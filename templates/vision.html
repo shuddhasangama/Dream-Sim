@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Vision — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Additive-only &middot; nothing is ever deleted</div>
+<h1>Your Vision</h1>
+
+{% for key in element_keys %}
+<div class="card">
+  <div class="micro section-label">{{ key|capitalize }}</div>
+  {% if grouped.get(key) %}
+  {% for e in grouped[key] %}
+  <div class="micro" style="margin-top:4px;">&middot; {{ e.detail_text }} <span style="color:var(--muted);">({{ e.added_at }})</span></div>
+  {% endfor %}
+  {% else %}
+  <div class="micro">Nothing added yet.</div>
+  {% endif %}
+  <form method="post" action="{{ url_for('vision_add') }}" class="action-row" style="margin-top:8px;">
+    <input type="hidden" name="element_key" value="{{ key }}">
+    <input type="text" name="detail_text" placeholder="Add more detail" style="flex:1;">
+    <button type="submit" class="btn-secondary">Add</button>
+  </form>
+</div>
+{% endfor %}
+
+<div class="card">
+  <div class="micro section-label">Declare a change (a genuine change of mind, not a routine edit)</div>
+  <div class="micro">Disclosed to your partner, routed to Guru, kept in full version history &mdash; never silent.</div>
+  <form method="post" action="{{ url_for('vision_declare_change') }}">
+    <select name="element_key" style="margin-top:8px;">
+      {% for key in element_keys %}<option value="{{ key }}">{{ key|capitalize }}</option>{% endfor %}
+    </select>
+    <input type="text" name="from_value" placeholder="From" style="margin-top:6px;width:100%;">
+    <input type="text" name="to_value" placeholder="To" style="margin-top:6px;width:100%;">
+    <label class="checkbox-row"><input type="checkbox" name="disclosed" required> I'm disclosing this to my partner</label>
+    <button type="submit" class="btn-primary">Declare change</button>
+  </form>
+</div>
+
+{% if changes %}
+<div class="card">
+  <div class="micro section-label">Your declared changes</div>
+  {% for c in changes %}
+  <div class="micro">&middot; {{ c.element_key }}: "{{ c.from_value }}" &rarr; "{{ c.to_value }}" ({{ c.declared_at }})</div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

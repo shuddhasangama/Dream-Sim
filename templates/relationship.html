@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Relationship — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">{{ couple.stage|capitalize }} &middot; week {{ couple.stage_week_index }} of {{ 16 if couple.stage == "relationship" }}</div>
+<h1>Together with {{ partner.name }}</h1>
+
+{% if checkpoint.checkpoint_reached %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>16 weeks in — a soft checkpoint, no forced decision. Three equal paths: progress toward Engaged, continue as you are, or part ways. Talk about it in Journey when you're ready.</div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="micro section-label">Playbook — Generic</div>
+  {% for t in generic %}<div class="chip">{{ t.replace('_', ' ') }}</div>{% endfor %}
+</div>
+
+{% if specific %}
+<div class="card">
+  <div class="micro section-label">Playbook — Specific (unlocked by your Vision)</div>
+  {% for t in specific %}<div class="chip">{{ t.replace('_', ' ') }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="micro section-label">Playbook — Custom</div>
+  {% for t in custom %}<div class="micro">&middot; {{ t }}</div>{% endfor %}
+  <form method="post" action="{{ url_for('relationship_playbook_add_custom') }}" class="action-row" style="margin-top:6px;">
+    <input type="text" name="idea" placeholder="Add your own" style="flex:1;">
+    <button type="submit" class="btn-secondary">Add</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="micro section-label">Guru &middot; Air &amp; Resolve</div>
+  {% for d in open_differences %}
+  <div class="interest-flag">
+    {{ d.text }} <span style="color:var(--muted);">({{ d.tag }})</span>
+    {% if d.raised_by == session_user.user_id and not d.consent_to_share %}
+    <form method="post" action="{{ url_for('relationship_difference_consent') }}" style="margin-top:4px;">
+      <input type="hidden" name="difference_id" value="{{ d.id }}">
+      <button type="submit" name="consent" value="1" class="btn-secondary">Let Guru share this with {{ partner.name }}</button>
+    </form>
+    {% elif d.consent_to_share %}
+    <form method="post" action="{{ url_for('relationship_difference_resolve') }}" style="margin-top:4px;">
+      <input type="hidden" name="difference_id" value="{{ d.id }}">
+      <button type="submit" class="btn-secondary">Mark resolved</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <form method="post" action="{{ url_for('relationship_difference_raise') }}" class="action-row" style="margin-top:8px;">
+    <input type="text" name="text" placeholder="Air a difference, privately at first" style="flex:1;">
+    <button type="submit" class="btn-secondary">Raise it</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="micro section-label">Guru &middot; Keep Romance Alive</div>
+  <form method="post" action="{{ url_for('relationship_romance_idea') }}" class="action-row">
+    <input type="text" name="idea" placeholder="A new idea" style="flex:1;">
+    <button type="submit" class="btn-secondary">Add</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="micro section-label">Guru &middot; Expense Handling</div>
+  <form method="post" action="{{ url_for('relationship_expense_check') }}" class="action-row">
+    <input type="text" name="expense_strategy" placeholder="Your agreed strategy" style="flex:1;">
+    <label class="checkbox-row"><input type="checkbox" name="compliant" {% if report and report.expense_compliant %}checked{% endif %}> On track</label>
+    <button type="submit" class="btn-secondary">Save</button>
+  </form>
+</div>
+
+<a class="btn-secondary" href="{{ url_for('road_view') }}">Manage ROAD</a>
+{% endblock %}

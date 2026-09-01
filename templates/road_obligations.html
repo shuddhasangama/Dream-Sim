@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}ROAD · Obligations — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">ROAD · Step 2 of 4</div>
+<h1>One-time exceptions</h1>
+<div class="micro">Travel, visiting parents/grandparents/friends — anything that means the routine gets missed.</div>
+
+{% include "_road_steps.html" %}
+
+<div class="micro section-label">On file</div>
+{% if exceptions %}
+{% for e in exceptions %}
+<div class="card block-row">
+  <div>
+    <div class="candidate-name-sm">{{ e.title }}</div>
+    <div class="micro">
+      {{ e.type|capitalize }}{% if e.travel_mode %} · {{ e.travel_mode.replace('_', ' ') }}{% endif %} ·
+      {{ e.starts_at }} &rarr; {{ e.ends_at }}{% if e.shared %} · shared{% endif %}
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('road_obligations_remove') }}">
+    <input type="hidden" name="entry_id" value="{{ e.id }}">
+    <button type="submit" class="btn-remove">Remove</button>
+  </form>
+</div>
+{% endfor %}
+{% else %}
+<div class="card"><div class="micro">None on file.</div></div>
+{% endif %}
+
+<div class="card">
+  <div class="micro">Add an exception</div>
+  <form method="post" action="{{ url_for('road_obligations_add') }}">
+    <label class="micro">Type</label>
+    <select name="type" id="exc-type">
+      {% for t in exception_types %}<option value="{{ t }}">{{ t|capitalize }}</option>{% endfor %}
+    </select>
+
+    <label class="micro">Title</label>
+    <input type="text" name="title" placeholder="e.g. Diwali trip to Goa, Visit parents" required>
+
+    <div class="time-row">
+      <input type="date" name="start_date" required>
+      <span class="micro">to</span>
+      <input type="date" name="end_date" required>
+    </div>
+
+    <div id="travel-mode-field">
+      <label class="micro">Travel mode</label>
+      <select name="travel_mode">
+        {% for m in travel_modes %}<option value="{{ m }}">{{ m.replace('_', ' ')|capitalize }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <label class="checkbox-row"><input type="checkbox" name="shared" checked> Visible to partner</label>
+    <button type="submit" class="btn-primary">Add exception</button>
+  </form>
+</div>
+
+<div class="road-nav">
+  <a class="btn-secondary" href="{{ url_for('road_routine') }}">&larr; Back: Routine</a>
+  <a class="btn-primary" href="{{ url_for('road_availability') }}">Next: Availability &rarr;</a>
+</div>
+
+<script>
+  var typeSelect = document.getElementById('exc-type');
+  var travelField = document.getElementById('travel-mode-field');
+  function syncTravelField() {
+    travelField.style.display = typeSelect.value === 'travel' ? 'block' : 'none';
+  }
+  typeSelect.addEventListener('change', syncTravelField);
+  syncTravelField();
+</script>
+{% endblock %}

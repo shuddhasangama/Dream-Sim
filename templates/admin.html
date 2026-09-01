@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Admin — simulation clock{% endblock %}
+{% block content %}
+<div class="eyebrow">Admin</div>
+<h1>Simulation clock</h1>
+<div class="micro">Week {{ clock.week }} · {{ clock.day }} {{ "%02d"|format(clock.hour) }}:00 · phase: {{ phase }}</div>
+
+<div class="card">
+  <div class="micro">Jump to a checkpoint — docs/dating-stage-spec.md §1's weekly timeline. Steppable here instead of waiting real hours.</div>
+  <form method="post">
+    <div class="admin-checkpoints">
+      {% for key, label, _point in checkpoints %}
+      <button type="submit" name="action" value="{{ key }}" class="btn-secondary">{{ label }}</button>
+      {% endfor %}
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="micro">Roll over to next week's Monday noon — clears the way for a fresh round of matches.</div>
+  <form method="post">
+    <button type="submit" name="action" value="next_week" class="btn-primary">Advance to next week</button>
+  </form>
+</div>
+
+<a class="btn-secondary" href="{{ url_for('picker') }}">Back to user picker</a>
+{% endblock %}

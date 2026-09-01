@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Next Level — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Guru-facilitated &middot; reciprocal unlock</div>
+<h1>The Next Level conversation</h1>
+
+{% if not unlocked %}
+<div class="card"><div class="micro">Unlocks after your 2nd date's feedback is fully in.</div></div>
+
+{% elif not already_open %}
+{% if mismatch and mismatch.surfaced %}
+<div class="card guru-card"><div class="guru-avatar">G</div><div>{{ mismatch.message }}</div></div>
+{% endif %}
+<div class="card">
+  <div class="micro">Either of you can start this, any time. Neither of you sees the other's answer to a question until you've both answered it.</div>
+  <form method="post" action="{{ url_for('next_level_open') }}">
+    <input type="hidden" name="opened_by" value="user">
+    <button type="submit" class="btn-primary">Start the conversation</button>
+  </form>
+</div>
+
+{% else %}
+<div class="card"><div class="micro">With {{ partner.name }}</div></div>
+
+{% for thread, visible in threads %}
+<div class="card">
+  <div class="micro section-label">{{ thread.question_key.replace('_', ' ')|capitalize }}</div>
+
+  {% if visible.own_answer is none %}
+  <form method="post" action="{{ url_for('next_level_answer') }}">
+    <input type="hidden" name="question_key" value="{{ thread.question_key }}">
+    <textarea name="answer_text" rows="2" style="width:100%;" placeholder="Your answer"></textarea>
+    <div class="action-row">
+      <button type="submit" name="declined" value="1" class="btn-secondary">Decline to answer</button>
+      <button type="submit" class="btn-primary">Answer</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="micro">You: {{ visible.own_answer }}</div>
+  {% if visible.reluctance_reflection %}
+  <div class="interest-flag">{{ visible.reluctance_reflection }}</div>
+  {% endif %}
+  {% if visible.revealed %}
+  <div class="micro">{{ partner.name }}: {{ visible.partner_answer }}</div>
+  {% else %}
+  <div class="micro">Waiting on {{ partner.name }}.</div>
+  {% endif %}
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

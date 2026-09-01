@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}REACH — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">REACH · Reciprocity this week</div>
+<h1>See who opens up.</h1>
+
+<div class="card reach-summary">
+  <div>
+    <span class="reach-number" id="mutual-open">{{ counts.mutual_open }}</span> people
+  </div>
+  <div class="micro">of <span id="fits-filters">{{ counts.fits_user_filters }}</span> who fit what you want are also open to you</div>
+  <div class="micro" id="no-matches-note" {% if not counts.no_realistic_matches %}style="display:none"{% endif %}>
+    No realistic matches yet at your current filters — the one for you may not have signed up yet.
+  </div>
+</div>
+
+<div class="micro section-label">Drag either end — set your own range</div>
+<div id="slider-list">
+  {% for s in sliders %}
+  {% set span = s.max - s.min %}
+  {% set cur_lo_pct = ((s.current[0] - s.min) / span * 100) %}
+  {% set cur_hi_pct = ((s.current[1] - s.min) / span * 100) %}
+  <div class="slider-card" data-lever="{{ s.key }}" data-min="{{ s.min }}" data-max="{{ s.max }}" data-step="{{ s.step }}"
+       {% if s.suggested %}data-sug-min="{{ s.suggested[0] }}" data-sug-max="{{ s.suggested[1] }}"{% endif %}>
+    <div class="lever-row">
+      <div class="lever-name">{{ s.label }}</div>
+      <div class="slider-values"><span class="sv-min">{{ s.current[0] }}</span>–<span class="sv-max">{{ s.current[1] }}</span> {{ s.unit }}</div>
+    </div>
+    <div class="slider-track-wrap">
+      <div class="slider-track"></div>
+      {% if s.suggested %}
+      {% set sug_lo_pct = ((s.suggested[0] - s.min) / span * 100) %}
+      {% set sug_hi_pct = ((s.suggested[1] - s.min) / span * 100) %}
+      <div class="slider-suggested" style="left:{{ sug_lo_pct }}%;width:{{ sug_hi_pct - sug_lo_pct }}%"></div>
+      {% endif %}
+      <div class="slider-selected" style="left:{{ cur_lo_pct }}%;width:{{ cur_hi_pct - cur_lo_pct }}%"></div>
+      {% if s.self_value is not none %}
+      {% set self_pct = ((s.self_value - s.min) / span * 100) %}
+      <div class="slider-self" style="left:{{ self_pct }}%" title="Your {{ s.label|lower }}: {{ s.self_value }} {{ s.unit }}"></div>
+      {% endif %}
+      <input type="range" class="range-min" min="{{ s.min }}" max="{{ s.max }}" step="{{ s.step }}" value="{{ s.current[0] }}">
+      <input type="range" class="range-max" min="{{ s.min }}" max="{{ s.max }}" step="{{ s.step }}" value="{{ s.current[1] }}">
+    </div>
+    <div class="slider-scale micro"><span>{{ s.min }}</span><span>{{ s.max }}</span></div>
+    {% if s.self_value is not none %}
+    <div class="micro slider-self-label">You: {{ s.self_value }} {{ s.unit }}</div>
+    {% endif %}
+    {% if s.suggested %}
+    <div class="micro slider-suggest-label">AI recommended: {{ s.suggested[0] }}–{{ s.suggested[1] }} {{ s.unit }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="micro section-label">Widen a filter — nothing changes unless you choose</div>
+<div id="lever-list">
+  {% for d in deltas %}
+  <div class="lever-card {% if d.sensitive %}sensitive{% endif %}">
+    <div class="lever-row">
+      <div class="lever-name">{{ d.lever.replace('_', ' ') }}</div>
+      {% if d.sensitive %}<div class="micro sensitive-tag">You control &middot; not suggested</div>{% endif %}
+    </div>
+    <div class="lever-values">{{ d.from|fmtval }} &rarr; {{ d.to|fmtval }}</div>
+    <div class="lever-delta">+{{ d.delta_mutual_open }} open up</div>
+    <button class="btn-widen" data-lever="{{ d.lever }}" {% if d.from == d.to %}disabled{% endif %}>
+      {% if d.from == d.to %}Fully open{% else %}Widen{% endif %}
+    </button>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>Nationality and religion are yours to explore — I'll never suggest widening them.</div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}

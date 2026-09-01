@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Your file</div>
+<h1>{{ session_user_name }}</h1>
+<div class="micro">Stage: {{ user.journey_state }} · Week {{ week_number }}</div>
+
+<div class="card">
+  <div class="micro">Vision</div>
+  <div class="chip-row">
+    {% for v in user.visions %}
+    <span class="chip">
+      {{ v.key }}{% if v.stance %} — {{ v.stance if v.stance is string else v.stance|join(', ') }}{% endif %}
+    </span>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="micro">Stats</div>
+  <div class="stat-rows">
+    <div class="stat-row"><span>Age</span><span>{{ user.stats.age }}</span></div>
+    <div class="stat-row"><span>Height</span><span>{{ user.stats.height_cm }} cm</span></div>
+    <div class="stat-row"><span>Weight</span><span>{{ user.stats.weight_kg }} kg</span></div>
+    <div class="stat-row"><span>Waist</span><span>{{ user.stats.waist_in }} in</span></div>
+    <div class="stat-row"><span>Income band</span><span>{{ user.stats.income_band }}</span></div>
+    <div class="stat-row"><span>Diet</span><span>{{ user.stats.diet }}</span></div>
+    <div class="stat-row"><span>Education</span><span>{{ user.stats.education }}</span></div>
+    <div class="stat-row"><span>Nationality</span><span>{{ user.stats.nationality }}</span></div>
+    <div class="stat-row"><span>Religion</span><span>{{ user.stats.religion }}</span></div>
+  </div>
+</div>
+
+{% if couple %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>You're in a <strong>{{ couple.stage }}</strong> — head to Journey to see where things stand.</div>
+</div>
+{% else %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>Still searching. Check REACH for your reciprocity read, then open this week's reviews.</div>
+</div>
+{% endif %}
+
+{% if not reach_locked %}
+<a class="btn-primary" href="{{ url_for('reach') }}">Open REACH</a>
+{% endif %}
+<a class="btn-secondary" href="{{ url_for('week') }}">This week</a>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Escalations — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Dating &middot; Progressive disclosure</div>
+<h1>Contact &amp; invite home</h1>
+
+{% if not unlocked %}
+<div class="card"><div class="micro">Unlocks after your 2nd date's feedback is fully in. So far: {{ dates_completed }}/2 completed.</div></div>
+
+{% else %}
+<div class="card">
+  <div class="micro">With {{ partner.name }}</div>
+</div>
+
+<div class="card">
+  <div class="micro section-label">Contact exchange</div>
+  <div class="micro">Declining or ignoring costs nothing — never shown to {{ partner.name }} as a rejection.</div>
+  <div class="stat-rows" style="margin-top:8px;">
+    {% for c in channels %}
+    {% set mine = my_sent|selectattr("channel", "equalto", c)|list %}
+    {% set theirs = their_sent|selectattr("channel", "equalto", c)|list %}
+    <div class="stat-row">
+      <span>{{ c|capitalize }}</span>
+      <span>
+        {% if mine %}you: {{ contact_status(mine[-1]) }}{% endif %}
+        {% if theirs %} &middot; {{ partner.name }}: {{ theirs[-1].status if theirs[-1].status == "accepted" else "requested" }}{% endif %}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  <form method="post" action="{{ url_for('escalations_contact_request') }}" class="action-row" style="margin-top:8px;">
+    <select name="channel">
+      {% for c in channels %}<option value="{{ c }}">{{ c|capitalize }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn-secondary">Request</button>
+  </form>
+  {% for r in their_sent %}
+  {% if r.status == "pending" %}
+  <form method="post" action="{{ url_for('escalations_contact_respond') }}" class="action-row">
+    <input type="hidden" name="request_id" value="{{ r.id }}">
+    <span class="micro">{{ partner.name }} wants to share {{ r.channel }}</span>
+    <button type="submit" name="response" value="declined" class="btn-secondary">Decline</button>
+    <button type="submit" name="response" value="accepted" class="btn-primary">Accept</button>
+  </form>
+  {% endif %}
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="micro section-label">Invite home</div>
+  {% if not invite %}
+  <div class="micro">Never suggested by Guru — only if one of you chooses to propose it.</div>
+  <form method="post" action="{{ url_for('escalations_invite_propose') }}">
+    <input type="datetime-local" name="proposed_datetime" required>
+    <div class="day-picker" style="margin-top:8px;">
+      {% for f in expectation_flags %}
+      <label class="day-check"><input type="radio" name="expectation_flag" value="{{ f }}" required>{{ expectation_copy[f] }}</label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn-primary" style="margin-top:8px;">Propose</button>
+  </form>
+
+  {% else %}
+  <div class="micro">Proposed by {{ "you" if invite.requester_id == my_user_id else partner.name }} for {{ invite.proposed_datetime }}</div>
+  <div class="interest-flag yes">{{ expectation_copy[invite.expectation_flag] }}</div>
+
+  {% if invite.status == "pending" and invite.requester_id != my_user_id %}
+    {% if not invite.flag_seen_by_recipient_at %}
+    <div class="micro section-label">Rules of engagement</div>
+    {% for r in rules_of_engagement %}<div class="micro">&middot; {{ r }}</div>{% endfor %}
+    <form method="post" action="{{ url_for('escalations_invite_see_flag') }}">
+      <input type="hidden" name="invite_id" value="{{ invite.id }}">
+      <button type="submit" class="btn-primary" style="margin-top:8px;">I've seen this</button>
+    </form>
+    {% else %}
+    <form method="post" action="{{ url_for('escalations_invite_respond') }}" class="action-row">
+      <input type="hidden" name="invite_id" value="{{ invite.id }}">
+      <button type="submit" name="response" value="declined" class="btn-secondary">Decline</button>
+      <button type="submit" name="response" value="accepted" class="btn-primary">Accept</button>
+    </form>
+    {% endif %}
+  {% elif invite.status == "pending" %}
+  <div class="micro">Waiting on {{ partner.name }} to respond &mdash; {{ invite_status(invite) }}.</div>
+
+  {% elif invite.status == "accepted" %}
+    {% if invite.expectation_flag == "intimacy_expected" %}
+    {% if not invite["guidance_shown_" + my_role] %}
+    <div class="micro section-label">Before you acknowledge</div>
+    {% for g in guidance %}<div class="micro">&middot; {{ g }}</div>{% endfor %}
+    <form method="post" action="{{ url_for('escalations_invite_guidance') }}">
+      <input type="hidden" name="invite_id" value="{{ invite.id }}">
+      <button type="submit" class="btn-primary" style="margin-top:8px;">I understand</button>
+    </form>
+    {% endif %}
+    {% endif %}
+
+    {% if invite.expectation_flag != "intimacy_expected" or invite["guidance_shown_" + my_role] %}
+    <div class="micro" style="margin-top:8px;white-space:pre-wrap;">This records a planned visit and the expectations that were disclosed before it. It is not consent to physical intimacy, and it cannot be. Consent is given in the moment, for a specific thing, by a person who is free to change their mind — and it can be withdrawn at any time, by either person, no matter what was said or agreed before. Changing your mind is not a broken promise. It is your right, always. Either person may cancel this visit, or end it once it has begun, without explanation.</div>
+    <form method="post" action="{{ url_for('escalations_invite_acknowledge') }}">
+      <input type="hidden" name="invite_id" value="{{ invite.id }}">
+      <button type="submit" class="btn-primary" {% if invite["ack_signed_" + my_role] %}disabled{% endif %}>
+        {% if invite["ack_signed_" + my_role] %}You acknowledged{% else %}Acknowledge &amp; verify{% endif %}
+      </button>
+    </form>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('escalations_invite_trusted_contact') }}" style="margin-top:6px;">
+      <input type="hidden" name="invite_id" value="{{ invite.id }}">
+      <button type="submit" class="btn-secondary" {% if invite["trusted_contact_notified_" + my_role] %}disabled{% endif %}>
+        {% if invite["trusted_contact_notified_" + my_role] %}Trusted contact notified{% else %}Share plan with a trusted contact{% endif %}
+      </button>
+    </form>
+
+    <form method="post" action="{{ url_for('escalations_invite_revoke') }}" style="margin-top:6px;">
+      <input type="hidden" name="invite_id" value="{{ invite.id }}">
+      <button type="submit" class="btn-secondary">Revoke &mdash; free, no explanation needed</button>
+    </form>
+  {% else %}
+  <div class="micro">Status: {{ invite.status }}</div>
+  {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

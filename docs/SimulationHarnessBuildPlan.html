@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dare to Dream — Simulation Harness Build Plan</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Sora:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  :root{
+    --bg:#FAF5F2; --paper:#FFFFFF; --ink:#1A1220; --soft:#6B5A6E; --border:#E7DEDC;
+    --rel:#8C3D5C; --rel-bg:#F9E9EF; --code-bg:#20242C; --code-tx:#E6E1DC;
+    --green:#2F5C2A; --green-bg:#EEF4EF; --gold:#7A5A1E; --gold-bg:#F7EFDD;
+    --blue:#2C4E70; --blue-bg:#EAF1F8; --navy:#243447; --hi:#96311E; --hi-bg:#FBECEA;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Sora',sans-serif; line-height:1.55; padding:44px 22px 80px; }
+  .wrap{ max-width:880px; margin:0 auto; }
+  .kicker{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--rel); }
+  h1{ font-family:'Fraunces',serif; font-weight:600; font-size:30px; margin:4px 0 4px; }
+  .sub{ color:var(--soft); font-size:14.5px; margin:0 0 18px; }
+  h2{ font-family:'Fraunces',serif; font-weight:600; font-size:20px; margin:30px 0 6px; padding-bottom:6px; border-bottom:2px solid var(--rel); color:var(--rel); }
+  h3{ font-weight:600; font-size:14.5px; margin:16px 0 4px; color:var(--rel); }
+  p{ font-size:13.5px; margin:6px 0; }
+  ul,ol{ margin:5px 0; padding-left:19px; } li{ font-size:13.5px; margin:4px 0; }
+  code{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; background:#EFE7E2; padding:1px 5px; border-radius:4px; color:var(--rel); }
+  pre{ background:var(--code-bg); color:var(--code-tx); border-radius:10px; padding:14px 16px; overflow-x:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; line-height:1.5; white-space:pre-wrap; }
+  table{ width:100%; border-collapse:collapse; font-size:12px; margin:10px 0; }
+  th,td{ border:.5px solid var(--border); padding:8px 9px; text-align:left; vertical-align:top; }
+  th{ background:var(--navy); color:#fff; font-weight:600; font-size:11px; }
+  td.m{ font-weight:600; color:var(--rel); white-space:nowrap; }
+  tr:nth-child(even) td{ background:#FFFDFC; }
+  .split{ background:var(--navy); color:#EAECEF; border-radius:14px; padding:18px 22px; margin:16px 0; }
+  .split h3{ color:#fff; font-family:'Fraunces',serif; font-size:17px; margin:0 0 8px; }
+  .split p{ font-size:13px; margin:5px 0; color:#C9C2CC; }
+  .split b{ color:#F3AFC7; }
+  .flag{ background:var(--hi-bg); border-left:4px solid var(--hi); border-radius:8px; padding:10px 15px; font-size:12.5px; margin:12px 0; }
+  .flag b{ color:var(--hi); }
+  .good{ background:var(--green-bg); border-left:4px solid var(--green); border-radius:8px; padding:10px 15px; font-size:12.5px; margin:12px 0; }
+  .good b{ color:var(--green); }
+  .step{ background:var(--paper); border:.5px solid var(--border); border-radius:12px; padding:14px 18px; margin-bottom:10px; }
+  .step h3{ margin:0 0 4px; display:flex; align-items:center; gap:8px; }
+  .num{ display:inline-flex; width:24px; height:24px; border-radius:50%; background:var(--rel); color:#fff; font-size:12px; align-items:center; justify-content:center; font-weight:600; flex:0 0 auto; }
+  .foot{ font-size:11px; color:var(--soft); font-style:italic; border-top:.5px solid var(--border); padding-top:12px; margin-top:26px; }
+  @media print{ body{ background:#fff; } pre,table,.flag,.good,.split,.step{ break-inside:avoid; } h2{ break-after:avoid; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="kicker">Dare to Dream · Build plan · Local simulation harness</div>
+  <h1>Simulation Harness — Build Plan</h1>
+  <p class="sub">Run the product's logic on your laptop with synthetic users, before the app exists. Validates mechanics, tunes agents, and answers the minimum-viable-pool question empirically.</p>
+
+  <div class="split">
+    <h3>The critical split</h3>
+    <p><b>What you can build yourself, now:</b> a local simulation of the product's <i>logic</i> — synthetic users, matching + REACH math, the weekly cadence, agents narrating, use cases executing. Pure Python. No mobile, no app store, no real BGV, no payments.</p>
+    <p><b>What needs the CTO:</b> the actual app — cross-platform mobile, auth, hosted backend, real BGV integration, payments, push, store submission, scale. A 3–5 month build for a CTO plus one or two devs.</p>
+  </div>
+
+  <h2>Why build this before the app</h2>
+  <ul>
+    <li><b>The spec already exists.</b> 127 use cases with Given/When/Then and Gherkin files, the full-journey build brief's data model, and five agent specs with I/O contracts. The harness has something real to build against.</li>
+    <li><b>Answers the minimum-viable-pool question</b> — sweep from 20 to 500 users per city and watch when the weekly cadence starts producing honest 2–3 match weeks. An empirical launch gate instead of a guess.</li>
+    <li><b>Proves the REACH reciprocity math</b> behaves sensibly before real users see it.</li>
+    <li><b>Tunes agent prompts</b> on realistic inputs, before production.</li>
+    <li><b>Becomes an executable spec for the CTO</b> — they start building on day two instead of week three.</li>
+  </ul>
+
+  <h2>The build sequence</h2>
+
+  <div class="step"><h3><span class="num">1</span>Environment</h3>
+    <p>Python 3.11+, Claude Code installed, Anthropic API key set, a git repo. <b>Effort: half a day.</b></p></div>
+
+  <div class="step"><h3><span class="num">2</span>Data model</h3>
+    <p>Translate the build brief's entities (<code>User</code>, <code>Couple</code>, <code>CalendarEntry</code>, <code>Difference</code>, <code>WeeklyReport</code>, <code>Exit</code>, <code>Invite</code>) into SQLite. Claude Code generates this well directly from the brief. <b>Effort: 1–2 evenings.</b></p></div>
+
+  <div class="step"><h3><span class="num">3</span>Synthetic user generator</h3>
+    <p>50 users across your age bands, gender, and metro cities, with Vision / Stats / preferences drawn from realistic distributions. Seeded and reproducible. <b>Effort: 1–2 evenings.</b></p></div>
+
+  <div class="step"><h3><span class="num">4</span>Deterministic core — no LLM yet</h3>
+    <p>Matching, REACH reciprocity counts, the weekly cadence (staggered reviews, midday close, mutual lock-in). <b>This is the bulk of the value and it is all plain logic.</b> <b>Effort: 1 week.</b></p></div>
+
+  <div class="step" style="border-color:var(--green); border-width:1.5px;"><h3><span class="num" style="background:var(--green);">4½</span>Walk the journey yourself</h3>
+    <p>A simple CLI to act as a user — play as a male user and a female user, progress stage by stage, feel what's wrong. <b>Do this before automating tests.</b> Manual play surfaces UX and logic problems automated suites never catch. <b>Effort: 2–3 evenings for the CLI, then ongoing play.</b></p></div>
+
+  <div class="step"><h3><span class="num">5</span>Scenario runner</h3>
+    <p>Wire in <code>usecases.json</code> / the Gherkin <code>.feature</code> files so all 127 cases execute as a test suite. <b>Effort: 3–5 evenings.</b></p></div>
+
+  <div class="step"><h3><span class="num">6</span>Layer the agents on</h3>
+    <p>The five starter prompts calling the Claude API for narration — REACH's read, Guru's pillars, the weekly report. <b>Effort: 3–5 evenings.</b></p></div>
+
+  <div class="step"><h3><span class="num">7</span>Metrics &amp; report output</h3>
+    <p>Locked-in dates per city per week, match counts, funnel drop-offs, failed invariants. <b>Effort: 2–3 evenings.</b></p></div>
+
+  <div class="step"><h3><span class="num">8</span>Sweep experiments</h3>
+    <p>Vary pool size, gender ratio, filter narrowness. The minimum-viable-pool answer falls out here. <b>Effort: cheap and ongoing once the harness exists.</b></p></div>
+
+  <h2>Effort summary</h2>
+  <table>
+    <tr><th>Phase</th><th>Steps</th><th>Part-time effort</th></tr>
+    <tr><td class="m">Core value</td><td>1–4 (deterministic engine)</td><td>~1–2 weeks of evenings</td></tr>
+    <tr><td class="m">Hands-on validation</td><td>4½ (manual play)</td><td>2–3 evenings + ongoing</td></tr>
+    <tr><td class="m">Automation &amp; agents</td><td>5–7</td><td>~1–2 weeks</td></tr>
+    <tr><td class="m">Experiments</td><td>8</td><td>ongoing, cheap</td></tr>
+    <tr><td class="m"><b>Total</b></td><td>—</td><td><b>~3–6 weeks part-time</b></td></tr>
+  </table>
+
+  <div class="good"><b>Cost note:</b> most of the simulation needs <b>no LLM at all</b>. Matching, reciprocity and cadence are deterministic. Only agent <i>narration</i> calls Claude. Build steps 1–4 first and run thousands of simulated weeks for free; layer API calls on afterward and token spend stays modest.</div>
+
+  <h2>What this will NOT tell you</h2>
+  <div class="flag">
+    <ul style="margin:4px 0;">
+      <li><b>It validates mechanics, not demand.</b> Synthetic users behave as instructed. It cannot tell you whether real Bangalore 32-year-olds will sign up, complete BGV, or pay for a date.</li>
+      <li><b>The pool number will be directional, not precise</b> — it rests on assumed filter distributions. Read it as "roughly 200, not 20," never "exactly 187."</li>
+      <li><b>It does not replace</b> the pre-launch feedback work with real people.</li>
+    </ul>
+  </div>
+
+  <h2>Timeline flag</h2>
+  <p>CTO landing in September and India matching live on December 11 is roughly <b>three months</b> for a full-stack marketplace with BGV, payments, five LLM agents, across two platforms. That is aggressive. The harness genuinely de-risks it — a CTO walking into working logic plus 127 executable test cases starts fast — but go into that hire with the timeline pressure named openly.</p>
+
+  <p class="foot">Internal build plan for Dare to Dream's local simulation harness. Effort estimates assume part-time evening work with Claude Code assistance and will vary with pace and prior coding familiarity. The harness is a validation and specification tool — not a path to a production mobile app, which remains a CTO-led build.</p>
+
+</div>
+</body>
+</html>

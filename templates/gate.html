@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Relationship gate — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Dating exit &rarr; Relationship entry</div>
+<h1>The gate</h1>
+
+{% if gate is none %}
+<div class="card"><div class="micro">No gate open yet. Either you both pick "Accept — go to relationship" after a date, or either of you can raise exclusivity directly.</div></div>
+{% if lockin %}
+<form method="post" action="{{ url_for('gate_raise') }}">
+  <button type="submit" class="btn-primary">Raise exclusivity</button>
+</form>
+{% endif %}
+
+{% else %}
+
+<div class="card">
+  <div class="micro">Opened via {{ gate.trigger.replace('_', ' ') }} &middot; status: {{ gate.status }}</div>
+  <div>With {{ partner.name }}</div>
+</div>
+
+{% if gate.status == "declined" %}
+<div class="card"><div class="micro">This gate was declined — you're both still in Dating. Either of you can raise it again.</div></div>
+
+{% elif gate.status == "progressed" %}
+<div class="card guru-card"><div class="guru-avatar">G</div><div>You're in Relationship now. Head to Journey.</div></div>
+<a class="btn-primary" href="{{ url_for('journey_view') }}">Go to Journey</a>
+
+{% else %}
+
+{% if not both_answered %}
+<div class="card">
+  <div class="micro">Step 2 of 9 &middot; Stage-gate questionnaire (private — your answers aren't shown directly to {{ partner.name }})</div>
+  <div style="margin-top:6px;">{{ answered_keys|length }} / {{ questions|length }} answered</div>
+</div>
+
+{% if next_question %}
+<div class="card">
+  <div class="micro">{{ next_question.category.replace('_', ' ')|capitalize }}</div>
+  <div style="margin:8px 0;font-family:var(--font-serif, inherit);">{{ next_question.text }}</div>
+  <form method="post" action="{{ url_for('gate_answer') }}">
+    <input type="hidden" name="question_key" value="{{ next_question.key }}">
+    {% if next_question.kind == "scale" %}
+    <div class="day-picker">
+      {% for opt in next_question.options %}
+      <label class="day-check"><input type="radio" name="readiness_scale" value="{{ opt }}" required>{{ opt.replace('_', ' ') }}</label>
+      {% endfor %}
+    </div>
+    {% else %}
+    <textarea name="answer_text" rows="3" style="width:100%;margin-top:4px;" placeholder="Your answer (leave blank to decline — that's free)"></textarea>
+    {% endif %}
+    <button type="submit" class="btn-primary" style="margin-top:10px;">Save answer</button>
+  </form>
+</div>
+{% else %}
+<div class="card"><div class="micro">You've answered everything — waiting on {{ partner.name }}.</div></div>
+{% endif %}
+
+{% else %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>Step 3 of 9 &middot; I compared your private answers. Here's what's worth talking about — never your exact words, just where things differ.</div>
+</div>
+
+{% if analysis.divergences %}
+<div class="card">
+  <div class="micro section-label">Worth a conversation</div>
+  {% for d in analysis.divergences %}
+  <div class="interest-flag">{{ d.note }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if analysis.guru_prompts %}
+<div class="card">
+  <div class="micro section-label">For you specifically</div>
+  {% for p in analysis.guru_prompts %}
+  {% if p["for"] == my_role %}<div class="interest-flag">{{ p.note }}</div>{% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if has_mismatch %}
+<div class="card">
+  <div class="interest-flag">Exclusivity expectations differ — this needs resolving before you can move forward. Guru doesn't block anything else, only this.</div>
+</div>
+{% else %}
+
+<div class="card">
+  <div class="micro">Step 4 of 9 &middot; Confirm intent to progress (mutual — either may decline)</div>
+  <form method="post" action="{{ url_for('gate_confirm') }}" style="display:inline;">
+    <button type="submit" class="btn-primary" {% if gate["confirm_" + my_role] %}disabled{% endif %}>
+      {% if gate["confirm_" + my_role] %}You confirmed{% else %}Confirm{% endif %}
+    </button>
+  </form>
+  <form method="post" action="{{ url_for('gate_decline') }}" style="display:inline;">
+    <button type="submit" class="btn-secondary">Decline — stay in Dating</button>
+  </form>
+</div>
+
+{% if prerequisites %}
+<div class="card">
+  <div class="micro">Step 5 of 9 &middot; Prerequisites — Vision, Stats, Chemistry mandatory at entry</div>
+  <div class="stat-rows" style="margin-top:8px;">
+    <div class="stat-row"><span>You — Vision</span><span>{{ "done" if prerequisites.a.vision_met else "incomplete" }}</span></div>
+    <div class="stat-row"><span>You — Stats</span><span>{{ "done" if not prerequisites.a.stats_missing else prerequisites.a.stats_missing|join(', ') }}</span></div>
+    <div class="stat-row"><span>You — Chemistry</span><span>{{ "done" if not prerequisites.a.chemistry_missing else prerequisites.a.chemistry_missing|join(', ') }}</span></div>
+    <div class="stat-row"><span>{{ partner.name }} — Vision</span><span>{{ "done" if prerequisites.b.vision_met else "incomplete" }}</span></div>
+    <div class="stat-row"><span>{{ partner.name }} — Stats</span><span>{{ "done" if not prerequisites.b.stats_missing else prerequisites.b.stats_missing|join(', ') }}</span></div>
+    <div class="stat-row"><span>{{ partner.name }} — Chemistry</span><span>{{ "done" if not prerequisites.b.chemistry_missing else prerequisites.b.chemistry_missing|join(', ') }}</span></div>
+  </div>
+  {% if not prerequisites.a.vision_met or prerequisites.a.stats_missing or prerequisites.a.chemistry_missing %}
+  <a class="btn-secondary" href="{{ url_for('vision_view') }}">Add Vision</a>
+  <a class="btn-secondary" href="{{ url_for('chemistry_view') }}">Fill Chemistry</a>
+  {% endif %}
+</div>
+
+{% if prerequisites.met %}
+<div class="card">
+  <div class="micro">Step 6 of 9 &middot; Exclusivity acknowledged</div>
+  <form method="post" action="{{ url_for('gate_exclusivity_ack') }}">
+    <button type="submit" class="btn-primary" {% if gate["exclusivity_ack_" + my_role] %}disabled{% endif %}>
+      {% if gate["exclusivity_ack_" + my_role] %}You acknowledged{% else %}Acknowledge exclusivity{% endif %}
+    </button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="micro">Step 7 of 9 &middot; Consent block — signed independently, face-verified. Neither of you is bound until both sign.</div>
+  <form method="post" action="{{ url_for('gate_consent') }}">
+    <button type="submit" class="btn-primary" {% if gate["consent_" + my_role] %}disabled{% endif %}>
+      {% if gate["consent_" + my_role] %}You signed{% else %}Sign &amp; verify{% endif %}
+    </button>
+  </form>
+  {% if gate["biometric_" + my_role] == 0 and gate["consent_" + my_role] == 0 %}
+  <div class="micro" style="margin-top:6px;">If verification fails, just try again.</div>
+  {% endif %}
+</div>
+
+{% if gate.confirm_a and gate.confirm_b and gate.exclusivity_ack_a and gate.exclusivity_ack_b and gate.consent_a and gate.consent_b %}
+<div class="card">
+  <div class="micro">Step 8-9 of 9 &middot; Everything's in place.</div>
+  <form method="post" action="{{ url_for('gate_enter_relationship') }}">
+    <button type="submit" class="btn-primary">Enter Relationship</button>
+  </form>
+</div>
+{% endif %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}

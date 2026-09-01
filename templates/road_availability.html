@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}ROAD · Availability — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">ROAD · Step 3 of 4</div>
+<h1>Your availability</h1>
+<div class="micro">From your routine's gaps, plus anything you declare directly below — private to you. Nothing here is visible to {{ partner.name }} until you share it below. No routine yet? Skip straight to "Add free time" — you don't need Routine or Obligations filled in first.</div>
+
+{% include "_road_steps.html" %}
+
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>
+    {% if shared_count %}
+    You're currently sharing {{ shared_count }} window{{ 's' if shared_count != 1 }} with {{ partner.name }}.
+    {% else %}
+    Nothing is shared yet — check the windows below you're comfortable exposing, then submit.
+    {% endif %}
+  </div>
+</div>
+
+{% if overlap_count %}
+<div class="micro section-label">When you could both go out</div>
+<div class="avail-grid">
+  {% for day in week_days %}
+  <div class="avail-day">
+    <div class="week-col-head" style="text-align:left;">{{ day }}</div>
+    {% for s in overlap[day] %}
+    <div class="avail-slot overlap">{{ s.start }}–{{ s.end }}</div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% elif shared_count %}
+<div class="micro" style="margin-top:10px;">No overlap with {{ partner.name }} yet — they haven't shared a window that lines up with yours.</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('road_availability_share') }}">
+  <div class="micro section-label">All your available windows</div>
+  <div class="avail-grid">
+    {% for day in week_days %}
+    <div class="avail-day">
+      <div class="week-col-head" style="text-align:left;">{{ day }}</div>
+      {% if derived[day] %}
+      {% for s in derived[day] %}
+      {% set key = slot_key(s) %}
+      <label class="avail-slot {% if key in shared_keys %}shared{% endif %}">
+        <input type="checkbox" name="slot" value="{{ key }}" {% if key in shared_keys %}checked{% endif %}>
+        {{ s.start }}–{{ s.end }}
+      </label>
+      {% endfor %}
+      {% else %}
+      <div class="micro" style="padding:6px 0;">Nothing yet</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <button type="submit" class="btn-primary" style="margin-top:16px;">Share checked windows with {{ partner.name }}</button>
+</form>
+
+{% if free_blocks %}
+<div class="card">
+  {% for b in free_blocks %}
+  <div class="block-row">
+    <div>
+      <div class="candidate-name-sm">
+        Free time
+        <span class="category-tag free">free</span>
+      </div>
+      <div class="micro">{{ b.days|join(', ') }} · {{ b.start }}–{{ b.end }}</div>
+    </div>
+    <form method="post" action="{{ url_for('road_availability_remove_free') }}">
+      <input type="hidden" name="block_id" value="{{ b.id }}">
+      <button type="submit" class="btn-remove">Remove</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="micro">Add free time directly — no routine needed</div>
+  <form method="post" action="{{ url_for('road_availability_add_free') }}">
+    <div class="day-picker" style="margin-top:2px;">
+      {% for day in week_days %}
+      <label class="day-check"><input type="checkbox" name="days" value="{{ day }}">{{ day }}</label>
+      {% endfor %}
+    </div>
+    <div class="time-row">
+      <input type="time" name="start" required>
+      <span class="micro">to</span>
+      <input type="time" name="end" required>
+    </div>
+    <button type="submit" class="btn-secondary">Add free time</button>
+  </form>
+</div>
+
+<div class="road-nav">
+  <a class="btn-secondary" href="{{ url_for('road_obligations') }}">&larr; Back: Obligations</a>
+  <a class="btn-primary" href="{{ url_for('road_vision') }}">Next: Vision &rarr;</a>
+</div>
+{% endblock %}

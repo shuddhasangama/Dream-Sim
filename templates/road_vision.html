@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}ROAD · Vision — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">ROAD · Step 4 of 4</div>
+<h1>Figuring it out together</h1>
+<div class="micro">At signup you just said what you're both seeking — Kids and Cohabitate were open questions on purpose. Now that you're together, this is where the how gets decided. Nothing here is required to keep using ROAD.</div>
+
+{% include "_road_steps.html" %}
+
+{% if not my_pending %}
+<div class="card"><div class="micro">You didn't select Kids or Cohabitate as a vision, so there's nothing to decide here.</div></div>
+{% endif %}
+
+{% for v in my_pending %}
+<div class="card">
+  <div class="micro section-label">{{ v.key }}</div>
+  {% if v.stance %}
+  <div class="micro">Your current answer: <strong>{{ v.stance if v.stance is string else v.stance|join(', ') }}</strong></div>
+  {% else %}
+  <div class="micro">Not decided yet.</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('road_vision_set') }}" style="margin-top:10px;">
+    <input type="hidden" name="key" value="{{ v.key }}">
+    {% if v.key == "Cohabitate" %}
+    <div class="day-picker">
+      {% for opt in stance_options[v.key] %}
+      <label class="day-check"><input type="checkbox" name="stance" value="{{ opt }}" {% if v.stance and opt in v.stance %}checked{% endif %}>{{ opt }}</label>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="day-picker">
+      {% for opt in stance_options[v.key] %}
+      <label class="day-check category-radio"><input type="radio" name="stance" value="{{ opt }}" {% if v.stance == opt %}checked{% endif %}>{{ opt }}</label>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <button type="submit" class="btn-secondary" style="margin-top:10px;">Save</button>
+  </form>
+
+  <div class="micro" style="margin-top:12px;">
+    {{ partner.name }}:
+    {% if partner_visions.get(v.key) %}
+    {% set pv = partner_visions[v.key] %}
+    <strong>{{ pv if pv is string else pv|join(', ') }}</strong>
+    {% elif v.key in partner_visions %}
+    hasn't decided yet either.
+    {% else %}
+    didn't select this as a vision.
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+<div class="road-nav">
+  <a class="btn-secondary" href="{{ url_for('road_availability') }}">&larr; Back: Availability</a>
+  <a class="btn-primary" href="{{ url_for('journey_view') }}">Done &rarr;</a>
+</div>
+{% endblock %}

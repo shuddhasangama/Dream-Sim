@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}This week — {{ session_user_name }}{% endblock %}
+{% block content %}
+
+{% if mode == "post_dating" %}
+<div class="eyebrow">Dating · Week {{ week_number }}</div>
+<h1>You're past the searching phase.</h1>
+{% if partner %}
+<div class="card">
+  <div class="micro">Your match</div>
+  <div class="candidate-name">{{ partner.name }}</div>
+  <div class="micro">{{ partner.stats.age }} · {{ partner.city }}</div>
+  <div class="stage-pill">{{ couple.stage }}</div>
+</div>
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>REACH sunsets once you've locked in — no more weekly reviews. Head to Journey to see what's next.</div>
+</div>
+<a class="btn-primary" href="{{ url_for('journey_view') }}">Go to Journey</a>
+{% else %}
+<div class="card"><div class="micro">No active match on file.</div></div>
+{% endif %}
+
+{% elif mode == "locked_in" %}
+<div class="eyebrow">Dating · Locked in · Week {{ lockin.week }}</div>
+<h1>You and {{ partner.name }} are locked in.</h1>
+
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>REACH has sunset for this match — no other candidates while you're locked in. If the date doesn't happen, you'll both return to the pool with the reason recorded.</div>
+</div>
+
+<div class="card">
+  <div class="micro">Your match</div>
+  <div class="candidate-name">{{ partner.name }}</div>
+  <div class="micro">{{ partner.stats.age }} · {{ partner.city }}</div>
+</div>
+
+{% if not plan %}
+<div class="card">
+  <div class="micro">Next: submit your availability for the calendar window (Fri/Sat/Sun meal slots).</div>
+</div>
+<a class="btn-primary" href="{{ url_for('calendar_view') }}">Open calendar</a>
+
+{% elif plan.status != "confirmed" %}
+<div class="card">
+  <div class="micro">Date plan</div>
+  <div>{{ plan.datetime }} · {{ plan.meal|capitalize }}{% if plan.venue %} · {{ plan.venue }}{% endif %}</div>
+  <div class="micro" style="margin-top:6px;">Waiting on both signatures before this is confirmed and payment opens.</div>
+</div>
+<a class="btn-primary" href="{{ url_for('plan_view') }}">Review &amp; sign the plan</a>
+
+{% elif phase in ("dates_live",) %}
+<div class="card">
+  <div class="micro">Date plan — confirmed</div>
+  <div>{{ plan.datetime }} · {{ plan.meal|capitalize }}{% if plan.venue %} · {{ plan.venue }}{% endif %}</div>
+</div>
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>Have a good date. Feedback opens Sunday night.</div>
+</div>
+
+{% elif phase == "feedback_open" %}
+{% set my_green = outcome[my_role + "_green_flags"] if outcome else [] %}
+{% if my_green|length < 2 %}
+<div class="card">
+  <div class="micro">How was the date? Pick exactly 2 green flags — this comes first, whatever you end up deciding.</div>
+  <form method="post" action="{{ url_for('plan_feedback_flags') }}">
+    <div class="micro section-label" style="margin-top:10px;color:var(--mint);">Green flags — pick 2</div>
+    <div class="day-picker">
+      {% for f in green_flags %}
+      <label class="day-check"><input type="checkbox" name="green_flags" value="{{ f }}">{{ f }}</label>
+      {% endfor %}
+    </div>
+    <div class="micro section-label" style="margin-top:10px;color:var(--coral-1);">Red flags — up to 2, optional</div>
+    <div class="day-picker">
+      {% for f in red_flags %}
+      <label class="day-check"><input type="checkbox" name="red_flags" value="{{ f }}">{{ f }}</label>
+      {% endfor %}
+    </div>
+    <div class="micro section-label" style="margin-top:10px;">Proof of date — optional</div>
+    <label class="checkbox-row"><input type="checkbox" name="together_photo"> We took a selfie together</label>
+    <label class="checkbox-row"><input type="checkbox" name="bill_photo"> We photographed the bill</label>
+    <button type="submit" class="btn-primary" style="margin-top:12px;">Save feedback</button>
+  </form>
+</div>
+
+{% elif outcome and outcome[my_role + "_decision"] %}
+<div class="card">
+  <div class="micro">How did it go?</div>
+  {% set said = outcome[my_role + "_decision"] %}
+  <div class="interest-flag yes">
+    You said: {{ {"continue": "Accept — continue dating", "relationship": "Accept — go to relationship", "pass": "Reject — back to REACH"}[said] }}.
+    Waiting on {{ partner.name }}.
+  </div>
+</div>
+
+{% else %}
+<div class="card">
+  <div class="micro">Feedback saved. Now, what's next?</div>
+  <form method="post" action="{{ url_for('plan_feedback') }}">
+    <textarea name="reason" placeholder="Optional — anything you'd want noted (only used if you reject)" rows="2" style="width:100%;margin-top:8px;"></textarea>
+    <div class="action-row" style="flex-wrap:wrap;">
+      <button type="submit" name="decision" value="pass" class="btn-secondary">Reject — back to REACH</button>
+      <button type="submit" name="decision" value="continue" class="btn-secondary">Accept — continue dating</button>
+      <button type="submit" name="decision" value="relationship" class="btn-primary">Accept — go to relationship</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+  <div class="micro">Date plan — confirmed</div>
+  <div>{{ plan.datetime }} · {{ plan.meal|capitalize }}{% if plan.venue %} · {{ plan.venue }}{% endif %}</div>
+  <div class="micro" style="margin-top:6px;">Feedback opens Sunday night.</div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="eyebrow">Dating · Week {{ clock.week }} · {{ clock.day }} {{ "%02d"|format(clock.hour) }}:00</div>
+<h1>This week's matches</h1>
+
+{% if not slots %}
+<div class="card"><div class="micro">No matches this week — an honest zero, not a filter problem you need to fix. Check REACH if you'd like to widen anything.</div></div>
+{% endif %}
+
+{% for s in slots %}
+<div class="match-slot slot-{{ s.row.slot }}">
+  <div class="slot-label">Match {{ s.row.slot }}</div>
+
+  {% if s.status == "not_yet_revealed" %}
+  <div class="slot-status">Reveals {{ s.row.revealed_at }}</div>
+
+  {% elif s.status == "open" %}
+  <div class="candidate-card" style="margin-top:8px;">
+    <div class="candidate-name">{{ s.candidate.name }}</div>
+    <div class="micro">Window closes {{ s.row.window_closes_at }}</div>
+
+    <div class="micro section-label" style="margin-top:10px;">Vision</div>
+    <div class="chip-row">
+      {% for v in s.candidate.visions %}<span class="chip">{{ v.key }}</span>{% endfor %}
+    </div>
+
+    <div class="micro section-label" style="margin-top:10px;">Verified stats</div>
+    <div class="stat-rows">
+      <div class="stat-row"><span>Age</span><span>{{ s.candidate.stats.age }}</span></div>
+      <div class="stat-row"><span>Height</span><span>{{ s.candidate.stats.height_cm }} cm</span></div>
+      <div class="stat-row"><span>Income band</span><span>{{ s.candidate.stats.income_band }}</span></div>
+      <div class="stat-row"><span>Education</span><span>{{ s.candidate.stats.education }}</span></div>
+      <div class="stat-row"><span>Diet</span><span>{{ s.candidate.stats.diet }}</span></div>
+    </div>
+    <div class="micro" style="margin-top:6px;">Photo (identity-verified) shown after Vision in the real product — not rendered in this simulation.</div>
+
+    <div class="interest-flag {% if s.their_interest_real %}yes{% endif %}">
+      {% if s.their_interest_real %}They've already expressed interest in you — expressing interest back will match you.{% else %}Expressing interest won't force anything — they'll only be told if it's mutual.{% endif %}
+    </div>
+
+    <form method="post" action="{{ url_for('week_act') }}" class="action-row">
+      <input type="hidden" name="match_id" value="{{ s.row.id }}">
+      <button type="submit" name="action" value="pass" class="btn-secondary">Pass</button>
+      <button type="submit" name="action" value="interest" class="btn-primary">Express interest</button>
+    </form>
+  </div>
+
+  {% elif s.status == "acted" %}
+  <div class="slot-status">{{ s.candidate.name }} · you {{ s.row.action }}{% if s.row.action == "pass" and s.row.pass_reason %} — "{{ s.row.pass_reason }}"{% endif %}</div>
+
+  {% elif s.status == "no_response" %}
+  <div class="slot-status">{{ s.candidate.name }} · window closed with no response</div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Date plan — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Dating · Date plan</div>
+<h1>Your date with {{ partner.name }}</h1>
+
+<div class="card">
+  <div class="plan-field-row"><span>Date &amp; time</span><span>{{ plan.datetime }}</span></div>
+  <div class="plan-field-row"><span>Meal</span><span>{{ plan.meal|capitalize }}</span></div>
+  <div class="plan-field-row"><span>Venue</span><span>{{ plan.venue or "Decide together" }}</span></div>
+  <div class="plan-field-row"><span>Cancellation</span><span>{{ plan.cancel_notice_hrs }}hr notice, ₹{{ plan.cancel_fee }} fee</span></div>
+  <div class="plan-field-row"><span>Scope</span><span>Single date instance only — expires on completion</span></div>
+</div>
+
+<div class="micro section-label" style="margin-top:18px;">Rules of engagement</div>
+<div class="micro" style="margin-bottom:6px;">Auto-filled from your confirmed slot — nothing here is typed in by hand.</div>
+<div class="card">
+  <div class="plan-field-row"><span>Cuisine</span><span>{{ plan.cuisine or "Decide together" }}</span></div>
+  <div class="plan-field-row"><span>Budget</span><span>{{ plan.budget_estimate }}</span></div>
+  <div class="plan-field-row"><span>Bill split</span><span>{{ bill_split_labels[plan.bill_split] }}</span></div>
+</div>
+
+{% if confirmed %}
+<div class="signature-status done">Confirmed by both partners — payment is open.</div>
+{% else %}
+
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>
+    <div class="micro section-label">Before the date</div>
+    <ul style="margin:6px 0 0 18px;padding:0;">
+      {% for c in briefing.courtesies %}<li class="micro">{{ c }}</li>{% endfor %}
+    </ul>
+    <div class="micro section-label" style="margin-top:8px;">Safety</div>
+    <ul style="margin:6px 0 0 18px;padding:0;">
+      {% for s in briefing.safety %}<li class="micro">{{ s }}</li>{% endfor %}
+    </ul>
+    {% if briefing.partner_greeting %}
+    <div class="micro" style="margin-top:8px;">{{ partner.name }}'s greeting preference: <strong>{{ briefing.partner_greeting }}</strong> — please respect it.</div>
+    {% endif %}
+    <div class="micro" style="margin-top:8px;">{{ briefing.note }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="micro">Your selections — {{ partner.name }} sees these in the signed plan too</div>
+  <form method="post" action="{{ url_for('plan_selections') }}">
+    <div class="day-picker" style="margin-top:8px;">
+      <label class="day-check category-radio"><input type="radio" name="greeting" value="namaste" {% if my_selections.greeting == "namaste" %}checked{% endif %}>Namaste</label>
+      <label class="day-check category-radio"><input type="radio" name="greeting" value="handshake" {% if my_selections.greeting == "handshake" %}checked{% endif %}>Handshake</label>
+      <label class="day-check category-radio"><input type="radio" name="greeting" value="side-hug" {% if my_selections.greeting == "side-hug" %}checked{% endif %}>Side-hug</label>
+      <label class="day-check category-radio"><input type="radio" name="greeting" value="bow" {% if my_selections.greeting == "bow" %}checked{% endif %}>Bow</label>
+    </div>
+    <input type="text" name="dietary" placeholder="Dietary notes / allergies" value="{{ my_selections.dietary or '' }}" style="margin-top:8px;">
+    <div class="day-picker" style="margin-top:8px;">
+      <label class="day-check category-radio"><input type="radio" name="dress" value="casual" {% if my_selections.dress == "casual" %}checked{% endif %}>Casual</label>
+      <label class="day-check category-radio"><input type="radio" name="dress" value="smart casual" {% if my_selections.dress == "smart casual" %}checked{% endif %}>Smart casual</label>
+      <label class="day-check category-radio"><input type="radio" name="dress" value="formal" {% if my_selections.dress == "formal" %}checked{% endif %}>Formal</label>
+    </div>
+    <button type="submit" class="btn-secondary" style="margin-top:10px;">Save selections</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="micro">Sign &amp; confirm</div>
+  {% if my_signature %}
+    {% if my_signature.face_verified %}
+    <div class="signature-status done">You've signed. Waiting on {{ partner.name }}.</div>
+    {% else %}
+    <div class="signature-status failed">Face verification didn't pass — try again.</div>
+    <form method="post" action="{{ url_for('plan_sign') }}">
+      {% for f in ack_fields %}<input type="hidden" name="{{ f }}" value="1">{% endfor %}
+      <button type="submit" class="btn-primary" style="margin-top:8px;">Retry verification</button>
+    </form>
+    {% endif %}
+  {% else %}
+  <form method="post" action="{{ url_for('plan_sign') }}">
+    <div class="ack-row"><input type="checkbox" name="ack_conduct" required> Code of conduct &amp; courtesies</div>
+    <div class="ack-row"><input type="checkbox" name="ack_cancellation" required> Cancellation policy</div>
+    <div class="ack-row"><input type="checkbox" name="ack_not_a_relationship" required> This is not a relationship or a playbook</div>
+    <div class="ack-row"><input type="checkbox" name="ack_liability" required> Platform liability</div>
+    <button type="submit" class="btn-primary" style="margin-top:12px;">Verify face &amp; sign</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<a class="btn-secondary" href="{{ url_for('week') }}">Back</a>
+{% endblock %}

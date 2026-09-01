@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Pick a user — Dare to Dream Sim{% endblock %}
+{% block content %}
+<div class="eyebrow">Dare to Dream · Simulation</div>
+<h1>Who are you playing?</h1>
+<div class="micro">{{ users|length }} simulated users · week {{ week_number }}</div>
+
+{% if users %}
+<div class="user-grid">
+  {% for u in users %}
+  <form method="post" action="{{ url_for('login', user_id=u.user_id) }}" class="user-card-form">
+    <button type="submit" class="user-card">
+      <div class="user-card-name">{{ u.name }}</div>
+      <div class="user-card-meta">{{ u.stats.age }} · {{ u.gender|capitalize }} · {{ u.city }}</div>
+      <div class="user-card-stage">{{ u.journey_state }}</div>
+    </button>
+  </form>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="micro">No users in data/dream.db yet.</div>
+  <div style="margin-top:8px;font-size:13px;color:var(--text-2);">
+    Run <code>python generate_users.py --count 200 --seed 42 --write-db</code> first.
+  </div>
+</div>
+{% endif %}
+
+<a class="btn-secondary" href="{{ url_for('admin_reset_week') }}">Admin: advance week</a>
+{% endblock %}

@@ -1,0 +1,6 @@
+<div class="stage-track" style="margin-top:16px;">
+  {% for step_id, step_label in steps %}
+  <a class="stage-node {% if loop.index0 == active_index %}active{% elif loop.index0 < active_index %}done{% endif %}"
+     href="{{ url_for('road_' + step_id) }}" style="text-decoration:none;">{{ step_label }}</a>
+  {% endfor %}
+</div>

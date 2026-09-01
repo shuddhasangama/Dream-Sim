@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}ROAD · Routine — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">ROAD · Step 1 of 4</div>
+<h1>Your weekly routine</h1>
+<div class="micro">Work and fitness, together — this is the backdrop Availability gets derived from.</div>
+
+{% include "_road_steps.html" %}
+
+<div class="week-grid" style="margin-top:18px;">
+  {% for day in week_days %}
+  <div class="week-col">
+    <div class="week-col-head">{{ day }}</div>
+    {% for b in grid[day] %}
+    <div class="week-block {{ b.category }}">{{ b.label }}<br>{{ b.start }}–{{ b.end }}</div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+{% if blocks %}
+<div class="card">
+  {% for b in blocks %}
+  <div class="block-row">
+    <div>
+      <div class="candidate-name-sm">
+        {{ b.label }}
+        <span class="category-tag {{ b.category }}">{{ b.category }}</span>
+      </div>
+      <div class="micro">{{ b.days|join(', ') }} · {{ b.start }}–{{ b.end }}</div>
+    </div>
+    <form method="post" action="{{ url_for('road_routine_remove') }}">
+      <input type="hidden" name="block_id" value="{{ b.id }}">
+      <button type="submit" class="btn-remove">Remove</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="micro">Add a routine block</div>
+  <form method="post" action="{{ url_for('road_routine_add') }}">
+    <div class="day-picker" style="margin-top:2px;">
+      <label class="day-check category-radio"><input type="radio" name="category" value="work" checked>Work</label>
+      <label class="day-check category-radio"><input type="radio" name="category" value="fitness">Fitness</label>
+    </div>
+
+    <div class="day-picker">
+      {% for day in week_days %}
+      <label class="day-check"><input type="checkbox" name="days" value="{{ day }}">{{ day }}</label>
+      {% endfor %}
+    </div>
+    <input type="text" name="label" placeholder="e.g. Office, Home office, Gym, Salsa" required>
+    <div class="time-row">
+      <input type="time" name="start" required>
+      <span class="micro">to</span>
+      <input type="time" name="end" required>
+    </div>
+    <button type="submit" class="btn-secondary">Add block</button>
+  </form>
+</div>
+
+<div class="road-nav">
+  <a class="btn-secondary" href="{{ url_for('journey_view') }}">Exit to Journey</a>
+  <a class="btn-primary" href="{{ url_for('road_obligations') }}">Next: Obligations &rarr;</a>
+</div>
+{% endblock %}

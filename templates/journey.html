@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Journey — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">The DREAM journey</div>
+<h1>Dating &rarr; Relationship &rarr; Engaged &rarr; Married</h1>
+
+{% if couple %}
+<div class="stage-track">
+  {% for s in stage_order %}
+  <div class="stage-node {% if couple.stage == s %}active{% elif stage_order.index(couple.stage) > loop.index0 %}done{% endif %}">{{ s }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if not couple %}
+<div class="card">
+  <div class="micro">You haven't matched yet — find a mutual match in this week's reviews first.</div>
+</div>
+<a class="btn-primary" href="{{ url_for('week') }}">Go to this week</a>
+
+{% else %}
+<div class="card">
+  <div class="micro">Together with</div>
+  <div class="candidate-name">{{ partner.name }}</div>
+  <div class="micro">Stage: {{ couple.stage }} · since {{ couple.start_date }}</div>
+</div>
+
+<div class="card">
+  <div class="micro">Your ROAD profile</div>
+  <div style="margin-top:6px;font-size:13.5px;color:var(--text-2);">
+    {{ road_block_count }} weekly routine block{{ 's' if road_block_count != 1 }} ·
+    {{ exception_count }} upcoming exception{{ 's' if exception_count != 1 }}
+  </div>
+  <a class="btn-secondary" href="{{ url_for('road_view') }}">Manage ROAD</a>
+</div>
+
+{% if next_stage %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>Ready for {{ next_stage }}? This is a soft checkpoint — both of you opt in, nothing is forced.</div>
+</div>
+<div class="card">
+  <form method="post" action="{{ url_for('journey_advance') }}">
+    <label class="checkbox-row"><input type="checkbox" name="opt_in_me" checked> I opt in</label>
+    <label class="checkbox-row"><input type="checkbox" name="opt_in_partner" checked> Partner opts in (simulated)</label>
+    <button type="submit" class="btn-primary">Advance to {{ next_stage }}</button>
+  </form>
+</div>
+{% else %}
+<div class="card"><div class="micro">You've reached the final stage: married.</div></div>
+{% endif %}
+{% endif %}
+{% endblock %}

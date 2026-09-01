@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Chemistry — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Mandatory at Relationship entry &middot; freely editable, always</div>
+<h1>Chemistry</h1>
+
+{% if mismatch and mismatch.surfaced %}
+<div class="card guru-card"><div class="guru-avatar">G</div><div>{{ mismatch.message }}</div></div>
+{% if mismatch.offer_next_level %}
+<a class="btn-secondary" href="{{ url_for('next_level_view') }}">Have the Next Level conversation</a>
+{% endif %}
+{% endif %}
+
+<div class="card">
+  <div class="micro section-label">Core chemistry</div>
+  {% for key in mandatory_keys %}
+  <form method="post" action="{{ url_for('chemistry_set') }}" class="action-row" style="margin-top:6px;">
+    <input type="hidden" name="key" value="{{ key }}">
+    <span class="micro" style="width:220px;">{{ key.replace('_', ' ')|capitalize }}</span>
+    <input type="text" name="value" value="{{ by_key.get(key, '') }}" style="flex:1;">
+    <button type="submit" class="btn-secondary">Save</button>
+  </form>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="micro section-label">Intimacy expectations</div>
+  <div class="micro">Expectation can be disclosed in advance. Consent cannot.</div>
+
+  <form method="post" action="{{ url_for('chemistry_set') }}" style="margin-top:8px;">
+    <input type="hidden" name="key" value="intimacy_pace">
+    <div class="micro">Pace</div>
+    <div class="day-picker">
+      {% for opt in pace_options %}
+      <label class="day-check"><input type="radio" name="value" value="{{ opt }}" {% if by_key.get('intimacy_pace') == opt %}checked{% endif %} required>{{ opt.replace('_', ' ') }}</label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn-secondary" style="margin-top:6px;">Save</button>
+  </form>
+
+  <form method="post" action="{{ url_for('chemistry_set') }}" class="action-row" style="margin-top:8px;">
+    <input type="hidden" name="key" value="intimacy_importance">
+    <span class="micro" style="width:220px;">Importance (1-5 + note)</span>
+    <input type="text" name="value" value="{{ by_key.get('intimacy_importance', '') }}" style="flex:1;">
+    <button type="submit" class="btn-secondary">Save</button>
+  </form>
+
+  <form method="post" action="{{ url_for('chemistry_set') }}" style="margin-top:8px;">
+    <input type="hidden" name="key" value="physical_boundary">
+    <div class="micro">Physical boundary preference</div>
+    <div class="day-picker">
+      {% for opt in boundary_options %}
+      <label class="day-check"><input type="radio" name="value" value="{{ opt }}" {% if by_key.get('physical_boundary') == opt %}checked{% endif %} required>{{ opt }}</label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn-secondary" style="margin-top:6px;">Save</button>
+  </form>
+
+  <form method="post" action="{{ url_for('chemistry_set') }}" class="action-row" style="margin-top:8px;">
+    <input type="hidden" name="key" value="intimacy_notes">
+    <span class="micro" style="width:220px;">What you want a partner to understand</span>
+    <input type="text" name="value" value="{{ by_key.get('intimacy_notes', '') }}" style="flex:1;">
+    <button type="submit" class="btn-secondary">Save</button>
+  </form>
+
+  <form method="post" action="{{ url_for('chemistry_set') }}" style="margin-top:8px;">
+    <input type="hidden" name="key" value="health_openness">
+    <div class="micro">Openness to discussing sexual health &amp; contraception</div>
+    <div class="day-picker">
+      {% for opt in health_options %}
+      <label class="day-check"><input type="radio" name="value" value="{{ opt }}" {% if by_key.get('health_openness') == opt %}checked{% endif %} required>{{ opt.replace('_', ' ') }}</label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn-secondary" style="margin-top:6px;">Save</button>
+  </form>
+</div>
+{% endblock %}

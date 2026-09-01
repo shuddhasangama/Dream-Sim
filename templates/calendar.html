@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Calendar — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Dating · Calendar</div>
+<h1>When could you both go out?</h1>
+<div class="micro">Friday: Coffee or Dinner only. Saturday/Sunday: Breakfast, Lunch, Coffee, or Dinner. Pick every window that could work for you — {{ partner.name }} does the same, and the system finds the overlap.</div>
+
+{% if overlap %}
+<div class="micro section-label">Overlap with {{ partner.name }} — pick one</div>
+<div class="meal-grid">
+  {% for day, meal in overlap %}
+  <form method="post" action="{{ url_for('calendar_confirm') }}">
+    <input type="hidden" name="day" value="{{ day }}">
+    <input type="hidden" name="meal_slot" value="{{ meal }}">
+    <button type="submit" class="meal-slot-check overlap" style="width:100%;">{{ day }} · {{ meal|capitalize }}</button>
+  </form>
+  {% endfor %}
+</div>
+{% elif their_submitted %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>No overlap yet between what you've each picked — offer next weekend, or head back to the pool.</div>
+</div>
+<form method="post" action="{{ url_for('calendar_no_overlap') }}" class="action-row">
+  <button type="submit" name="choice" value="next_weekend" class="btn-secondary">Try different times</button>
+  <button type="submit" name="choice" value="return_to_pool" class="btn-primary">Return to the pool</button>
+</form>
+{% else %}
+<div class="card"><div class="micro">Waiting on {{ partner.name }} to submit their availability too.</div></div>
+{% endif %}
+
+<div class="micro section-label" style="margin-top:18px;">Your availability</div>
+<form method="post" action="{{ url_for('calendar_submit') }}">
+  <div class="meal-grid">
+    {% for day in ["Fri", "Sat", "Sun"] %}
+    <div class="meal-day-col">
+      <div class="week-col-head">{{ day }}</div>
+      {% for d, meal in valid_slots if d == day %}
+      <label class="meal-slot-check">
+        <input type="checkbox" name="slot" value="{{ day }}|{{ meal }}" {% if (day, meal) in my_slots %}checked{% endif %}>
+        {{ meal|capitalize }}
+      </label>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  <button type="submit" class="btn-primary" style="margin-top:16px;">Save my availability</button>
+</form>
+
+<a class="btn-secondary" href="{{ url_for('week') }}">Back</a>
+{% endblock %}
