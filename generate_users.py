@@ -340,13 +340,13 @@ def main() -> None:
     parser.add_argument(
         "--write-db",
         action="store_true",
-        help="also insert the generated users into the User table (data/dream.db by default)",
+        help="also insert the generated users into the configured database",
     )
     parser.add_argument(
         "--db-path",
         type=Path,
         default=None,
-        help="SQLite path to write to when --write-db is set (default: db.py's DEFAULT_DB_PATH)",
+        help="local SQLite path to use when DATABASE_URL is not configured",
     )
     args = parser.parse_args()
 
@@ -356,14 +356,13 @@ def main() -> None:
     print(f"Wrote {len(users)} synthetic users to {args.out} (seed={args.seed})")
 
     if args.write_db:
-        import db
+    	import db
 
-        db_path = args.db_path or db.DEFAULT_DB_PATH
-        conn = db.get_connection(db_path)
-        db.init_db(conn)
-        seed_db(conn, users)
-        conn.close()
-        print(f"Inserted {len(users)} rows into User at {db_path}")
+    	conn = db.get_connection(args.db_path or db.DEFAULT_DB_PATH)
+    	db.init_db(conn)
+    	seed_db(conn, users)
+    	conn.close()
+    	print(f"Inserted {len(users)} rows into the configured database")
 
 
 if __name__ == "__main__":
