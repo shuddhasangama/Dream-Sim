@@ -33,7 +33,7 @@
 -- preferences_json is not in the brief's §7 struct verbatim, but every user
 -- needs it to drive REACH (docs/agent-1-reach.pdf §3: preferences.fixed /
 -- preferences.adjustable) — added here rather than left DB-less.
-CREATE TABLE IF NOT EXISTS User (
+CREATE TABLE IF NOT EXISTS "User" (
     id                TEXT PRIMARY KEY,
     journey_state     TEXT NOT NULL CHECK (journey_state IN (
                           'onboarding', 'dating', 'relationship', 'engaged', 'married',
@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS User (
 --   exclusivityAckA/B, consentBlock, road/playbook/calendar refs }
 CREATE TABLE IF NOT EXISTS Couple (
     id                   TEXT PRIMARY KEY,
-    partner_a_id         TEXT NOT NULL REFERENCES User(id),
-    partner_b_id         TEXT NOT NULL REFERENCES User(id),
+    partner_a_id         TEXT NOT NULL REFERENCES "User"(id),
+    partner_b_id         TEXT NOT NULL REFERENCES "User"(id),
     stage                TEXT NOT NULL CHECK (stage IN ('relationship', 'engaged', 'married')),
     entered_via          TEXT NOT NULL CHECK (entered_via IN ('progression', 'lateral')),
     start_date           TEXT NOT NULL,
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS Couple (
 -- sharing at the data layer — availability... default private").
 CREATE TABLE IF NOT EXISTS RoadProfile (
     id                 TEXT PRIMARY KEY,
-    user_id            TEXT NOT NULL REFERENCES User(id),
+    user_id            TEXT NOT NULL REFERENCES "User"(id),
     couple_id          TEXT NOT NULL REFERENCES Couple(id),
     routine_json       TEXT NOT NULL DEFAULT '[]',
     availability_json  TEXT NOT NULL DEFAULT '[]',
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS RoadProfile (
 CREATE TABLE IF NOT EXISTS CalendarEntry (
     id          TEXT PRIMARY KEY,
     couple_id   TEXT NOT NULL REFERENCES Couple(id),
-    owner_id    TEXT NOT NULL REFERENCES User(id),
+    owner_id    TEXT NOT NULL REFERENCES "User"(id),
     type        TEXT NOT NULL CHECK (type IN ('availability', 'obligation', 'date', 'travel')),
     travel_mode TEXT CHECK (
                     travel_mode IS NULL OR travel_mode IN ('solo', 'partner_solo', 'together')
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS Playbook (
 CREATE TABLE IF NOT EXISTS Difference (
     id               TEXT PRIMARY KEY,
     couple_id        TEXT NOT NULL REFERENCES Couple(id),
-    raised_by        TEXT NOT NULL REFERENCES User(id),
+    raised_by        TEXT NOT NULL REFERENCES "User"(id),
     text             TEXT NOT NULL,
     tag              TEXT,
     status           TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'sorted')),
@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS WeeklyReport (
 CREATE TABLE IF NOT EXISTS Exit (
     id                   TEXT PRIMARY KEY,
     couple_id            TEXT NOT NULL REFERENCES Couple(id),
-    initiated_by         TEXT NOT NULL REFERENCES User(id),
+    initiated_by         TEXT NOT NULL REFERENCES "User"(id),
     stage_at_exit        TEXT NOT NULL CHECK (stage_at_exit IN ('relationship', 'engaged', 'married')),
     status               TEXT NOT NULL DEFAULT 'interview' CHECK (
                             status IN ('interview', 'feedback', 'cooloff', 'complete')
@@ -234,8 +234,8 @@ CREATE TABLE IF NOT EXISTS Exit (
 --   window_closes_at, action(interest|pass|none), pass_reason }
 CREATE TABLE IF NOT EXISTS Match (
     id                 TEXT PRIMARY KEY,
-    user_id            TEXT NOT NULL REFERENCES User(id),
-    candidate_id       TEXT NOT NULL REFERENCES User(id),
+    user_id            TEXT NOT NULL REFERENCES "User"(id),
+    candidate_id       TEXT NOT NULL REFERENCES "User"(id),
     week               INTEGER NOT NULL,
     slot               INTEGER NOT NULL CHECK (slot IN (1, 2, 3)),
     revealed_at        TEXT NOT NULL,
@@ -259,8 +259,8 @@ CREATE TABLE IF NOT EXISTS Match (
 -- ever increment once both halves of that condition are true.
 CREATE TABLE IF NOT EXISTS LockIn (
     id                TEXT PRIMARY KEY,
-    user_a            TEXT NOT NULL REFERENCES User(id),
-    user_b            TEXT NOT NULL REFERENCES User(id),
+    user_a            TEXT NOT NULL REFERENCES "User"(id),
+    user_b            TEXT NOT NULL REFERENCES "User"(id),
     week              INTEGER NOT NULL,
     created_at        TEXT NOT NULL,
     status            TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'released', 'completed')),
@@ -275,7 +275,7 @@ CREATE TABLE IF NOT EXISTS LockIn (
 CREATE TABLE IF NOT EXISTS Availability (
     id          TEXT PRIMARY KEY,
     lockin_id   TEXT NOT NULL REFERENCES LockIn(id),
-    user_id     TEXT NOT NULL REFERENCES User(id),
+    user_id     TEXT NOT NULL REFERENCES "User"(id),
     day         TEXT NOT NULL CHECK (day IN ('Fri', 'Sat', 'Sun')),
     meal_slot   TEXT NOT NULL CHECK (meal_slot IN ('breakfast', 'lunch', 'coffee', 'dinner')),
     UNIQUE (lockin_id, user_id, day, meal_slot),
@@ -317,7 +317,7 @@ CREATE TABLE IF NOT EXISTS DatePlan (
 CREATE TABLE IF NOT EXISTS Signature (
     id                       TEXT PRIMARY KEY,
     dateplan_id              TEXT NOT NULL REFERENCES DatePlan(id),
-    user_id                  TEXT NOT NULL REFERENCES User(id),
+    user_id                  TEXT NOT NULL REFERENCES "User"(id),
     signed_at                TEXT NOT NULL,
     face_verified            INTEGER NOT NULL CHECK (face_verified IN (0, 1)),
     ack_conduct              INTEGER NOT NULL DEFAULT 0 CHECK (ack_conduct IN (0, 1)),
@@ -368,7 +368,7 @@ CREATE TABLE IF NOT EXISTS DateOutcome (
 -- shape; compliance_status() in outcomes.py is what interprets it per type.
 CREATE TABLE IF NOT EXISTS ComplianceEvent (
     id       TEXT PRIMARY KEY,
-    user_id  TEXT NOT NULL REFERENCES User(id),
+    user_id  TEXT NOT NULL REFERENCES "User"(id),
     type     TEXT NOT NULL CHECK (type IN ('rating', 'no_show', 'late_cancel', 'report', 'violation')),
     value    TEXT,
     week     INTEGER NOT NULL,
@@ -393,7 +393,7 @@ CREATE TABLE IF NOT EXISTS ComplianceEvent (
 CREATE TABLE IF NOT EXISTS ContactRequest (
     id            TEXT PRIMARY KEY,
     pair_id       TEXT NOT NULL REFERENCES LockIn(id),
-    requester_id  TEXT NOT NULL REFERENCES User(id),
+    requester_id  TEXT NOT NULL REFERENCES "User"(id),
     channel       TEXT NOT NULL CHECK (channel IN ('phone', 'whatsapp', 'instagram', 'linkedin')),
     week          INTEGER NOT NULL,
     status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'ignored')),
@@ -438,7 +438,7 @@ CREATE TABLE IF NOT EXISTS StageGate (
 CREATE TABLE IF NOT EXISTS GateResponse (
     id               TEXT PRIMARY KEY,
     pair_id          TEXT NOT NULL REFERENCES LockIn(id),
-    user_id          TEXT NOT NULL REFERENCES User(id),
+    user_id          TEXT NOT NULL REFERENCES "User"(id),
     question_key     TEXT NOT NULL,
     answer_text      TEXT,
     readiness_scale  TEXT,
@@ -463,7 +463,7 @@ CREATE TABLE IF NOT EXISTS GateAnalysis (
 -- additive-only: vision.py defines no delete/edit-in-place function.
 CREATE TABLE IF NOT EXISTS VisionEntry (
     id           TEXT PRIMARY KEY,
-    user_id      TEXT NOT NULL REFERENCES User(id),
+    user_id      TEXT NOT NULL REFERENCES "User"(id),
     element_key  TEXT NOT NULL,
     detail_text  TEXT NOT NULL,
     added_at     TEXT NOT NULL,
@@ -479,7 +479,7 @@ CREATE TABLE IF NOT EXISTS VisionEntry (
 -- declaration" — enforced in code AND schema, not just one or the other).
 CREATE TABLE IF NOT EXISTS VisionChange (
     id                    TEXT PRIMARY KEY,
-    user_id               TEXT NOT NULL REFERENCES User(id),
+    user_id               TEXT NOT NULL REFERENCES "User"(id),
     element_key           TEXT NOT NULL,
     from_value            TEXT NOT NULL,
     to_value               TEXT NOT NULL,
@@ -492,7 +492,7 @@ CREATE TABLE IF NOT EXISTS VisionChange (
 -- (chemistry.py upserts by (user_id, key)), unlike Vision above.
 CREATE TABLE IF NOT EXISTS ChemistryEntry (
     id          TEXT PRIMARY KEY,
-    user_id     TEXT NOT NULL REFERENCES User(id),
+    user_id     TEXT NOT NULL REFERENCES "User"(id),
     key         TEXT NOT NULL,
     value       TEXT NOT NULL,
     updated_at  TEXT NOT NULL,
@@ -536,7 +536,7 @@ CREATE TABLE IF NOT EXISTS NextLevelThread (
 CREATE TABLE IF NOT EXISTS HomeInvite (
     id                           TEXT PRIMARY KEY,
     pair_id                      TEXT NOT NULL REFERENCES LockIn(id),
-    requester_id                 TEXT NOT NULL REFERENCES User(id),
+    requester_id                 TEXT NOT NULL REFERENCES "User"(id),
     proposed_datetime            TEXT NOT NULL,
     expectation_flag             TEXT NOT NULL CHECK (expectation_flag IN ('social_only', 'open_ended', 'intimacy_expected')),
     flag_seen_by_recipient_at    TEXT,
@@ -551,7 +551,7 @@ CREATE TABLE IF NOT EXISTS HomeInvite (
     face_verified_b              INTEGER NOT NULL DEFAULT 0 CHECK (face_verified_b IN (0, 1)),
     trusted_contact_notified_a   INTEGER NOT NULL DEFAULT 0 CHECK (trusted_contact_notified_a IN (0, 1)),
     trusted_contact_notified_b   INTEGER NOT NULL DEFAULT 0 CHECK (trusted_contact_notified_b IN (0, 1)),
-    revoked_by                   TEXT REFERENCES User(id),
+    revoked_by                   TEXT REFERENCES "User"(id),
     revoked_at                   TEXT,
     acknowledgement_version      TEXT
 );
@@ -561,7 +561,7 @@ CREATE TABLE IF NOT EXISTS HomeInvite (
 --   targetStage: 'relationship' | 'engaged' | 'married' | null // null for join_pool }
 CREATE TABLE IF NOT EXISTS Invite (
     id            TEXT PRIMARY KEY,
-    from_user_id  TEXT NOT NULL REFERENCES User(id),
+    from_user_id  TEXT NOT NULL REFERENCES "User"(id),
     to_contact    TEXT NOT NULL,
     mode          TEXT NOT NULL CHECK (mode IN ('start_together', 'join_pool')),
     target_stage  TEXT CHECK (

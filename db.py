@@ -87,6 +87,9 @@ def _placeholder(conn: Any) -> str:
     """Return the parameter placeholder used by the active database."""
     return "%s" if _is_postgres_connection(conn) else "?"
 
+def _table_name(conn: Any, table: str) -> str:
+    """Return a safely formatted table identifier."""
+    return f'"{table}"' if _is_postgres_connection(conn) else table
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
     """Convert a database row into a plain dictionary."""
@@ -180,6 +183,8 @@ def insert_row(conn: Any, table: str, row: dict[str, Any]) -> Any:
     """
     _check_table(table)
 
+    table_name = _table_name(conn, table)
+
     columns_list = list(row.keys())
     columns = ", ".join(columns_list)
     values = tuple(row.values())
@@ -203,21 +208,21 @@ def insert_row(conn: Any, table: str, row: dict[str, Any]) -> Any:
                 for column in update_columns
             )
             sql = (
-                f"INSERT INTO {table} ({columns}) "
+                f"INSERT INTO {table_name} ({columns}) "
                 f"VALUES ({placeholders}) "
                 f"ON CONFLICT ({conflict_target}) "
                 f"DO UPDATE SET {updates}"
             )
         else:
             sql = (
-                f"INSERT INTO {table} ({columns}) "
+                f"INSERT INTO {table_name} ({columns}) "
                 f"VALUES ({placeholders}) "
                 f"ON CONFLICT ({conflict_target}) DO NOTHING"
             )
     else:
         placeholders = ", ".join(placeholder for _ in row)
         sql = (
-            f"INSERT OR REPLACE INTO {table} "
+            f"INSERT OR REPLACE INTO {table_name} "
             f"({columns}) VALUES ({placeholders})"
         )
 
@@ -234,7 +239,8 @@ def fetch_all(
     """Fetch every row from `table`, optionally filtered by equality."""
     _check_table(table)
 
-    sql = f"SELECT * FROM {table}"
+    table_name = _table_name(conn, table)
+    sql = f"SELECT * FROM {table_name}"
     values: tuple[Any, ...] = ()
 
     if where:
@@ -264,10 +270,11 @@ def delete_row(conn: Any, table: str, row_id: str) -> None:
     """Delete one row from `table` by id. No-op if it doesn't exist."""
     _check_table(table)
 
+    table_name = _table_name(conn, table)
     placeholder = _placeholder(conn)
     _execute(
         conn,
-        f"DELETE FROM {table} WHERE id = {placeholder}",
+        f"DELETE FROM {table_name} WHERE id = {placeholder}",
         (row_id,),
     )
     _commit(conn)
