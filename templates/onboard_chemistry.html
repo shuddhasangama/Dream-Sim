@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Step 3 · Chemistry — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Step 3 of 3 · Chemistry</div>
+<h1>What you'd actually do together</h1>
+{% include "_wizard.html" %}
+
+<div class="lede">
+  Sort at least {{ min_sorted }}. This is what a match page uses to say
+  "you both want to improve at Salsa" — the overlap matters more than the total.
+</div>
+
+{% if error %}<div class="card form-error">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ url_for('onboard_chemistry') }}">
+  <div class="card">
+    <div class="bucket-legend">
+      {% for bucket_id, glyph, label in buckets %}
+      <span class="bucket-legend-item"><b>{{ glyph }}</b> {{ label }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="activity-table">
+      {% for activity in activities %}
+      <div class="activity-row">
+        <span class="activity-name">{{ activity }}</span>
+        <span class="activity-buckets">
+          {% for bucket_id, glyph, label in buckets %}
+          <label class="bucket-pick" title="{{ label }}">
+            <input type="radio" name="act__{{ activity }}" value="{{ bucket_id }}"
+                   {% if chosen.get(activity) == bucket_id %}checked{% endif %}>
+            <span class="bucket-glyph b-{{ bucket_id }}">{{ glyph }}</span>
+          </label>
+          {% endfor %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="action-row">
+    <a class="btn-secondary" href="{{ url_for('onboard_stats') }}">‹ Back</a>
+    <button type="submit" class="btn-primary">Finish registration →</button>
+  </div>
+</form>
+{% endblock %}

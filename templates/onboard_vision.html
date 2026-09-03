@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Step 1 · Vision — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Step 1 of 3 · Vision</div>
+<h1>What are you actually here for?</h1>
+{% include "_wizard.html" %}
+
+<div class="lede">
+  Your end goals are matched before anything else. Intimacy is on everyone's list — pick which kinds,
+  then at least one more goal alongside it.
+</div>
+
+{% if error %}<div class="card form-error">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ url_for('onboard_vision') }}">
+  <div class="card">
+    <div class="section-label">Intimacy — mandatory, pick one or both</div>
+    <div class="chip-row">
+      {% for kind in intimacy_kinds %}
+      <label class="chip-check">
+        <input type="checkbox" name="intimacy_kinds" value="{{ kind }}" {% if kind in chosen_kinds %}checked{% endif %}>
+        <span>{{ kind }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="hint" style="margin-top:9px;">Kids can only be chosen if Physical is selected here.</div>
+  </div>
+
+  <div class="card">
+    <div class="section-label">And at least one of these</div>
+
+    <div class="goal-block">
+      <label class="chip-check">
+        <input type="checkbox" name="other_keys" value="Travel together" {% if 'Travel together' in chosen_others %}checked{% endif %}>
+        <span>Travel together</span>
+      </label>
+    </div>
+
+    <div class="goal-block">
+      <label class="chip-check">
+        <input type="checkbox" name="other_keys" value="Kids" {% if 'Kids' in chosen_others %}checked{% endif %}>
+        <span>Kids</span>
+      </label>
+    </div>
+
+    <div class="goal-block">
+      <label class="chip-check">
+        <input type="checkbox" name="other_keys" value="Cohabitate" {% if 'Cohabitate' in chosen_others %}checked{% endif %}>
+        <span>Cohabitate</span>
+      </label>
+      <div class="goal-detail">
+        <div class="hint">If you pick Cohabitate — what are you actually agreeing about? Pick one or both.</div>
+        <div class="chip-row" style="margin-top:8px;">
+          {% for focus in cohabit_focus_options %}
+          <label class="chip-check">
+            <input type="checkbox" name="cohabit_focus" value="{{ focus }}" {% if focus in chosen_focus %}checked{% endif %}>
+            <span>{{ focus }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:14px;">
+      Travel together and Kids take no detail now. How Kids actually works gets decided later,
+      together, at the Relationship stage — not here, on your own.
+    </div>
+  </div>
+
+  <div class="action-row">
+    <a class="btn-secondary" href="{{ url_for('signup') }}">‹ Back</a>
+    <button type="submit" class="btn-primary">Continue to stats →</button>
+  </div>
+</form>
+{% endblock %}

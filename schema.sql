@@ -573,3 +573,21 @@ CREATE TABLE IF NOT EXISTS Invite (
         OR (mode = 'start_together' AND target_stage IS NOT NULL)
     )
 );
+
+-- ── Account: the credential, kept apart from the dating profile ──
+-- Added by Segment A. Nothing validates these yet (Case 1 specifies an
+-- unvalidated front door); password_hash and the two verified_* flags
+-- exist so Phase 3 can fill them without another schema change.
+CREATE TABLE IF NOT EXISTS Account (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL REFERENCES "User"(id),
+    email           TEXT,
+    phone           TEXT,
+    password_hash   TEXT,
+    verified_email  INTEGER NOT NULL DEFAULT 0 CHECK (verified_email IN (0, 1)),
+    verified_phone  INTEGER NOT NULL DEFAULT 0 CHECK (verified_phone IN (0, 1)),
+    created_at      TEXT NOT NULL,
+    UNIQUE (user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_account_email ON Account (email);
+CREATE INDEX IF NOT EXISTS idx_account_phone ON Account (phone);

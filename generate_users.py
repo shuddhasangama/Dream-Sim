@@ -63,21 +63,41 @@ VISION_KEYS = ["Kids", "Intimacy", "Cohabitate", "Travel together"]
 # Cohabitate, Travel Together"). See _generate_visions().
 OTHER_VISION_KEYS = ["Kids", "Cohabitate", "Travel together"]
 
-# Kids/Cohabitate's stance detail is deliberately NOT decided at Dating
-# signup — per the user's own framing, "just the vision needs to be
-# mentioned... how part of it will be figured out along the way." Both
-# start at stance=None (same as Travel together always has) and only get
-# a real stance once the couple reaches Relationship and visits the new
-# /road/vision step (app.py's road_vision route) — at which point it's a
-# genuine decision being made then, not a secret withheld from signup.
-# These option lists stay here because that later step is what offers
-# them, not because generation uses them anymore.
+# Kids' stance detail is deliberately NOT decided at Dating signup — per
+# the user's framing, "just the vision needs to be mentioned... how part
+# of it will be figured out along the way." Kids starts at stance=None
+# (same as Travel together always has) and only gets a real stance once
+# the couple reaches Relationship and visits the /road/vision step
+# (app.py's road_vision route).
+#
+# Cohabitate is the exception, revised 2026-09-03 at the user's request:
+# choosing to cohabit without saying whether you mean chores, expenses or
+# both says almost nothing, so its focus IS captured at signup. It stays
+# in VISION_STANCE_OPTIONS so it can still be revised at Relationship.
 KIDS_STANCES = ["Have kids & want more", "Have kids & don't want more", "Want kids", "Don't want kids"]
 INTIMACY_KINDS = ["Emotional", "Physical"]  # 2026-08-28: Sexual removed at the user's request
 COHABIT_FOCUS = ["Chores split", "Expenses sharing"]
 
 INCOME_BANDS = ["₹ · under 12L", "₹₹ · 12L – 25L", "₹₹₹ · 25L – 50L", "₹₹₹₹ · 50L+"]
 INCOME_BAND_WEIGHTS = [0.15, 0.40, 0.30, 0.15]
+
+# Per-person spend on one meal out — distinct from INCOME_BANDS, which is
+# what someone earns. Two people can share an income band and still be
+# uncomfortable in each other's restaurants, which is the friction the
+# date playbook's bill-split clause exists to prevent.
+RESTAURANT_BUDGETS = ["₹ · under 800", "₹₹ · 800 – 2,000", "₹₹₹ · 2,000 – 4,500", "₹₹₹₹ · 4,500+"]
+RESTAURANT_BUDGET_WEIGHTS = [0.22, 0.42, 0.26, 0.10]
+
+# Self-declared descent, at the coarse level people describe themselves.
+# Deliberately NOT caste, and deliberately not a matching filter — see
+# matching.py's lever list, which this is absent from. "Prefer not to say"
+# is a first-class value, not a gap to be filled in later.
+ETHNICITIES = [
+    "Indian", "South Asian (other)", "East Asian", "Southeast Asian",
+    "Middle Eastern", "African", "European", "Latin American",
+    "Mixed", "Prefer not to say",
+]
+ETHNICITY_WEIGHTS = [0.74, 0.06, 0.02, 0.02, 0.02, 0.02, 0.03, 0.01, 0.03, 0.05]
 
 DIETS = ["Vegetarian", "Vegan", "Eggetarian", "Halal", "Jain", "No red meat", "Everything"]
 DIET_WEIGHTS = [0.30, 0.05, 0.10, 0.08, 0.07, 0.10, 0.30]
@@ -163,9 +183,10 @@ def _generate_visions(rng: random.Random) -> list[dict[str, Any]]:
     """Every user gets Intimacy (mandatory, with 1-2 of its own kinds)
     plus at least one — up to all three — of Kids/Cohabitate/Travel
     together, so every vision list has 2-4 entries and always includes
-    Intimacy. Kids/Cohabitate start with stance=None regardless of
-    selection — that detail isn't decided at signup (see KIDS_STANCES'
-    comment above); Travel together never has one.
+    Intimacy. Cohabitate carries its focus (chores, expenses or both)
+    from signup; Kids starts at stance=None — that detail isn't decided
+    at signup (see KIDS_STANCES' comment above) — and Travel together
+    never has one.
 
     Kids requires Physical intimacy (2026-08-28, user's explicit rule:
     "Kids cannot be selected if Intimacy - Physical is not selected") —
@@ -177,7 +198,12 @@ def _generate_visions(rng: random.Random) -> list[dict[str, Any]]:
 
     visions = [{"key": "Intimacy", "stance": intimacy_kinds}]
     for key in other_keys:
-        visions.append({"key": key, "stance": None})  # Kids, Cohabitate, Travel together — stance TBD, see module comment
+        if key == "Cohabitate":
+            # Chores split, Expenses sharing, or both — decided at signup.
+            stance = sorted(rng.sample(COHABIT_FOCUS, k=rng.randint(1, len(COHABIT_FOCUS))))
+        else:
+            stance = None  # Kids and Travel together carry no detail at signup
+        visions.append({"key": key, "stance": stance})
     return visions
 
 
@@ -191,6 +217,8 @@ def _generate_stats(rng: random.Random, gender: str, age: int) -> dict[str, Any]
         "weight_kg": round(_clipped_normal(rng, weight_mean, weight_sd, 40, 150)),
         "waist_in": round(_clipped_normal(rng, waist_mean, waist_sd, 20, 55)),
         "income_band": _weighted_choice(rng, INCOME_BANDS, INCOME_BAND_WEIGHTS),
+        "budget": _weighted_choice(rng, RESTAURANT_BUDGETS, RESTAURANT_BUDGET_WEIGHTS),
+        "ethnicity": _weighted_choice(rng, ETHNICITIES, ETHNICITY_WEIGHTS),
         "diet": _weighted_choice(rng, DIETS, DIET_WEIGHTS),
         "education": _weighted_choice(rng, EDUCATION, EDUCATION_WEIGHTS),
         "nationality": _weighted_choice(rng, OWN_NATIONALITIES, OWN_NATIONALITY_WEIGHTS),

@@ -1,0 +1,9 @@
+{# Shared step rail for the onboarding wizard. #}
+<div class="wizard-rail">
+  {% for s in wizard_steps %}
+  <div class="wizard-step {{ s.state }}">
+    <span class="wizard-dot">{% if s.state == 'done' %}✓{% else %}{{ s.index }}{% endif %}</span>
+    <span class="wizard-label">{{ s.label }}</span>
+  </div>
+  {% endfor %}
+</div>

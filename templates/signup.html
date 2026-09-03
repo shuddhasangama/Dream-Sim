@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Sign up — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Dare to Dream</div>
+<h1>Start your journey</h1>
+{% include "_wizard.html" %}
+
+<div class="lede">
+  Give us one way to reach you. Neither is verified yet — that comes with background verification.
+</div>
+
+{% if error %}<div class="card form-error">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ url_for('signup') }}">
+  <div class="card">
+    <label class="field">
+      <span class="field-label">Email address</span>
+      <input class="field-input" type="text" name="email" value="{{ draft.email or '' }}" placeholder="you@example.com" autocomplete="email">
+      {% if hints and draft.email and not hints.email_looks_valid %}
+      <span class="field-hint">That doesn't look like an email address. Continuing anyway.</span>
+      {% endif %}
+    </label>
+
+    <label class="field">
+      <span class="field-label">Phone number</span>
+      <input class="field-input" type="text" name="phone" value="{{ draft.phone or '' }}" placeholder="98765 43210" autocomplete="tel">
+      {% if hints and draft.phone and not hints.phone_looks_valid %}
+      <span class="field-hint">That doesn't look like a phone number. Continuing anyway.</span>
+      {% endif %}
+    </label>
+  </div>
+
+  <button type="submit" class="btn-primary">Continue to your vision →</button>
+</form>
+
+<div class="micro" style="margin-top:22px;">
+  Play-testing the simulation instead?
+  <a href="{{ url_for('picker') }}">Pick one of the seeded users</a>.
+</div>
+{% endblock %}

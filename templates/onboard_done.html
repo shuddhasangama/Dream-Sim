@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Review — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Almost there</div>
+<h1>Check this, then we verify you</h1>
+{% include "_wizard.html" %}
+
+<div class="lede">
+  Creating your profile puts you in the onboarding state. You reach the weekly match rotation
+  once background verification clears.
+</div>
+
+<div class="card">
+  <div class="section-label">Contact</div>
+  <div class="stat-rows">
+    <div class="stat-row"><span>Email</span><span>{{ draft.email or '—' }}</span></div>
+    <div class="stat-row"><span>Phone</span><span>{{ draft.phone or '—' }}</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-label">Vision</div>
+  <div class="stat-rows">
+    {% for v in visions %}
+    <div class="stat-row">
+      <span>{{ v.key }}</span>
+      <span>{% if v.stance %}{{ v.stance|join(', ') }}{% elif v.key == 'Travel together' %}no detail needed{% else %}decided together, later{% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-label">Stats</div>
+  <div class="stat-rows">
+    <div class="stat-row"><span>City</span><span>{{ draft.city }}</span></div>
+    <div class="stat-row"><span>Gender</span><span>{{ draft.gender|capitalize }}</span></div>
+    <div class="stat-row"><span>Age</span><span>{{ draft.stats.age }}</span></div>
+    <div class="stat-row"><span>Height · weight · waist</span><span>{{ draft.stats.height_cm }} cm · {{ draft.stats.weight_kg }} kg · {{ draft.stats.waist_in }} in</span></div>
+    <div class="stat-row"><span>Salary bracket</span><span>{{ income_band }}</span></div>
+    <div class="stat-row"><span>Restaurant budget</span><span>{{ draft.stats.budget }}</span></div>
+    <div class="stat-row"><span>Ethnicity</span><span>{{ draft.stats.ethnicity }}</span></div>
+    <div class="stat-row"><span>Profession</span><span>{{ draft.stats.profession }}</span></div>
+    <div class="stat-row"><span>Education</span><span>{{ draft.stats.education }}</span></div>
+    <div class="stat-row"><span>Diet</span><span>{{ draft.stats.diet }}</span></div>
+    <div class="stat-row"><span>Marital history</span><span>{{ draft.stats.marital_history }}</span></div>
+    <div class="stat-row"><span>Nationality · religion</span><span>{{ draft.stats.nationality }} · {{ draft.stats.religion }}</span></div>
+    <div class="stat-row"><span>Languages</span><span>{{ draft.stats.languages|join(', ') }}</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-label">Chemistry</div>
+  <div class="stat-rows">
+    {% for bucket_id, items in skills.by_bucket.items() %}
+    <div class="stat-row">
+      <span>{{ bucket_labels[bucket_id] }}</span>
+      <span>{{ items|join(' · ') if items else '—' }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-label">What happens next</div>
+  <div class="stat-rows">
+    <div class="stat-row"><span>Date of birth</span><span class="pending">Pending verification</span></div>
+    <div class="stat-row"><span>Nationality</span><span class="pending">Pending verification</span></div>
+    <div class="stat-row"><span>Salary</span><span class="pending">Pending verification</span></div>
+    <div class="stat-row"><span>Salary bracket</span><span class="pending">Pending salary</span></div>
+  </div>
+  <div class="micro" style="margin-top:8px;">Background verification is Segment B — not built yet.</div>
+</div>
+
+<div class="action-row">
+  <a class="btn-secondary" href="{{ url_for('onboard_chemistry') }}">‹ Back</a>
+  <form method="post" action="{{ url_for('onboard_finish') }}" style="margin:0;">
+    <button type="submit" class="btn-primary">Create my profile</button>
+  </form>
+</div>
+
+<form method="post" action="{{ url_for('onboard_restart') }}" style="margin-top:18px;">
+  <button type="submit" class="btn-secondary">Start over</button>
+</form>
+{% endblock %}

@@ -13,6 +13,7 @@ Run: python app.py   (serves http://localhost:5000)
 from __future__ import annotations
 
 import json
+import os
 import random
 import uuid
 from datetime import date, timedelta
@@ -35,6 +36,7 @@ import journey
 import lockin
 import matching
 import next_level
+import onboarding
 import outcomes
 import stage_gate
 import vision
@@ -84,7 +86,10 @@ VISION_STANCE_OPTIONS = {
 }
 
 app = Flask(__name__)
-app.secret_key = "dream-sim-local-play-test-only"  # local dev tool only — never reuse this for a real deployment
+app.secret_key = os.environ.get("SECRET_KEY") or "dream-sim-local-play-test-only"
+# SECRET_KEY must be set in Railway. The fallback exists so `python app.py`
+# still runs locally; it signs session cookies and is public in this repo,
+# so anything deployed without the environment variable is forgeable.
 
 
 # ── simulation-wide state: the current clock (week + day + hour) ──────────
@@ -203,7 +208,7 @@ def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if current_user() is None:
-            return redirect(url_for("picker"))
+            return redirect(url_for("signup"))
         return view(*args, **kwargs)
 
     return wrapped
@@ -443,7 +448,7 @@ def add_exception(couple_id: str, owner_id: str, exc_type: str, title: str, star
 # ── / — user picker ─────────────────────────────────────────────────────
 
 
-@app.route("/")
+@app.route("/pool")
 def picker():
     pool = load_pool()
     users = sorted(
@@ -2257,6 +2262,254 @@ _ADMIN_CHECKPOINTS = [
     ("dates_live", "Dates go live", clock_module.DATES_LIVE),
     ("feedback", "Feedback opens (Sun night)", clock_module.FEEDBACK_OPENS),
 ]
+
+
+
+# ── Sign-up and the three-step onboarding wizard ───────────────────────
+# Steps 1-5 of the Case 1 walkthrough. The draft lives in the session and
+# only becomes a User row at /onboarding/finish, so an abandoned sign-up
+# leaves nothing behind. journey_state starts at 'onboarding' — Segment B
+# (BGV) is what promotes a user to 'dating'.
+
+ONBOARDING_STEPS = [
+    ("signup", "Sign up"),
+    ("onboard_vision", "Vision"),
+    ("onboard_stats", "Stats"),
+    ("onboard_chemistry", "Chemistry"),
+    ("onboard_done", "Verification"),
+]
+
+
+def _draft() -> dict:
+    """The in-progress onboarding draft held in the session."""
+    if "onboarding" not in session:
+        session["onboarding"] = onboarding.blank_draft()
+    return session["onboarding"]
+
+
+def _save_draft(draft: dict) -> None:
+    session["onboarding"] = draft
+    session.modified = True
+
+
+def _onboarding_context(step_endpoint: str, **extra):
+    """Shared template context: which wizard step we're on, for the rail."""
+    steps = [
+        {"endpoint": endpoint, "label": label, "index": i + 1,
+         "state": "done" if i < [s[0] for s in ONBOARDING_STEPS].index(step_endpoint)
+                  else ("current" if endpoint == step_endpoint else "todo")}
+        for i, (endpoint, label) in enumerate(ONBOARDING_STEPS)
+    ]
+    return {"wizard_steps": steps, "step_total": len(ONBOARDING_STEPS), **extra}
+
+
+@app.route("/")
+def home():
+    """The front door. Signed in, you go to your dashboard; otherwise you
+    start signing up. The seeded-user picker used to live here — it is
+    still available at /pool for play-testing the simulation."""
+    if session.get("user_id") and current_user() is not None:
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("signup"))
+
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    """Step 1. Phone and email, neither validated — Case 1's unvalidated
+    front door. Shape hints are shown, nothing is enforced."""
+    draft = _draft()
+    error = None
+    hints = {}
+
+    if request.method == "POST":
+        result = onboarding.normalise_identifiers(request.form.get("email"), request.form.get("phone"))
+        if result["ok"]:
+            draft["email"] = result["email"]
+            draft["phone"] = result["phone"]
+            _save_draft(draft)
+            return redirect(url_for("onboard_vision"))
+        error = result["error"]
+        hints = result
+
+    return render_template(
+        "signup.html",
+        **_onboarding_context("signup", draft=draft, error=error, hints=hints),
+    )
+
+
+@app.route("/onboarding/vision", methods=["GET", "POST"])
+def onboard_vision():
+    """Step 2. The four end goals. Intimacy is mandatory with 1-2 kinds,
+    plus at least one of Kids / Cohabitate / Travel together, and Kids
+    requires Physical — the same rules generate_users enforces."""
+    draft = _draft()
+    error = None
+
+    if request.method == "POST":
+        result = onboarding.validate_vision(
+            request.form.getlist("intimacy_kinds"),
+            request.form.getlist("other_keys"),
+            request.form.getlist("cohabit_focus"),
+        )
+        if result["ok"]:
+            draft["vision"] = {
+                "intimacy_kinds": result["intimacy_kinds"],
+                "other_keys": result["other_keys"],
+                "cohabit_focus": result["cohabit_focus"],
+            }
+            _save_draft(draft)
+            return redirect(url_for("onboard_stats"))
+        error = result["error"]
+
+    saved = draft.get("vision") or {}
+    return render_template(
+        "onboard_vision.html",
+        **_onboarding_context(
+            "onboard_vision",
+            error=error,
+            intimacy_kinds=onboarding.INTIMACY_KINDS,
+            other_keys=onboarding.OTHER_VISION_KEYS,
+            chosen_kinds=saved.get("intimacy_kinds", []),
+            chosen_others=saved.get("other_keys", []),
+            cohabit_focus_options=onboarding.COHABIT_FOCUS,
+            chosen_focus=saved.get("cohabit_focus", []),
+        ),
+    )
+
+
+@app.route("/onboarding/stats", methods=["GET", "POST"])
+def onboard_stats():
+    """Step 3. Stats, with the salary → bracket derivation. Only the
+    bracket is ever shown to anyone else; the salary itself is not stored
+    on the User row at all."""
+    draft = _draft()
+    error = None
+    submitted = {}
+
+    if request.method == "POST":
+        submitted = {**request.form.to_dict(), "languages": request.form.getlist("languages")}
+        result = onboarding.validate_stats(submitted)
+        if result["ok"]:
+            draft["stats"] = result["stats"]
+            draft["city"] = result["city"]
+            draft["gender"] = result["gender"]
+            _save_draft(draft)
+            return redirect(url_for("onboard_chemistry"))
+        error = result["error"]
+
+    saved = draft.get("stats") or {}
+    return render_template(
+        "onboard_stats.html",
+        **_onboarding_context(
+            "onboard_stats",
+            error=error,
+            submitted=submitted,
+            saved=saved,
+            saved_city=draft.get("city"),
+            saved_gender=draft.get("gender"),
+            numeric_stats=onboarding.NUMERIC_STATS,
+            choice_stats=onboarding.CHOICE_STATS,
+            cities=onboarding.CITIES_FOR_SIGNUP,
+            genders=onboarding.GENDERS_FOR_SIGNUP,
+            languages_pool=onboarding.LANGUAGES_POOL,
+            saved_languages=saved.get("languages", []),
+            income_bands=onboarding.INCOME_BANDS,
+        ),
+    )
+
+
+@app.route("/onboarding/chemistry", methods=["GET", "POST"])
+def onboard_chemistry():
+    """Step 4. Sort activities into four buckets. Not to be confused with
+    chemistry.py, which is the Relationship-entry intimacy layer — this
+    step writes User.skills_json."""
+    draft = _draft()
+    error = None
+
+    if request.method == "POST":
+        submitted = {activity: request.form.get(f"act__{activity}") for activity in onboarding.ACTIVITIES}
+        submitted = {a: b for a, b in submitted.items() if b}
+        result = onboarding.validate_activities(submitted)
+        draft["activities"] = submitted
+        _save_draft(draft)
+        if result["ok"]:
+            return redirect(url_for("onboard_finish"))
+        error = result["error"]
+
+    return render_template(
+        "onboard_chemistry.html",
+        **_onboarding_context(
+            "onboard_chemistry",
+            error=error,
+            activities=onboarding.ACTIVITIES,
+            buckets=onboarding.BUCKETS,
+            chosen=draft.get("activities", {}),
+            min_sorted=onboarding.MIN_SORTED,
+        ),
+    )
+
+
+@app.route("/onboarding/finish", methods=["GET", "POST"])
+def onboard_finish():
+    """Step 5. Write the User and Account rows, sign the person in, and
+    hand off to verification. This is the only place in the wizard that
+    touches the database."""
+    draft = _draft()
+
+    if not draft.get("vision"):
+        return redirect(url_for("onboard_vision"))
+    if not draft.get("stats"):
+        return redirect(url_for("onboard_stats"))
+    if not onboarding.validate_activities(draft.get("activities", {}))["ok"]:
+        return redirect(url_for("onboard_chemistry"))
+
+    if request.method == "POST":
+        user_id = onboarding.new_user_id()
+        visions = onboarding.build_visions(
+            draft["vision"]["intimacy_kinds"],
+            draft["vision"]["other_keys"],
+            draft["vision"].get("cohabit_focus"),
+        )
+        user_row = onboarding.build_user_row(
+            user_id=user_id,
+            city=draft["city"],
+            gender=draft["gender"],
+            stats=draft["stats"],
+            visions=visions,
+            activities=draft["activities"],
+        )
+        db.insert_row(get_db(), "User", user_row)
+        db.insert_row(
+            get_db(),
+            "Account",
+            onboarding.account_row(user_id, draft.get("email"), draft.get("phone"), str(get_clock())),
+        )
+
+        session.pop("onboarding", None)
+        session["user_id"] = user_id
+        return redirect(url_for("dashboard"))
+
+    return render_template(
+        "onboard_done.html",
+        **_onboarding_context(
+            "onboard_done",
+            draft=draft,
+            visions=onboarding.build_visions(
+                draft["vision"]["intimacy_kinds"],
+                draft["vision"]["other_keys"],
+                draft["vision"].get("cohabit_focus"),
+            ),
+            skills=onboarding.build_skills(draft["activities"]),
+            bucket_labels={b[0]: b[2] for b in onboarding.BUCKETS},
+            income_band=draft["stats"]["income_band"],
+        ),
+    )
+
+
+@app.route("/onboarding/restart", methods=["POST"])
+def onboard_restart():
+    session.pop("onboarding", None)
+    return redirect(url_for("signup"))
 
 
 @app.route("/admin/reset-week", methods=["GET", "POST"])

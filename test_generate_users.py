@@ -5,7 +5,18 @@ from __future__ import annotations
 import unittest
 from collections import Counter
 
-from generate_users import AGE_BANDS, BGV_STATUSES, CITIES, GENDERS, INTIMACY_KINDS, VISION_KEYS, generate_users
+from generate_users import (
+    AGE_BANDS,
+    BGV_STATUSES,
+    CITIES,
+    COHABIT_FOCUS,
+    ETHNICITIES,
+    GENDERS,
+    INTIMACY_KINDS,
+    RESTAURANT_BUDGETS,
+    VISION_KEYS,
+    generate_users,
+)
 
 
 class ReproducibilityTests(unittest.TestCase):
@@ -66,19 +77,33 @@ class ShapeTests(unittest.TestCase):
             if "Kids" in by_key:
                 self.assertIn("Physical", by_key["Intimacy"]["stance"], u["user_id"])
 
-    def test_kids_cohabitate_travel_have_no_stance_at_signup(self) -> None:
-        # Deferred to the /road/vision step once the couple reaches
+    def test_kids_and_travel_have_no_stance_at_signup(self) -> None:
+        # Kids is deferred to the /road/vision step once the couple reaches
         # Relationship — not decided at Dating signup (see
-        # generate_users.py's KIDS_STANCES comment).
+        # generate_users.py's KIDS_STANCES comment). Travel together never
+        # carries a detail at all.
         for u in self.users:
             for v in u["visions"]:
-                if v["key"] in ("Kids", "Cohabitate", "Travel together"):
+                if v["key"] in ("Kids", "Travel together"):
                     self.assertIsNone(v["stance"], u["user_id"])
+
+    def test_cohabitate_carries_its_focus_from_signup(self) -> None:
+        # Revised 2026-09-03: choosing to cohabit without saying whether
+        # you mean chores, expenses or both says almost nothing, so the
+        # focus is captured at signup rather than deferred.
+        for u in self.users:
+            for v in u["visions"]:
+                if v["key"] == "Cohabitate":
+                    self.assertIsInstance(v["stance"], list, u["user_id"])
+                    self.assertTrue(1 <= len(v["stance"]) <= 2, u["user_id"])
+                    self.assertEqual(v["stance"], sorted(set(v["stance"])), u["user_id"])
+                    for focus in v["stance"]:
+                        self.assertIn(focus, COHABIT_FOCUS, u["user_id"])
 
     def test_every_user_has_required_stats(self) -> None:
         for u in self.users:
             stats = u["stats"]
-            for field in ("age", "height_cm", "weight_kg", "waist_in", "income_band", "diet", "education", "nationality", "religion"):
+            for field in ("age", "height_cm", "weight_kg", "waist_in", "income_band", "budget", "ethnicity", "diet", "education", "nationality", "religion"):
                 self.assertIn(field, stats, u["user_id"])
             self.assertTrue(18 <= stats["age"] <= 60)
             self.assertTrue(140 <= stats["height_cm"] <= 210)
@@ -121,6 +146,15 @@ class NoAppearanceFieldsTests(unittest.TestCase):
 
     FORBIDDEN_SUBSTRINGS = ("appearance", "skin", "complexion", "race", "ethnic")
 
+    # `ethnicity` was added 2026-09-03 at the user's request. It is exempt
+    # from the substring ban for two specific reasons, and the ban is kept
+    # otherwise intact so that any OTHER ethnic-* key still fails here:
+    #   1. it is self-declared, never inferred — REACH's boundary is about
+    #      appearance and skin-tone data, which this is not; and
+    #   2. it is not a matching lever. See test_ethnicity_is_not_a_matching
+    #      _filter below, which is the assertion that actually matters.
+    EXEMPT_KEYS = {"ethnicity"}
+
     def test_no_appearance_or_skin_tone_keys(self) -> None:
         users = generate_users(20, seed=1)
 
@@ -128,7 +162,10 @@ class NoAppearanceFieldsTests(unittest.TestCase):
             if isinstance(value, dict):
                 for k, v in value.items():
                     key_lower = str(k).lower()
-                    if any(bad in key_lower for bad in NoAppearanceFieldsTests.FORBIDDEN_SUBSTRINGS):
+                    if (
+                        key_lower not in NoAppearanceFieldsTests.EXEMPT_KEYS
+                        and any(bad in key_lower for bad in NoAppearanceFieldsTests.FORBIDDEN_SUBSTRINGS)
+                    ):
                         offending.append(f"{path}.{k}")
                     walk(v, f"{path}.{k}", offending)
             elif isinstance(value, list):
@@ -139,6 +176,20 @@ class NoAppearanceFieldsTests(unittest.TestCase):
         for u in users:
             walk(u, u["user_id"], offending)
         self.assertEqual(offending, [])
+
+
+    def test_ethnicity_is_not_a_matching_filter(self) -> None:
+        """Declaring your own descent and screening other people by theirs
+        are different products. Only the first was asked for, so ethnicity
+        must never appear among the adjustable REACH levers."""
+        for u in generate_users(20, seed=2):
+            self.assertNotIn("ethnicity", u["preferences"]["adjustable"])
+            self.assertNotIn("ethnicity", u["preferences"]["fixed"])
+            for tag in u["preferences"]["fixed"]["dealbreakers"]:
+                self.assertNotIn("ethnic", tag.lower())
+
+    def test_prefer_not_to_say_is_a_real_ethnicity_value(self) -> None:
+        self.assertIn("Prefer not to say", ETHNICITIES)
 
 
 class DistributionTests(unittest.TestCase):

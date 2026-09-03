@@ -30,6 +30,7 @@ DEFAULT_DB_PATH = Path(__file__).parent / "data" / "dream.db"
 # database syntax error from string-interpolating an identifier.
 TABLES = {
     "User",
+    "Account",
     "Couple",
     "RoadProfile",
     "CalendarEntry",
