@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Expectations — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">After your first date</div>
+<h1>What you each expect</h1>
+<div class="lede">
+  These open now, and not before, because they are questions between two people who have met.
+  Everything here is editable at any time — expectations genuinely change.
+</div>
+
+{% if mismatch and mismatch.mismatch %}
+<div class="card form-error">{{ mismatch.message }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="section-label">Pace of physical intimacy</div>
+  <form method="post" action="{{ url_for('chemistry_set') }}" class="chip-row" style="margin-top:10px;">
+    <input type="hidden" name="key" value="intimacy_pace">
+    <input type="hidden" name="back" value="expectations_view">
+    {% for option in pace_options %}
+    <button type="submit" name="value" value="{{ option }}"
+            class="btn-secondary{% if by_key.get('intimacy_pace') == option %} chosen{% endif %}">
+      {{ option|replace('_', ' ')|capitalize }}
+    </button>
+    {% endfor %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="section-label">Openness to discussing sexual health and contraception</div>
+  <div class="hint">Whether you are willing to have the conversation — never what your answers are.</div>
+  <form method="post" action="{{ url_for('chemistry_set') }}" class="chip-row" style="margin-top:10px;">
+    <input type="hidden" name="key" value="health_openness">
+    <input type="hidden" name="back" value="expectations_view">
+    {% for option in health_options %}
+    <button type="submit" name="value" value="{{ option }}"
+            class="btn-secondary{% if by_key.get('health_openness') == option %} chosen{% endif %}">
+      {{ option|replace('_', ' ')|capitalize }}
+    </button>
+    {% endfor %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="section-label">How much it matters to you</div>
+  <form method="post" action="{{ url_for('chemistry_set') }}">
+    <input type="hidden" name="key" value="intimacy_importance">
+    <input type="hidden" name="back" value="expectations_view">
+    <input class="field-input" type="text" name="value" maxlength="120"
+           value="{{ by_key.get('intimacy_importance', '') }}" placeholder="In your own words">
+    <button type="submit" class="btn-primary" style="margin-top:10px;">Save</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="section-label">Anything else you want on the record</div>
+  <form method="post" action="{{ url_for('chemistry_set') }}">
+    <input type="hidden" name="key" value="intimacy_notes">
+    <input type="hidden" name="back" value="expectations_view">
+    <input class="field-input" type="text" name="value" maxlength="240"
+           value="{{ by_key.get('intimacy_notes', '') }}" placeholder="Optional">
+    <button type="submit" class="btn-primary" style="margin-top:10px;">Save</button>
+  </form>
+</div>
+{% endblock %}

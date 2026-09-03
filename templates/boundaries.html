@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Boundaries — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Your date is set</div>
+<h1>How would you like to be greeted?</h1>
+<div class="lede">
+  Now that there is a real evening in the diary, this is a real decision rather than an abstract
+  preference. It goes into the agreement so neither of you has to guess at the door.
+</div>
+
+<div class="card">
+  <div class="section-label">Physical boundary — greeting</div>
+  <form method="post" action="{{ url_for('chemistry_set') }}" class="chip-row" style="margin-top:10px;">
+    <input type="hidden" name="key" value="physical_boundary">
+    <input type="hidden" name="back" value="boundaries_view">
+    {% for option in boundary_options %}
+    <button type="submit" name="value" value="{{ option }}"
+            class="btn-secondary{% if by_key.get('physical_boundary') == option %} chosen{% endif %}">
+      {{ option|replace('-', ' ')|capitalize }}
+    </button>
+    {% endfor %}
+  </form>
+  {% if by_key.get('physical_boundary') %}
+  <div class="hint" style="margin-top:10px;">
+    Recorded as <strong>{{ by_key['physical_boundary']|replace('-', ' ') }}</strong>.
+    Your date sees it in the signed agreement, and is asked to respect it.
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="section-label">What is not asked here</div>
+  <div class="hint">
+    Intimacy expectations, and how openly you want to discuss sexual health and contraception,
+    are not asked before you have met. They open after your first date.
+  </div>
+</div>
+{% endblock %}

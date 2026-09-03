@@ -39,6 +39,9 @@
     <div class="stat-row"><span>Height · weight · waist</span><span>{{ draft.stats.height_cm }} cm · {{ draft.stats.weight_kg }} kg · {{ draft.stats.waist_in }} in</span></div>
     <div class="stat-row"><span>Salary bracket</span><span>{{ income_band }}</span></div>
     <div class="stat-row"><span>Restaurant budget</span><span>{{ draft.stats.budget }}</span></div>
+    <div class="stat-row"><span>Cuisine</span><span>{{ draft.stats.cuisine|join(', ') }}</span></div>
+    <div class="stat-row"><span>Smoking · drinking</span><span>{{ draft.stats.smoking }} · {{ draft.stats.drinking }}</span></div>
+    <div class="stat-row"><span>Fitness routine</span><span>{{ draft.stats.fitness_routine }}</span></div>
     <div class="stat-row"><span>Ethnicity</span><span>{{ draft.stats.ethnicity }}</span></div>
     <div class="stat-row"><span>Profession</span><span>{{ draft.stats.profession }}</span></div>
     <div class="stat-row"><span>Education</span><span>{{ draft.stats.education }}</span></div>

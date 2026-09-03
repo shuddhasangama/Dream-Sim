@@ -1,77 +1,61 @@
 {% extends "base.html" %}
-{% block title %}Chemistry — {{ session_user_name }}{% endblock %}
+{% block title %}Chemistry — Dare to Dream{% endblock %}
 {% block content %}
-<div class="eyebrow">Mandatory at Relationship entry &middot; freely editable, always</div>
-<h1>Chemistry</h1>
-
-{% if mismatch and mismatch.surfaced %}
-<div class="card guru-card"><div class="guru-avatar">G</div><div>{{ mismatch.message }}</div></div>
-{% if mismatch.offer_next_level %}
-<a class="btn-secondary" href="{{ url_for('next_level_view') }}">Have the Next Level conversation</a>
-{% endif %}
-{% endif %}
-
-<div class="card">
-  <div class="micro section-label">Core chemistry</div>
-  {% for key in mandatory_keys %}
-  <form method="post" action="{{ url_for('chemistry_set') }}" class="action-row" style="margin-top:6px;">
-    <input type="hidden" name="key" value="{{ key }}">
-    <span class="micro" style="width:220px;">{{ key.replace('_', ' ')|capitalize }}</span>
-    <input type="text" name="value" value="{{ by_key.get(key, '') }}" style="flex:1;">
-    <button type="submit" class="btn-secondary">Save</button>
-  </form>
-  {% endfor %}
+<div class="eyebrow">Chemistry</div>
+<h1>What you'd actually do together</h1>
+<div class="lede">
+  Hobbies, skills and activities. This is what Guru draws on when suggesting things to try
+  together through the DREAM stages — the overlap matters more than the total.
 </div>
 
+{% if has_partner and overlap %}
 <div class="card">
-  <div class="micro section-label">Intimacy expectations</div>
-  <div class="micro">Expectation can be disclosed in advance. Consent cannot.</div>
+  <div class="section-label">Where you overlap</div>
+  <div class="stat-rows">
+    {% for o in overlap %}
+    <div class="stat-row">
+      <span>{{ o.activity }}</span>
+      <span>you: {{ bucket_labels[o.mine]|lower }} · them: {{ bucket_labels[o.theirs]|lower }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
-  <form method="post" action="{{ url_for('chemistry_set') }}" style="margin-top:8px;">
-    <input type="hidden" name="key" value="intimacy_pace">
-    <div class="micro">Pace</div>
-    <div class="day-picker">
-      {% for opt in pace_options %}
-      <label class="day-check"><input type="radio" name="value" value="{{ opt }}" {% if by_key.get('intimacy_pace') == opt %}checked{% endif %} required>{{ opt.replace('_', ' ') }}</label>
+<form method="post" action="{{ url_for('chemistry_set_activities') }}">
+  <div class="card">
+    <div class="bucket-legend">
+      {% for bucket_id, glyph, label in buckets %}
+      <span class="bucket-legend-item"><b>{{ glyph }}</b> {{ label }}</span>
       {% endfor %}
     </div>
-    <button type="submit" class="btn-secondary" style="margin-top:6px;">Save</button>
-  </form>
-
-  <form method="post" action="{{ url_for('chemistry_set') }}" class="action-row" style="margin-top:8px;">
-    <input type="hidden" name="key" value="intimacy_importance">
-    <span class="micro" style="width:220px;">Importance (1-5 + note)</span>
-    <input type="text" name="value" value="{{ by_key.get('intimacy_importance', '') }}" style="flex:1;">
-    <button type="submit" class="btn-secondary">Save</button>
-  </form>
-
-  <form method="post" action="{{ url_for('chemistry_set') }}" style="margin-top:8px;">
-    <input type="hidden" name="key" value="physical_boundary">
-    <div class="micro">Physical boundary preference</div>
-    <div class="day-picker">
-      {% for opt in boundary_options %}
-      <label class="day-check"><input type="radio" name="value" value="{{ opt }}" {% if by_key.get('physical_boundary') == opt %}checked{% endif %} required>{{ opt }}</label>
+    <div class="activity-table">
+      {% for activity in activities %}
+      <div class="activity-row">
+        <span class="activity-name">{{ activity }}</span>
+        <span class="activity-buckets">
+          {% for bucket_id, glyph, label in buckets %}
+          <label class="bucket-pick" title="{{ label }}">
+            <input type="radio" name="act__{{ activity }}" value="{{ bucket_id }}"
+                   {% if chosen.get(activity) == bucket_id %}checked{% endif %}>
+            <span class="bucket-glyph b-{{ bucket_id }}">{{ glyph }}</span>
+          </label>
+          {% endfor %}
+        </span>
+      </div>
       {% endfor %}
     </div>
-    <button type="submit" class="btn-secondary" style="margin-top:6px;">Save</button>
-  </form>
+  </div>
+  <button type="submit" class="btn-primary">Save chemistry</button>
+</form>
 
-  <form method="post" action="{{ url_for('chemistry_set') }}" class="action-row" style="margin-top:8px;">
-    <input type="hidden" name="key" value="intimacy_notes">
-    <span class="micro" style="width:220px;">What you want a partner to understand</span>
-    <input type="text" name="value" value="{{ by_key.get('intimacy_notes', '') }}" style="flex:1;">
-    <button type="submit" class="btn-secondary">Save</button>
-  </form>
-
-  <form method="post" action="{{ url_for('chemistry_set') }}" style="margin-top:8px;">
-    <input type="hidden" name="key" value="health_openness">
-    <div class="micro">Openness to discussing sexual health &amp; contraception</div>
-    <div class="day-picker">
-      {% for opt in health_options %}
-      <label class="day-check"><input type="radio" name="value" value="{{ opt }}" {% if by_key.get('health_openness') == opt %}checked{% endif %} required>{{ opt.replace('_', ' ') }}</label>
-      {% endfor %}
-    </div>
-    <button type="submit" class="btn-secondary" style="margin-top:6px;">Save</button>
-  </form>
+<div class="card">
+  <div class="section-label">What moved out of here</div>
+  <div class="hint">
+    Intimacy expectations, openness to discussing sexual health and contraception, and your
+    physical boundary preference used to sit on this page. They are not chemistry, and they should
+    not be asked at sign-up. Boundaries open once a date is set; expectations open after your
+    first date.
+  </div>
 </div>
 {% endblock %}

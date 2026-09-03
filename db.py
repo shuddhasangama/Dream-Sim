@@ -31,6 +31,8 @@ DEFAULT_DB_PATH = Path(__file__).parent / "data" / "dream.db"
 TABLES = {
     "User",
     "Account",
+    "Verification",
+    "Payment",
     "Couple",
     "RoadProfile",
     "CalendarEntry",
@@ -64,6 +66,8 @@ TABLES = {
 }
 
 CONFLICT_COLUMNS = {
+    "Verification": ("user_id", "field"),
+    "Payment": ("user_id", "purpose", "scope_id"),
     "RoadProfile": ("user_id", "couple_id"),
     "Playbook": ("couple_id", "stage"),
     "GuruTopic": ("couple_id", "stage", "topic_key"),

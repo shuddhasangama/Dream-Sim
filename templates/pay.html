@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ view.label }} — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Payment</div>
+<h1>{{ view.label }}</h1>
+<div class="lede">{{ view.blurb }}</div>
+
+<div class="card pay-card">
+  <div class="pay-amount">{{ view.amount }}</div>
+  <div class="micro">{{ view.period }}</div>
+</div>
+
+<div class="card stub-card">
+  <div class="section-label">No gateway is connected</div>
+  <div class="hint">
+    This is a stub. No money moves and no card details are taken or asked for.
+    Confirming below records the payment so the journey continues.
+  </div>
+</div>
+
+{% if view.paid %}
+<div class="signature-status done">Paid ✓</div>
+<div class="action-row">
+  <a class="btn-primary" href="{{ next_url }}">Continue →</a>
+</div>
+{% else %}
+<form method="post" action="{{ url_for('pay_confirm', purpose=view.purpose) }}">
+  <input type="hidden" name="next" value="{{ next_url }}">
+  <button type="submit" class="btn-primary">{{ view.cta }}</button>
+</form>
+{% endif %}
+{% endblock %}

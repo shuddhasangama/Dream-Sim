@@ -2,3 +2,8 @@ data/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# One-off commit helpers written during the Segment A-E build. They do a
+# job once and are not part of the application.
+commit-*.cmd
+commit-message*.txt

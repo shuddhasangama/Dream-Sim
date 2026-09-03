@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Vibes — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Relationship stage</div>
+<h1>What keeps this alive</h1>
+<div class="lede">
+  Guru's material for the Keep Romance Alive pillar and the weekly report. Freely editable —
+  this is the layer that genuinely evolves.
+</div>
+
+{% for key in mandatory_keys %}
+<div class="card">
+  <div class="section-label">{{ key|replace('_', ' ')|capitalize }}</div>
+  <form method="post" action="{{ url_for('chemistry_set') }}">
+    <input type="hidden" name="key" value="{{ key }}">
+    <input type="hidden" name="back" value="vibes_view">
+    <input class="field-input" type="text" name="value" maxlength="240"
+           value="{{ by_key.get(key, '') }}" placeholder="In your own words">
+    <button type="submit" class="btn-primary" style="margin-top:10px;">Save</button>
+  </form>
+</div>
+{% endfor %}
+{% endblock %}

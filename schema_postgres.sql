@@ -590,3 +590,36 @@ CREATE TABLE IF NOT EXISTS Account (
 );
 CREATE INDEX IF NOT EXISTS idx_account_email ON Account (email);
 CREATE INDEX IF NOT EXISTS idx_account_phone ON Account (phone);
+
+-- ── Verification: per-field background checks (Segment B) ──
+-- User.bgv_status is the account-level roll-up; this is the field-level
+-- detail behind it, because "salary in review, nationality verified" is a
+-- state one enum value cannot express. bgv.aggregate_status() is the only
+-- thing that collapses these into that column.
+CREATE TABLE IF NOT EXISTS Verification (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES "User"(id),
+    field       TEXT NOT NULL,
+    status      TEXT NOT NULL CHECK (status IN ('pending', 'in_review', 'verified', 'failed')),
+    note        TEXT,
+    updated_at  TEXT NOT NULL,
+    UNIQUE (user_id, field)
+);
+CREATE INDEX IF NOT EXISTS idx_verification_user ON Verification (user_id);
+
+-- ── Payment: the four fees (Segment D) ──
+-- Scoped, not one-off: (user, purpose, scope_id) is unique, so the
+-- availability fee charges again for the next date rather than being
+-- "paid forever", and a webhook that arrives twice writes once.
+CREATE TABLE IF NOT EXISTS Payment (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES "User"(id),
+    purpose     TEXT NOT NULL CHECK (purpose IN ('availability', 'agreement', 'stage_gate', 'guru')),
+    scope_id    TEXT NOT NULL,
+    amount_inr  INTEGER NOT NULL,
+    status      TEXT NOT NULL CHECK (status IN ('pending', 'paid', 'failed')),
+    reference   TEXT,
+    created_at  TEXT NOT NULL,
+    UNIQUE (user_id, purpose, scope_id)
+);
+CREATE INDEX IF NOT EXISTS idx_payment_user ON Payment (user_id);

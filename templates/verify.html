@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Verification — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Background verification</div>
+<h1>{{ action.headline }}</h1>
+<div class="lede">{{ action.body }}</div>
+
+<div class="card">
+  <div class="section-label">The four checks</div>
+  <div class="verify-list">
+    {% for f in fields %}
+    <div class="verify-row">
+      <div>
+        <div class="verify-name">{{ f.label }}{% if f.derived %} <span class="verify-derived">derived</span>{% endif %}</div>
+        <div class="hint">{{ f.why }}</div>
+      </div>
+      <span class="verify-status s-{{ f.status }}">{{ f.status_label }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% if action.cta == 'start' %}
+<form method="post" action="{{ url_for('verify_start') }}">
+  <button type="submit" class="btn-primary">Begin verification</button>
+</form>
+{% elif action.cta == 'retry' %}
+<form method="post" action="{{ url_for('verify_start') }}">
+  <button type="submit" class="btn-primary">Correct and send again</button>
+</form>
+{% endif %}
+
+{% if action.cta in ('simulate', 'retry') or account_status == 'pending' %}
+<div class="card stub-card">
+  <div class="section-label">Provider stub</div>
+  <div class="hint" style="margin-bottom:10px;">
+    No verifier is connected yet. This stands in for the callback a real provider would send,
+    so the journey can be walked end to end. Choosing a vendor is a commercial decision, not a coding one.
+  </div>
+  <form method="post" action="{{ url_for('verify_simulate') }}" class="chip-row">
+    {% for o in outcomes %}
+    <button type="submit" name="outcome" value="{{ o.key }}" class="btn-secondary">{{ o.label }}</button>
+    {% endfor %}
+  </form>
+</div>
+{% endif %}
+
+{% if is_verified %}
+<div class="action-row">
+  <a class="btn-primary" href="{{ url_for('week') }}">Go to your week →</a>
+</div>
+{% endif %}
+{% endblock %}

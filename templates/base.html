@@ -11,24 +11,14 @@
 </head>
 <body>
   <div class="page">
+    {% include "_demo_bar.html" %}
     {% if session_user %}
     <nav class="topnav">
-      <a class="navlink" href="{{ url_for('dashboard') }}">Dashboard</a>
-      {% if not reach_locked %}
-      <a class="navlink" href="{{ url_for('reach') }}">REACH</a>
-      {% endif %}
-      <a class="navlink" href="{{ url_for('week') }}">Week</a>
-      {% if session_user.journey_state == "dating" %}
-      <a class="navlink" href="{{ url_for('escalations_view') }}">Escalations</a>
-      <a class="navlink" href="{{ url_for('gate_view') }}">Gate</a>
-      <a class="navlink" href="{{ url_for('next_level_view') }}">Next Level</a>
-      {% endif %}
-      <a class="navlink" href="{{ url_for('vision_view') }}">Vision</a>
-      <a class="navlink" href="{{ url_for('chemistry_view') }}">Chemistry</a>
-      <a class="navlink" href="{{ url_for('journey_view') }}">Journey</a>
-      {% if session_user.journey_state in ("relationship", "engaged", "married") %}
-      <a class="navlink" href="{{ url_for('relationship_view') }}">Relationship</a>
-      {% endif %}
+      {# Driven by disclosure.SURFACES, not by conditions scattered through
+         this file. To change what appears when, edit that one table. #}
+      {% for link in nav_links %}
+      <a class="navlink" href="{{ url_for(link.endpoint) }}">{{ link.label }}</a>
+      {% endfor %}
       <form method="post" action="{{ url_for('logout') }}" style="margin:0;display:inline;">
         <button type="submit" class="navlink" style="background:none;border:none;font:inherit;cursor:pointer;">Switch user</button>
       </form>

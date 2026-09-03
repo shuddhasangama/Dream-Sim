@@ -86,4 +86,10 @@
 {% endif %}
 
 <a class="btn-secondary" href="{{ url_for('week') }}">Back</a>
+<div class="card">
+  <div class="section-label">Before the evening</div>
+  <div class="hint">Say how you would like to be greeted. It goes into the agreement, so neither of you has to guess at the door.</div>
+  <a class="btn-secondary" style="margin-top:10px;" href="{{ url_for('boundaries_view') }}">Set your boundary →</a>
+</div>
+
 {% endblock %}

@@ -61,18 +61,20 @@
     {% endfor %}
   </div>
 
+  {% for key, label, options, hint in multi_stats %}
   <div class="card">
-    <div class="section-label">Languages — pick at least one</div>
+    <div class="section-label">{{ label }} — {{ hint }}</div>
     <div class="chip-row">
-      {% for lang in languages_pool %}
+      {% for option in options %}
       <label class="chip-check">
-        <input type="checkbox" name="languages" value="{{ lang }}"
-               {% if lang in (submitted.get('languages') or saved_languages) %}checked{% endif %}>
-        <span>{{ lang }}</span>
+        <input type="checkbox" name="{{ key }}" value="{{ option }}"
+               {% if option in (submitted.get(key) or saved.get(key) or []) %}checked{% endif %}>
+        <span>{{ option }}</span>
       </label>
       {% endfor %}
     </div>
   </div>
+  {% endfor %}
 
   <div class="action-row">
     <a class="btn-secondary" href="{{ url_for('onboard_vision') }}">‹ Back</a>

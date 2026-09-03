@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Demo partner — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Demo scaffolding</div>
+<h1>Could not build a matching partner</h1>
+<div class="lede">
+  A counterpart was constructed for you, but it does not pass the real matching rules,
+  so it has not been added to the pool. Faking the match would make the walkthrough lie.
+</div>
+
+<div class="card">
+  <div class="stat-rows">
+    <div class="stat-row"><span>You would accept them</span><span>{{ 'yes' if checks.a_accepts_b else 'no' }}</span></div>
+    <div class="stat-row"><span>They would accept you</span><span>{{ 'yes' if checks.b_accepts_a else 'no' }}</span></div>
+    <div class="stat-row"><span>Mutually open</span><span>{{ 'yes' if checks.mutual else 'no' }}</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-label">Most likely cause</div>
+  <div class="hint">
+    Your filters ask for a minimum distance above zero. Distance is modelled city to city, so the
+    only values that exist are 0 km (same city) or 120 km and up. A minimum between those two
+    can never be satisfied by anyone. Widen the distance lever in REACH, or set its minimum to zero.
+  </div>
+</div>
+
+<div class="action-row">
+  <a class="btn-secondary" href="{{ url_for('reach') }}">Open REACH</a>
+</div>
+{% endblock %}

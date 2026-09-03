@@ -1074,3 +1074,63 @@ select:focus {
 .goal-detail { margin: 9px 0 2px 16px; padding-left: 13px; border-left: 2px solid var(--border); }
 /* In-card explanation, as opposed to .micro's uppercase label style. */
 .hint { font-size: 12.5px; line-height: 1.55; color: var(--muted); max-width: 58ch; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   SEGMENTS B, C, D — verification, the demo clock, the fees
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Segment C: the demo clock bar ── */
+.demo-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding: 8px 14px; margin-bottom: 14px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  font-size: 12px;
+}
+.demo-tag {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--bg); background: var(--gold); padding: 2px 7px; border-radius: 10px;
+}
+.demo-clock { font-family: var(--font-mono); color: var(--white); }
+.demo-phase { color: var(--muted); text-transform: capitalize; }
+.demo-steps { display: flex; gap: 6px; margin: 0 0 0 auto; }
+.demo-step {
+  font: inherit; font-size: 11.5px; cursor: pointer;
+  background: var(--bg); color: var(--text-2);
+  border: 1px solid var(--border); border-radius: 7px; padding: 4px 10px;
+}
+.demo-step:hover { border-color: var(--gold); color: var(--gold); }
+.demo-step:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ── Segment B: verification ── */
+.verify-list { display: grid; gap: 1px; }
+.verify-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.verify-row:last-child { border-bottom: 0; }
+.verify-name { font-size: 14px; color: var(--white); }
+.verify-derived {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 1px 5px; margin-left: 5px;
+}
+.verify-status {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  white-space: nowrap; padding: 3px 9px; border-radius: 11px; margin-top: 2px;
+}
+.s-pending   { color: var(--muted);   background: rgba(255,255,255,.04); }
+.s-in_review { color: var(--gold);    background: rgba(232,181,77,.10); }
+.s-verified  { color: var(--mint);    background: rgba(61,220,151,.10); }
+.s-failed    { color: var(--coral-1); background: rgba(255,107,94,.10); }
+
+/* ── stub notices: these must never be mistaken for the real thing ── */
+.stub-card { border-style: dashed; }
+
+/* ── Segment D: the checkout ── */
+.pay-card { text-align: center; }
+.pay-amount {
+  font-family: var(--font-display); font-weight: 700; font-size: 38px;
+  letter-spacing: -.02em; color: var(--white);
+}
+
+/* A chosen option among a row of submit buttons (boundaries, expectations). */
+.btn-secondary.chosen { border-color: var(--mint); color: var(--mint); }

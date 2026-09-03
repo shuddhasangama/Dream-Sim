@@ -99,6 +99,27 @@ ETHNICITIES = [
 ]
 ETHNICITY_WEIGHTS = [0.74, 0.06, 0.02, 0.02, 0.02, 0.02, 0.03, 0.01, 0.03, 0.05]
 
+# Added 2026-09-03. Cuisine is multi-select — people rarely eat one way —
+# and feeds the date playbook's venue clause, where two people's lists
+# have to overlap for the agreement to name somewhere they both want.
+CUISINES = ["South Indian", "North Indian", "Italian", "Japanese", "Thai", "Levantine", "Mexican", "Korean", "Chinese", "Continental"]
+
+# Smoking and drinking finally give matching.py's non_smoker /
+# non_drinker dealbreakers something to check. They are NOT wired into
+# _dealbreaker_satisfied() yet — doing so changes who matches whom across
+# the whole pool, which is a product decision, not a refactor. See
+# test_generate_users.DealbreakerReadinessTests.
+SMOKING = ["Never", "Socially", "Regular", "Quitting"]
+SMOKING_WEIGHTS = [0.62, 0.22, 0.09, 0.07]
+
+DRINKING = ["Never", "Socially", "Weekly", "Daily"]
+DRINKING_WEIGHTS = [0.34, 0.44, 0.18, 0.04]
+
+# General wellness, not a health metric: how often someone moves, at the
+# level they would describe it themselves.
+FITNESS_ROUTINES = ["None right now", "Occasional", "2-3 times a week", "4+ times a week", "Daily"]
+FITNESS_WEIGHTS = [0.16, 0.27, 0.31, 0.18, 0.08]
+
 DIETS = ["Vegetarian", "Vegan", "Eggetarian", "Halal", "Jain", "No red meat", "Everything"]
 DIET_WEIGHTS = [0.30, 0.05, 0.10, 0.08, 0.07, 0.10, 0.30]
 
@@ -220,6 +241,10 @@ def _generate_stats(rng: random.Random, gender: str, age: int) -> dict[str, Any]
         "budget": _weighted_choice(rng, RESTAURANT_BUDGETS, RESTAURANT_BUDGET_WEIGHTS),
         "ethnicity": _weighted_choice(rng, ETHNICITIES, ETHNICITY_WEIGHTS),
         "diet": _weighted_choice(rng, DIETS, DIET_WEIGHTS),
+        "cuisine": sorted(rng.sample(CUISINES, k=rng.randint(1, 4))),
+        "smoking": _weighted_choice(rng, SMOKING, SMOKING_WEIGHTS),
+        "drinking": _weighted_choice(rng, DRINKING, DRINKING_WEIGHTS),
+        "fitness_routine": _weighted_choice(rng, FITNESS_ROUTINES, FITNESS_WEIGHTS),
         "education": _weighted_choice(rng, EDUCATION, EDUCATION_WEIGHTS),
         "nationality": _weighted_choice(rng, OWN_NATIONALITIES, OWN_NATIONALITY_WEIGHTS),
         "religion": _weighted_choice(rng, OWN_RELIGIONS, OWN_RELIGION_WEIGHTS),

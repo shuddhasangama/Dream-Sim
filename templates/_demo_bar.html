@@ -1,0 +1,14 @@
+{# Segment C: the demo clock. Hidden entirely when DEMO_MODE=0. #}
+{% if demo_enabled and demo_clock %}
+<div class="demo-bar">
+  <span class="demo-tag">Demo</span>
+  <span class="demo-clock">{{ demo_clock.stamp }}</span>
+  <span class="demo-phase">{{ demo_clock.phase|replace('_', ' ') }}</span>
+  <form method="post" action="{{ url_for('demo_advance') }}" class="demo-steps">
+    <input type="hidden" name="back" value="{{ request.path }}">
+    {% for step in demo_clock.steps %}
+    <button type="submit" name="step" value="{{ step.key }}" class="demo-step">{{ step.label }}</button>
+    {% endfor %}
+  </form>
+</div>
+{% endif %}

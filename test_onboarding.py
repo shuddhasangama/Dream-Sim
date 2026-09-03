@@ -16,12 +16,15 @@ import unittest
 import onboarding
 from generate_users import (
     COHABIT_FOCUS,
+    DRINKING,
     ETHNICITIES,
+    FITNESS_ROUTINES,
     INCOME_BANDS,
     NATIONALITY_OPTIONS,
     OTHER_VISION_KEYS,
     RELIGION_OPTIONS,
     RESTAURANT_BUDGETS,
+    SMOKING,
     from_user_row,
     generate_users,
 )
@@ -32,7 +35,9 @@ def _valid_stats() -> dict:
         "age": "31", "height_cm": "178", "weight_kg": "74", "waist_in": "32",
         "salary": "1800000",
         "budget": RESTAURANT_BUDGETS[1], "ethnicity": "Indian",
-        "diet": "Everything", "education": "Master's", "profession": "Engineering",
+        "diet": "Everything", "cuisine": ["Italian", "Thai"],
+        "smoking": "Never", "drinking": "Socially", "fitness_routine": "2-3 times a week",
+        "education": "Master's", "profession": "Engineering",
         "marital_history": "Never married", "nationality": "IN", "religion": "Hindu",
         "languages": ["English", "Hindi"],
         "city": "Bangalore", "gender": "male",
@@ -190,6 +195,63 @@ class StatsValidationTests(unittest.TestCase):
         mine = set(onboarding.validate_stats(_valid_stats())["stats"])
         generated = set(generate_users(1, seed=7)[0]["stats"])
         self.assertEqual(mine, generated)
+
+
+class MultiSelectStatTests(unittest.TestCase):
+    """Cuisine and languages are lists. The route reads them with
+    getlist(), because to_dict() keeps only the FIRST value of a repeated
+    field — which silently drops every choice but one and looks like the
+    user only picked one thing."""
+
+    def test_every_chosen_value_survives(self):
+        form = _valid_stats()
+        form["cuisine"] = ["Italian", "Thai", "Korean"]
+        stats = onboarding.validate_stats(form)["stats"]
+        self.assertEqual(stats["cuisine"], ["Italian", "Korean", "Thai"])
+
+    def test_a_single_string_is_accepted_as_one_choice(self):
+        form = _valid_stats()
+        form["cuisine"] = "Italian"
+        self.assertEqual(onboarding.validate_stats(form)["stats"]["cuisine"], ["Italian"])
+
+    def test_each_multi_field_is_mandatory(self):
+        for key, label, _opts, _hint in onboarding.MULTI_STATS:
+            form = _valid_stats()
+            form[key] = []
+            result = onboarding.validate_stats(form)
+            self.assertFalse(result["ok"], key)
+            self.assertIn(label, result["error"], key)
+
+    def test_unknown_values_are_dropped(self):
+        form = _valid_stats()
+        form["cuisine"] = ["Italian", "Martian"]
+        self.assertEqual(onboarding.validate_stats(form)["stats"]["cuisine"], ["Italian"])
+
+
+class LifestyleStatTests(unittest.TestCase):
+    """Smoking, drinking and fitness routine, added 2026-09-03."""
+
+    def test_all_three_are_collected_and_mandatory(self):
+        for key in ("smoking", "drinking", "fitness_routine"):
+            form = _valid_stats()
+            form[key] = ""
+            self.assertFalse(onboarding.validate_stats(form)["ok"], key)
+
+    def test_they_offer_the_generated_populations_options(self):
+        by_key = {k: opts for k, _, opts in onboarding.CHOICE_STATS}
+        self.assertEqual(by_key["smoking"], SMOKING)
+        self.assertEqual(by_key["drinking"], DRINKING)
+        self.assertEqual(by_key["fitness_routine"], FITNESS_ROUTINES)
+
+    def test_smoking_and_drinking_are_not_matching_filters_yet(self):
+        """matching.py's non_smoker / non_drinker dealbreakers now HAVE a
+        field to check, but wiring them up changes who matches whom across
+        the whole pool. That is a product decision — see the note in
+        generate_users. This test records that it has not been taken."""
+        stats = onboarding.validate_stats(_valid_stats())["stats"]
+        adjustable = onboarding.default_preferences(stats)["adjustable"]
+        for field in ("smoking", "drinking", "fitness_routine", "cuisine"):
+            self.assertNotIn(field, adjustable, field)
 
 
 class BudgetAndEthnicityTests(unittest.TestCase):

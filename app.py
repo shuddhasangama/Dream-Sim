@@ -22,12 +22,15 @@ from pathlib import Path
 
 from flask import Flask, abort, g, jsonify, redirect, render_template, request, session, url_for
 
+import bgv
 import cadence
 import calendar_dating
 import chemistry
 import clock as clock_module
 import dateplan
 import db
+import demo
+import disclosure
 import escalations
 import guru_dating
 import guru_relationship
@@ -38,9 +41,10 @@ import matching
 import next_level
 import onboarding
 import outcomes
+import payments
 import stage_gate
 import vision
-from generate_users import COHABIT_FOCUS, KIDS_STANCES, from_user_row
+from generate_users import COHABIT_FOCUS, KIDS_STANCES, from_user_row, to_user_row
 
 APP_DIR = Path(__file__).parent
 SIM_STATE_PATH = APP_DIR / "data" / "sim_state.json"
@@ -214,14 +218,53 @@ def login_required(view):
     return wrapped
 
 
+def _milestones_for(user: dict) -> set:
+    """Turn this user's actual rows into the milestone set disclosure.py
+    reasons about. The only place that maps database facts onto them."""
+    if user is None:
+        return set()
+    active = _my_active_lockin(user["user_id"])
+    plan = _dateplan_for_lockin(active["id"]) if active else None
+    outcome = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"]) if plan else None
+    return disclosure.milestones_for(
+        bgv_status=user["bgv_status"],
+        journey_state=user["journey_state"],
+        has_active_lockin=active is not None,
+        has_dateplan=plan is not None,
+        has_date_outcome=outcome is not None,
+    )
+
+
+def unlocked_or_redirect(key: str):
+    """Route guard. Returns a redirect when the surface is not open yet,
+    or None to carry on. Guarding in the route matters as much as hiding
+    the link — a bookmarked URL must not get past the timing rules."""
+    user = current_user()
+    reached = _milestones_for(user)
+    if disclosure.is_open(key, reached):
+        return None
+    return render_template(
+        "locked.html",
+        label=disclosure.BY_KEY[key][1],
+        reason=disclosure.locked_reason(key, reached),
+    ), 403
+
+
 @app.context_processor
 def inject_globals():
     user = current_user()
+    reached = _milestones_for(user) if user else set()
     return {
         "session_user": user,
         "session_user_name": display_name(user["user_id"], user["gender"]) if user else None,
         "week_number": get_week_number(),
         "reach_locked": reach_locked(user) if user else False,
+        "demo_enabled": demo.is_enabled(),
+        "demo_clock": demo.clock_view(get_clock()) if demo.is_enabled() else None,
+        "payments_enabled": payments.is_enabled(),
+        "needs_verification": bool(user) and user["bgv_status"] != "verified",
+        "nav_links": disclosure.nav_for(reached, reach_locked=reach_locked(user) if user else False),
+        "milestones": reached,
     }
 
 
@@ -915,6 +958,9 @@ def week_act():
 @app.route("/calendar")
 @login_required
 def calendar_view():
+    guard = unlocked_or_redirect("calendar")
+    if guard is not None:
+        return guard
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     if active is None:
@@ -946,6 +992,12 @@ def calendar_submit():
     active = _my_active_lockin(user["user_id"])
     if active is None:
         return redirect(url_for("week"))
+
+    # Segment D: the availability fee is charged before the slots are
+    # submitted, which is where the mock-up puts it.
+    gate = _require_payment(user, payments.AVAILABILITY)
+    if gate is not None:
+        return gate
 
     valid = set(calendar_dating.valid_slots())
     chosen = set()
@@ -1028,6 +1080,9 @@ def calendar_no_overlap():
 @app.route("/plan")
 @login_required
 def plan_view():
+    guard = unlocked_or_redirect("plan")
+    if guard is not None:
+        return guard
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     if active is None:
@@ -1098,6 +1153,11 @@ def plan_sign():
     plan = _dateplan_for_lockin(active["id"])
     if plan is None:
         return redirect(url_for("calendar_view"))
+
+    # Segment D: the agreement fee is charged before either party can sign.
+    gate = _require_payment(user, payments.AGREEMENT)
+    if gate is not None:
+        return gate
 
     ack_flags = {f: (f in request.form) for f in dateplan.ACK_FIELDS}
     clock = get_clock()
@@ -1245,6 +1305,9 @@ def plan_feedback():
 @app.route("/escalations")
 @login_required
 def escalations_view():
+    guard = unlocked_or_redirect("escalations")
+    if guard is not None:
+        return guard
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     if active is None:
@@ -1464,6 +1527,9 @@ def _maybe_compute_gate_analysis(gate: dict, active: dict) -> None:
 @app.route("/gate")
 @login_required
 def gate_view():
+    guard = unlocked_or_redirect("gate")
+    if guard is not None:
+        return guard
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     if active is None:
@@ -1718,9 +1784,97 @@ def vision_declare_change():
 @app.route("/chemistry")
 @login_required
 def chemistry_view():
+    """Chemistry is hobbies and activities — the things Guru suggests you
+    try together through the DREAM stages. It is NOT the intimacy layer;
+    that moved to /boundaries and /expectations, which open on their own
+    schedule (see disclosure.py). Sharing one word for both was the
+    confusion worth removing.
+    """
+    user = current_user()
+    row = db.fetch_one(get_db(), "User", id=user["user_id"])
+    skills = db.load_json_field(row.get("skills_json"), {}) or {}
+    chosen = skills.get("activities", {})
+
+    partner_chosen = {}
+    couple = find_couple_for_user(user["user_id"]) if user["journey_state"] != "dating" else None
+    active = _my_active_lockin(user["user_id"]) if user["journey_state"] == "dating" else None
+    partner_id = partner_id_in(couple, user["user_id"]) if couple else (_partner_id_in_lockin(active, user["user_id"]) if active else None)
+    if partner_id:
+        prow = db.fetch_one(get_db(), "User", id=partner_id)
+        if prow:
+            partner_chosen = (db.load_json_field(prow.get("skills_json"), {}) or {}).get("activities", {})
+
+    overlap = [
+        {"activity": a, "mine": chosen[a], "theirs": partner_chosen[a]}
+        for a in onboarding.ACTIVITIES
+        if a in chosen and a in partner_chosen
+    ]
+
+    return render_template(
+        "chemistry.html",
+        activities=onboarding.ACTIVITIES,
+        buckets=onboarding.BUCKETS,
+        chosen=chosen,
+        bucket_labels={b[0]: b[2] for b in onboarding.BUCKETS},
+        by_bucket=skills.get("by_bucket", {}),
+        overlap=overlap,
+        has_partner=partner_id is not None,
+    )
+
+
+@app.route("/chemistry/activities", methods=["POST"])
+@login_required
+def chemistry_set_activities():
+    user = current_user()
+    submitted = {a: request.form.get(f"act__{a}") for a in onboarding.ACTIVITIES}
+    submitted = {a: b for a, b in submitted.items() if b}
+    result = onboarding.validate_activities(submitted)
+    if not result["ok"]:
+        return redirect(url_for("chemistry_view"))
+    row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
+    row["skills_json"] = json.dumps(onboarding.build_skills(result["activities"]), ensure_ascii=False)
+    db.insert_row(get_db(), "User", row)
+    return redirect(url_for("chemistry_view"))
+
+
+# ── the intimacy layer, split by when it should be asked ────────────────
+# Both write the same ChemistryEntry rows through chemistry.set_entry(),
+# so vision.py's Relationship-entry prerequisite check is unchanged. Only
+# WHERE and WHEN they are asked has moved.
+
+BOUNDARY_KEYS = ("physical_boundary",)
+EXPECTATION_KEYS = ("intimacy_pace", "intimacy_importance", "intimacy_notes", "health_openness")
+
+
+@app.route("/boundaries")
+@login_required
+def boundaries_view():
+    """Opens once a date is set. A greeting preference is a decision about
+    a specific evening with a specific person, not an abstract preference
+    about a stranger — asking at sign-up gets answers people did not mean."""
+    guard = unlocked_or_redirect("boundaries")
+    if guard is not None:
+        return guard
     user = current_user()
     entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
-    by_key = {e["key"]: e["value"] for e in entries}
+    return render_template(
+        "boundaries.html",
+        by_key={e["key"]: e["value"] for e in entries},
+        boundary_options=chemistry.PHYSICAL_BOUNDARY_OPTIONS,
+    )
+
+
+@app.route("/expectations")
+@login_required
+def expectations_view():
+    """Opens after the first date. Intimacy expectations and openness to
+    discussing sexual health and contraception are questions between two
+    people who have met, not sign-up fields."""
+    guard = unlocked_or_redirect("expectations")
+    if guard is not None:
+        return guard
+    user = current_user()
+    entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
 
     couple = find_couple_for_user(user["user_id"]) if user["journey_state"] != "dating" else None
     active = _my_active_lockin(user["user_id"]) if user["journey_state"] == "dating" else None
@@ -1728,19 +1882,33 @@ def chemistry_view():
 
     mismatch = None
     if partner_id:
-        partner_entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=partner_id)
-        mismatch = chemistry.on_chemistry_update(entries, partner_entries)
+        mismatch = chemistry.on_chemistry_update(entries, db.fetch_all(get_db(), "ChemistryEntry", user_id=partner_id))
 
     return render_template(
-        "chemistry.html",
-        by_key=by_key,
-        mandatory_keys=chemistry.MANDATORY_KEYS,
-        intimacy_keys=chemistry.INTIMACY_MANDATORY_KEYS,
+        "expectations.html",
+        by_key={e["key"]: e["value"] for e in entries},
         pace_options=chemistry.INTIMACY_PACE_OPTIONS,
         health_options=chemistry.HEALTH_OPENNESS_OPTIONS,
-        boundary_options=chemistry.PHYSICAL_BOUNDARY_OPTIONS,
         mismatch=mismatch,
         has_partner=partner_id is not None,
+    )
+
+
+@app.route("/vibes")
+@login_required
+def vibes_view():
+    """The Relationship-entry chemistry keys — love language, how you each
+    like to communicate, what makes you feel appreciated. Guru's material,
+    so it opens with the Relationship stage."""
+    guard = unlocked_or_redirect("relationship")
+    if guard is not None:
+        return guard
+    user = current_user()
+    entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
+    return render_template(
+        "vibes.html",
+        by_key={e["key"]: e["value"] for e in entries},
+        mandatory_keys=chemistry.MANDATORY_KEYS,
     )
 
 
@@ -1754,6 +1922,12 @@ def chemistry_set():
         return redirect(url_for("chemistry_view"))
     row = chemistry.set_entry(user["user_id"], key, value, str(get_clock()))
     db.insert_row(get_db(), "ChemistryEntry", {"id": f"{user['user_id']}:{key}", **row})
+    # Back to whichever screen asked. These keys now live on three
+    # different surfaces (see disclosure.py), so a single hardcoded
+    # redirect would bounce people off the page they were filling in.
+    back = request.form.get("back")
+    if back in ("boundaries_view", "expectations_view", "vibes_view"):
+        return redirect(url_for(back))
     return redirect(url_for("chemistry_view"))
 
 
@@ -1763,6 +1937,9 @@ def chemistry_set():
 @app.route("/next-level")
 @login_required
 def next_level_view():
+    guard = unlocked_or_redirect("next_level")
+    if guard is not None:
+        return guard
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     if active is None:
@@ -1833,6 +2010,9 @@ def next_level_answer():
 @app.route("/relationship")
 @login_required
 def relationship_view():
+    guard = unlocked_or_redirect("relationship")
+    if guard is not None:
+        return guard
     user = current_user()
     couple = find_couple_for_user(user["user_id"]) if user["journey_state"] != "dating" else None
     if couple is None:
@@ -2387,7 +2567,13 @@ def onboard_stats():
     submitted = {}
 
     if request.method == "POST":
-        submitted = {**request.form.to_dict(), "languages": request.form.getlist("languages")}
+        # to_dict() keeps only the first value of a repeated field, which
+        # silently drops every multi-select but the first choice. Read
+        # each one with getlist so "Italian, Thai" survives as both.
+        submitted = {
+            **request.form.to_dict(),
+            **{key: request.form.getlist(key) for key, _, _, _ in onboarding.MULTI_STATS},
+        }
         result = onboarding.validate_stats(submitted)
         if result["ok"]:
             draft["stats"] = result["stats"]
@@ -2411,8 +2597,7 @@ def onboard_stats():
             choice_stats=onboarding.CHOICE_STATS,
             cities=onboarding.CITIES_FOR_SIGNUP,
             genders=onboarding.GENDERS_FOR_SIGNUP,
-            languages_pool=onboarding.LANGUAGES_POOL,
-            saved_languages=saved.get("languages", []),
+            multi_stats=onboarding.MULTI_STATS,
             income_bands=onboarding.INCOME_BANDS,
         ),
     )
@@ -2510,6 +2695,205 @@ def onboard_finish():
 def onboard_restart():
     session.pop("onboarding", None)
     return redirect(url_for("signup"))
+
+
+
+# ── Segment B: background verification ─────────────────────────────────
+# Steps 6-8 of the Case 1 walkthrough. The provider is stubbed; bgv.py's
+# simulate_provider_callback() is the one function a real vendor replaces.
+
+
+def _verification_statuses(user_id: str) -> dict:
+    """This user's field statuses, seeding the rows on first look so the
+    screen always has something to render."""
+    rows = db.fetch_all(get_db(), "Verification", user_id=user_id)
+    if not rows:
+        for row in bgv.new_verification_rows(user_id, str(get_clock())):
+            db.insert_row(get_db(), "Verification", row)
+        rows = db.fetch_all(get_db(), "Verification", user_id=user_id)
+    return bgv.statuses_from_rows(rows)
+
+
+def _save_verification(user_id: str, statuses: dict) -> None:
+    """Persist the field statuses, then roll them up into the User row's
+    bgv_status and promote the user if verification just completed."""
+    stamp = str(get_clock())
+    for field, status in statuses.items():
+        db.insert_row(
+            get_db(), "Verification",
+            {"id": f"{user_id}:{field}", "user_id": user_id, "field": field,
+             "status": status, "note": None, "updated_at": stamp},
+        )
+
+    row = dict(db.fetch_one(get_db(), "User", id=user_id))
+    row["bgv_status"] = bgv.aggregate_status(statuses)
+    promoted = bgv.promotion_for(row["journey_state"], statuses)
+    if promoted:
+        row["journey_state"] = promoted
+    db.insert_row(get_db(), "User", row)
+
+
+@app.route("/verify")
+@login_required
+def verify_view():
+    user = current_user()
+    statuses = _verification_statuses(user["user_id"])
+    return render_template(
+        "verify.html",
+        fields=bgv.field_view(statuses),
+        action=bgv.next_action(statuses),
+        account_status=bgv.aggregate_status(statuses),
+        outcomes=[{"key": k, "label": v} for k, v in bgv.OUTCOME_LABELS.items()],
+        is_verified=bgv.is_verified(statuses),
+    )
+
+
+@app.route("/verify/start", methods=["POST"])
+@login_required
+def verify_start():
+    user = current_user()
+    statuses = bgv.start_review(_verification_statuses(user["user_id"]))
+    _save_verification(user["user_id"], statuses)
+    return redirect(url_for("verify_view"))
+
+
+@app.route("/verify/simulate", methods=["POST"])
+@login_required
+def verify_simulate():
+    """Stands in for the provider's webhook. A real integration deletes
+    this route and receives the callback instead — everything downstream
+    of bgv.simulate_provider_callback() stays as it is."""
+    user = current_user()
+    outcome = request.form.get("outcome", "all_pass")
+    if outcome not in bgv.OUTCOMES:
+        return redirect(url_for("verify_view"))
+    statuses = bgv.simulate_provider_callback(_verification_statuses(user["user_id"]), outcome)
+    _save_verification(user["user_id"], statuses)
+    return redirect(url_for("verify_view"))
+
+
+# ── Segment C: the demo clock and the scripted partner ─────────────────
+# The week machine gates on a simulated clock only the admin screen could
+# move. This lets a viewer walk Monday into Tuesday from inside the
+# journey, which is what makes steps 9-13 reachable at all.
+
+
+@app.route("/demo/advance", methods=["POST"])
+def demo_advance():
+    if not demo.is_enabled():
+        abort(404)
+    step = request.form.get("step", "day")
+    if step in demo.STEP_HOURS:
+        set_clock(demo.advance(get_clock(), step))
+    back = request.form.get("back") or request.referrer or url_for("dashboard")
+    return redirect(back)
+
+
+@app.route("/demo/partner", methods=["POST"])
+@login_required
+def demo_partner():
+    """Put one counterpart in the pool who is guaranteed to match this
+    user, in both directions. Built to satisfy matching.fits_filters, not
+    to bypass it — demo.verify_pairing() runs the real function, and this
+    refuses rather than seeding a partner who would not actually match."""
+    if not demo.is_enabled():
+        abort(404)
+    user = current_user()
+    partner_id = demo.partner_id_for(user["user_id"])
+    partner = demo.build_partner_for(user, partner_id)
+
+    checks = demo.verify_pairing(user, partner)
+    if not all(checks.values()):
+        return render_template("demo_partner_failed.html", checks=checks, user=user), 409
+
+    row = to_user_row(partner, journey_state="dating")
+    row["bgv_status"] = "verified"
+    db.insert_row(get_db(), "User", row)
+    for field in bgv.FIELD_KEYS:
+        db.insert_row(
+            get_db(), "Verification",
+            {"id": f"{partner_id}:{field}", "user_id": partner_id, "field": field,
+             "status": bgv.VERIFIED, "note": "demo partner", "updated_at": str(get_clock())},
+        )
+    return redirect(url_for("week"))
+
+
+# ── Segment D: the four fees ───────────────────────────────────────────
+# No gateway. payments.simulate_gateway_callback() is where Razorpay's
+# webhook lands. The entitlement question is answered in exactly one
+# place — payments.has_paid() — so no screen invents its own rule.
+
+
+def _payment_scope(user: dict, purpose: str) -> str | None:
+    """What this fee is being charged FOR. A fee is never 'paid forever':
+    the availability fee is per date, so the next date charges again."""
+    if purpose == payments.GURU:
+        return f"week-{get_week_number()}"
+    active = _my_active_lockin(user["user_id"])
+    if active is None:
+        return None
+    if purpose == payments.AVAILABILITY:
+        return active["id"]
+    if purpose == payments.AGREEMENT:
+        plan = _dateplan_for_lockin(active["id"])
+        return plan["id"] if plan else None
+    if purpose == payments.STAGE_GATE:
+        return active["id"]
+    return None
+
+
+def _has_paid(user_id: str, purpose: str, scope_id: str) -> bool:
+    rows = db.fetch_all(get_db(), "Payment", user_id=user_id)
+    return payments.has_paid(rows, user_id, purpose, scope_id)
+
+
+def _require_payment(user: dict, purpose: str):
+    """Returns a redirect to the checkout when this is unpaid, or None to
+    let the caller carry on. Callers use it as an early return."""
+    if not payments.is_enabled():
+        return None
+    scope_id = _payment_scope(user, purpose)
+    if scope_id is None:
+        return None
+    if _has_paid(user["user_id"], purpose, scope_id):
+        return None
+    return redirect(url_for("pay_view", purpose=purpose))
+
+
+@app.route("/pay/<purpose>")
+@login_required
+def pay_view(purpose):
+    if purpose not in payments.PURPOSES:
+        abort(404)
+    user = current_user()
+    scope_id = _payment_scope(user, purpose)
+    if scope_id is None:
+        return redirect(url_for("week"))
+    paid = _has_paid(user["user_id"], purpose, scope_id)
+    return render_template(
+        "pay.html",
+        view=payments.checkout_view(purpose, scope_id, paid),
+        next_url=request.args.get("next") or url_for("week"),
+    )
+
+
+@app.route("/pay/<purpose>/confirm", methods=["POST"])
+@login_required
+def pay_confirm(purpose):
+    """The stub gateway. Writes a Payment row and marks it paid; no money
+    moves and the screen says so."""
+    if purpose not in payments.PURPOSES:
+        abort(404)
+    user = current_user()
+    scope_id = _payment_scope(user, purpose)
+    if scope_id is None:
+        return redirect(url_for("week"))
+
+    row = payments.payment_row(user["user_id"], purpose, scope_id, str(get_clock()))
+    db.insert_row(get_db(), "Payment", payments.simulate_gateway_callback(row, succeeded=True))
+
+    nxt = request.form.get("next") or url_for("week")
+    return redirect(nxt)
 
 
 @app.route("/admin/reset-week", methods=["GET", "POST"])

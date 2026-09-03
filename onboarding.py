@@ -29,8 +29,11 @@ from typing import Any
 from generate_users import (
     AGE_BANDS,
     COHABIT_FOCUS,
+    CUISINES,
     DIETS,
+    DRINKING,
     ETHNICITIES,
+    FITNESS_ROUTINES,
     EDUCATION,
     INCOME_BANDS,
     INTIMACY_KINDS,
@@ -42,6 +45,7 @@ from generate_users import (
     OWN_RELIGIONS,
     PROFESSIONS,
     RESTAURANT_BUDGETS,
+    SMOKING,
 )
 
 # ── Step 3: Chemistry as the mock-up models it ────────────────────────────
@@ -255,12 +259,24 @@ NUMERIC_STATS = [
 CHOICE_STATS = [
     ("budget", "Restaurant budget", RESTAURANT_BUDGETS),
     ("diet", "Dietary preference", DIETS),
+    ("smoking", "Smoking", SMOKING),
+    ("drinking", "Drinking", DRINKING),
+    ("fitness_routine", "Fitness routine", FITNESS_ROUTINES),
     ("education", "Education", EDUCATION),
     ("profession", "Profession", PROFESSIONS),
     ("marital_history", "Marital history", MARITAL_HISTORY),
     ("nationality", "Nationality", OWN_NATIONALITIES),
     ("ethnicity", "Ethnicity", ETHNICITIES),
     ("religion", "Religion", OWN_RELIGIONS),
+]
+
+# Multi-select stats. Kept separate from CHOICE_STATS because the form
+# posts them as a list and validate_stats has to read them differently —
+# collapsing the two would mean a truthy check that silently accepts one
+# value where the field means "all of these".
+MULTI_STATS = [
+    ("languages", "Languages you speak", LANGUAGES_POOL, "pick at least one"),
+    ("cuisine", "Cuisine you enjoy", CUISINES, "pick at least one"),
 ]
 
 # budget is what someone spends on one meal out, not what they earn — it
@@ -274,7 +290,11 @@ CITIES_FOR_SIGNUP = ["Mumbai", "Delhi", "Bangalore", "Hyderabad", "Pune", "Chenn
 GENDERS_FOR_SIGNUP = ["female", "male"]
 
 # Every stat above is mandatory except languages, which needs at least one.
-REQUIRED_STAT_KEYS = [k for k, _, _, _, _, _ in NUMERIC_STATS] + [k for k, _, _ in CHOICE_STATS]
+REQUIRED_STAT_KEYS = (
+    [k for k, _, _, _, _, _ in NUMERIC_STATS]
+    + [k for k, _, _ in CHOICE_STATS]
+    + [k for k, _, _, _ in MULTI_STATS]
+)
 
 
 def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
@@ -307,13 +327,14 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
             return {"ok": False, "error": f"Choose a {label.lower()}.", "stats": None}
         stats[key] = value
 
-    raw_languages = form.get("languages") or []
-    if isinstance(raw_languages, str):
-        raw_languages = [raw_languages]
-    languages = [lang for lang in LANGUAGES_POOL if lang in raw_languages]
-    if not languages:
-        return {"ok": False, "error": "Pick at least one language you speak.", "stats": None}
-    stats["languages"] = sorted(languages)
+    for key, label, options, _hint in MULTI_STATS:
+        raw = form.get(key) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        chosen = [value for value in options if value in raw]
+        if not chosen:
+            return {"ok": False, "error": f"{label} — pick at least one.", "stats": None}
+        stats[key] = sorted(chosen)
 
     band = bracket_for(form.get("salary"))
     if band is None:
