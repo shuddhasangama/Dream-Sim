@@ -33,6 +33,7 @@ TABLES = {
     "Account",
     "Verification",
     "Payment",
+    "Ceremony",
     "Couple",
     "RoadProfile",
     "CalendarEntry",
@@ -68,6 +69,7 @@ TABLES = {
 CONFLICT_COLUMNS = {
     "Verification": ("user_id", "field"),
     "Payment": ("user_id", "purpose", "scope_id"),
+    "Ceremony": ("user_id", "kind", "scope_id"),
     "RoadProfile": ("user_id", "couple_id"),
     "Playbook": ("couple_id", "stage"),
     "GuruTopic": ("couple_id", "stage", "topic_key"),

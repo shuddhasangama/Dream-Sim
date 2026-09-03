@@ -16,7 +16,7 @@ import json
 import os
 import random
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
@@ -25,6 +25,7 @@ from flask import Flask, abort, g, jsonify, redirect, render_template, request, 
 import bgv
 import cadence
 import calendar_dating
+import ceremony
 import chemistry
 import clock as clock_module
 import dateplan
@@ -32,6 +33,7 @@ import db
 import demo
 import disclosure
 import escalations
+import guru
 import guru_dating
 import guru_relationship
 import invite_home
@@ -280,6 +282,24 @@ def fmtval(value):
     if isinstance(value, list):
         return ", ".join(str(v) for v in value)
     return value
+
+
+@app.template_filter("slot")
+def humanise_slot(value):
+    """Turn a DatePlan's stored ISO slot into something a person reads.
+
+    slot_datetime() writes "2026-01-10T19:30" because that is what the
+    rest of the code wants back. Printing it raw in an agreement someone
+    is being asked to sign is the wrong register — a clause should read
+    like a sentence. Anything that is not an ISO slot passes through
+    untouched, so a placeholder stays a placeholder."""
+    if not isinstance(value, str) or "T" not in value:
+        return value
+    try:
+        stamp = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    return f"{stamp:%a} {stamp.day} {stamp:%b}, {stamp:%H:%M}"
 
 
 def save_preferences(user_id: str, preferences: dict) -> None:
@@ -1184,6 +1204,13 @@ def plan_sign():
     return redirect(url_for("plan_view"))
 
 
+def _feedback_back() -> str:
+    """Where to land after recording flags or a decision. The debrief screen
+    (Segment F) and the week screen post to these same two routes, so the
+    rules stay in one place and only the destination differs."""
+    return "debrief_view" if request.form.get("back") == "debrief_view" else "week"
+
+
 @app.route("/plan/feedback/flags", methods=["POST"])
 @login_required
 def plan_feedback_flags():
@@ -1220,7 +1247,7 @@ def plan_feedback_flags():
     outcome["bill_photo"] = outcome.get("bill_photo", False) or ("bill_photo" in request.form)
     db.insert_row(get_db(), "DateOutcome", _outcome_to_row(outcome))
 
-    return redirect(url_for("week"))
+    return redirect(url_for(_feedback_back()))
 
 
 @app.route("/plan/feedback", methods=["POST"])
@@ -1229,10 +1256,10 @@ def plan_feedback():
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     if active is None:
-        return redirect(url_for("week"))
+        return redirect(url_for(_feedback_back()))
     plan = _dateplan_for_lockin(active["id"])
     if plan is None or plan["status"] != "confirmed":
-        return redirect(url_for("week"))
+        return redirect(url_for(_feedback_back()))
 
     decision = request.form.get("decision")
     if decision not in ("continue", "relationship", "pass"):
@@ -1246,7 +1273,7 @@ def plan_feedback():
     # Flag feedback is mandatory and comes first — refuse a decision
     # recorded without it, not just hidden in the UI.
     if len(outcome.get(f"{my_role}_green_flags", [])) < guru_dating.MIN_GREEN_FLAGS:
-        return redirect(url_for("week"))
+        return redirect(url_for(_feedback_back()))
     outcome[f"{my_role}_decision"] = decision
     outcome[f"{my_role}_reason"] = reason
     db.insert_row(get_db(), "DateOutcome", _outcome_to_row(outcome))
@@ -1295,7 +1322,7 @@ def plan_feedback():
         for row in db.fetch_all(get_db(), "Availability", lockin_id=active["id"]):
             db.delete_row(get_db(), "Availability", row["id"])
 
-    return redirect(url_for("week"))
+    return redirect(url_for(_feedback_back()))
 
 
 # ── Contact exchange / invite home (docs/relationship-stage-spec.md Part A,
@@ -2894,6 +2921,278 @@ def pay_confirm(purpose):
 
     nxt = request.form.get("next") or url_for("week")
     return redirect(nxt)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  SEGMENTS E, F, G — the ceremony, the debrief, and Guru's hub
+# ═══════════════════════════════════════════════════════════════════════
+
+
+# ── Segment E: the ceremony ────────────────────────────────────────────
+# playbook -> sign -> face -> verified. Six occasions, one implementation
+# (ceremony.py), because building it six times means six places to get the
+# rules slightly different in.
+
+
+def _ceremony_scope(kind: str) -> str | None:
+    """What this ceremony is ABOUT for this user right now. The same kind
+    recurs — a new agreement for every date, a new checkpoint for every
+    stage — so the scope is what keeps them apart."""
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    if active is None:
+        return None
+    if kind == ceremony.DATE_AGREEMENT:
+        plan = _dateplan_for_lockin(active["id"])
+        return plan["id"] if plan else None
+    return active["id"]
+
+
+def _ceremony_state(kind: str, scope_id: str) -> dict:
+    user = current_user()
+    row = db.fetch_one(get_db(), "Ceremony", user_id=user["user_id"], kind=kind, scope_id=scope_id)
+    if row is None:
+        row = ceremony.new_state(user["user_id"], kind, scope_id, str(get_clock()))
+        db.insert_row(get_db(), "Ceremony", row)
+    return dict(row)
+
+
+def _save_ceremony(state: dict) -> dict:
+    if ceremony.is_complete(state):
+        state = ceremony.complete(state, str(get_clock()))
+    db.insert_row(get_db(), "Ceremony", _bool_ints(state))
+    return state
+
+
+def _date_ceremony_context(scope_id: str) -> dict:
+    """Fill the seven clauses from what both people already told us.
+    Nothing here is typed by hand — the agreement is a readback."""
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    plan = _dateplan_for_lockin(active["id"]) if active else None
+    if plan is None:
+        return {}
+    entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
+    greeting = {e["key"]: e["value"] for e in entries}.get("physical_boundary")
+    partner = load_user(_partner_id_in_lockin(active, user["user_id"]))
+    return {
+        "slot": humanise_slot(plan.get("datetime")),
+        "meal": plan.get("meal"),
+        "cuisine": plan.get("cuisine"),
+        "budget": plan.get("budget_estimate"),
+        "bill_split": dateplan.BILL_SPLIT_LABELS.get(plan.get("bill_split"), plan.get("bill_split")),
+        "my_diet": (user.get("stats") or {}).get("diet"),
+        "their_diet": (partner.get("stats") or {}).get("diet") if partner else None,
+        "greeting": greeting,
+    }
+
+
+@app.route("/ceremony/<kind>")
+@login_required
+def ceremony_view(kind):
+    if kind not in ceremony.KINDS:
+        abort(404)
+    guard = unlocked_or_redirect("ceremony")
+    if guard is not None:
+        return guard
+    scope_id = _ceremony_scope(kind)
+    if scope_id is None:
+        return redirect(url_for("guru_view"))
+
+    state = _ceremony_state(kind, scope_id)
+    meta = ceremony.kind_meta(kind)
+
+    # The fee, if this kind carries one, uses the SAME scope helper the
+    # rest of payments.py uses — a ceremony must never be reachable by a
+    # route the checkout would have stopped.
+    fee_gate = None
+    if meta["fee"] and payments.is_enabled():
+        fee_scope = _payment_scope(current_user(), meta["fee"])
+        if fee_scope is not None and not _has_paid(current_user()["user_id"], meta["fee"], fee_scope):
+            fee_gate = meta["fee"]
+
+    ctx = _date_ceremony_context(scope_id) if kind == ceremony.DATE_AGREEMENT else {}
+    peers = [dict(p) for p in db.fetch_all(get_db(), "Ceremony", kind=kind, scope_id=scope_id)]
+
+    return render_template(
+        "ceremony.html",
+        kind=kind,
+        meta=meta,
+        state=state,
+        step=ceremony.next_step(state),
+        steps=ceremony.progress(state),
+        clauses=ceremony.clauses_for(kind, ctx),
+        complete=ceremony.is_complete(state),
+        fee_gate=fee_gate,
+        fee_label=payments.amount_label(fee_gate) if fee_gate else None,
+        face_failed=request.args.get("face") == "failed",
+        waiting_on_partner=(
+            ceremony.is_complete(state)
+            and len([p for p in peers if ceremony.is_complete(p)]) < 2
+        ),
+    )
+
+
+@app.route("/ceremony/<kind>/step", methods=["POST"])
+@login_required
+def ceremony_step(kind):
+    """One route for all three actions. Which step runs is decided by
+    ceremony.next_step(), never by which form was posted — you cannot sign
+    a playbook you have not opened, whatever the request body says."""
+    if kind not in ceremony.KINDS:
+        abort(404)
+    guard = unlocked_or_redirect("ceremony")
+    if guard is not None:
+        return guard
+    scope_id = _ceremony_scope(kind)
+    if scope_id is None:
+        return redirect(url_for("guru_view"))
+
+    meta = ceremony.kind_meta(kind)
+    if meta["fee"]:
+        gate = _require_payment(current_user(), meta["fee"])
+        if gate is not None:
+            return gate
+
+    state = _ceremony_state(kind, scope_id)
+    step = ceremony.next_step(state)
+    face_failed = False
+
+    if step == ceremony.PLAYBOOK:
+        state = ceremony.ack_playbook(state)
+    elif step == ceremony.SIGN:
+        state = ceremony.sign(state, request.form.get("signed_name", ""), str(get_clock()))
+    elif step == ceremony.FACE:
+        # Reuses the existing stub rather than adding a second one. A fresh
+        # seed every attempt, so a retry is a genuinely new draw — the
+        # /plan/sign flow had to grow that fix after a user could get
+        # permanently stuck repeating one deterministic failure.
+        if dateplan.verify_face(current_user()["user_id"], seed=uuid.uuid4().hex):
+            state = ceremony.capture_face(state)
+        else:
+            face_failed = True
+
+    state = _save_ceremony(state)
+
+    # The date agreement also writes the Signature row the existing plan
+    # machinery reads, so confirmation keeps working unchanged.
+    if kind == ceremony.DATE_AGREEMENT and ceremony.is_complete(state):
+        _mirror_date_signature()
+
+    if face_failed:
+        return redirect(url_for("ceremony_view", kind=kind, face="failed"))
+    return redirect(url_for("ceremony_view", kind=kind))
+
+
+def _mirror_date_signature() -> None:
+    """A completed date agreement is a signed DatePlan.
+
+    dateplan.is_confirmed() / payment_open() / the whole feedback cycle all
+    read Signature rows. Rather than teach them about Ceremony, the
+    ceremony writes the row they already expect — face_verified is True
+    because the ceremony's own face step has just passed, and every ack is
+    True because the playbook it acknowledged contains all four."""
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    plan = _dateplan_for_lockin(active["id"]) if active else None
+    if plan is None:
+        return
+    sig = dateplan.sign(
+        plan["id"], user["user_id"],
+        {field: True for field in dateplan.ACK_FIELDS},
+        signed_at=str(get_clock()), face_verified=True,
+    )
+    db.insert_row(get_db(), "Signature",
+                  {"id": f"{plan['id']}:{user['user_id']}", **_bool_ints(sig)})
+    signatures = db.fetch_all(get_db(), "Signature", dateplan_id=plan["id"])
+    if dateplan.is_confirmed(signatures, active["user_a"], active["user_b"]) and plan["status"] != "confirmed":
+        db.insert_row(get_db(), "DatePlan", {**plan, "status": "confirmed"})
+
+
+# ── Segment F: the post-date debrief ───────────────────────────────────
+# The rules already existed — guru_dating enforces two green flags and at
+# most two red, outcomes.apply_resolution() runs the three-way branch, and
+# plan_feedback_flags()/plan_feedback() persist both. What was missing was
+# a screen of its own; this one posts to those same two routes rather than
+# growing a second copy of the rules that could drift from the first.
+
+
+@app.route("/debrief")
+@login_required
+def debrief_view():
+    guard = unlocked_or_redirect("debrief")
+    if guard is not None:
+        return guard
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    plan = _dateplan_for_lockin(active["id"]) if active else None
+    if plan is None:
+        return redirect(url_for("week"))
+
+    row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
+    outcome = _outcome_from_row(row) if row else None
+    role = _my_role_in_lockin(active, user["user_id"])
+    my_green = (outcome or {}).get(f"{role}_green_flags") or []
+    partner_id = _partner_id_in_lockin(active, user["user_id"])
+    partner = load_user(partner_id)
+
+    return render_template(
+        "debrief.html",
+        plan=plan,
+        phase=clock_module.phase(get_clock()),
+        green_flags=guru_dating.GREEN_FLAGS,
+        red_flags=guru_dating.RED_FLAGS,
+        min_green=guru_dating.MIN_GREEN_FLAGS,
+        max_red=guru_dating.MAX_RED_FLAGS,
+        my_green=my_green,
+        my_red=(outcome or {}).get(f"{role}_red_flags") or [],
+        flags_given=len(my_green) >= guru_dating.MIN_GREEN_FLAGS,
+        my_decision=(outcome or {}).get(f"{role}_decision"),
+        partner_name=display_name(partner_id, (partner or {}).get("gender", "female")),
+    )
+
+
+# ── Segment G: Guru's hub ──────────────────────────────────────────────
+# The one tab that is always there once you are verified, carrying every
+# contextual screen as a card. This is what replaced four separate tabs.
+
+
+def _guru_facts(user: dict) -> dict:
+    """The handful of things a milestone cannot express. Anything missing
+    reads as not-yet-done, so Guru under-promises rather than telling
+    someone a step is finished when it is not."""
+    active = _my_active_lockin(user["user_id"])
+    if active is None:
+        return {}
+    plan = _dateplan_for_lockin(active["id"])
+    if plan is None:
+        return {}
+    signature = db.fetch_one(get_db(), "Signature", dateplan_id=plan["id"], user_id=user["user_id"])
+    entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
+    row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
+    outcome = _outcome_from_row(row) if row else {}
+    role = _my_role_in_lockin(active, user["user_id"])
+    return {
+        "agreement_signed": signature is not None and dateplan.is_fully_acknowledged(dict(signature)),
+        "boundary_set": any(e["key"] == "physical_boundary" and e["value"] for e in entries),
+        "flags_given": len(outcome.get(f"{role}_green_flags") or []) >= guru_dating.MIN_GREEN_FLAGS,
+        "decision_made": outcome.get(f"{role}_decision") is not None,
+    }
+
+
+@app.route("/guru")
+@login_required
+def guru_view():
+    guard = unlocked_or_redirect("guru")
+    if guard is not None:
+        return guard
+    user = current_user()
+    reached = _milestones_for(user)
+    return render_template(
+        "guru.html",
+        cards=guru.cards(reached),
+        action=guru.next_action(reached, facts=_guru_facts(user)),
+    )
 
 
 @app.route("/admin/reset-week", methods=["GET", "POST"])

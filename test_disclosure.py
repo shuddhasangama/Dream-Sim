@@ -120,16 +120,37 @@ class NavTests(unittest.TestCase):
             self.assertLessEqual(len(d.nav_for(stage)), d.MAX_NAV_LINKS, self._labels(stage))
 
     def test_links_appear_as_the_journey_earns_them(self):
-        self.assertIn("Expectations", self._labels(AFTER_DATE))
+        self.assertIn("Guru", self._labels(VERIFIED))
         self.assertIn("Relationship", self._labels(IN_RELATIONSHIP))
-        self.assertIn("Vibes", self._labels(IN_RELATIONSHIP))
+
+    def test_the_contextual_screens_moved_into_guru_rather_than_the_nav(self):
+        """Expectations, Sharing, the Gate and Vibes are open after a first
+        date, but they are cards in Guru's hub now, not tabs. That swap is
+        what got the menu from eleven links back to six — asserting the
+        openness AND the absence together is what stops the next person
+        from "fixing" a missing tab by putting it back."""
+        for key in ("expectations", "escalations", "gate"):
+            self.assertTrue(d.is_open(key, AFTER_DATE), key)
+        self.assertTrue(d.is_open("vibes", IN_RELATIONSHIP))
+        for label in ("Expectations", "Sharing", "Gate", "Vibes"):
+            self.assertNotIn(label, self._labels(AFTER_DATE), label)
+            self.assertNotIn(label, self._labels(IN_RELATIONSHIP), label)
 
     def test_the_dating_machine_retires_once_exclusive(self):
         """REACH and the weekly rotation are not merely unused in a
         relationship, they are the wrong thing to be offering."""
-        for label in ("REACH", "Week", "Sharing", "Gate"):
+        for label in ("REACH", "Week"):
             self.assertIn(label, self._labels(AFTER_DATE), label)
             self.assertNotIn(label, self._labels(IN_RELATIONSHIP), label)
+        for key in ("reach", "week", "escalations", "gate"):
+            self.assertFalse(d.is_open(key, IN_RELATIONSHIP), key)
+
+    def test_guru_is_the_one_tab_that_never_leaves(self):
+        """Everything else comes and goes. If Guru could retire, the cards
+        it carries would have nowhere to be reached from."""
+        for stage in (VERIFIED, MATCHED, DATE_SET, AFTER_DATE, IN_RELATIONSHIP):
+            self.assertIn("Guru", self._labels(stage))
+        self.assertNotIn("Guru", self._labels(JUST_REGISTERED))
 
     def test_reach_hides_when_it_is_locked_for_the_week(self):
         self.assertIn("REACH", self._labels(VERIFIED))

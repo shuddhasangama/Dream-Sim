@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Debrief — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">After the date</div>
+<h1>How was it?</h1>
+<div class="lede">
+  Flags first, decision after. A decision made before you write the flags colours them, so this
+  screen asks in that order and the routes behind it refuse the other way round.
+</div>
+
+<div class="card">
+  <div class="micro">{{ plan.datetime|slot }} · {{ plan.meal|capitalize }}{% if plan.venue %} · {{ plan.venue }}{% endif %}</div>
+  <div style="margin-top:4px;">with {{ partner_name }}</div>
+</div>
+
+{% if phase != "feedback_open" %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>The debrief opens on Sunday night, once the date has actually happened. Come back then.</div>
+</div>
+
+{% elif not flags_given %}
+{# Posts to the existing plan_feedback_flags route — same validation, same
+   storage, no second copy of the rules. #}
+<div class="card">
+  <div class="section-label">Pick exactly {{ min_green }} green flags</div>
+  <div class="hint">Whatever you end up deciding, this part comes first.</div>
+  <form method="post" action="{{ url_for('plan_feedback_flags') }}">
+    <input type="hidden" name="back" value="debrief_view">
+    <div class="micro section-label" style="margin-top:12px;color:var(--mint);">Green — pick {{ min_green }}</div>
+    <div class="day-picker">
+      {% for f in green_flags %}
+      <label class="day-check"><input type="checkbox" name="green_flags" value="{{ f }}">{{ f }}</label>
+      {% endfor %}
+    </div>
+    <div class="micro section-label" style="margin-top:12px;color:var(--coral-1);">Red — up to {{ max_red }}, optional</div>
+    <div class="day-picker">
+      {% for f in red_flags %}
+      <label class="day-check"><input type="checkbox" name="red_flags" value="{{ f }}">{{ f }}</label>
+      {% endfor %}
+    </div>
+    <div class="micro section-label" style="margin-top:12px;">Proof of date — optional</div>
+    <label class="checkbox-row"><input type="checkbox" name="together_photo"> We took a selfie together</label>
+    <label class="checkbox-row"><input type="checkbox" name="bill_photo"> We photographed the bill</label>
+    <button type="submit" class="btn-primary">Save the flags</button>
+  </form>
+</div>
+
+{% elif my_decision %}
+<div class="card">
+  <div class="section-label">Your call is in</div>
+  <div class="interest-flag yes">
+    You said: {{ {"continue": "Accept — continue dating",
+                  "relationship": "Accept — go to relationship",
+                  "pass": "Reject — back to REACH"}[my_decision] }}.
+    Waiting on {{ partner_name }}.
+  </div>
+  <div class="hint" style="margin-top:10px;">
+    Neither of you sees the other's answer until both are in, and neither sees the other's flags
+    at all.
+  </div>
+</div>
+
+{% else %}
+<div class="card">
+  <div class="section-label">Recorded</div>
+  <div class="chip-row">
+    {% for f in my_green %}<span class="chip" style="border-color:var(--mint);">{{ f }}</span>{% endfor %}
+    {% for f in my_red %}<span class="chip" style="border-color:var(--coral-1);">{{ f }}</span>{% endfor %}
+  </div>
+</div>
+<div class="card">
+  <div class="section-label">Now, what happens next?</div>
+  <form method="post" action="{{ url_for('plan_feedback') }}">
+    <input type="hidden" name="back" value="debrief_view">
+    <textarea name="reason" rows="2" placeholder="Optional — anything you'd want noted (only used if you reject)"
+              style="width:100%;margin-top:8px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--white);font:inherit;"></textarea>
+    <div class="action-row" style="flex-wrap:wrap;">
+      <button type="submit" name="decision" value="pass" class="btn-secondary">Reject — back to REACH</button>
+      <button type="submit" name="decision" value="continue" class="btn-secondary">Accept — continue dating</button>
+      <button type="submit" name="decision" value="relationship" class="btn-primary">Accept — go to relationship</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ meta.label }} — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">{{ meta.scope|capitalize }}</div>
+<h1>{{ meta.label }}</h1>
+<div class="lede">{{ meta.blurb }}</div>
+
+{# The same step rail the onboarding wizard uses, so the two read as one
+   product. ceremony.progress() decides the states, not this template. #}
+<div class="wizard-rail" style="margin-top:18px;">
+  {% for s in steps %}
+  <div class="wizard-step {{ s.state }}">
+    <span class="wizard-dot">{% if s.state == 'done' %}✓{% else %}{{ s.index }}{% endif %}</span>
+    <span class="wizard-label">{{ s.label }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+{% if fee_gate %}
+<div class="card">
+  <div class="section-label">Before you can sign</div>
+  <div class="hint">This one carries a fee of {{ fee_label }}. Nothing is signed until it clears.</div>
+  <a class="btn-primary" href="{{ url_for('pay_view', purpose=fee_gate, next=url_for('ceremony_view', kind=kind)) }}">
+    Go to checkout
+  </a>
+</div>
+{% endif %}
+
+{# ── the playbook ────────────────────────────────────────────────────
+   Always visible, at every step. An agreement you can only read once,
+   before signing, is not one you have agreed to. #}
+<div class="card">
+  <div class="section-label">The playbook</div>
+  <div class="hint" style="margin-bottom:14px;">
+    Every clause below is filled from what you and your match already told us. This is a readback,
+    not a negotiation — and it is a guideline between two people, not a legal instrument.
+  </div>
+  {% for c in clauses %}
+  <div class="clause">
+    <div class="clause-n">{{ c.n }}</div>
+    <div>
+      <div class="clause-title">{{ c.title }}</div>
+      <div class="clause-body">{{ c.body }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if complete %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>
+    {% if waiting_on_partner %}
+    Your side is done. Nothing takes effect until your match has signed theirs too — one signature
+    is half of one.
+    {% else %}
+    Both of you have signed. {{ meta.unlocks }}
+    {% endif %}
+  </div>
+</div>
+{% elif not fee_gate %}
+
+{% if step == 'playbook' %}
+<form method="post" action="{{ url_for('ceremony_step', kind=kind) }}">
+  <button type="submit" class="btn-primary">I have read it</button>
+</form>
+
+{% elif step == 'sign' %}
+<div class="card">
+  <div class="section-label">Sign it</div>
+  <div class="hint">Type your name. This records intent; it does not create a legal obligation.</div>
+  <form method="post" action="{{ url_for('ceremony_step', kind=kind) }}">
+    <input type="text" name="signed_name" placeholder="Your full name" required
+           style="width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--white);font:inherit;">
+    <button type="submit" class="btn-primary">Sign</button>
+  </form>
+</div>
+
+{% elif step == 'face' %}
+<div class="card">
+  <div class="section-label">Confirm it is you</div>
+  <div class="hint">
+    Signed as <strong>{{ state.signed_name }}</strong>. This is a simulated check — nothing is
+    captured, nothing is looked at, and it is not identity verification.
+  </div>
+  {% if face_failed %}
+  <div class="interest-flag" style="margin-top:10px;">The check did not pass. Try again.</div>
+  {% endif %}
+  <form method="post" action="{{ url_for('ceremony_step', kind=kind) }}">
+    <button type="submit" class="btn-primary">{% if face_failed %}Try again{% else %}Run the check{% endif %}</button>
+  </form>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

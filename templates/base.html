@@ -20,7 +20,7 @@
       <a class="navlink" href="{{ url_for(link.endpoint) }}">{{ link.label }}</a>
       {% endfor %}
       <form method="post" action="{{ url_for('logout') }}" style="margin:0;display:inline;">
-        <button type="submit" class="navlink" style="background:none;border:none;font:inherit;cursor:pointer;">Switch user</button>
+        <button type="submit" class="navlink" style="background:none;cursor:pointer;">Switch user</button>
       </form>
     </nav>
     {% endif %}

@@ -1,0 +1,192 @@
+"""Tests for ceremony.py — playbook, sign, face, verified (Segment E).
+
+The same four steps run six times across the journey. That is the whole
+reason this module exists, so most of what is worth pinning is that the
+parameterisation did not quietly become five special cases: every kind
+must produce clauses, and the ordering must hold for all of them.
+
+The other half is refusal. A ceremony that can be half-completed and still
+look signed is worse than one that cannot be completed at all, so the
+skip-ahead cases get more attention here than the happy path.
+"""
+
+from __future__ import annotations
+
+import unittest
+
+import ceremony
+
+
+def fresh(kind=ceremony.DATE_AGREEMENT):
+    return ceremony.new_state("u1", kind, "plan-1", "W1 Mon 09:00")
+
+
+def completed(kind=ceremony.DATE_AGREEMENT, user_id="u1"):
+    s = ceremony.new_state(user_id, kind, "plan-1", "W1 Mon 09:00")
+    s = ceremony.ack_playbook(s)
+    s = ceremony.sign(s, "Asha Rao", "W1 Mon 09:05")
+    return ceremony.capture_face(s)
+
+
+class KindTests(unittest.TestCase):
+    def test_all_five_kinds_carry_a_label_scope_and_unlock(self):
+        for kind in ceremony.KINDS:
+            with self.subTest(kind=kind):
+                meta = ceremony.kind_meta(kind)
+                for field in ("label", "blurb", "scope", "unlocks"):
+                    self.assertTrue(meta[field], f"{kind}.{field}")
+
+    def test_an_unknown_kind_raises_rather_than_rendering_a_blank_agreement(self):
+        with self.assertRaises(ValueError):
+            ceremony.kind_meta("marriage_contract")
+
+    def test_only_the_two_paid_occasions_carry_a_fee(self):
+        charged = sorted(k for k, m in ceremony.KINDS.items() if m["fee"])
+        self.assertEqual(charged, [ceremony.DATE_AGREEMENT, ceremony.STAGE_GATE])
+
+    def test_no_kind_uses_the_forbidden_word(self):
+        """docs/CLAUDE.md: never "contract" in identifiers or copy."""
+        for kind, meta in ceremony.KINDS.items():
+            with self.subTest(kind=kind):
+                blob = " ".join([kind, meta["label"], meta["blurb"], meta["unlocks"]]).lower()
+                self.assertNotIn("contract", blob)
+
+
+class StepOrderTests(unittest.TestCase):
+    def test_a_new_ceremony_starts_at_the_playbook(self):
+        self.assertEqual(ceremony.next_step(fresh()), ceremony.PLAYBOOK)
+
+    def test_the_four_steps_run_in_order(self):
+        s = fresh()
+        seen = [ceremony.next_step(s)]
+        s = ceremony.ack_playbook(s)
+        seen.append(ceremony.next_step(s))
+        s = ceremony.sign(s, "Asha Rao", "W1 Mon 09:05")
+        seen.append(ceremony.next_step(s))
+        s = ceremony.capture_face(s)
+        seen.append(ceremony.next_step(s))
+        self.assertEqual(seen, [ceremony.PLAYBOOK, ceremony.SIGN, ceremony.FACE, ceremony.DONE])
+
+    def test_you_cannot_sign_a_playbook_you_have_not_opened(self):
+        s = ceremony.sign(fresh(), "Asha Rao", "W1 Mon 09:05")
+        self.assertIsNone(s["signed_name"])
+        self.assertEqual(ceremony.next_step(s), ceremony.PLAYBOOK)
+
+    def test_the_face_step_will_not_run_before_a_signature(self):
+        s = ceremony.capture_face(ceremony.ack_playbook(fresh()))
+        self.assertFalse(s["face_verified"])
+        self.assertEqual(ceremony.next_step(s), ceremony.SIGN)
+
+    def test_a_blank_signature_is_refused_rather_than_stored_empty(self):
+        s = ceremony.ack_playbook(fresh())
+        for blank in ("", "   ", None):
+            with self.subTest(value=blank):
+                self.assertIsNone(ceremony.sign(s, blank, "W1 Mon 09:05")["signed_name"])
+
+    def test_a_signature_is_trimmed(self):
+        s = ceremony.sign(ceremony.ack_playbook(fresh()), "  Asha Rao  ", "W1 Mon 09:05")
+        self.assertEqual(s["signed_name"], "Asha Rao")
+
+    def test_rows_read_back_as_booleans_behave_the_same_as_zero_and_one(self):
+        """SQLite hands these back as 0/1 and psycopg as True/False. The
+        step machine must not read one as further along than the other."""
+        as_ints = {**fresh(), "playbook_ack": 1, "signed_name": "Asha Rao", "face_verified": 1}
+        as_bools = {**fresh(), "playbook_ack": True, "signed_name": "Asha Rao", "face_verified": True}
+        self.assertEqual(ceremony.next_step(as_ints), ceremony.next_step(as_bools))
+
+
+class ProgressTests(unittest.TestCase):
+    def test_the_rail_marks_exactly_one_step_current(self):
+        for state in (fresh(), ceremony.ack_playbook(fresh()), completed()):
+            with self.subTest(step=ceremony.next_step(state)):
+                current = [s for s in ceremony.progress(state) if s["state"] == "current"]
+                self.assertEqual(len(current), 1)
+
+    def test_everything_before_the_current_step_reads_as_done(self):
+        rail = ceremony.progress(ceremony.sign(ceremony.ack_playbook(fresh()), "A", "t"))
+        self.assertEqual([s["state"] for s in rail], ["done", "done", "current", "todo"])
+
+
+class CompletionTests(unittest.TestCase):
+    def test_completing_stamps_the_time_once_and_does_not_move_it(self):
+        s = ceremony.complete(completed(), "W1 Mon 10:00")
+        self.assertEqual(s["completed_at"], "W1 Mon 10:00")
+        self.assertEqual(ceremony.complete(s, "W1 Tue 10:00")["completed_at"], "W1 Mon 10:00")
+
+    def test_an_unfinished_ceremony_cannot_be_stamped_complete(self):
+        s = ceremony.complete(ceremony.ack_playbook(fresh()), "W1 Mon 10:00")
+        self.assertIsNone(s["completed_at"])
+
+    def test_one_signature_is_half_of_one(self):
+        """A ceremony binds two people. Nothing takes effect on one."""
+        mine = completed(user_id="u1")
+        self.assertFalse(ceremony.both_complete([mine], "u1", "u2"))
+        self.assertTrue(ceremony.both_complete([mine, completed(user_id="u2")], "u1", "u2"))
+
+    def test_a_partner_who_started_but_did_not_finish_does_not_count(self):
+        half = ceremony.ack_playbook(ceremony.new_state("u2", ceremony.DATE_AGREEMENT, "plan-1", "t"))
+        self.assertFalse(ceremony.both_complete([completed("date_agreement", "u1"), half], "u1", "u2"))
+
+
+class ClauseTests(unittest.TestCase):
+    def test_every_kind_produces_numbered_clauses(self):
+        for kind in ceremony.KINDS:
+            with self.subTest(kind=kind):
+                clauses = ceremony.clauses_for(kind)
+                self.assertGreaterEqual(len(clauses), 4)
+                self.assertEqual([c["n"] for c in clauses],
+                                 [str(i + 1) for i in range(len(clauses))])
+                for c in clauses:
+                    self.assertTrue(c["title"] and c["body"])
+
+    def test_the_date_agreement_reads_back_what_both_people_already_said(self):
+        clauses = ceremony.date_clauses({
+            "slot": "W2 Sat 19:30", "meal": "Dinner", "cuisine": "Thai",
+            "budget": "₹1500–2500", "bill_split": "Pay your own",
+            "my_diet": "vegetarian", "their_diet": "eats everything",
+        })
+        blob = " ".join(c["body"] for c in clauses)
+        for value in ("W2 Sat 19:30", "Thai", "₹1500–2500", "Pay your own",
+                      "vegetarian", "eats everything"):
+            self.assertIn(value, blob)
+
+    def test_a_missing_value_degrades_to_words_rather_than_rendering_none(self):
+        """An agreement with "None" in a clause is not one anyone should
+        be asked to sign."""
+        for c in ceremony.date_clauses({}):
+            self.assertNotIn("None", c["body"])
+
+    def test_a_recorded_greeting_leads_the_courtesies_clause(self):
+        with_greeting = ceremony.date_clauses({"greeting": "no-contact"})
+        without = ceremony.date_clauses({})
+        courtesies = next(c for c in with_greeting if c["title"] == "Courtesies")
+        self.assertIn("no contact", courtesies["body"])
+        self.assertNotIn("no contact", next(c for c in without if c["title"] == "Courtesies")["body"])
+
+    def test_the_relationship_entry_says_what_it_is_not(self):
+        blob = " ".join(c["body"] for c in ceremony.clauses_for(ceremony.RELATIONSHIP_ENTRY)).lower()
+        self.assertIn("not", blob)
+        self.assertIn("legal", blob)
+
+    def test_the_stage_checkpoint_names_the_stage_being_entered(self):
+        clauses = ceremony.clauses_for(ceremony.STAGE_GATE, {"next_stage_name": "Engaged"})
+        self.assertIn("Engaged", " ".join(c["body"] for c in clauses))
+
+
+class IdentityTests(unittest.TestCase):
+    def test_the_row_id_keeps_recurrences_of_one_kind_apart(self):
+        """The same kind happens again for the next date and the next
+        stage. If the id collapsed them, signing once would look like
+        signing forever."""
+        a = ceremony.new_state("u1", ceremony.DATE_AGREEMENT, "plan-1", "t")
+        b = ceremony.new_state("u1", ceremony.DATE_AGREEMENT, "plan-2", "t")
+        self.assertNotEqual(a["id"], b["id"])
+
+    def test_two_people_at_the_same_ceremony_get_separate_rows(self):
+        a = ceremony.new_state("u1", ceremony.DATE_AGREEMENT, "plan-1", "t")
+        b = ceremony.new_state("u2", ceremony.DATE_AGREEMENT, "plan-1", "t")
+        self.assertNotEqual(a["id"], b["id"])
+
+
+if __name__ == "__main__":
+    unittest.main()

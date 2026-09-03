@@ -1,4 +1,4 @@
-"""What is open to a user right now, and what is not yet (Segment E).
+"""What is open to a user right now, and what is not yet (Segment G).
 
 Two problems, one mechanism.
 
@@ -108,20 +108,28 @@ SURFACES = [
     # be offering, so both retire rather than lingering.
     ("reach",        "REACH",         "reach",             VERIFIED,     RELATIONSHIP, True),
     ("week",         "Week",          "week",              VERIFIED,     RELATIONSHIP, True),
+    # Guru is the hub for everything contextual. Giving each of those a
+    # tab of its own is what produced eleven links; they are cards in
+    # guru.py instead, and this is the one tab that carries them.
+    ("guru",         "Guru",          "guru_view",         VERIFIED,     None,         True),
     ("calendar",     "Calendar",      "calendar_view",     MATCHED,      None,         False),
     ("plan",         "Date plan",     "plan_view",         DATE_SET,     None,         False),
     # Boundaries belong to a specific date, so they are reached from that
     # date's plan rather than from a permanent link.
     ("boundaries",   "Boundaries",    "boundaries_view",   DATE_SET,     None,         False),
-    ("expectations", "Expectations",  "expectations_view", FIRST_DATE,   None,         True),
-    ("escalations",  "Sharing",       "escalations_view",  FIRST_DATE,   RELATIONSHIP, True),
+    ("debrief",      "Debrief",       "debrief_view",      DATE_SET,     None,         False),
+    # Ceremony's endpoint takes a <kind>, so it can never be a nav link —
+    # it is always entered from the thing being agreed to.
+    ("ceremony",     "Ceremony",      "ceremony_view",     MATCHED,      None,         False),
+    ("expectations", "Expectations",  "expectations_view", FIRST_DATE,   None,         False),
+    ("escalations",  "Sharing",       "escalations_view",  FIRST_DATE,   RELATIONSHIP, False),
     # Next Level is OFFERED on a material pace mismatch (next_level.py),
     # not browsed. A permanent link would invite people into a
     # conversation nothing has suggested they need.
     ("next_level",   "Next level",    "next_level_view",   FIRST_DATE,   None,         False),
-    ("gate",         "Gate",          "gate_view",         FIRST_DATE,   RELATIONSHIP, True),
+    ("gate",         "Gate",          "gate_view",         FIRST_DATE,   RELATIONSHIP, False),
     ("relationship", "Relationship",  "relationship_view", RELATIONSHIP, None,         True),
-    ("vibes",        "Vibes",         "vibes_view",        RELATIONSHIP, None,         True),
+    ("vibes",        "Vibes",         "vibes_view",        RELATIONSHIP, None,         False),
     ("journey",      "Journey",       "journey_view",      RELATIONSHIP, None,         True),
 ]
 

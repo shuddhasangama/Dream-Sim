@@ -624,7 +624,26 @@ CREATE TABLE IF NOT EXISTS "Payment" (
 );
 CREATE INDEX IF NOT EXISTS idx_payment_user ON "Payment" (user_id);
 
-
-
-
-
+-- ── Ceremony: playbook -> sign -> face -> verified (Segment E) ──
+-- One row per (user, kind, scope), because the same kind recurs: a new
+-- agreement for every date, a new checkpoint for every stage.
+-- NOTE the quoting. db._table_name() quotes every identifier for
+-- PostgreSQL, so an unquoted CREATE TABLE here would be folded to
+-- lower case and never found again. test_schema_postgres.py enforces it.
+CREATE TABLE IF NOT EXISTS "Ceremony" (
+    id            TEXT PRIMARY KEY,
+    user_id       TEXT NOT NULL REFERENCES "User"(id),
+    kind          TEXT NOT NULL CHECK (kind IN (
+                      'date_agreement', 'contact_share', 'home_invite',
+                      'relationship_entry', 'stage_gate'
+                  )),
+    scope_id      TEXT NOT NULL,
+    playbook_ack  INTEGER NOT NULL DEFAULT 0 CHECK (playbook_ack IN (0, 1)),
+    signed_name   TEXT,
+    signed_at     TEXT,
+    face_verified INTEGER NOT NULL DEFAULT 0 CHECK (face_verified IN (0, 1)),
+    completed_at  TEXT,
+    created_at    TEXT NOT NULL,
+    UNIQUE (user_id, kind, scope_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ceremony_scope ON "Ceremony" (kind, scope_id);
