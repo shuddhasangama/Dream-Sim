@@ -1,4 +1,4 @@
-﻿-- DREAM simulation harness â€” consolidated data model.
+-- DREAM simulation harness â€” consolidated data model.
 -- Source: docs/dream-full-journey-build-brief.pdf, section 7 ("Full data model (consolidated)").
 --
 -- Naming rule (docs/CLAUDE.md): never use the word "contract" in identifiers or copy.
