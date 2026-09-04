@@ -24,6 +24,21 @@
       </form>
     </nav>
     {% endif %}
+    {% if journey_progress %}
+    <div class="journey-bar" title="{{ journey_progress.label }}">
+      <div class="journey-bar-track">
+        <div class="journey-bar-fill" style="width: {{ journey_progress.percent }}%"></div>
+      </div>
+      <span class="journey-bar-label">
+        {% if journey_progress.complete %}
+          Journey complete
+        {% else %}
+          Step {{ journey_progress.step_number }} of {{ journey_progress.total }} ·
+          {{ journey_progress.label }}
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
     <main class="container">
       {% block content %}{% endblock %}
     </main>

@@ -1214,3 +1214,84 @@ select:focus {
 }
 
 .clause-body { font-size: 12.5px; line-height: 1.6; color: var(--text-2); margin-top: 3px; }
+
+/* ── the terms on a ceremony signature ─────────────────────────────────
+   One row per term, each ticked separately. Deliberately not a compact
+   list: the wording is the point, so it gets room to be read. */
+
+.term {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.term:first-of-type { border-top: none; }
+.term input { margin-top: 3px; flex-shrink: 0; }
+.term-label { display: block; font-size: 13px; font-weight: 600; }
+.term-body { display: block; margin-top: 3px; font-size: 12px; line-height: 1.55; color: var(--muted); }
+
+/* ── mandatory vs optional on the Stats step ───────────────────────────
+   2026-09-04: five required fields, everything else optional. The split
+   has to be visible at a glance, or the form still reads as seventeen
+   questions. */
+
+.required-block { border-color: var(--teal); }
+
+.optional-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 28px 0 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.optional-divider::before,
+.optional-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.optional-block { background: transparent; }
+
+/* ── journey step tracker (Segment J) ──────────────────────────────────
+   Deliberately thin and quiet. It answers "how far in am I?" for a demo
+   viewer without competing with whatever the screen is actually asking. */
+
+.journey-bar {
+  width: 100%;
+  max-width: 460px;
+  padding: 10px 20px 0;
+  box-sizing: border-box;
+}
+
+.journey-bar-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.journey-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--mint), var(--teal));
+  transition: width .3s ease;
+}
+
+.journey-bar-label {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

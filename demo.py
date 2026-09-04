@@ -80,6 +80,49 @@ def clock_view(current: clock_module.SimulationClock) -> dict[str, Any]:
     }
 
 
+# ── the walkthrough reset ─────────────────────────────────────────────────
+# Every table a run through the journey writes to, in the order they have
+# to be deleted so foreign keys stay satisfied: children before parents.
+# Getting this order wrong shows up as an IntegrityError halfway through,
+# leaving the demo user in a state worse than the one being reset.
+
+RESET_TABLES_IN_ORDER = [
+    "Signature",       # -> DatePlan
+    "DateOutcome",     # -> DatePlan
+    "DatePlan",        # -> LockIn
+    "Availability",    # -> LockIn
+    "GateResponse",    # -> LockIn
+    "GateAnalysis",    # -> StageGate's pair
+    "StageGate",       # -> LockIn
+    "ContactRequest",  # -> LockIn
+    "HomeInvite",      # -> LockIn
+    "NextLevelThread", # -> LockIn
+    "Match",           # -> User
+    "Ceremony",        # -> User (scope_id is plain text, no constraint)
+    "ComplianceEvent",
+    "Payment",
+    "ChemistryEntry",
+    "LockIn",
+]
+
+
+def reset_plan(user_id: str, partner_id: str | None = None) -> dict[str, Any]:
+    """What a walkthrough reset should delete and set, without doing it.
+
+    Returned rather than executed so the caller owns the connection and
+    the test can check the plan without a database. `journey_state` goes
+    back to 'dating' and NOT to 'onboarding': the point is to re-run the
+    dating journey, not to re-type a sign-up form that is already done.
+    """
+    users = [user_id] + ([partner_id] if partner_id else [])
+    return {
+        "user_ids": users,
+        "tables": list(RESET_TABLES_IN_ORDER),
+        "journey_state": "dating",
+        "bgv_status": "verified",
+    }
+
+
 # ── 2. the scripted partner ───────────────────────────────────────────────
 
 

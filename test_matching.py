@@ -7,6 +7,9 @@ import unittest
 
 from generate_users import generate_users
 from matching import (
+    apply_lever_widen,
+    available_levers,
+    locked_levers,
     LEVERS,
     RANGE_LEVERS,
     build_reach_input,
@@ -447,13 +450,82 @@ class BuildReachInputTests(unittest.TestCase):
         pool = [a, _candidate()]
         payload = build_reach_input(a, pool)
         self.assertEqual(
-            set(payload.keys()), {"user_id", "phase", "preferences", "reciprocity", "whatif"}
+            set(payload.keys()),
+            {"user_id", "phase", "preferences", "reciprocity", "whatif", "locked"},
         )
         self.assertEqual(payload["phase"], "searching")
         self.assertEqual(payload["preferences"], a["preferences"])
         self.assertEqual(set(payload["reciprocity"].keys()), {"fits_user_filters", "mutual_open", "no_realistic_matches"})
+        # A user with every stat filled in gets every lever; the count is
+        # levers AVAILABLE, not levers that exist, since 2026-09-04.
         self.assertEqual(len(payload["whatif"]), len(LEVERS))
+        self.assertEqual(payload["locked"], [])
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LeverAvailabilityTests(unittest.TestCase):
+    """2026-09-04, user's rule: REACH only filters on what the user keyed
+    in, so that granular filtering visibly requires granular stats.
+
+    The failure this prevents is subtle. A lever with no backing stat is
+    not merely useless — it silently excludes candidates on a value the
+    user never chose, and there is nothing on screen to explain why the
+    pool looks small."""
+
+    def _sparse(self, **stats):
+        import onboarding
+        user = _base_user()
+        user["stats"] = {"age": 31, "nationality": "IN", **stats}
+        user["preferences"] = onboarding.default_preferences(user["stats"])
+        return user
+
+    def test_a_user_with_five_fields_has_three_levers(self):
+        self.assertEqual(available_levers(self._sparse()), ["age", "distance_km", "nationality"])
+
+    def test_the_rest_are_reported_as_locked_rather_than_hidden(self):
+        locked = {entry["lever"] for entry in locked_levers(self._sparse())}
+        self.assertEqual(locked, {"height_cm", "weight_kg", "waist_in", "religion"})
+
+    def test_each_locked_lever_names_the_stat_that_unlocks_it(self):
+        for entry in locked_levers(self._sparse()):
+            with self.subTest(lever=entry["lever"]):
+                self.assertTrue(entry["needs"])
+
+    def test_filling_a_stat_in_moves_its_lever_from_locked_to_available(self):
+        before = self._sparse()
+        after = self._sparse(height_cm=165)
+        self.assertNotIn("height_cm", available_levers(before))
+        self.assertIn("height_cm", available_levers(after))
+        self.assertNotIn("height_cm", {e["lever"] for e in locked_levers(after)})
+
+    def test_a_lever_the_user_does_not_have_excludes_nobody(self):
+        """The loosening half: not filtering on height means every height
+        passes, rather than an invented default quietly excluding people."""
+        sparse = self._sparse()
+        tall, short = _candidate(), _candidate()
+        tall["stats"]["height_cm"], short["stats"]["height_cm"] = 205, 145
+        self.assertTrue(fits_filters(sparse, tall))
+        self.assertTrue(fits_filters(sparse, short))
+
+    def test_a_candidate_who_skipped_a_stat_fails_a_filter_on_it(self):
+        """The tightening half, and the incentive: undeclared fields keep
+        you out of granular searches rather than sailing through them."""
+        picky = _base_user()
+        undeclared = _candidate()
+        undeclared["stats"].pop("height_cm")
+        self.assertFalse(fits_filters(picky, undeclared))
+
+    def test_widening_a_lever_that_does_not_exist_raises_rather_than_inventing_one(self):
+        with self.assertRaises(ValueError):
+            apply_lever_widen(self._sparse(), "height_cm")
+
+    def test_a_missing_religion_on_either_side_simply_does_not_filter(self):
+        """"Same" and "related" are both relative to the user's own
+        religion. With either side missing there is no question to answer,
+        so inventing an answer is the only wrong move available."""
+        no_religion_declared = self._sparse()
+        candidate = _candidate()
+        self.assertTrue(fits_filters(no_religion_declared, candidate))

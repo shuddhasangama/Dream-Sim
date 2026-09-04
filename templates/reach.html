@@ -75,4 +75,23 @@
 </div>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
+
+{% if locked_levers %}
+<div class="card">
+  <div class="section-label">Filters you have not unlocked</div>
+  <div class="hint">
+    REACH only filters on what you have actually told us. Each of these turns on the moment you
+    fill the matching field in — and until then it is not quietly excluding anyone either.
+  </div>
+  <div class="stat-rows" style="margin-top:12px;">
+    {% for entry in locked_levers %}
+    <div class="stat-row">
+      <span class="lever-name">{{ entry.label }}</span>
+      <span class="sensitive-tag">add {{ entry.needs }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <a class="btn-secondary" href="{{ url_for('vision_view') }}">Add the missing stats</a>
+</div>
+{% endif %}
 {% endblock %}

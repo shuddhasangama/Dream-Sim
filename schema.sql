@@ -643,6 +643,10 @@ CREATE TABLE IF NOT EXISTS Ceremony (
     signed_name   TEXT,
     signed_at     TEXT,
     face_verified INTEGER NOT NULL DEFAULT 0 CHECK (face_verified IN (0, 1)),
+    -- Which terms were explicitly ticked, as a JSON list of ack keys. A
+    -- signature that does not record WHAT was agreed to is a signature on
+    -- nothing; ceremony.ACKS holds the wording for each key.
+    acks_json     TEXT NOT NULL DEFAULT '[]',
     completed_at  TEXT,
     created_at    TEXT NOT NULL,
     UNIQUE (user_id, kind, scope_id)

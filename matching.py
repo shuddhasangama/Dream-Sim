@@ -136,7 +136,10 @@ def _dealbreaker_satisfied(tag: str, candidate: dict[str, Any]) -> bool:
     absence is what "no_kids_wanted" checks for.
     """
     if tag == "veg_only":
-        return candidate["stats"]["diet"] in _VEG_COMPATIBLE_DIETS
+        # An undeclared diet cannot satisfy a veg-only dealbreaker. Same
+        # rule as the range levers: a hard exclusion is not waived just
+        # because the other person left the field blank.
+        return candidate["stats"].get("diet") in _VEG_COMPATIBLE_DIETS
     if tag == "wants_kids":
         return _has_vision(candidate, "Kids")
     if tag == "no_kids_wanted":
@@ -144,15 +147,17 @@ def _dealbreaker_satisfied(tag: str, candidate: dict[str, Any]) -> bool:
     return True
 
 
-def _nationality_fits(accepted: list[str], candidate_nationality: str) -> bool:
+def _nationality_fits(accepted: list[str], candidate_nationality: str | None) -> bool:
     if any(n.lower() == "any" for n in accepted):
         return True
-    return candidate_nationality in accepted
+    return candidate_nationality is not None and candidate_nationality in accepted
 
 
-def _religion_fits(tiers: list[str], own_religion: str, candidate_religion: str) -> bool:
+def _religion_fits(tiers: list[str], own_religion: str, candidate_religion: str | None) -> bool:
     if any(t.lower() == "any" for t in tiers):
         return True
+    if candidate_religion is None:
+        return False
     if "same" in tiers and candidate_religion == own_religion:
         return True
     if "related" in tiers and _RELIGION_FAMILY.get(candidate_religion) == _RELIGION_FAMILY.get(own_religion):
@@ -182,9 +187,23 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     adj = prefs["adjustable"]
     b_stats = user_b["stats"]
 
+    # 2026-09-04, user's rule: only filters the user actually keyed in
+    # apply. Two separate absences, with deliberately different answers:
+    #
+    #   * user_a has no lever for this field — they never gave the stat, so
+    #     they are not filtering on it and every candidate passes.
+    #   * user_b has no such stat — user_a IS filtering on it and there is
+    #     nothing to check against, so user_b does not pass. That is what
+    #     makes filling your stats in worth doing: undeclared fields keep
+    #     you out of granular searches rather than sailing through them.
     for field in RANGE_LEVERS:
+        if field not in adj:
+            continue
         lo, hi = adj[field]
-        if not (lo <= b_stats[field] <= hi):
+        value = b_stats.get(field)
+        if value is None:
+            return False
+        if not (lo <= value <= hi):
             return False
 
     dist_lo, dist_hi = adj["distance_km"]
@@ -192,11 +211,17 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     if not (dist_lo <= distance <= dist_hi):
         return False
 
-    if not _nationality_fits(adj["nationality"], b_stats["nationality"]):
-        return False
+    if "nationality" in adj:
+        if not _nationality_fits(adj["nationality"], b_stats.get("nationality")):
+            return False
 
-    if not _religion_fits(adj["religion"], user_a["stats"]["religion"], b_stats["religion"]):
-        return False
+    # A religion filter needs BOTH sides declared: "same" and "related" are
+    # both relative to user_a's own, so with either missing there is no
+    # question to answer and the filter simply does not apply.
+    own_religion = user_a["stats"].get("religion")
+    if "religion" in adj and own_religion:
+        if not _religion_fits(adj["religion"], own_religion, b_stats.get("religion")):
+            return False
 
     return True
 
@@ -289,6 +314,12 @@ def _widened_user(user: dict[str, Any], lever: str) -> tuple[dict[str, Any], Any
     }
     new_adj = widened["preferences"]["adjustable"]
 
+    if lever in LEVERS and lever not in adj:
+        raise ValueError(
+            f"Lever {lever!r} has no filter to widen — this user never gave "
+            f"their {LEVER_STAT.get(lever, lever)}. Check available_levers() first."
+        )
+
     if lever in _WIDEN_STEP:  # age, height_cm, weight_kg, waist_in, distance_km — all [min,max]
         lo, hi = adj[lever]
         step = _WIDEN_STEP[lever]
@@ -309,6 +340,34 @@ def _widened_user(user: dict[str, Any], lever: str) -> tuple[dict[str, Any], Any
 
 _SENSITIVE_LEVERS = {"nationality", "religion"}
 LEVERS = ["age", "height_cm", "weight_kg", "waist_in", "distance_km", "nationality", "religion"]
+
+# 2026-09-04, user's rule: REACH filters on what the user actually keyed
+# in. A lever exists only where the backing stat does, so the whole lever
+# machinery has to ask before it reaches.
+LEVER_STAT = {
+    "height_cm": "height_cm",
+    "weight_kg": "weight_kg",
+    "waist_in": "waist_in",
+    "religion": "religion",
+}
+
+
+def available_levers(user: dict[str, Any]) -> list[str]:
+    """The levers this user can actually move."""
+    adj = user["preferences"]["adjustable"]
+    return [lever for lever in LEVERS if lever in adj]
+
+
+def locked_levers(user: dict[str, Any]) -> list[dict[str, str]]:
+    """The levers they cannot move yet, and the stat that would unlock
+    each. This is the honest half of the rule: rather than hiding a filter
+    someone has not earned, REACH names it and says what to fill in."""
+    adj = user["preferences"]["adjustable"]
+    return [
+        {"lever": lever, "needs": LEVER_STAT.get(lever, lever)}
+        for lever in LEVERS
+        if lever not in adj
+    ]
 
 
 def apply_lever_widen(user: dict[str, Any], lever: str) -> dict[str, Any]:
@@ -380,7 +439,7 @@ def whatif_deltas(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict
     baseline = sum(1 for c in candidates if mutual_open(user, c))
 
     results = []
-    for lever in LEVERS:
+    for lever in available_levers(user):
         widened, from_value, to_value = _widened_user(user, lever)
         new_mutual = sum(1 for c in candidates if mutual_open(widened, c))
         entry = {
@@ -403,4 +462,5 @@ def build_reach_input(user: dict[str, Any], pool: list[dict[str, Any]], phase: s
         "preferences": user["preferences"],
         "reciprocity": reciprocity_counts(user, pool),
         "whatif": whatif_deltas(user, pool),
+        "locked": locked_levers(user),
     }

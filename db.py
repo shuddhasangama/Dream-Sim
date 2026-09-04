@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -154,7 +155,14 @@ def init_db(
     conn: Any,
     schema_path: str | Path | None = None,
 ) -> None:
-    """Create all tables for the active database backend."""
+    """Create all tables, and bring an existing database level with the
+    schema file.
+
+    The second half matters as much as the first. CREATE TABLE IF NOT
+    EXISTS does nothing to a table that already exists, so without
+    reconcile_columns() every schema change after the first deploy would
+    need a hand-run ALTER on the live database — and a hand-run ALTER is
+    how the deployed database and the repo stop being the same thing."""
 
     if _is_postgres_connection(conn):
         path = Path(schema_path) if schema_path else POSTGRES_SCHEMA_PATH
@@ -166,12 +174,114 @@ def init_db(
             cur.execute(sql)
 
         _commit(conn)
+        reconcile_columns(conn, schema_path)
         return
 
     path = Path(schema_path) if schema_path else SQLITE_SCHEMA_PATH
     sql = path.read_text(encoding="utf-8")
     conn.executescript(sql)
     _commit(conn)
+    reconcile_columns(conn, schema_path)
+
+
+# ── keeping an existing database level with the schema file ───────────────
+# CREATE TABLE IF NOT EXISTS creates a table that is missing. It does
+# NOTHING to a table that already exists — so a column added to the schema
+# file ships in the code, deploys cleanly, and then every write to that
+# table fails with 'column "x" does not exist'.
+#
+# That is what made a hand-run ALTER on the deployed database the only way
+# forward, and a hand-run ALTER is exactly how the live database and the
+# schema file stop being the same thing. This closes it: the schema file
+# stays the single source of truth, and both backends reach it by the same
+# code path on startup.
+#
+# ADDITIVE ONLY, deliberately. Adding a column is safe and reversible;
+# dropping, renaming or retyping one is not, and silently guessing at
+# those is worse than refusing. Anything this cannot do is reported rather
+# than attempted — see reconcile_columns()'s return value.
+
+_COLUMN_LINE = re.compile(
+    r'^\s*([a-z_][a-z0-9_]*)\s+(TEXT|INTEGER|REAL|BOOLEAN)\b(.*?),?\s*$',
+    re.IGNORECASE,
+)
+
+
+def _expected_columns(sql: str) -> dict[str, list[tuple[str, str]]]:
+    """Every table's columns and their declarations, read from the schema
+    file. Table-level constraints (UNIQUE, CHECK, PRIMARY KEY on their own
+    line) are skipped — they are not columns and cannot be added this way."""
+    out: dict[str, list[tuple[str, str]]] = {}
+    for match in re.finditer(
+        r'CREATE TABLE IF NOT EXISTS\s+"?([A-Za-z_]+)"?\s*\((.*?)\n\);', sql, re.S
+    ):
+        table, body = match.group(1), match.group(2)
+        columns: list[tuple[str, str]] = []
+        for line in body.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("--"):
+                continue
+            if stripped.upper().startswith(("UNIQUE", "CHECK", "PRIMARY KEY", "FOREIGN KEY")):
+                continue
+            found = _COLUMN_LINE.match(stripped)
+            if found:
+                name, kind, rest = found.group(1), found.group(2), found.group(3)
+                columns.append((name, f"{kind}{rest}".rstrip().rstrip(",")))
+        out[table] = columns
+    return out
+
+
+def _existing_columns(conn: Any, table: str) -> set[str]:
+    if _is_postgres_connection(conn):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = 'public' AND table_name = %s",
+                (table,),
+            )
+            rows = cur.fetchall()
+        return {row["column_name"] if isinstance(row, dict) else row[0] for row in rows}
+    return {row[1] for row in conn.execute(f'PRAGMA table_info("{table}")').fetchall()}
+
+
+def _table_exists(conn: Any, table: str) -> bool:
+    return bool(_existing_columns(conn, table))
+
+
+def reconcile_columns(conn: Any, schema_path: str | Path | None = None) -> dict[str, list[str]]:
+    """Add any column the schema file declares and the database lacks.
+
+    Returns {"added": [...], "needs_migration": [...]} — the second list is
+    the honest half. A NOT NULL column with no DEFAULT cannot be added to a
+    table that already has rows, because there is no value to put in them.
+    Guessing one would be a data decision disguised as a deploy step, so it
+    is reported and left alone.
+    """
+    if _is_postgres_connection(conn):
+        path = Path(schema_path) if schema_path else POSTGRES_SCHEMA_PATH
+    else:
+        path = Path(schema_path) if schema_path else SQLITE_SCHEMA_PATH
+
+    added: list[str] = []
+    needs_migration: list[str] = []
+
+    for table, columns in _expected_columns(path.read_text(encoding="utf-8")).items():
+        if not _table_exists(conn, table):
+            continue  # CREATE TABLE already handled it, or will
+        present = _existing_columns(conn, table)
+        for name, declaration in columns:
+            if name in present:
+                continue
+            upper = declaration.upper()
+            if "NOT NULL" in upper and "DEFAULT" not in upper:
+                needs_migration.append(f"{table}.{name}")
+                continue
+            _execute(conn, f'ALTER TABLE {_table_name(conn, table)} ADD COLUMN {name} {declaration}')
+            added.append(f"{table}.{name}")
+
+    if added:
+        _commit(conn)
+    return {"added": added, "needs_migration": needs_migration}
 
 
 def _check_table(table: str) -> None:

@@ -39,6 +39,7 @@ AVAILABILITY = "availability"
 AGREEMENT = "agreement"
 STAGE_GATE = "stage_gate"
 GURU = "guru"
+CANCELLATION = "cancellation"
 
 FEES = {
     AVAILABILITY: {
@@ -64,6 +65,21 @@ FEES = {
         "label": "Guru",
         "blurb": "The four pillars, the weekly report, and mediation when you want it.",
         "recurring": True,
+    },
+    # 2026-09-04, user's rule: a free cancellation is an invitation to
+    # change your mind at everyone else's expense, and dates are set on
+    # Thursday for the weekend. This is a PENALTY, not a service — it is
+    # charged after the fact to whoever cancelled inside the 24h window,
+    # never as a gate in front of something.
+    #
+    # THE AMOUNT IS A PLACEHOLDER. 999 sits deliberately between the
+    # availability fee and the agreement fee: enough to be felt, less than
+    # the cost of the date itself. Set it where you want it.
+    CANCELLATION: {
+        "amount_inr": 999,
+        "label": "Late cancellation",
+        "blurb": "Charged when a confirmed date is cancelled inside 24 hours of the slot.",
+        "recurring": False,
     },
 }
 PURPOSES = tuple(FEES)

@@ -28,6 +28,7 @@ Pure functions. The caller persists Ceremony rows.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 # ── the four steps, always in this order ──────────────────────────────────
@@ -96,6 +97,84 @@ KINDS = {
 }
 
 
+# ── the terms each ceremony asks you to acknowledge ───────────────────────
+# A signature that records only a name records agreement to nothing. These
+# are the specific terms, spelt out, ticked one at a time — which is what
+# makes the difference between signing a document and clicking through it.
+#
+# For the date agreement the four keys match dateplan.ACK_FIELDS exactly,
+# so a completed ceremony can be mirrored into the Signature row the rest
+# of the app already reads without inventing consent nobody gave.
+
+ACKS: dict[str, list[tuple[str, str, str]]] = {
+    DATE_AGREEMENT: [
+        ("ack_conduct", "Code of conduct and courtesies",
+         "I will greet them by name, keep my phone face-down, answer honestly, and "
+         "respect the greeting preference on the record without comment."),
+        ("ack_cancellation", "Cancellation policy",
+         "I understand that cancelling inside 24 hours of the slot carries a fee, and "
+         "that not turning up is recorded against me."),
+        ("ack_not_a_relationship", "What this is not",
+         "This is one meeting to establish whether a second is warranted. It creates no "
+         "relationship, no exclusivity and no expectation beyond the evening."),
+        ("ack_liability", "Platform liability",
+         "Dare to Dream introduces people and records what they agree to. It does not "
+         "supervise the meeting and is not responsible for what happens at it."),
+    ],
+    CONTACT_SHARE: [
+        ("ack_onward", "No onward sharing",
+         "I will use these details to contact them and nothing else — no lists, no "
+         "forwarding, no looking them up elsewhere."),
+        ("ack_revocable", "Either of us can take it back",
+         "I understand either party may revoke at any time, that revoking hides the "
+         "detail again, and that it cannot un-send anything already sent."),
+        ("ack_no_obligation", "No obligation to reply",
+         "Sharing a channel creates no expectation of a reply, a pace, or a continued "
+         "exchange."),
+    ],
+    HOME_INVITE: [
+        ("ack_someone_knows", "Someone outside this app knows",
+         "I have told a trusted contact where I will be and when I expect to leave."),
+        ("ack_callable_off", "Either of us can call it off",
+         "I understand either party may cancel before or during, without explanation, "
+         "and that it counts against neither of us."),
+        ("ack_boundaries", "Boundaries stand",
+         "Everything either of us recorded about pace and boundaries applies here "
+         "exactly as it does anywhere else."),
+    ],
+    RELATIONSHIP_ENTRY: [
+        ("ack_exclusive", "We both leave the pool",
+         "I will not be shown to anyone else, and I will not be shown anyone else."),
+        ("ack_not_legal", "This is not a legal instrument",
+         "This is an agreement of understanding between two people. It creates no "
+         "financial or legal tie."),
+        ("ack_exit", "Leaving is allowed",
+         "Either of us may exit. Exiting opens a private conversation with Guru and a "
+         "cool-off period before returning to the pool."),
+    ],
+    STAGE_GATE: [
+        ("ack_both", "Both of us, or neither",
+         "I understand one opt-in advances nothing, and that nothing here is automatic."),
+        ("ack_reversible", "Reaching a stage obliges nothing",
+         "Nothing about this checkpoint is irreversible, and reaching a stage creates no "
+         "obligation to reach the next one."),
+        ("ack_honest", "Answered honestly",
+         "A checkpoint passed to please the other person is worse than one not yet "
+         "passed. My answers are my own."),
+    ],
+}
+
+
+def acks_for(kind: str) -> list[dict[str, str]]:
+    """The terms this kind asks you to tick, in order."""
+    kind_meta(kind)
+    return [{"key": k, "label": lbl, "term": term} for k, lbl, term in ACKS[kind]]
+
+
+def ack_keys(kind: str) -> tuple[str, ...]:
+    return tuple(k for k, _, _ in ACKS[kind])
+
+
 def kind_meta(kind: str) -> dict[str, Any]:
     if kind not in KINDS:
         raise ValueError(f"Unknown ceremony kind {kind!r}; expected one of {sorted(KINDS)}")
@@ -114,6 +193,7 @@ def new_state(user_id: str, kind: str, scope_id: str, created_at: str) -> dict[s
         "signed_name": None,
         "signed_at": None,
         "face_verified": 0,
+        "acks_json": "[]",
         "completed_at": None,
         "created_at": created_at,
     }
@@ -164,16 +244,50 @@ def ack_playbook(state: dict[str, Any]) -> dict[str, Any]:
     return {**state, "playbook_ack": 1}
 
 
-def sign(state: dict[str, Any], typed_name: str, signed_at: str) -> dict[str, Any]:
-    """Record the typed signature. A blank name is refused rather than
-    stored as an empty signature — an unsigned agreement that looks signed
-    is worse than an unsigned one."""
+def signed_acks(state: dict[str, Any]) -> list[str]:
+    """Which terms this signature actually ticked."""
+    raw = state.get("acks_json") or "[]"
+    if isinstance(raw, (list, tuple)):
+        return list(raw)
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    return list(value) if isinstance(value, list) else []
+
+
+def missing_acks(state: dict[str, Any], ticked: list[str] | None = None) -> list[str]:
+    """The terms still outstanding. `ticked` checks a proposed signature;
+    omit it to check what is already stored."""
+    given = set(ticked if ticked is not None else signed_acks(state))
+    return [k for k in ack_keys(state["kind"]) if k not in given]
+
+
+def sign(state: dict[str, Any], typed_name: str, acks: list[str], signed_at: str) -> dict[str, Any]:
+    """Record the typed signature and the terms it agreed to.
+
+    Three refusals, all returning the state untouched rather than a partial
+    signature — an agreement that looks signed but is not is worse than one
+    that is plainly unsigned:
+
+      * a blank name,
+      * a playbook that was never opened,
+      * any term left unticked.
+
+    The last is the point of this function. Ticking every box on the user's
+    behalf, which is what the date flow used to do, records agreement
+    nobody gave.
+    """
     name = (typed_name or "").strip()
     if not name:
         return state
     if not _truthy(state.get("playbook_ack")):
         return state
-    return {**state, "signed_name": name, "signed_at": signed_at}
+    given = [k for k in ack_keys(state["kind"]) if k in set(acks or [])]
+    if missing_acks(state, given):
+        return state
+    return {**state, "signed_name": name, "signed_at": signed_at,
+            "acks_json": json.dumps(given)}
 
 
 def capture_face(state: dict[str, Any]) -> dict[str, Any]:

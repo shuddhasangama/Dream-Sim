@@ -41,6 +41,7 @@ import disclosure as d
 CARDS = [
     # code  title                    subtitle                                    endpoint            surface        needs           hides_at
     # The calendar closes once the date it was collecting slots for exists.
+    ("AL", "Before the date",        "Budget, what you eat, what you enjoy",     "align_view",       "align",       d.MATCHED,      d.DATE_SET),
     ("CL", "Weekend calendar",       "Offer the slots that suit you",            "calendar_view",    "calendar",    d.MATCHED,      d.DATE_SET),
     ("AG", "Agreement of understanding", "The terms for this date",              "plan_view",        "plan",        d.DATE_SET,     d.RELATIONSHIP),
     ("BD", "Boundaries",             "How you would like to be greeted",         "boundaries_view",  "boundaries",  d.DATE_SET,     d.RELATIONSHIP),
@@ -50,6 +51,7 @@ CARDS = [
     ("NL", "Next level",             "When the two of you describe a different pace", "next_level_view", "next_level", d.FIRST_DATE, d.RELATIONSHIP),
     ("GT", "Checkpoint",             "Moving to the next stage, together",       "gate_view",        "gate",        d.FIRST_DATE,   d.RELATIONSHIP),
     ("VB", "Vibes",                  "What keeps this alive",                    "vibes_view",       "vibes",       d.RELATIONSHIP, None),
+    ("HM", "Happily married",        "The end of the journey",                   "married_view",     "married",     d.RELATIONSHIP, None),
 ]
 
 
@@ -112,6 +114,13 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             "though REACH will tell you how far your filters actually go.",
             "week", "Open your week")
 
+    if d.DATE_SET not in milestones and not f.get("aligned", True):
+        return action(
+            "Three things before the slot",
+            "Budget, what you eat, and the cuisines you enjoy. They were not asked at sign-up "
+            "because they mean nothing until there is a bill and a table.",
+            "align_view", "Answer them")
+
     if d.DATE_SET not in milestones:
         return action(
             "Offer your weekend",
@@ -150,6 +159,13 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             "See them again, go back to the pool, or agree to be exclusive. Nothing moves until "
             "you choose.",
             "debrief_view", "Make your call")
+
+    if d.RELATIONSHIP in milestones and f.get("married"):
+        return action(
+            "Nothing needs you",
+            "You went the whole way. The four pillars keep running underneath, and that is the "
+            "only thing left to do.",
+            "married_view", "Happily married")
 
     if d.RELATIONSHIP in milestones:
         return action(

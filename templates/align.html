@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Before the date — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Arranging your date</div>
+<h1>Three things, now they matter</h1>
+<div class="lede">
+  These were not asked at sign-up on purpose — budget and cuisine mean nothing until there is a
+  bill and a table. There is one waiting on them now.
+</div>
+
+{% if error %}<div class="card form-error">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ url_for('align_view') }}">
+  <div class="card">
+    <div class="section-label">{{ labels.budget }}</div>
+    <div class="hint">{{ blurbs.budget }}</div>
+    <select class="field-input" name="budget" style="margin-top:10px;">
+      <option value="">Choose…</option>
+      {% for band in options.budget %}
+      <option value="{{ band }}" {% if saved.get('budget') == band %}selected{% endif %}>{{ band }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="card">
+    <div class="section-label">{{ labels.diet }}</div>
+    <div class="hint">{{ blurbs.diet }}</div>
+    <select class="field-input" name="diet" style="margin-top:10px;">
+      <option value="">Choose…</option>
+      {% for option in options.diet %}
+      <option value="{{ option }}" {% if saved.get('diet') == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="card">
+    <div class="section-label">{{ labels.cuisine }}</div>
+    <div class="hint">{{ blurbs.cuisine }}</div>
+    <div class="chip-row" style="margin-top:10px;">
+      {% for option in options.cuisine %}
+      <label class="chip-check">
+        <input type="checkbox" name="cuisine" value="{{ option }}"
+               {% if option in (saved.get('cuisine') or []) %}checked{% endif %}>
+        <span>{{ option }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <button type="submit" class="btn-primary">Save and pick a slot</button>
+</form>
+
+{% if partner_pending %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>
+    {{ partner_name }} still has {{ partner_pending|length }} of these to answer. Neither of you
+    sees the other's answers — the agreement reads them, and takes the lower budget of the two.
+  </div>
+</div>
+{% endif %}
+{% endblock %}

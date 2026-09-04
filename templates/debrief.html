@@ -13,10 +13,22 @@
   <div style="margin-top:4px;">with {{ partner_name }}</div>
 </div>
 
-{% if phase != "feedback_open" %}
+{% if no_show_reported %}
+<div class="card">
+  <div class="section-label">Recorded as a no-show</div>
+  <div class="hint">
+    You are back in the pool. It is on their record, not yours, and you were not asked to find
+    two nice things to say about an empty chair.
+  </div>
+</div>
+
+{% elif not is_open %}
 <div class="card guru-card">
   <div class="guru-avatar">G</div>
-  <div>The debrief opens on Sunday night, once the date has actually happened. Come back then.</div>
+  <div>
+    The debrief opens an hour after your date starts — {{ opens_at }}. That is early enough to
+    report a no-show the same evening, rather than days later.
+  </div>
 </div>
 
 {% elif not flags_given %}
@@ -43,6 +55,17 @@
     <label class="checkbox-row"><input type="checkbox" name="together_photo"> We took a selfie together</label>
     <label class="checkbox-row"><input type="checkbox" name="bill_photo"> We photographed the bill</label>
     <button type="submit" class="btn-primary">Save the flags</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="section-label">Or they never turned up</div>
+  <div class="hint">
+    Separate on purpose. Two green flags are mandatory before any decision, and asking that of
+    someone who was left sitting there is absurd — this path skips them entirely.
+  </div>
+  <form method="post" action="{{ url_for('debrief_no_show') }}">
+    <button type="submit" class="btn-secondary">Report a no-show</button>
   </form>
 </div>
 

@@ -6,8 +6,9 @@
 {% include "_wizard.html" %}
 
 <div class="lede">
-  These are the fields background verification will check, and the ones matching filters on.
-  Your salary derives a bracket — only the bracket is ever shown to anyone.
+  Five fields to get matched. Everything below them is optional — and every one you fill in
+  unlocks the matching filter that goes with it. Your salary derives a bracket; only the
+  bracket is ever shown to anyone.
 </div>
 
 {% if error %}<div class="card form-error">{{ error }}</div>{% endif %}
@@ -31,8 +32,8 @@
     </label>
   </div>
 
-  <div class="card">
-    <div class="section-label">Numbers</div>
+  <div class="card required-block">
+    <div class="section-label">Required — {{ mandatory_labels|join(' · ') }}</div>
     {% for key, label, unit, low, high, placeholder in numeric_stats %}
     <label class="field">
       <span class="field-label">{{ label }} <span class="field-unit">{{ unit }}</span></span>
@@ -48,8 +49,6 @@
     </label>
   </div>
 
-  <div class="card">
-    <div class="section-label">Choices</div>
     {% for key, label, options in choice_stats %}
     <label class="field">
       <span class="field-label">{{ label }}</span>
@@ -61,14 +60,69 @@
     {% endfor %}
   </div>
 
-  {% for key, label, options, hint in multi_stats %}
-  <div class="card">
+  {# ── everything below here is optional ─────────────────────────────────
+     Visibly separated, and honest about the trade: each field you fill in
+     is a filter you can then use. Skipping them costs nothing except the
+     ability to search on them. #}
+  <div class="optional-divider">
+    <span>Optional — skip any of these</span>
+  </div>
+  <div class="hint" style="margin-bottom:12px;">
+    Every field here unlocks its own matching filter. Leave them blank now and add them later
+    from your profile; nothing below is needed to get your first match.
+  </div>
+
+  <div class="card optional-block">
+    <div class="section-label">Numbers</div>
+    <div class="hint" style="margin-bottom:8px;">Fill one in and you can filter matches on it.</div>
+    {% for key, label, unit, low, high, placeholder in optional_numeric_stats %}
+    <label class="field">
+      <span class="field-label">{{ label }} <span class="field-unit">{{ unit }}</span></span>
+      <input class="field-input" type="number" name="{{ key }}" min="{{ low }}" max="{{ high }}"
+             placeholder="{{ placeholder }}" value="{{ submitted.get(key) or saved.get(key) or '' }}">
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="card optional-block">
+    <div class="section-label">About you</div>
+    {% for key, label, options in optional_choice_stats %}
+    <label class="field">
+      <span class="field-label">{{ label }}</span>
+      <select class="field-input" name="{{ key }}">
+        <option value="">Skip</option>
+        {% for o in (locale.diets if key == 'diet' else options) %}
+        <option value="{{ o }}" {% if (submitted.get(key) or saved.get(key)) == o %}selected{% endif %}>{{ o }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endfor %}
+    <label class="field">
+      <span class="field-label">
+        Restaurant budget <span class="field-unit">{{ locale.currency.code }}</span>
+      </span>
+      <select class="field-input" name="budget">
+        <option value="">Skip — we will ask when a date is being arranged</option>
+        {% for band in locale.budget_bands %}
+        <option value="{{ band }}" {% if (submitted.get('budget') or saved.get('budget')) == band %}selected{% endif %}>{{ band }}</option>
+        {% endfor %}
+      </select>
+      <span class="field-hint">Priced in {{ locale.currency.name }}, from your city.</span>
+    </label>
+  </div>
+
+  {% for key, label, options, hint in optional_multi_stats %}
+  <div class="card optional-block">
     <div class="section-label">{{ label }} — {{ hint }}</div>
     <div class="chip-row">
-      {% for option in options %}
+      {% set shown = locale.languages if key == 'languages' else options %}
+      {% set preticked = locale.suggested_languages if key == 'languages' else [] %}
+      {% for option in shown %}
       <label class="chip-check">
         <input type="checkbox" name="{{ key }}" value="{{ option }}"
-               {% if option in (submitted.get(key) or saved.get(key) or []) %}checked{% endif %}>
+               {% if submitted.get(key) or saved.get(key) %}
+                 {% if option in (submitted.get(key) or saved.get(key)) %}checked{% endif %}
+               {% elif option in preticked %}checked{% endif %}>
         <span>{{ option }}</span>
       </label>
       {% endfor %}

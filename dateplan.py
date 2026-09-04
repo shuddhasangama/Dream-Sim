@@ -43,6 +43,81 @@ BILL_SPLIT_OPTIONS = ("pay-your-own", "one-third-two-thirds")
 BILL_SPLIT_LABELS = {"pay-your-own": "Pay your own", "one-third-two-thirds": "1/3 – 2/3 split"}
 
 
+# ── when a slot actually happens, and what follows it ─────────────────────
+# The single definition of what time each meal slot starts. app.py's
+# slot_datetime() and the debrief's timing both read it here, because two
+# copies of this map is how the calendar and the debrief end up disagreeing
+# about when a date was.
+
+MEAL_SLOT_TIMES = {
+    "breakfast": (9, 0),
+    "lunch": (13, 0),
+    "coffee": (17, 0),
+    "dinner": (19, 30),
+}
+
+# 2026-09-04, user's rule: the debrief opens an hour after the date starts,
+# NOT on Sunday night. That is what makes a no-show reportable while the
+# evening is still happening, instead of days later.
+DEBRIEF_OPENS_AFTER_HOURS = 1
+
+
+def slot_start(meal_slot: str) -> tuple[int, int]:
+    if meal_slot not in MEAL_SLOT_TIMES:
+        raise ValueError(f"Unknown meal slot {meal_slot!r}; expected one of {sorted(MEAL_SLOT_TIMES)}")
+    return MEAL_SLOT_TIMES[meal_slot]
+
+
+def debrief_opens_hour(meal_slot: str) -> int:
+    """The whole hour at which the debrief opens for this slot.
+
+    Rounded UP, never down: dinner starts at 19:30, so an hour later is
+    20:30, and the debrief opens at 21:00. Opening at 20:00 would put the
+    "how was it?" screen in front of someone who is still at the table.
+    """
+    hour, minute = slot_start(meal_slot)
+    total_minutes = hour * 60 + minute + DEBRIEF_OPENS_AFTER_HOURS * 60
+    return min(23, -(-total_minutes // 60))
+
+
+# ── cancellation ──────────────────────────────────────────────────────────
+# 2026-09-04, user's rule: dates are set on Thursday for the weekend, so a
+# free cancellation is an invitation to change your mind at everyone else's
+# expense. Inside the notice window it costs something and it is recorded.
+
+CANCELLATION_NOTICE_HOURS = 24
+
+
+def hours_between(earlier: tuple[int, int], later: tuple[int, int]) -> int:
+    """Whole hours between two (day_index, hour) points in the same week.
+    Negative if `later` is actually earlier."""
+    return (later[0] * 24 + later[1]) - (earlier[0] * 24 + earlier[1])
+
+
+def cancellation(hours_notice: int, fee_inr: int) -> dict[str, Any]:
+    """What cancelling with this much notice costs.
+
+    Outside the window it is free and unrecorded — people's plans change,
+    and a policy that punishes honest early notice teaches people to
+    no-show instead, which is the outcome this is trying to prevent.
+    Inside it, the fee applies and a late_cancel strike is recorded.
+    """
+    late = hours_notice < CANCELLATION_NOTICE_HOURS
+    return {
+        "late": late,
+        "hours_notice": hours_notice,
+        "fee_inr": fee_inr if late else 0,
+        "compliance_event": "late_cancel" if late else None,
+        "reason": (
+            f"Cancelled with {max(hours_notice, 0)}h notice — inside the "
+            f"{CANCELLATION_NOTICE_HOURS}h window, so the fee applies."
+            if late else
+            f"Cancelled with {hours_notice}h notice — outside the "
+            f"{CANCELLATION_NOTICE_HOURS}h window, so nothing is charged."
+        ),
+    }
+
+
 def verify_face(user_id: str, success_rate: float = 0.95, seed: str | int | None = None) -> bool:
     """Stubbed biometric check — NOT real face verification (the spec is
     explicit: "do not implement real biometrics"). Deterministic given

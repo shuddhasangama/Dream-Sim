@@ -28,6 +28,7 @@ import calendar_dating
 import ceremony
 import chemistry
 import clock as clock_module
+import date_alignment
 import dateplan
 import db
 import demo
@@ -38,12 +39,14 @@ import guru_dating
 import guru_relationship
 import invite_home
 import journey
+import locale_defaults
 import lockin
 import matching
 import next_level
 import onboarding
 import outcomes
 import payments
+import progress
 import stage_gate
 import vision
 from generate_users import COHABIT_FOCUS, KIDS_STANCES, from_user_row, to_user_row
@@ -139,8 +142,8 @@ def slot_datetime(week: int, day: str, meal_slot: str) -> str:
     real venue's opening hours."""
     day_offset = clock_module.DAYS_OF_WEEK.index(day)
     the_date = WEEK_ONE_MONDAY + timedelta(weeks=week - 1, days=day_offset)
-    hour = {"breakfast": "09:00", "lunch": "13:00", "coffee": "17:00", "dinner": "19:30"}[meal_slot]
-    return f"{the_date.isoformat()}T{hour}"
+    hour, minute = dateplan.slot_start(meal_slot)
+    return f"{the_date.isoformat()}T{hour:02d}:{minute:02d}"
 
 
 # ── one sqlite connection per request ──────────────────────────────────────
@@ -267,6 +270,10 @@ def inject_globals():
         "needs_verification": bool(user) and user["bgv_status"] != "verified",
         "nav_links": disclosure.nav_for(reached, reach_locked=reach_locked(user) if user else False),
         "milestones": reached,
+        # Segment J step 41. Driven by the same facts guru.next_action()
+        # reads, so the tracker and "what now?" cannot disagree about what
+        # has actually happened.
+        "journey_progress": progress.position(reached, _guru_facts(user)) if user else None,
     }
 
 
@@ -593,13 +600,47 @@ def build_sliders(user: dict, pool: list[dict]) -> list[dict]:
     "typical value" nor a personal one (it's derived from two people's
     cities, not a stat either one "has"), so both stay None for it."""
     partner_gender = _PARTNER_GENDER[user["gender"]]
+    adjustable = user["preferences"]["adjustable"]
     sliders = []
     for spec in SLIDER_LEVERS:
         key = spec["key"]
+        # 2026-09-04, user's rule: a slider only exists where the stat
+        # does. Skipping it silently would leave a gap with no explanation,
+        # so reach.html lists these separately as "unlock by filling it in".
+        if key not in adjustable:
+            continue
         suggested = matching.suggest_range(pool, key, gender=partner_gender) if key in matching.RANGE_LEVERS else None
         self_value = user["stats"].get(key) if key in matching.RANGE_LEVERS else None
-        sliders.append({**spec, "current": user["preferences"]["adjustable"][key], "suggested": suggested, "self_value": self_value})
+        sliders.append({**spec, "current": adjustable[key], "suggested": suggested, "self_value": self_value})
     return sliders
+
+
+_STAT_PROMPTS = {
+    "height_cm": "your height",
+    "weight_kg": "your weight",
+    "waist_in": "your waist measurement",
+    "religion": "your religion",
+}
+
+
+def locked_lever_view(user: dict) -> list[dict]:
+    """The filters this user has not unlocked, and what unlocks each.
+
+    Naming them beats hiding them: a short REACH with no explanation reads
+    as the product failing, where "add your height to filter on height"
+    reads as a trade the user can take or leave.
+    """
+    labels = {spec["key"]: spec.get("label", spec["key"]) for spec in SLIDER_LEVERS}
+    labels.setdefault("religion", "Religion")
+    labels.setdefault("nationality", "Nationality")
+    return [
+        {
+            "lever": entry["lever"],
+            "label": labels.get(entry["lever"], entry["lever"]),
+            "needs": _STAT_PROMPTS.get(entry["needs"], entry["needs"]),
+        }
+        for entry in matching.locked_levers(user)
+    ]
 
 
 @app.route("/reach")
@@ -612,7 +653,8 @@ def reach():
     counts = matching.reciprocity_counts(user, pool)
     deltas = [d for d in matching.whatif_deltas(user, pool) if d["lever"] not in _SLIDER_KEYS]
     sliders = build_sliders(user, pool)
-    return render_template("reach.html", counts=counts, deltas=deltas, sliders=sliders)
+    return render_template("reach.html", counts=counts, deltas=deltas, sliders=sliders,
+                           locked_levers=locked_lever_view(user))
 
 
 @app.route("/reach/widen", methods=["POST"])
@@ -770,6 +812,46 @@ def _create_lockin(user_a_id: str, user_b_id: str, week: int, clock: clock_modul
 
 def _dateplan_for_lockin(lockin_id: str) -> dict | None:
     return db.fetch_one(get_db(), "DatePlan", lockin_id=lockin_id)
+
+
+def _plan_slot(plan: dict) -> tuple[int, int] | None:
+    """Where this date sits in the simulated week, as (day_index, hour).
+
+    Derived from the stored ISO datetime rather than a new column: the
+    epoch that produced it (WEEK_ONE_MONDAY) starts on a Monday, so the
+    weekday IS the day index. One source of truth, no migration."""
+    stamp = plan.get("datetime")
+    if not stamp or "T" not in stamp:
+        return None
+    try:
+        day_index = date.fromisoformat(stamp.split("T")[0]).weekday()
+    except ValueError:
+        return None
+    return day_index, dateplan.debrief_opens_hour(plan["meal"])
+
+
+def _debrief_is_open(plan: dict, clock: clock_module.SimulationClock) -> bool:
+    """2026-09-04, user's rule: the debrief opens an hour after the date
+    starts, not on Sunday night — so a no-show can be reported the same
+    evening rather than three days later.
+
+    A plan whose slot cannot be read opens the debrief rather than sealing
+    it shut. Being unable to say when the date was is not a reason to stop
+    someone reporting what happened at it."""
+    slot = _plan_slot(plan)
+    if slot is None:
+        return True
+    day_index, opens_hour = slot
+    return (clock.day_index, clock.hour) >= (day_index, opens_hour)
+
+
+def _cancellation_terms(plan: dict, clock: clock_module.SimulationClock) -> dict:
+    """What cancelling this date right now would cost."""
+    slot = _plan_slot(plan)
+    start_hour = dateplan.slot_start(plan["meal"])[0]
+    day_index = slot[0] if slot else clock.day_index
+    notice = dateplan.hours_between((clock.day_index, clock.hour), (day_index, start_hour))
+    return dateplan.cancellation(notice, payments.fee(payments.CANCELLATION)["amount_inr"])
 
 
 # DateOutcome stores each partner's green/red flags as *_flags_json text
@@ -1049,15 +1131,32 @@ def calendar_confirm():
         abort(400)
 
     partner = load_user(_partner_id_in_lockin(active, user["user_id"]))
+
+    # 2026-09-04: budget, diet and cuisine are asked here rather than at
+    # sign-up, so a date cannot be confirmed until both have answered.
+    if not date_alignment.ready_for_pair(user["stats"], partner["stats"]):
+        return redirect(url_for("align_view"))
+
     venue = calendar_dating.suggest_venue(day, meal, user["stats"]["diet"], partner["stats"]["diet"])
+
+    # The bill clause used to assert "both parties declared" a band that
+    # came from a hardcoded default and matched neither of them. It now
+    # states the lower of the two bands they actually chose, which is the
+    # only reading that does not commit the person with less money to the
+    # other's idea of an evening.
+    budget = date_alignment.lower_budget(user["stats"].get("budget"),
+                                         partner["stats"].get("budget"), user.get("city"))
+    shared = date_alignment.shared_cuisines(user["stats"].get("cuisine"),
+                                            partner["stats"].get("cuisine"))
     plan = dateplan.generate_plan(
         lockin_id=active["id"],
         confirmed_slot={"day": day, "meal_slot": meal},
-        venue=venue,
+        venue={**venue, "cuisine": shared[0] if shared else venue.get("cuisine")},
         datetime_str=slot_datetime(active["week"], day, meal),
         bill_split="pay-your-own",
         selections_a={},
         selections_b={},
+        config={"budget_estimate": budget} if budget else None,
     )
     db.insert_row(
         get_db(), "DatePlan",
@@ -1134,6 +1233,10 @@ def plan_view():
         ack_fields=dateplan.ACK_FIELDS,
         bill_split_labels=dateplan.BILL_SPLIT_LABELS,
         phase=clock_module.phase(get_clock()),
+        cancellable=plan["status"] == "confirmed",
+        cancellation=_cancellation_terms(plan, get_clock()),
+        cancellation_fee=payments.amount_label(payments.CANCELLATION),
+        notice_hours=dateplan.CANCELLATION_NOTICE_HOURS,
     )
 
 
@@ -1352,8 +1455,17 @@ def escalations_view():
     invites = db.fetch_all(get_db(), "HomeInvite", pair_id=active["id"])
     invite = invites[-1] if invites else None  # only one pending/accepted at a time by design
 
+    # Segment G: each escalation is gated behind its own ceremony, and the
+    # home invite is gated behind contact sharing as well — you do not
+    # invite someone home before you have exchanged a phone number.
+    share = _ceremony_pair_state(ceremony.CONTACT_SHARE, active["id"], active)
+    home = _ceremony_pair_state(ceremony.HOME_INVITE, active["id"], active)
+    home["blocked_by"] = None if share["both_complete"] else share["label"]
+
     return render_template(
         "escalations.html",
+        share_ceremony=share,
+        home_ceremony=home,
         unlocked=True,
         partner=partner,
         channels=escalations.CONTACT_CHANNELS,
@@ -1375,6 +1487,9 @@ def escalations_view():
 @app.route("/escalations/contact/request", methods=["POST"])
 @login_required
 def escalations_contact_request():
+    """Requesting is free; REVEALING is what the ceremony gates. The
+    request is how you ask, and asking is not the thing that hands your
+    number over."""
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     if active is None or not escalations.unlocks_available(active["dates_completed"]):
@@ -1396,6 +1511,15 @@ def escalations_contact_respond():
     row = db.fetch_one(get_db(), "ContactRequest", id=request.form.get("request_id"))
     if row is None or row["requester_id"] == user["user_id"]:
         return redirect(url_for("escalations_view"))
+    # Ceremony #2. Accepting is what makes a number visible, so that is
+    # what the agreement gates — not the asking. Declining never needs a
+    # signature: nobody should have to sign something to say no.
+    active = _my_active_lockin(user["user_id"])
+    if request.form.get("response") == "accepted" and active is not None:
+        share = _ceremony_pair_state(ceremony.CONTACT_SHARE, active["id"], active)
+        if not share["mine_complete"]:
+            return redirect(url_for("ceremony_view", kind=ceremony.CONTACT_SHARE))
+
     try:
         updated = escalations.respond_to_contact_request(row, request.form.get("response"), str(get_clock()))
     except ValueError:
@@ -1414,6 +1538,16 @@ def escalations_invite_propose():
     proposed_datetime = request.form.get("proposed_datetime")
     if not proposed_datetime:
         return redirect(url_for("escalations_view"))
+
+    # Ceremony #3, and the ordering that goes with it: contact details are
+    # shared before an address is. Both gates are checked here rather than
+    # only hidden in the template, because a posted form is not a click.
+    share = _ceremony_pair_state(ceremony.CONTACT_SHARE, active["id"], active)
+    if not share["both_complete"]:
+        return redirect(url_for("escalations_view"))
+    home = _ceremony_pair_state(ceremony.HOME_INVITE, active["id"], active)
+    if not home["mine_complete"]:
+        return redirect(url_for("ceremony_view", kind=ceremony.HOME_INVITE))
     existing = db.fetch_all(get_db(), "HomeInvite", pair_id=active["id"])
     try:
         row = invite_home.propose_invite(active["id"], user["user_id"], proposed_datetime, request.form.get("expectation_flag"), existing)
@@ -1691,25 +1825,39 @@ def gate_exclusivity_ack():
 @app.route("/gate/consent", methods=["POST"])
 @login_required
 def gate_consent():
-    """Consent block, signed independently per partner, face-verified
-    (B2 step 7) — a single attempt per click, same verify_face() stub as
-    everywhere else in this project; unlike /plan/sign there's no
-    hardcoded-attempt bug to guard against here since this route never
-    reuses a fixed seed across calls in the first place."""
+    """Segment H: this no longer signs anything itself.
+
+    It used to run its own playbook-free signature and face check, which
+    meant two implementations of one rule — and two places for the wording,
+    the refusals and the record to drift apart. Consent for Relationship
+    entry is ceremony #4 now, exactly like the date agreement, so this
+    route's whole job is to send people to it.
+
+    The gate row is still where the answer LANDS — _mirror_gate_consent()
+    writes it when the ceremony completes, so stage_gate.py and everything
+    downstream keep reading the columns they always did.
+    """
+    return redirect(url_for("ceremony_view", kind=ceremony.RELATIONSHIP_ENTRY))
+
+
+def _mirror_gate_consent() -> None:
+    """A completed relationship-entry ceremony is the gate's consent.
+
+    Same shape as _mirror_date_signature(): the ceremony is the front end,
+    the existing row stays the source of truth for every rule already
+    written against it.
+    """
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     if active is None:
-        return redirect(url_for("week"))
+        return
     gate = _gate_for_lockin(active["id"])
     if gate is None:
-        return redirect(url_for("week"))
-    my_role = _my_role_in_lockin(active, user["user_id"])
-    verified = dateplan.verify_face(user["user_id"], seed=uuid.uuid4().hex)
-    updated = dict(gate)
-    updated[f"biometric_{my_role}"] = int(verified)
-    updated[f"consent_{my_role}"] = int(verified)
-    db.insert_row(get_db(), "StageGate", updated)
-    return redirect(url_for("gate_view"))
+        return
+    role = _my_role_in_lockin(active, user["user_id"])
+    db.insert_row(get_db(), "StageGate", {**dict(gate),
+                                          f"consent_{role}": 1,
+                                          f"biometric_{role}": 1})
 
 
 @app.route("/gate/enter-relationship", methods=["POST"])
@@ -2189,6 +2337,50 @@ def journey_view():
     )
 
 
+@app.route("/married")
+@login_required
+def married_view():
+    """Step 37 — the end of the journey.
+
+    Deliberately the only screen in the product with nothing to do on it.
+    Everything else asks for a decision, a signature or a slot; this one
+    asks for nothing, which is the whole point of arriving. The four
+    pillars keep running underneath, because a marriage is not a finish
+    line — but the JOURNEY has one, and it should feel like it.
+    """
+    guard = unlocked_or_redirect("married")
+    if guard is not None:
+        return guard
+    user = current_user()
+    couple = find_couple_for_user(user["user_id"])
+    if couple is None or couple["stage"] != "married":
+        return redirect(url_for("journey_view"))
+    partner_id = partner_id_in(couple, user["user_id"])
+    partner = with_view_fields(load_user(partner_id))
+
+    # What it took to get here, counted from the record rather than
+    # asserted: every ceremony either of them completed along the way.
+    signed = [
+        dict(row) for row in db.fetch_all(get_db(), "Ceremony")
+        if row["user_id"] in (couple["user_a"], couple["user_b"]) and row["completed_at"]
+    ]
+    by_kind: dict[str, int] = {}
+    for row in signed:
+        by_kind[row["kind"]] = by_kind.get(row["kind"], 0) + 1
+
+    return render_template(
+        "married.html",
+        couple=couple,
+        partner=partner,
+        stage_order=journey.STAGE_ORDER,
+        agreements=[
+            {"label": ceremony.kind_meta(kind)["label"], "count": count}
+            for kind, count in by_kind.items()
+        ],
+        total_signed=len(signed),
+    )
+
+
 @app.route("/journey/advance", methods=["POST"])
 @login_required
 def journey_advance():
@@ -2599,7 +2791,8 @@ def onboard_stats():
         # each one with getlist so "Italian, Thai" survives as both.
         submitted = {
             **request.form.to_dict(),
-            **{key: request.form.getlist(key) for key, _, _, _ in onboarding.MULTI_STATS},
+            **{key: request.form.getlist(key)
+               for key, _, _, _ in onboarding.MULTI_STATS + onboarding.OPTIONAL_MULTI_STATS},
         }
         result = onboarding.validate_stats(submitted)
         if result["ok"]:
@@ -2622,10 +2815,19 @@ def onboard_stats():
             saved_gender=draft.get("gender"),
             numeric_stats=onboarding.NUMERIC_STATS,
             choice_stats=onboarding.CHOICE_STATS,
+            optional_numeric_stats=onboarding.OPTIONAL_NUMERIC_STATS,
+            optional_choice_stats=onboarding.OPTIONAL_CHOICE_STATS,
+            optional_multi_stats=onboarding.OPTIONAL_MULTI_STATS,
             cities=onboarding.CITIES_FOR_SIGNUP,
             genders=onboarding.GENDERS_FOR_SIGNUP,
             multi_stats=onboarding.MULTI_STATS,
             income_bands=onboarding.INCOME_BANDS,
+            mandatory_labels=onboarding.MANDATORY_FIELD_LABELS,
+            # City decides currency, which languages lead the list, and
+            # which diets do. Asking for any of that separately is a
+            # question the city already answered.
+            locale=locale_defaults.defaults_for(
+                submitted.get("city") or draft.get("city") or onboarding.CITIES_FOR_SIGNUP[0]),
         ),
     )
 
@@ -3021,6 +3223,9 @@ def ceremony_view(kind):
         state=state,
         step=ceremony.next_step(state),
         steps=ceremony.progress(state),
+        acks=ceremony.acks_for(kind),
+        signed_acks=ceremony.signed_acks(state),
+        unsigned=request.args.get("unsigned") == "1",
         clauses=ceremony.clauses_for(kind, ctx),
         complete=ceremony.is_complete(state),
         fee_gate=fee_gate,
@@ -3050,6 +3255,9 @@ def ceremony_step(kind):
 
     meta = ceremony.kind_meta(kind)
     if meta["fee"]:
+        # Segment I: the ₹2,999 stage-gate fee is charged HERE, at the
+        # checkpoint's ceremony, rather than sitting in the fee table
+        # unconnected at both ends as it did before.
         gate = _require_payment(current_user(), meta["fee"])
         if gate is not None:
             return gate
@@ -3061,7 +3269,14 @@ def ceremony_step(kind):
     if step == ceremony.PLAYBOOK:
         state = ceremony.ack_playbook(state)
     elif step == ceremony.SIGN:
-        state = ceremony.sign(state, request.form.get("signed_name", ""), str(get_clock()))
+        state = ceremony.sign(
+            state, request.form.get("signed_name", ""),
+            request.form.getlist("acks"), str(get_clock()),
+        )
+        if ceremony.next_step(state) == ceremony.SIGN:
+            # Refused — a blank name or an unticked term. Say which rather
+            # than bouncing them back to an unchanged page with no reason.
+            return redirect(url_for("ceremony_view", kind=kind, unsigned="1"))
     elif step == ceremony.FACE:
         # Reuses the existing stub rather than adding a second one. A fresh
         # seed every attempt, so a retry is a genuinely new draw — the
@@ -3074,14 +3289,38 @@ def ceremony_step(kind):
 
     state = _save_ceremony(state)
 
-    # The date agreement also writes the Signature row the existing plan
-    # machinery reads, so confirmation keeps working unchanged.
-    if kind == ceremony.DATE_AGREEMENT and ceremony.is_complete(state):
-        _mirror_date_signature()
+    # Each ceremony writes back into whatever row the rest of the app
+    # already reads, so nothing downstream had to learn about Ceremony.
+    if ceremony.is_complete(state):
+        if kind == ceremony.DATE_AGREEMENT:
+            _mirror_date_signature()
+        elif kind == ceremony.RELATIONSHIP_ENTRY:
+            _mirror_gate_consent()
+        elif kind == ceremony.STAGE_GATE:
+            _mirror_stage_gate()
 
     if face_failed:
         return redirect(url_for("ceremony_view", kind=kind, face="failed"))
     return redirect(url_for("ceremony_view", kind=kind))
+
+
+def _ceremony_pair_state(kind: str, scope_id: str, active: dict) -> dict:
+    """Where a two-sided ceremony stands for this pair.
+
+    Segment G's whole shape: a ceremony gates the thing it is about, and
+    one signature gates nothing. Both flows — contact sharing and the home
+    invite — ask this the same question rather than each inventing its own
+    idea of "signed".
+    """
+    rows = [dict(r) for r in db.fetch_all(get_db(), "Ceremony", kind=kind, scope_id=scope_id)]
+    mine = next((r for r in rows if r["user_id"] == current_user()["user_id"]), None)
+    return {
+        "kind": kind,
+        "mine_complete": mine is not None and ceremony.is_complete(mine),
+        "both_complete": ceremony.both_complete(rows, active["user_a"], active["user_b"]),
+        "url": url_for("ceremony_view", kind=kind),
+        "label": ceremony.kind_meta(kind)["label"],
+    }
 
 
 def _mirror_date_signature() -> None:
@@ -3097,9 +3336,15 @@ def _mirror_date_signature() -> None:
     plan = _dateplan_for_lockin(active["id"]) if active else None
     if plan is None:
         return
+    # The ceremony's ack keys for a date agreement are dateplan.ACK_FIELDS,
+    # deliberately, so what gets mirrored is what the person actually
+    # ticked rather than a blanket True. ceremony.sign() will not complete
+    # without all four, so this is always full — but it is full because
+    # they said so, not because this line says so.
+    ticked = set(ceremony.signed_acks(_ceremony_state(ceremony.DATE_AGREEMENT, plan["id"])))
     sig = dateplan.sign(
         plan["id"], user["user_id"],
-        {field: True for field in dateplan.ACK_FIELDS},
+        {field: field in ticked for field in dateplan.ACK_FIELDS},
         signed_at=str(get_clock()), face_verified=True,
     )
     db.insert_row(get_db(), "Signature",
@@ -3109,12 +3354,30 @@ def _mirror_date_signature() -> None:
         db.insert_row(get_db(), "DatePlan", {**plan, "status": "confirmed"})
 
 
+def _mirror_stage_gate() -> None:
+    """Ceremonies #5 and #6 — the Engaged and Married checkpoints.
+
+    Same kind, different scope: stage_gate is scoped to the LockIn, so
+    each stage's checkpoint is its own row and signing for one never reads
+    as signing for the next.
+    """
+    _mirror_gate_consent()
+
+
 # ── Segment F: the post-date debrief ───────────────────────────────────
 # The rules already existed — guru_dating enforces two green flags and at
 # most two red, outcomes.apply_resolution() runs the three-way branch, and
 # plan_feedback_flags()/plan_feedback() persist both. What was missing was
 # a screen of its own; this one posts to those same two routes rather than
 # growing a second copy of the rules that could drift from the first.
+
+
+def _debrief_opens_label(plan: dict) -> str:
+    slot = _plan_slot(plan)
+    if slot is None:
+        return "shortly"
+    day = clock_module.DAYS_OF_WEEK[slot[0]]
+    return f"{day} {slot[1]:02d}:00"
 
 
 @app.route("/debrief")
@@ -3136,10 +3399,14 @@ def debrief_view():
     partner_id = _partner_id_in_lockin(active, user["user_id"])
     partner = load_user(partner_id)
 
+    clock = get_clock()
     return render_template(
         "debrief.html",
         plan=plan,
-        phase=clock_module.phase(get_clock()),
+        is_open=_debrief_is_open(plan, clock),
+        opens_at=_debrief_opens_label(plan),
+        happened=(outcome or {}).get("happened", 1),
+        no_show_reported=bool(outcome) and not outcome.get("happened", 1),
         green_flags=guru_dating.GREEN_FLAGS,
         red_flags=guru_dating.RED_FLAGS,
         min_green=guru_dating.MIN_GREEN_FLAGS,
@@ -3150,6 +3417,141 @@ def debrief_view():
         my_decision=(outcome or {}).get(f"{role}_decision"),
         partner_name=display_name(partner_id, (partner or {}).get("gender", "female")),
     )
+
+
+@app.route("/align", methods=["GET", "POST"])
+@login_required
+def align_view():
+    """Budget, diet and cuisine — asked here rather than at sign-up.
+
+    2026-09-04, user's rule: these are needed for a date, not for a
+    profile. Asking at sign-up puts three questions between a stranger and
+    their first match, and invites "it depends" as the honest answer. Asked
+    now, there is a real evening waiting on them.
+
+    Answers are written into stats, so someone who fills them in once is
+    not asked again — and can change them for the next date.
+    """
+    guard = unlocked_or_redirect("align")
+    if guard is not None:
+        return guard
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    if active is None:
+        return redirect(url_for("week"))
+
+    error = None
+    if request.method == "POST":
+        form = {**request.form.to_dict(), "cuisine": request.form.getlist("cuisine")}
+        result = date_alignment.validate(form, user.get("city"))
+        if result["ok"]:
+            row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
+            stats = json.loads(row["stats_json"])
+            stats.update(result["stats"])
+            row["stats_json"] = json.dumps(stats, ensure_ascii=False)
+            db.insert_row(get_db(), "User", row)
+            return redirect(url_for("calendar_view"))
+        error = result["error"]
+
+    partner_id = _partner_id_in_lockin(active, user["user_id"])
+    partner = load_user(partner_id)
+    return render_template(
+        "align.html",
+        error=error,
+        fields=date_alignment.FIELDS,
+        labels=date_alignment.LABELS,
+        blurbs=date_alignment.BLURBS,
+        options={f: date_alignment.options_for(f, user.get("city")) for f in date_alignment.FIELDS},
+        saved=user["stats"],
+        partner_name=display_name(partner_id, (partner or {}).get("gender", "female")),
+        partner_pending=date_alignment.missing((partner or {}).get("stats", {})),
+    )
+
+
+@app.route("/plan/cancel", methods=["POST"])
+@login_required
+def plan_cancel():
+    """Cancel a confirmed date.
+
+    2026-09-04, user's rule: dates are set on Thursday for the weekend, so
+    a free cancellation is an invitation to change your mind at everyone
+    else's expense. Inside 24 hours it costs a fee AND files a late_cancel
+    strike; outside it, nothing is charged and nothing is recorded —
+    punishing honest early notice teaches people to no-show instead, which
+    is the behaviour this is trying to prevent.
+    """
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    plan = _dateplan_for_lockin(active["id"]) if active else None
+    if plan is None or plan["status"] != "confirmed":
+        return redirect(url_for("week"))
+
+    clock = get_clock()
+    terms = _cancellation_terms(plan, clock)
+
+    db.insert_row(get_db(), "DatePlan", {**plan, "status": "cancelled",
+                                         "cancel_fee": terms["fee_inr"]})
+
+    if terms["late"]:
+        db.insert_row(get_db(), "ComplianceEvent", {
+            "id": uuid.uuid4().hex[:12],
+            **outcomes.record_compliance_event(
+                user["user_id"], "late_cancel", clock.week, value="late_cancel",
+                notes=terms["reason"],
+            ),
+        })
+        if payments.is_enabled():
+            row = payments.payment_row(user["user_id"], payments.CANCELLATION, plan["id"], str(clock))
+            db.insert_row(get_db(), "Payment", {**row, "status": payments.PENDING})
+
+    db.insert_row(get_db(), "LockIn", {**active, **lockin.release(active, "date cancelled")})
+    return redirect(url_for("week"))
+
+
+@app.route("/debrief/no-show", methods=["POST"])
+@login_required
+def debrief_no_show():
+    """Report that the other person did not turn up.
+
+    Kept separate from the flag form on purpose: green flags are mandatory
+    before a decision, and demanding two nice things about someone who
+    left you sitting there is absurd. A no-show records the outcome as
+    not-happened, files a compliance strike against them, and releases the
+    lock-in without asking for flags at all.
+    """
+    guard = unlocked_or_redirect("debrief")
+    if guard is not None:
+        return guard
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    plan = _dateplan_for_lockin(active["id"]) if active else None
+    if plan is None:
+        return redirect(url_for("week"))
+
+    clock = get_clock()
+    if not _debrief_is_open(plan, clock):
+        return redirect(url_for("debrief_view"))
+
+    partner_id = _partner_id_in_lockin(active, user["user_id"])
+    row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
+    outcome = _outcome_from_row(row) if row else outcomes.record_outcome(plan["id"], True, None, None)
+    outcome.setdefault("id", f"outcome:{plan['id']}")
+    outcome["happened"] = False
+    role = _my_role_in_lockin(active, user["user_id"])
+    outcome[f"{role}_decision"] = "pass"
+    outcome[f"{role}_reason"] = "They did not turn up."
+    db.insert_row(get_db(), "DateOutcome", _outcome_to_row(outcome))
+
+    db.insert_row(get_db(), "ComplianceEvent", {
+        "id": uuid.uuid4().hex[:12],
+        **outcomes.record_compliance_event(
+            partner_id, "no_show", clock.week, value="no_show",
+            notes=f"Reported by their match for {plan['datetime']}",
+        ),
+    })
+
+    db.insert_row(get_db(), "LockIn", {**active, **lockin.release(active, "no-show reported")})
+    return redirect(url_for("week"))
 
 
 # ── Segment G: Guru's hub ──────────────────────────────────────────────
@@ -3163,10 +3565,12 @@ def _guru_facts(user: dict) -> dict:
     someone a step is finished when it is not."""
     active = _my_active_lockin(user["user_id"])
     if active is None:
-        return {}
+        return {"married": user["journey_state"] == "married"}
+    aligned = date_alignment.is_complete(user["stats"])
+    married = user["journey_state"] == "married"
     plan = _dateplan_for_lockin(active["id"])
     if plan is None:
-        return {}
+        return {"aligned": aligned, "married": married}
     signature = db.fetch_one(get_db(), "Signature", dateplan_id=plan["id"], user_id=user["user_id"])
     entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
     row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
@@ -3177,6 +3581,8 @@ def _guru_facts(user: dict) -> dict:
         "boundary_set": any(e["key"] == "physical_boundary" and e["value"] for e in entries),
         "flags_given": len(outcome.get(f"{role}_green_flags") or []) >= guru_dating.MIN_GREEN_FLAGS,
         "decision_made": outcome.get(f"{role}_decision") is not None,
+        "aligned": aligned,
+        "married": married,
     }
 
 
@@ -3193,6 +3599,96 @@ def guru_view():
         cards=guru.cards(reached),
         action=guru.next_action(reached, facts=_guru_facts(user)),
     )
+
+
+def _mutually_open_pairs(limit: int = 25) -> list[dict]:
+    """Verified pairs who can actually match each other (Segment J, 40b).
+
+    Finding a testable pair used to mean a SQL query against the deployed
+    database — which is a poor answer to "who do I click to try this?".
+    This runs matching.mutual_open() over the pool directly, so it cannot
+    drift from the rules the week machine uses.
+    """
+    pool = [u for u in load_pool()
+            if u["bgv_status"] == "verified" and u["journey_state"] == "dating"]
+    locked = _active_lockin_ids()
+    pairs = []
+    for i, a in enumerate(pool):
+        if a["user_id"] in locked:
+            continue
+        for b in pool[i + 1:]:
+            if b["user_id"] in locked:
+                continue
+            if not matching.mutual_open(a, b):
+                continue
+            pairs.append({
+                "a": with_view_fields(a), "b": with_view_fields(b),
+                "city": a["city"],
+            })
+            if len(pairs) >= limit:
+                return pairs
+    return pairs
+
+
+@app.route("/admin/pairs")
+def admin_pairs():
+    """Who can be used to walk the journey, right now, in this database."""
+    return render_template("admin_pairs.html", pairs=_mutually_open_pairs(), week=get_week_number())
+
+
+@app.route("/admin/reset-walkthrough", methods=["POST"])
+def admin_reset_walkthrough():
+    """Put a pair back to step 1 (Segment J, step 40).
+
+    Deletes every row a run through the journey wrote for these two and
+    returns both to a verified, dating, unmatched state — then resets the
+    clock to Monday noon so the week starts over with them. The table
+    order comes from demo.RESET_TABLES_IN_ORDER, children first, because
+    getting it wrong leaves the pair in a worse state than the one being
+    reset.
+    """
+    user_id = (request.form.get("user_id") or "").strip()
+    partner_id = (request.form.get("partner_id") or "").strip() or None
+    if not user_id:
+        return redirect(url_for("admin_pairs"))
+
+    plan = demo.reset_plan(user_id, partner_id)
+    conn = get_db()
+    ids = set(plan["user_ids"])
+
+    # Every lock-in either of them is in, resolved UP FRONT. Most of the
+    # journey's rows hang off a lock-in rather than a user, and matching
+    # them by picking a user id out of the lock-in's own id string is the
+    # kind of guess that leaves an orphan behind and fails on the parent
+    # delete three tables later.
+    lockin_ids = {row["id"] for row in db.fetch_all(conn, "LockIn")
+                  if row["user_a"] in ids or row["user_b"] in ids}
+    # A DatePlan's id is what Signature and DateOutcome point at.
+    plan_ids = {row["id"] for row in db.fetch_all(conn, "DatePlan")
+                if row["lockin_id"] in lockin_ids}
+
+    for table in plan["tables"]:
+        for row in db.fetch_all(conn, table):
+            row = dict(row)
+            if (
+                {row.get("user_id"), row.get("requester_id"), row.get("owner_id"),
+                 row.get("candidate_id")} & ids
+                or row.get("id") in lockin_ids
+                or row.get("pair_id") in lockin_ids
+                or row.get("lockin_id") in lockin_ids
+                or row.get("dateplan_id") in plan_ids
+            ):
+                db.delete_row(conn, table, row["id"])
+
+    for uid in plan["user_ids"]:
+        existing = db.fetch_one(conn, "User", id=uid)
+        if existing is not None:
+            db.insert_row(conn, "User", {**dict(existing),
+                                         "journey_state": plan["journey_state"],
+                                         "bgv_status": plan["bgv_status"]})
+
+    set_clock(clock_module.SimulationClock.at(get_week_number(), "Mon", 12))
+    return redirect(url_for("admin_pairs"))
 
 
 @app.route("/admin/reset-week", methods=["GET", "POST"])

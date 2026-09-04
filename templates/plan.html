@@ -8,7 +8,7 @@
   <div class="plan-field-row"><span>Date &amp; time</span><span>{{ plan.datetime }}</span></div>
   <div class="plan-field-row"><span>Meal</span><span>{{ plan.meal|capitalize }}</span></div>
   <div class="plan-field-row"><span>Venue</span><span>{{ plan.venue or "Decide together" }}</span></div>
-  <div class="plan-field-row"><span>Cancellation</span><span>{{ plan.cancel_notice_hrs }}hr notice, ₹{{ plan.cancel_fee }} fee</span></div>
+  <div class="plan-field-row"><span>Cancellation</span><span>Free with {{ notice_hours }}h notice · {{ cancellation_fee }} inside it</span></div>
   <div class="plan-field-row"><span>Scope</span><span>Single date instance only — expires on completion</span></div>
 </div>
 
@@ -92,4 +92,22 @@
   <a class="btn-secondary" style="margin-top:10px;" href="{{ url_for('boundaries_view') }}">Set your boundary →</a>
 </div>
 
+
+{% if cancellable %}
+<div class="card">
+  <div class="section-label">Need to cancel?</div>
+  <div class="hint">{{ cancellation.reason }}</div>
+  {% if cancellation.late %}
+  <div class="interest-flag" style="margin-top:10px;">
+    Inside the {{ notice_hours }}-hour window. Cancelling now charges
+    {{ cancellation_fee }} and is recorded against you.
+  </div>
+  {% endif %}
+  <form method="post" action="{{ url_for('plan_cancel') }}">
+    <button type="submit" class="btn-secondary">
+      {% if cancellation.late %}Cancel anyway — {{ cancellation_fee }}{% else %}Cancel this date{% endif %}
+    </button>
+  </form>
+</div>
+{% endif %}
 {% endblock %}

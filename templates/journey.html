@@ -50,4 +50,12 @@
 <div class="card"><div class="micro">You've reached the final stage: married.</div></div>
 {% endif %}
 {% endif %}
+
+{% if couple and couple.stage == 'married' %}
+<div class="card">
+  <div class="section-label">You made it</div>
+  <div class="hint">Dating, relationship, engaged, married — the whole journey.</div>
+  <a class="btn-primary" href="{{ url_for('married_view') }}">Happily married →</a>
+</div>
+{% endif %}
 {% endblock %}

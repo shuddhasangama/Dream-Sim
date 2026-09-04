@@ -112,6 +112,9 @@ SURFACES = [
     # tab of its own is what produced eleven links; they are cards in
     # guru.py instead, and this is the one tab that carries them.
     ("guru",         "Guru",          "guru_view",         VERIFIED,     None,         True),
+    # Budget, diet and cuisine, asked once there is a date to align rather
+    # than on the sign-up form (2026-09-04).
+    ("align",        "Before the date", "align_view",      MATCHED,      RELATIONSHIP, False),
     ("calendar",     "Calendar",      "calendar_view",     MATCHED,      None,         False),
     ("plan",         "Date plan",     "plan_view",         DATE_SET,     None,         False),
     # Boundaries belong to a specific date, so they are reached from that
@@ -131,6 +134,9 @@ SURFACES = [
     ("relationship", "Relationship",  "relationship_view", RELATIONSHIP, None,         True),
     ("vibes",        "Vibes",         "vibes_view",        RELATIONSHIP, None,         False),
     ("journey",      "Journey",       "journey_view",      RELATIONSHIP, None,         True),
+    # The end of the journey. Reached from Journey once the stage is
+    # actually 'married' — the milestone cannot express that on its own.
+    ("married",      "Happily married", "married_view",    RELATIONSHIP, None,         False),
 ]
 
 # The cap this table is tuned against. The navigation had grown to eleven

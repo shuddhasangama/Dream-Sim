@@ -126,14 +126,14 @@
 </div>
 
 <div class="card">
-  <div class="micro">Step 7 of 9 &middot; Consent block — signed independently, face-verified. Neither of you is bound until both sign.</div>
-  <form method="post" action="{{ url_for('gate_consent') }}">
-    <button type="submit" class="btn-primary" {% if gate["consent_" + my_role] %}disabled{% endif %}>
-      {% if gate["consent_" + my_role] %}You signed{% else %}Sign &amp; verify{% endif %}
-    </button>
-  </form>
-  {% if gate["biometric_" + my_role] == 0 and gate["consent_" + my_role] == 0 %}
-  <div class="micro" style="margin-top:6px;">If verification fails, just try again.</div>
+  <div class="micro">Step 7 of 9 &middot; Consent — the same playbook, signature and face check
+    every other agreement uses. Neither of you is bound until both have signed.</div>
+  {% if gate["consent_" + my_role] %}
+  <div class="interest-flag yes" style="margin-top:8px;">You signed.</div>
+  {% else %}
+  <a class="btn-primary" href="{{ url_for('ceremony_view', kind='relationship_entry') }}">
+    Read the terms &amp; sign →
+  </a>
   {% endif %}
 </div>
 

@@ -26,6 +26,7 @@ import re
 import uuid
 from typing import Any
 
+import locale_defaults
 from generate_users import (
     AGE_BANDS,
     COHABIT_FOCUS,
@@ -248,35 +249,59 @@ def build_visions(
 # Field list and value vocabularies are generate_users._generate_stats()'s,
 # so a self-registered user is filterable by matching.py on day one.
 
+# 2026-09-04, user's rule: five mandatory fields, everything else optional
+# and visibly separated. The sign-up form was asking seventeen questions of
+# a stranger who has not yet seen a single match, and the exhaustive list
+# is what people abandon.
+#
+# The five are the ones the product cannot work without: Age and
+# Profession are matched on, Nationality and Salary are verified, and
+# Education is the one stat almost everyone filters by. Everything else
+# earns its place later — see DATE_ALIGNMENT_KEYS, which are asked once
+# there is an actual date to align.
+
 NUMERIC_STATS = [
     # key, label, unit, min, max, placeholder
     ("age", "Age", "years", 21, 75, "31"),
+]
+
+OPTIONAL_NUMERIC_STATS = [
     ("height_cm", "Height", "cm", 140, 210, "178"),
     ("weight_kg", "Weight", "kg", 40, 150, "74"),
     ("waist_in", "Waist", "in", 20, 55, "32"),
 ]
 
 CHOICE_STATS = [
-    ("budget", "Restaurant budget", RESTAURANT_BUDGETS),
+    ("education", "Education", EDUCATION),
+    ("nationality", "Nationality", OWN_NATIONALITIES),
+    ("profession", "Profession", PROFESSIONS),
+]
+
+OPTIONAL_CHOICE_STATS = [
     ("diet", "Dietary preference", DIETS),
     ("smoking", "Smoking", SMOKING),
     ("drinking", "Drinking", DRINKING),
     ("fitness_routine", "Fitness routine", FITNESS_ROUTINES),
-    ("education", "Education", EDUCATION),
-    ("profession", "Profession", PROFESSIONS),
     ("marital_history", "Marital history", MARITAL_HISTORY),
-    ("nationality", "Nationality", OWN_NATIONALITIES),
     ("ethnicity", "Ethnicity", ETHNICITIES),
     ("religion", "Religion", OWN_RELIGIONS),
 ]
+
+# Asked when a date is being arranged, not at sign-up. Budget only means
+# anything once there is a bill to split; diet only once there is a venue
+# to pick. Both are still collected — just at the moment they are needed,
+# which is also the moment someone is motivated to answer.
+DATE_ALIGNMENT_KEYS = ("budget", "diet", "cuisine")
 
 # Multi-select stats. Kept separate from CHOICE_STATS because the form
 # posts them as a list and validate_stats has to read them differently —
 # collapsing the two would mean a truthy check that silently accepts one
 # value where the field means "all of these".
-MULTI_STATS = [
-    ("languages", "Languages you speak", LANGUAGES_POOL, "pick at least one"),
-    ("cuisine", "Cuisine you enjoy", CUISINES, "pick at least one"),
+MULTI_STATS: list[tuple[str, str, list[str], str]] = []
+
+OPTIONAL_MULTI_STATS = [
+    ("languages", "Languages you speak", LANGUAGES_POOL, "pre-filled from your city"),
+    ("cuisine", "Cuisine you enjoy", CUISINES, "used to pick a venue you both eat at"),
 ]
 
 # budget is what someone spends on one meal out, not what they earn — it
@@ -289,12 +314,21 @@ MULTI_STATS = [
 CITIES_FOR_SIGNUP = ["Mumbai", "Delhi", "Bangalore", "Hyderabad", "Pune", "Chennai", "Kolkata"]
 GENDERS_FOR_SIGNUP = ["female", "male"]
 
-# Every stat above is mandatory except languages, which needs at least one.
 REQUIRED_STAT_KEYS = (
     [k for k, _, _, _, _, _ in NUMERIC_STATS]
     + [k for k, _, _ in CHOICE_STATS]
     + [k for k, _, _, _ in MULTI_STATS]
 )
+
+OPTIONAL_STAT_KEYS = (
+    [k for k, _, _, _, _, _ in OPTIONAL_NUMERIC_STATS]
+    + [k for k, _, _ in OPTIONAL_CHOICE_STATS]
+    + [k for k, _, _, _ in OPTIONAL_MULTI_STATS]
+    + ["budget"]
+)
+
+# Salary is mandatory but never stored raw — only the derived band is.
+MANDATORY_FIELD_LABELS = ("Age", "Education", "Nationality", "Salary", "Profession")
 
 
 def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
@@ -335,6 +369,46 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
         if not chosen:
             return {"ok": False, "error": f"{label} — pick at least one.", "stats": None}
         stats[key] = sorted(chosen)
+
+    # ── the optional half ───────────────────────────────────────────────
+    # A field left blank is OMITTED, never stored as "" or 0. The absence
+    # is load-bearing: REACH offers a lever only for a stat that is
+    # actually there, so an empty string would quietly hand someone a
+    # filter they never filled in.
+
+    for key, label, unit, low, high, _ph in OPTIONAL_NUMERIC_STATS:
+        raw = str(form.get(key, "")).strip()
+        if not raw:
+            continue
+        try:
+            value = int(round(float(raw)))
+        except ValueError:
+            return {"ok": False, "error": f"{label} should be a number, or left blank.", "stats": None}
+        if not low <= value <= high:
+            return {"ok": False, "error": f"{label} should be between {low} and {high} {unit}.", "stats": None}
+        stats[key] = value
+
+    for key, label, options in OPTIONAL_CHOICE_STATS:
+        value = str(form.get(key, "")).strip()
+        if not value:
+            continue
+        if value not in options:
+            return {"ok": False, "error": f"{label} is not one of the options.", "stats": None}
+        stats[key] = value
+
+    for key, label, options, _hint in OPTIONAL_MULTI_STATS:
+        raw = form.get(key) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        chosen = [value for value in options if value in raw]
+        if chosen:
+            stats[key] = sorted(chosen)
+
+    budget = str(form.get("budget", "")).strip()
+    if budget:
+        if budget not in locale_defaults.budget_bands_for(str(form.get("city", "")).strip()):
+            return {"ok": False, "error": "That budget band is not one of the options.", "stats": None}
+        stats["budget"] = budget
 
     band = bracket_for(form.get("salary"))
     if band is None:
@@ -399,18 +473,29 @@ def default_preferences(stats: dict[str, Any]) -> dict[str, Any]:
     silently, so this starts empty and the user adds their own.
     """
     age = int(stats.get("age", 32))
-    return {
-        "fixed": {"dealbreakers": []},
-        "adjustable": {
-            "age": [max(21, age - 6), age + 6],
-            "height_cm": [150, 195],
-            "weight_kg": [45, 95],
-            "waist_in": [24, 40],
-            "distance_km": [0, 30],
-            "nationality": ["IN", "NRI"],
-            "religion": ["same", "related"],
-        },
+    adjustable: dict[str, Any] = {
+        "age": [max(21, age - 6), age + 6],
+        # Distance has no backing stat — it is derived from two cities, and
+        # city is always given — so it is always available.
+        "distance_km": [0, 30],
+        "nationality": ["IN", "NRI"],
     }
+
+    # 2026-09-04, user's rule: REACH filters on what you actually keyed in.
+    # A lever with no stat behind it is not created, so it cannot be widened,
+    # cannot silently exclude anyone, and shows up in REACH as something you
+    # unlock by filling the field in. Giving people a height filter when they
+    # never told us their height is how a filter ends up meaning nothing.
+    for key, default in (("height_cm", [150, 195]),
+                         ("weight_kg", [45, 95]),
+                         ("waist_in", [24, 40])):
+        if stats.get(key) is not None:
+            adjustable[key] = default
+
+    if stats.get("religion"):
+        adjustable["religion"] = ["same", "related"]
+
+    return {"fixed": {"dealbreakers": []}, "adjustable": adjustable}
 
 
 # ── Assembly ──────────────────────────────────────────────────────────────

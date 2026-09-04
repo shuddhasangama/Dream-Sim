@@ -173,6 +173,11 @@ class CeremonyRouteTests(RouteTestCase):
     def step(self, kind=ceremony.DATE_AGREEMENT, **form):
         return self.client.post(f"/ceremony/{kind}/step", data=form, follow_redirects=False)
 
+    def sign(self, name="Asha Rao", kind=ceremony.DATE_AGREEMENT, acks="all"):
+        """Sign with every term ticked, which is the only way it completes."""
+        keys = list(ceremony.ack_keys(kind)) if acks == "all" else acks
+        return self.step(kind, signed_name=name, acks=keys)
+
     def state(self, user_id="u1", kind=ceremony.DATE_AGREEMENT):
         row = db.fetch_one(self.conn, "Ceremony", user_id=user_id, kind=kind, scope_id=self.plan)
         return dict(row) if row else None
@@ -212,7 +217,7 @@ class CeremonyRouteTests(RouteTestCase):
         self.assertTrue(self.state()["playbook_ack"])
         self.assertIsNone(self.state()["signed_name"])
 
-        self.step(signed_name="Asha Rao")
+        self.sign()
         self.assertEqual(self.state()["signed_name"], "Asha Rao")
         self.assertFalse(self.state()["face_verified"])
 
@@ -221,11 +226,57 @@ class CeremonyRouteTests(RouteTestCase):
         self.assertTrue(self.state()["face_verified"])
         self.assertIsNotNone(self.state()["completed_at"])
 
+    def test_the_terms_are_shown_in_full_not_just_named(self):
+        """The complaint this answers: the mock-up spelt the terms out and
+        the build had reduced them to a bare name field."""
+        self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
+        self.step()  # past the playbook, onto the signature
+        body = self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}").get_data(as_text=True)
+        for ack in ceremony.acks_for(ceremony.DATE_AGREEMENT):
+            self.assertIn(ack["label"], body)
+            self.assertIn(ack["term"][:40], body)
+
+    def test_a_signature_with_a_term_unticked_is_refused(self):
+        """Ticking on someone's behalf records agreement they never gave."""
+        self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
+        self.step()
+        keys = list(ceremony.ack_keys(ceremony.DATE_AGREEMENT))
+        self.sign(acks=keys[:-1])
+        self.assertIsNone(self.state()["signed_name"])
+        # Nothing was stored, so the row still shows every term outstanding;
+        # the proposed partial tick is short exactly the one left out.
+        self.assertEqual(ceremony.signed_acks(self.state()), [])
+        self.assertEqual(ceremony.missing_acks(self.state(), keys[:-1]), [keys[-1]])
+
+    def test_the_refusal_says_why(self):
+        self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
+        self.step()
+        response = self.sign(acks=[])
+        self.assertIn("unsigned=1", response.headers["Location"])
+        body = self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}?unsigned=1").get_data(as_text=True)
+        self.assertIn("Every term has to be ticked", body)
+
+    def test_what_was_ticked_is_stored_and_mirrored(self):
+        """The Signature row must carry the terms the person actually
+        agreed to, not a blanket True written by the mirror."""
+        self._complete("u1")
+        self.assertEqual(sorted(ceremony.signed_acks(self.state())),
+                         sorted(ceremony.ack_keys(ceremony.DATE_AGREEMENT)))
+        sig = dict(db.fetch_one(self.conn, "Signature", dateplan_id=self.plan, user_id="u1"))
+        for field in app_module.dateplan.ACK_FIELDS:
+            self.assertTrue(sig[field], field)
+
+    def test_the_date_terms_line_up_with_the_signature_row(self):
+        """The mirror maps ack keys straight onto dateplan.ACK_FIELDS. If
+        those two lists drift, consent silently stops being recorded."""
+        self.assertEqual(tuple(ceremony.ack_keys(ceremony.DATE_AGREEMENT)),
+                         app_module.dateplan.ACK_FIELDS)
+
     def test_posting_a_signature_first_does_not_skip_the_playbook(self):
         """The step is decided by next_step(), never by the form. A client
         that posts out of order gets the step it was actually on."""
         self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
-        self.step(signed_name="Asha Rao")
+        self.sign()
         self.assertIsNone(self.state()["signed_name"])
         self.assertTrue(self.state()["playbook_ack"])
 
@@ -233,14 +284,14 @@ class CeremonyRouteTests(RouteTestCase):
         self.login(user_id)
         self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
         self.step()
-        self.step(signed_name=f"Name {user_id}")
+        self.sign(name=f"Name {user_id}")
         with mock.patch.object(app_module.dateplan, "verify_face", return_value=True):
             self.step()
 
     def test_a_failed_face_check_leaves_the_ceremony_open_and_retryable(self):
         self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
         self.step()
-        self.step(signed_name="Asha Rao")
+        self.sign()
         with mock.patch.object(app_module.dateplan, "verify_face", return_value=False):
             self.step()
         self.assertFalse(self.state()["face_verified"])
@@ -346,6 +397,22 @@ class CeremonyPaymentTests(CeremonyRouteTests):
         self.client.post("/pay/agreement/confirm", data={})
         super().test_the_slot_reads_as_a_sentence_not_a_timestamp()
 
+    def test_the_terms_are_shown_in_full_not_just_named(self):
+        self.client.post("/pay/agreement/confirm", data={})
+        super().test_the_terms_are_shown_in_full_not_just_named()
+
+    def test_a_signature_with_a_term_unticked_is_refused(self):
+        self.client.post("/pay/agreement/confirm", data={})
+        super().test_a_signature_with_a_term_unticked_is_refused()
+
+    def test_the_refusal_says_why(self):
+        self.client.post("/pay/agreement/confirm", data={})
+        super().test_the_refusal_says_why()
+
+    def test_what_was_ticked_is_stored_and_mirrored(self):
+        self.client.post("/pay/agreement/confirm", data={})
+        super().test_what_was_ticked_is_stored_and_mirrored()
+
     def test_the_three_steps_run_in_order(self):
         self.client.post("/pay/agreement/confirm", data={})
         super().test_the_three_steps_run_in_order()
@@ -428,11 +495,125 @@ class DebriefRouteTests(RouteTestCase):
         self.client.post("/plan/feedback", data={"decision": "continue", "back": "debrief_view"})
         self.assertIn("Waiting on", self.client.get("/debrief").get_data(as_text=True))
 
-    def test_before_sunday_it_says_when_it_opens_rather_than_asking(self):
+    # ── timing: an hour after the date, not Sunday night ────────────────
+    # The fixture's slot is 2026-01-10T19:30, a Saturday dinner, so the
+    # debrief opens Sat 21:00 (19:30 + 1h, rounded up off the half hour).
+
+    def test_it_is_shut_before_the_date_has_happened(self):
         self.set_clock(week=1, day="Wed", hour=12)
         body = self.client.get("/debrief").get_data(as_text=True)
-        self.assertIn("Sunday", body)
+        self.assertIn("Sat 21:00", body)
         self.assertNotIn("Save the flags", body)
+
+    def test_it_is_still_shut_while_the_date_is_happening(self):
+        """Dinner starts 19:30. At 20:00 they are at the table, and the
+        old Sunday-night rule was not the only way to get this wrong."""
+        self.set_clock(week=1, day="Sat", hour=20)
+        self.assertNotIn("Save the flags", self.client.get("/debrief").get_data(as_text=True))
+
+    def test_it_opens_an_hour_after_the_date_starts(self):
+        self.set_clock(week=1, day="Sat", hour=21)
+        self.assertIn("Save the flags", self.client.get("/debrief").get_data(as_text=True))
+
+    def test_a_plan_with_an_unreadable_slot_opens_rather_than_seals_shut(self):
+        """Not knowing when the date was is not a reason to stop someone
+        reporting what happened at it."""
+        db.insert_row(self.conn, "DatePlan",
+                      {**dict(db.fetch_one(self.conn, "DatePlan", id=self.plan)), "datetime": "unknown"})
+        self.conn.commit()
+        self.set_clock(week=1, day="Mon", hour=1)
+        self.assertIn("Save the flags", self.client.get("/debrief").get_data(as_text=True))
+
+    # ── the no-show path ────────────────────────────────────────────────
+
+    def test_a_no_show_is_offered_without_asking_for_green_flags(self):
+        body = self.client.get("/debrief").get_data(as_text=True)
+        self.assertIn("Report a no-show", body)
+
+    def test_reporting_a_no_show_records_it_against_them_not_you(self):
+        self.client.post("/debrief/no-show")
+        outcome = self.outcome()
+        self.assertFalse(outcome["happened"])
+        self.assertEqual(outcome["a_decision"], "pass")
+        events = db.fetch_all(self.conn, "ComplianceEvent", user_id="u2")
+        self.assertEqual([e["type"] for e in events], ["no_show"])
+        self.assertEqual(db.fetch_all(self.conn, "ComplianceEvent", user_id="u1"), [])
+
+    def test_a_no_show_releases_the_lock_in(self):
+        self.client.post("/debrief/no-show")
+        self.assertNotEqual(db.fetch_one(self.conn, "LockIn", id=self.lock)["status"], "active")
+
+    def test_a_no_show_cannot_be_reported_before_the_debrief_opens(self):
+        self.set_clock(week=1, day="Wed", hour=12)
+        self.client.post("/debrief/no-show")
+        self.assertTrue(self.outcome()["happened"])
+        self.assertEqual(db.fetch_all(self.conn, "ComplianceEvent", user_id="u2"), [])
+
+    def test_no_flags_are_demanded_of_someone_who_was_stood_up(self):
+        """Reporting it returns you to the pool immediately. There is no
+        screen asking for two nice things about an empty chair, because
+        the lock-in is already gone by the time you land."""
+        response = self.client.post("/debrief/no-show")
+        self.assertIn("/week", response.headers["Location"])
+        self.assertEqual(self.client.get("/debrief").status_code, 403)
+
+
+class CancellationTests(RouteTestCase):
+    """2026-09-04, user's rule: dates are set Thursday for the weekend, so
+    a free cancellation is an invitation to change your mind at everyone
+    else's expense."""
+
+    def setUp(self):
+        super().setUp()
+        self.login(self.make_user("u1"))
+        self.make_user("u2")
+        self.lock = self.make_lockin("u1", "u2")
+        self.plan = self.make_plan(self.lock, status="confirmed")
+
+    def strikes(self, user_id):
+        return [e["type"] for e in db.fetch_all(self.conn, "ComplianceEvent", user_id=user_id)]
+
+    def test_early_notice_is_free_and_unrecorded(self):
+        """Punishing honest early notice teaches people to no-show
+        instead, which is the behaviour this is trying to prevent."""
+        self.set_clock(week=1, day="Thu", hour=12)   # Sat 19:30 is 55h away
+        self.client.post("/plan/cancel")
+        row = db.fetch_one(self.conn, "DatePlan", id=self.plan)
+        self.assertEqual(row["status"], "cancelled")
+        self.assertEqual(row["cancel_fee"], 0)
+        self.assertEqual(self.strikes("u1"), [])
+
+    def test_inside_the_window_it_costs_and_is_recorded(self):
+        self.set_clock(week=1, day="Sat", hour=10)   # 9h before a 19:30 slot
+        self.client.post("/plan/cancel")
+        row = db.fetch_one(self.conn, "DatePlan", id=self.plan)
+        self.assertEqual(row["cancel_fee"], 999)
+        self.assertEqual(self.strikes("u1"), ["late_cancel"])
+
+    def test_the_penalty_lands_on_the_person_who_cancelled(self):
+        self.set_clock(week=1, day="Sat", hour=10)
+        self.client.post("/plan/cancel")
+        self.assertEqual(self.strikes("u2"), [])
+
+    def test_cancelling_releases_the_pair_back_to_the_pool(self):
+        self.set_clock(week=1, day="Thu", hour=12)
+        self.client.post("/plan/cancel")
+        self.assertNotEqual(db.fetch_one(self.conn, "LockIn", id=self.lock)["status"], "active")
+
+    def test_the_screen_states_the_cost_before_you_click(self):
+        self.set_clock(week=1, day="Sat", hour=10)
+        body = self.client.get("/plan").get_data(as_text=True)
+        self.assertIn("₹999", body)
+        self.assertIn("24-hour window", body)
+
+    def test_an_unconfirmed_plan_has_nothing_to_cancel(self):
+        db.insert_row(self.conn, "DatePlan",
+                      {**dict(db.fetch_one(self.conn, "DatePlan", id=self.plan)),
+                       "status": "pending_signatures"})
+        self.conn.commit()
+        self.client.post("/plan/cancel")
+        self.assertEqual(db.fetch_one(self.conn, "DatePlan", id=self.plan)["status"],
+                         "pending_signatures")
 
 
 if __name__ == "__main__":

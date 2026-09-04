@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Testable pairs — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Demo scaffolding · week {{ week }}</div>
+<h1>Who can walk the journey</h1>
+<div class="lede">
+  Every verified, unmatched pair in this database who pass each other's filters — computed with
+  the same rules the weekly match run uses, so this cannot drift from what actually happens.
+</div>
+
+{% if pairs %}
+<div class="card">
+  <div class="section-label">{{ pairs|length }} pair{{ '' if pairs|length == 1 else 's' }}</div>
+  <div class="hint">
+    Log in as the first, express interest in the second on your Week page, then switch and do the
+    same. They lock in, and the rest of the journey opens.
+  </div>
+  <div class="stat-rows" style="margin-top:12px;">
+    {% for pair in pairs %}
+    <div class="stat-row">
+      <span>
+        <span class="lever-name">{{ pair.a.name }}</span>
+        <span class="micro">{{ pair.a.user_id }}</span>
+      </span>
+      <span class="micro">+</span>
+      <span>
+        <span class="lever-name">{{ pair.b.name }}</span>
+        <span class="micro">{{ pair.b.user_id }}</span>
+      </span>
+      <span class="micro">{{ pair.city }}</span>
+      <form method="post" action="{{ url_for('admin_reset_walkthrough') }}" style="margin:0;">
+        <input type="hidden" name="user_id" value="{{ pair.a.user_id }}">
+        <input type="hidden" name="partner_id" value="{{ pair.b.user_id }}">
+        <button type="submit" class="btn-widen" style="width:auto;">Reset both</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="section-label">No pairs</div>
+  <div class="hint">
+    Nobody in this database passes anybody else's filters right now. That is a matching-model
+    result, not an empty database — the filters are narrower than the pool can support.
+  </div>
+</div>
+{% endif %}
+
+<a class="btn-secondary" href="{{ url_for('admin_reset_week') }}">Clock checkpoints →</a>
+{% endblock %}

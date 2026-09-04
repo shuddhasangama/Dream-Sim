@@ -175,11 +175,45 @@ class StatsValidationTests(unittest.TestCase):
         self.assertEqual(result["stats"]["age"], 31)
         self.assertEqual(result["stats"]["languages"], ["English", "Hindi"])
 
-    def test_every_required_field_is_actually_required(self):
-        for key in ("age", "height_cm", "diet", "profession", "religion"):
+    def test_every_mandatory_field_is_actually_required(self):
+        """2026-09-04, user's rule: five mandatory fields, no more. Salary
+        is checked separately because only its derived band is stored."""
+        for key in ("age", "education", "nationality", "profession"):
             form = _valid_stats()
             form[key] = ""
             self.assertFalse(onboarding.validate_stats(form)["ok"], key)
+
+    def test_the_five_mandatory_fields_are_the_ones_that_were_asked_for(self):
+        self.assertEqual(onboarding.REQUIRED_STAT_KEYS,
+                         ["age", "education", "nationality", "profession"])
+        self.assertEqual(onboarding.MANDATORY_FIELD_LABELS,
+                         ("Age", "Education", "Nationality", "Salary", "Profession"))
+
+    def test_the_five_alone_are_enough_to_register(self):
+        """The whole point of the split: a stranger who has not seen a
+        single match answers five questions, not seventeen."""
+        minimal = {
+            "age": "31", "education": "Master's", "nationality": "IN",
+            "profession": "Law", "salary": "1800000",
+            "city": "Chennai", "gender": "female",
+        }
+        result = onboarding.validate_stats(minimal)
+        self.assertTrue(result["ok"], result["error"])
+        self.assertEqual(sorted(result["stats"]),
+                         ["age", "education", "income_band", "nationality", "profession"])
+
+    def test_an_optional_field_left_blank_is_absent_not_empty(self):
+        """Absence is load-bearing — REACH offers a lever only for a stat
+        that is actually there, and "" would hand someone a filter they
+        never filled in."""
+        result = onboarding.validate_stats(_valid_stats() | {"height_cm": ""})
+        self.assertTrue(result["ok"])
+        self.assertNotIn("height_cm", result["stats"])
+
+    def test_a_nonsense_optional_value_is_still_refused(self):
+        """Optional means skippable, not unchecked."""
+        self.assertFalse(onboarding.validate_stats(_valid_stats() | {"height_cm": "tall"})["ok"])
+        self.assertFalse(onboarding.validate_stats(_valid_stats() | {"religion": "Pastafarian"})["ok"])
 
     def test_out_of_range_numbers_are_refused(self):
         form = _valid_stats()
@@ -229,16 +263,20 @@ class MultiSelectStatTests(unittest.TestCase):
 
 
 class LifestyleStatTests(unittest.TestCase):
-    """Smoking, drinking and fitness routine, added 2026-09-03."""
+    """Smoking, drinking and fitness routine — collected, but OPTIONAL
+    since 2026-09-04. Sign-up asks five questions; these are offered
+    underneath and skipped without complaint."""
 
-    def test_all_three_are_collected_and_mandatory(self):
+    def test_all_three_are_offered_but_optional(self):
         for key in ("smoking", "drinking", "fitness_routine"):
             form = _valid_stats()
             form[key] = ""
-            self.assertFalse(onboarding.validate_stats(form)["ok"], key)
+            result = onboarding.validate_stats(form)
+            self.assertTrue(result["ok"], key)
+            self.assertNotIn(key, result["stats"], f"{key} left blank should be absent, not empty")
 
     def test_they_offer_the_generated_populations_options(self):
-        by_key = {k: opts for k, _, opts in onboarding.CHOICE_STATS}
+        by_key = {k: opts for k, _, opts in onboarding.OPTIONAL_CHOICE_STATS}
         self.assertEqual(by_key["smoking"], SMOKING)
         self.assertEqual(by_key["drinking"], DRINKING)
         self.assertEqual(by_key["fitness_routine"], FITNESS_ROUTINES)
@@ -257,11 +295,15 @@ class LifestyleStatTests(unittest.TestCase):
 class BudgetAndEthnicityTests(unittest.TestCase):
     """Added 2026-09-03."""
 
-    def test_both_fields_are_collected_and_mandatory(self):
+    def test_both_fields_are_offered_but_optional(self):
+        """Budget moved to the date-alignment set on 2026-09-04 — it only
+        means something once there is a bill to split."""
         for key in ("budget", "ethnicity"):
             form = _valid_stats()
             form[key] = ""
-            self.assertFalse(onboarding.validate_stats(form)["ok"], key)
+            result = onboarding.validate_stats(form)
+            self.assertTrue(result["ok"], key)
+            self.assertNotIn(key, result["stats"], key)
 
     def test_budget_is_a_declared_band_not_a_free_number(self):
         form = _valid_stats()
@@ -293,8 +335,11 @@ class BudgetAndEthnicityTests(unittest.TestCase):
         self.assertEqual(prefs["fixed"]["dealbreakers"], [])
 
     def test_offered_options_match_the_generated_population(self):
-        by_key = {k: opts for k, _, opts in onboarding.CHOICE_STATS}
-        self.assertEqual(by_key["budget"], RESTAURANT_BUDGETS)
+        by_key = {k: opts for k, _, opts in onboarding.OPTIONAL_CHOICE_STATS}
+        # Budget is no longer a plain choice field: its bands come from the
+        # city's currency, so locale_defaults owns the list.
+        import locale_defaults
+        self.assertEqual(locale_defaults.budget_bands_for("Chennai"), RESTAURANT_BUDGETS)
         self.assertEqual(by_key["ethnicity"], ETHNICITIES)
 
 
@@ -335,11 +380,11 @@ class PreferenceCompatibilityTests(unittest.TestCase):
         self.assertIn(prefs["adjustable"]["nationality"], NATIONALITY_OPTIONS)
 
     def test_religion_default_is_a_canonical_option(self):
-        prefs = onboarding.default_preferences({"age": 31})
+        prefs = onboarding.default_preferences({"age": 31, "religion": "Hindu"})
         self.assertIn(prefs["adjustable"]["religion"], RELIGION_OPTIONS)
 
     def test_defaults_leave_room_to_widen(self):
-        prefs = onboarding.default_preferences({"age": 31})
+        prefs = onboarding.default_preferences({"age": 31, "religion": "Hindu"})
         self.assertLess(NATIONALITY_OPTIONS.index(prefs["adjustable"]["nationality"]), len(NATIONALITY_OPTIONS) - 1)
         self.assertLess(RELIGION_OPTIONS.index(prefs["adjustable"]["religion"]), len(RELIGION_OPTIONS) - 1)
 
@@ -347,10 +392,35 @@ class PreferenceCompatibilityTests(unittest.TestCase):
         self.assertEqual(onboarding.default_preferences({"age": 31})["fixed"]["dealbreakers"], [])
 
     def test_preference_keys_match_the_generated_population(self):
-        mine = onboarding.default_preferences({"age": 31})
+        """A user who filled everything in gets the generator's full lever
+        set. The generated population declares every stat, so this is the
+        comparison that has to hold."""
+        full = {"age": 31, "height_cm": 170, "weight_kg": 65, "waist_in": 30, "religion": "Hindu"}
+        mine = onboarding.default_preferences(full)
         generated = generate_users(1, seed=7)[0]["preferences"]
         self.assertEqual(set(mine), set(generated))
         self.assertEqual(set(mine["adjustable"]), set(generated["adjustable"]))
+
+    def test_a_lever_is_only_created_for_a_stat_that_was_given(self):
+        """2026-09-04, user's rule: REACH filters on what you keyed in.
+        A height filter belonging to someone who never gave their height
+        is a filter that means nothing."""
+        sparse = onboarding.default_preferences({"age": 31})["adjustable"]
+        self.assertEqual(sorted(sparse), ["age", "distance_km", "nationality"])
+        for absent in ("height_cm", "weight_kg", "waist_in", "religion"):
+            self.assertNotIn(absent, sparse, absent)
+
+    def test_levers_appear_one_by_one_as_stats_are_filled_in(self):
+        stats = {"age": 31}
+        for key in ("height_cm", "weight_kg", "waist_in"):
+            self.assertNotIn(key, onboarding.default_preferences(stats)["adjustable"])
+            stats[key] = 100
+            self.assertIn(key, onboarding.default_preferences(stats)["adjustable"])
+
+    def test_distance_is_always_available_because_city_always_is(self):
+        """Distance is derived from two cities rather than a stat, and city
+        is mandatory — so it is the one lever nobody has to unlock."""
+        self.assertIn("distance_km", onboarding.default_preferences({"age": 31})["adjustable"])
 
 
 class UserRowTests(unittest.TestCase):

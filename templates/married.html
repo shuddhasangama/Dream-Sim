@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Happily married — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">The end of the journey</div>
+<h1>Happily married</h1>
+<div class="lede">
+  You and {{ partner.name }} went the whole way — dating, relationship, engaged, married.
+  Nothing on this screen needs doing.
+</div>
+
+<div class="card">
+  <div class="stage-track">
+    {% for stage in stage_order %}
+    <div class="stage-node done">
+      <span class="stage-dot">✓</span>
+      <span>{{ stage|capitalize }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% if agreements %}
+<div class="card">
+  <div class="section-label">What it took</div>
+  <div class="hint">
+    {{ total_signed }} agreement{{ '' if total_signed == 1 else 's' }} between you, each one read
+    and signed by both. Not a single one was ticked on anybody's behalf.
+  </div>
+  <div class="stat-rows" style="margin-top:12px;">
+    {% for entry in agreements %}
+    <div class="stat-row">
+      <span class="lever-name">{{ entry.label }}</span>
+      <span>{{ entry.count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>
+    The four pillars keep running — airing and resolving, expenses, mediation when you want it,
+    and keeping romance alive. A marriage is not a finish line. The journey to one is, and you
+    are past it.
+  </div>
+</div>
+
+<a class="btn-secondary" href="{{ url_for('relationship_view') }}">Back to the pillars</a>
+{% endblock %}

@@ -12,6 +12,41 @@
   <div class="micro">With {{ partner.name }}</div>
 </div>
 
+{# ── Segment G: each escalation sits behind its own ceremony ─────────── #}
+<div class="card">
+  <div class="section-label">{{ share_ceremony.label }}</div>
+  {% if share_ceremony.both_complete %}
+  <div class="interest-flag yes">Both signed. Accepted details are visible to each other.</div>
+  {% elif share_ceremony.mine_complete %}
+  <div class="hint">
+    You have signed. Nothing is shared until {{ partner.name }} does too — one signature is
+    half of one.
+  </div>
+  {% else %}
+  <div class="hint">
+    Before a number changes hands, both of you agree what it is for and how to take it back.
+  </div>
+  <a class="btn-secondary" href="{{ share_ceremony.url }}">Read and sign →</a>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="section-label">{{ home_ceremony.label }}</div>
+  {% if home_ceremony.blocked_by %}
+  <div class="hint">
+    Opens once {{ home_ceremony.blocked_by|lower }} is signed by both of you. Contact details
+    come before an address does.
+  </div>
+  {% elif home_ceremony.both_complete %}
+  <div class="interest-flag yes">Both signed. An invitation can be proposed below.</div>
+  {% elif home_ceremony.mine_complete %}
+  <div class="hint">You have signed. Waiting on {{ partner.name }}.</div>
+  {% else %}
+  <div class="hint">Where you are going, who else knows, and what either of you can call off.</div>
+  <a class="btn-secondary" href="{{ home_ceremony.url }}">Read and sign →</a>
+  {% endif %}
+</div>
+
 <div class="card">
   <div class="micro section-label">Contact exchange</div>
   <div class="micro">Declining or ignoring costs nothing — never shown to {{ partner.name }} as a rejection.</div>

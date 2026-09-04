@@ -67,9 +67,29 @@
 
 {% elif step == 'sign' %}
 <div class="card">
-  <div class="section-label">Sign it</div>
-  <div class="hint">Type your name. This records intent; it does not create a legal obligation.</div>
+  <div class="section-label">The terms</div>
+  <div class="hint">
+    Each one separately. A signature that records only a name records agreement to nothing —
+    these are what you are actually agreeing to.
+  </div>
   <form method="post" action="{{ url_for('ceremony_step', kind=kind) }}">
+    {% for ack in acks %}
+    <label class="term">
+      <input type="checkbox" name="acks" value="{{ ack.key }}" required>
+      <span>
+        <span class="term-label">{{ ack.label }}</span>
+        <span class="term-body">{{ ack.term }}</span>
+      </span>
+    </label>
+    {% endfor %}
+
+    <div class="section-label" style="margin-top:18px;">Sign it</div>
+    <div class="hint">Type your name. This records intent; it does not create a legal obligation.</div>
+    {% if unsigned %}
+    <div class="interest-flag" style="margin-top:10px;">
+      Not signed. Every term has to be ticked, and the name cannot be blank.
+    </div>
+    {% endif %}
     <input type="text" name="signed_name" placeholder="Your full name" required
            style="width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--white);font:inherit;">
     <button type="submit" class="btn-primary">Sign</button>
@@ -80,8 +100,9 @@
 <div class="card">
   <div class="section-label">Confirm it is you</div>
   <div class="hint">
-    Signed as <strong>{{ state.signed_name }}</strong>. This is a simulated check — nothing is
-    captured, nothing is looked at, and it is not identity verification.
+    Signed as <strong>{{ state.signed_name }}</strong>, agreeing to all
+    {{ acks|length }} terms. This is a simulated check — nothing is captured, nothing is
+    looked at, and it is not identity verification.
   </div>
   {% if face_failed %}
   <div class="interest-flag" style="margin-top:10px;">The check did not pass. Try again.</div>

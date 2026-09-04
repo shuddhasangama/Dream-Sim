@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 
+import dateplan
 from dateplan import (
     ACK_FIELDS,
     BILL_SPLIT_OPTIONS,
@@ -180,3 +181,78 @@ class PaymentOpenTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SlotTimingTests(unittest.TestCase):
+    """2026-09-04, user's rule: the debrief opens an hour after the date
+    starts, not on Sunday night. That timing is what makes a no-show
+    reportable the same evening instead of three days later."""
+
+    def test_every_meal_slot_has_a_start_time(self):
+        for meal in ("breakfast", "lunch", "coffee", "dinner"):
+            with self.subTest(meal=meal):
+                hour, minute = dateplan.slot_start(meal)
+                self.assertTrue(0 <= hour <= 23 and 0 <= minute <= 59)
+
+    def test_an_unknown_slot_raises_rather_than_guessing_a_time(self):
+        with self.assertRaises(ValueError):
+            dateplan.slot_start("brunch")
+
+    def test_the_debrief_opens_an_hour_after_a_whole_hour_slot(self):
+        self.assertEqual(dateplan.debrief_opens_hour("lunch"), 14)
+        self.assertEqual(dateplan.debrief_opens_hour("breakfast"), 10)
+        self.assertEqual(dateplan.debrief_opens_hour("coffee"), 18)
+
+    def test_a_half_hour_slot_rounds_up_rather_than_down(self):
+        """Dinner starts 19:30, so an hour later is 20:30. Opening at
+        20:00 would put "how was it?" in front of someone still at the
+        table; 21:00 is the first whole hour that is genuinely after."""
+        self.assertEqual(dateplan.debrief_opens_hour("dinner"), 21)
+
+    def test_it_never_runs_past_the_end_of_the_day(self):
+        for meal in dateplan.MEAL_SLOT_TIMES:
+            self.assertLessEqual(dateplan.debrief_opens_hour(meal), 23)
+
+
+class CancellationPolicyTests(unittest.TestCase):
+    """Dates are set on Thursday for the weekend, so a free cancellation is
+    an invitation to change your mind at everyone else's expense."""
+
+    FEE = 999
+
+    def test_inside_the_window_it_costs_and_is_recorded(self):
+        result = dateplan.cancellation(6, self.FEE)
+        self.assertTrue(result["late"])
+        self.assertEqual(result["fee_inr"], self.FEE)
+        self.assertEqual(result["compliance_event"], "late_cancel")
+
+    def test_outside_the_window_it_is_free_and_unrecorded(self):
+        """Punishing honest early notice teaches people to no-show
+        instead, which is the behaviour the fee exists to prevent."""
+        result = dateplan.cancellation(48, self.FEE)
+        self.assertFalse(result["late"])
+        self.assertEqual(result["fee_inr"], 0)
+        self.assertIsNone(result["compliance_event"])
+
+    def test_the_boundary_is_inclusive_of_the_full_notice_period(self):
+        self.assertFalse(dateplan.cancellation(dateplan.CANCELLATION_NOTICE_HOURS, self.FEE)["late"])
+        self.assertTrue(dateplan.cancellation(dateplan.CANCELLATION_NOTICE_HOURS - 1, self.FEE)["late"])
+
+    def test_cancelling_after_the_slot_has_passed_is_still_late(self):
+        self.assertTrue(dateplan.cancellation(-3, self.FEE)["late"])
+
+    def test_the_reason_states_the_notice_and_the_window(self):
+        self.assertIn("6h notice", dateplan.cancellation(6, self.FEE)["reason"])
+        self.assertIn("24h window", dateplan.cancellation(6, self.FEE)["reason"])
+
+    def test_a_thursday_set_weekend_date_is_outside_the_window(self):
+        """The scenario the rule was written for: set Thursday noon, date
+        Saturday evening."""
+        notice = dateplan.hours_between((3, 12), (5, 19))
+        self.assertEqual(notice, 55)
+        self.assertFalse(dateplan.cancellation(notice, self.FEE)["late"])
+
+    def test_the_morning_of_the_date_is_inside_it(self):
+        notice = dateplan.hours_between((5, 10), (5, 19))
+        self.assertEqual(notice, 9)
+        self.assertTrue(dateplan.cancellation(notice, self.FEE)["late"])
