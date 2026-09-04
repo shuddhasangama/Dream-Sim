@@ -15,6 +15,7 @@ from unittest import mock
 
 import ceremony
 import db
+import gate_conversation
 
 from test_segment_efg_routes import RouteTestCase, app_module
 
@@ -286,17 +287,241 @@ class DemoScaffoldingTests(PairCase):
         self.client.post("/admin/reset-walkthrough", data={"user_id": "u1", "partner_id": "u2"})
         self.assertEqual(str(app_module.get_clock()), "Mon:12")
 
-    def test_the_step_tracker_appears_on_every_page(self):
+    def test_the_stage_indicator_appears_on_every_page(self):
         for path in ("/dashboard", "/guru", "/week"):
             with self.subTest(path=path):
                 body = self.client.get(path).get_data(as_text=True)
-                self.assertIn("journey-bar", body)
+                self.assertIn("stage-bar", body)
 
-    def test_the_tracker_reports_a_real_position(self):
+    def test_it_shows_the_stage_rather_than_a_step_count(self):
+        """2026-09-04: "Step 11 of 12" invited the question "what are the
+        other eleven?" — the confusion it existed to remove."""
         body = self.client.get("/dashboard").get_data(as_text=True)
-        self.assertIn("Step", body)
-        self.assertIn("of 12", body)
+        for stage in ("Dating", "Relationship", "Engaged", "Married"):
+            self.assertIn(stage, body)
+        self.assertNotIn("of 12", body)
+
+    def test_every_signed_in_screen_has_a_way_back(self):
+        """2026-09-04, user's rule: "Closing the app is not the solution"."""
+        for path in ("/guru", "/week", "/dashboard", "/vision", "/chemistry"):
+            with self.subTest(path=path):
+                body = self.client.get(path).get_data(as_text=True)
+                self.assertIn("backlink", body)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GateConversationRouteTests(PairCase):
+    """The gate end to end: ask, answer, wait, commit.
+
+    The route-level half of gate_conversation's two rules — a pause that a
+    disabled button would not actually enforce, and a screen that must
+    never leak one person's words to the other.
+    """
+
+    SCALE = "ready_meet_friends"
+
+    def setUp(self):
+        super().setUp()
+        self.reach_first_date()
+        db.insert_row(self.conn, "StageGate", {
+            "id": f"gate:{self.lock}", "pair_id": self.lock,
+            "trigger": "exclusivity_raised", "status": "open",
+            "opened_at": "W1 Sun 21:00",
+        })
+        self.conn.commit()
+
+    def gate(self):
+        return dict(db.fetch_one(self.conn, "StageGate", pair_id=self.lock))
+
+    def ask(self, user_id, *keys):
+        self.login(user_id)
+        return self.client.post("/gate/ask", data={"question_key": list(keys)})
+
+    def answer(self, user_id, key, scale=None, text=None):
+        self.login(user_id)
+        return self.client.post("/gate/respond", data={
+            "question_key": key, "readiness_scale": scale or "", "answer_text": text or ""})
+
+    def test_asking_puts_the_question_to_both_of_them(self):
+        self.ask("u1", self.SCALE)
+        rows = db.fetch_all(self.conn, "GateAsk", pair_id=self.lock)
+        self.assertEqual([r["question_key"] for r in rows], [self.SCALE])
+        self.assertEqual(rows[0]["asked_by"], "u1")
+
+    def test_the_screen_never_says_who_asked(self):
+        self.ask("u1", self.SCALE)
+        self.login("u2")
+        body = self.client.get("/gate").get_data(as_text=True)
+        self.assertIn("You are both answering", body)
+        self.assertNotIn("asked by", body.lower())
+
+    def test_asking_more_than_the_cap_is_refused(self):
+        keys = [q["key"] for q in gate_conversation.askable([])][:4]
+        self.ask("u1", *keys)
+        self.assertEqual(db.fetch_all(self.conn, "GateAsk", pair_id=self.lock), [])
+
+    def test_you_cannot_answer_something_nobody_asked(self):
+        self.answer("u1", self.SCALE, scale="ready_now")
+        self.assertEqual(db.fetch_all(self.conn, "GateResponse", pair_id=self.lock), [])
+
+    def test_the_pause_starts_only_once_both_have_answered(self):
+        self.ask("u1", self.SCALE)
+        self.answer("u1", self.SCALE, scale="ready_now")
+        self.assertIsNone(self.gate()["answers_closed_at"])
+        self.answer("u2", self.SCALE, scale="soon")
+        self.assertIsNotNone(self.gate()["answers_closed_at"])
+
+    def test_committing_before_the_pause_is_refused_by_the_route(self):
+        """A disabled button is not a rule. This is the behaviour the whole
+        feature exists to prevent."""
+        self.ask("u1", self.SCALE)
+        self.answer("u1", self.SCALE, scale="ready_now")
+        self.answer("u2", self.SCALE, scale="soon")
+        self.login("u1")
+        response = self.client.post("/gate/confirm")
+        self.assertIn("early=1", response.headers["Location"])
+        self.assertFalse(self.gate()["confirm_a"])
+
+    def test_committing_works_once_the_pause_has_run(self):
+        self.ask("u1", self.SCALE)
+        self.answer("u1", self.SCALE, scale="ready_now")
+        self.answer("u2", self.SCALE, scale="soon")
+        self.set_clock(week=1, day="Tue", hour=12)   # well past 12 hours
+        self.login("u1")
+        self.client.post("/gate/confirm")
+        self.assertTrue(self.gate()["confirm_a"])
+
+    def test_asking_again_restarts_the_pause(self):
+        """A new question means something new to sit with."""
+        self.ask("u1", self.SCALE)
+        self.answer("u1", self.SCALE, scale="ready_now")
+        self.answer("u2", self.SCALE, scale="soon")
+        self.assertIsNotNone(self.gate()["answers_closed_at"])
+        self.ask("u2", "exclusivity_check")
+        self.assertIsNone(self.gate()["answers_closed_at"])
+
+    def test_one_persons_words_never_reach_the_other(self):
+        self.ask("u1", "who_knows")
+        self.answer("u1", "who_knows", text="I told my sister and two close friends")
+        self.answer("u2", "who_knows", text="Nobody yet")
+        self.login("u2")
+        body = self.client.get("/gate").get_data(as_text=True)
+        for word in ("sister", "close friends"):
+            self.assertNotIn(word, body)
+
+    def test_a_gap_is_reported_without_naming_either_side(self):
+        self.ask("u1", self.SCALE)
+        self.answer("u1", self.SCALE, scale="ready_now")
+        self.answer("u2", self.SCALE, scale="not_yet")
+        self.login("u2")
+        body = self.client.get("/gate").get_data(as_text=True)
+        self.assertIn("not in the same place", body)
+        self.assertNotIn("ready_now", body.split("On the table")[-1])
+
+
+class AfterDateScreenTests(PairCase):
+    """One post-date screen instead of three cards to choose between.
+
+    2026-09-04, user's rule: "I think request for no and socials can be
+    kept after first date. Maybe post date expectations all of these can
+    be clubbed together."
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.reach_first_date()
+        self.login("u1")
+
+    def test_it_is_locked_before_a_first_date(self):
+        other = self.make_user("u3")
+        self.login(other)
+        self.assertNotEqual(self.client.get("/after-date").status_code, 200)
+
+    def test_all_three_parts_are_on_the_one_screen(self):
+        body = self.client.get("/after-date").get_data(as_text=True)
+        for part in ("What you each expect", "Numbers and socials",
+                     "Whether this goes further"):
+            with self.subTest(part=part):
+                self.assertIn(part, body)
+
+    def test_contact_sharing_opens_after_one_date(self):
+        """escalations.unlocks_available() demanded two dates while
+        disclosure opened the surface at FIRST_DATE. One rule now."""
+        body = self.client.get("/after-date").get_data(as_text=True)
+        self.assertIn("Read and sign", body)
+
+    def test_it_reports_expectations_progress(self):
+        body = self.client.get("/after-date").get_data(as_text=True)
+        self.assertIn("0/5", body)
+
+    def test_it_has_a_way_back_to_guru(self):
+        body = self.client.get("/after-date").get_data(as_text=True)
+        self.assertIn("backlink", body)
+        self.assertIn("Guru", body)
+
+
+class GuruFocusTests(PairCase):
+    """One answer, at most two cards, and one link to the rest.
+
+    2026-09-04, user's rule: "All other tabs being visible under guru,
+    doesn't make sense as well. Keep this intuitive rather than with
+    multiple options, which is very confusing."
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.reach_first_date()
+        self.login("u1")
+
+    def tiles(self, path="/guru"):
+        return self.client.get(path).get_data(as_text=True).count('class="guru-tile"')
+
+    def test_the_hub_never_shows_more_than_the_cap(self):
+        self.assertLessEqual(self.tiles(), app_module.guru.MAX_CARDS)
+
+    def test_the_rest_is_one_link_away_not_gone(self):
+        """A screen that silently drops a door you used yesterday is its
+        own confusion."""
+        body = self.client.get("/guru").get_data(as_text=True)
+        self.assertIn(url_for_everything := "/guru/everything", body)
+        self.assertGreaterEqual(self.tiles("/guru/everything"), self.tiles("/guru"))
+
+    def test_everything_else_has_a_way_back(self):
+        body = self.client.get("/guru/everything").get_data(as_text=True)
+        self.assertIn("backlink", body)
+
+    def test_a_raised_gate_is_the_first_thing_on_the_screen(self):
+        """user's rule: "If one of them expressed moving to next stage it
+        should be visible or first thing someone wants to see"."""
+        self.login("u2")
+        self.client.post("/gate/raise")
+        self.login("u1")
+        body = self.client.get("/guru").get_data(as_text=True)
+        headline = body.split('class="guru-avatar"')[1]
+        self.assertIn("has raised the next stage", headline)
+        # and it is above every tile on the page
+        self.assertLess(body.index("has raised the next stage"),
+                        body.index('class="guru-tile"') if 'class="guru-tile"' in body else len(body))
+
+    def test_it_names_the_partner_who_raised_it(self):
+        self.login("u2")
+        self.client.post("/gate/raise")
+        self.login("u1")
+        with app_module.app.app_context():
+            name = app_module.with_view_fields(app_module.load_user("u2"))["name"]
+        self.assertIn(name, self.client.get("/guru").get_data(as_text=True))
+
+    def test_the_person_who_raised_it_is_not_told_they_raised_it(self):
+        self.login("u1")
+        self.client.post("/gate/raise")
+        body = self.client.get("/guru").get_data(as_text=True)
+        self.assertIn("The next stage is on the table", body)
+
+    def test_the_gate_is_not_also_a_tile_once_it_is_the_answer(self):
+        """The same door twice is the crowding, not the fix."""
+        self.client.post("/gate/raise")
+        body = self.client.get("/guru").get_data(as_text=True)
+        self.assertEqual(body.count('href="/gate"'), 1)

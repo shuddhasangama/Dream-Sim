@@ -45,17 +45,17 @@ CONTACT_CHANNELS = ("phone", "whatsapp", "instagram", "linkedin")
 
 
 def unlocks_available(dates_completed: int) -> bool:
-    """§A1's unlock ladder: contact exchange unlocks once `dates_completed`
-    (a LockIn's own counter — see
-    lockin.increment_dates_completed()) reaches WEEK_2_DATES_REQUIRED.
-    That counter only ever advances once both partners' feedback for a
-    date is in, so this single check already covers the spec's full
-    "completed_dates >= 2 and feedback_complete_both" condition."""
-    return dates_completed >= WEEK_2_DATES_REQUIRED
+    """Whether contact sharing and the home invite are open yet.
 
+    2026-09-04, user's rule: "I think request for no and socials can be
+    kept after first date." This used to demand TWO completed dates while
+    disclosure.py opened the surface after one — two gates disagreeing,
+    with the stricter one winning silently and no screen explaining why.
 
-# ── Contact exchange (§A2) ──────────────────────────────────────────────
-
+    One completed date now. The ceremony is what makes this safe, not the
+    count: nothing is shared until both have read the terms and signed.
+    """
+    return dates_completed >= 1
 
 def request_contact(
     pair_id: str,

@@ -429,12 +429,39 @@ CREATE TABLE IF NOT EXISTS "StageGate" (
     consent_a             INTEGER NOT NULL DEFAULT 0 CHECK (consent_a IN (0, 1)),
     consent_b             INTEGER NOT NULL DEFAULT 0 CHECK (consent_b IN (0, 1)),
     biometric_a           INTEGER NOT NULL DEFAULT 0 CHECK (biometric_a IN (0, 1)),
-    biometric_b           INTEGER NOT NULL DEFAULT 0 CHECK (biometric_b IN (0, 1))
+    biometric_b           INTEGER NOT NULL DEFAULT 0 CHECK (biometric_b IN (0, 1)),
+    -- 2026-09-04: the exchange runs in rounds, and answers_closed_at
+    -- starts the mandatory pause before anyone can commit. Nulling it
+    -- (a new round) restarts the pause, which is the point.
+    round_no              INTEGER NOT NULL DEFAULT 1,
+    answers_closed_at     INTEGER,
+    -- 2026-09-04, user's rule: "If one of them expressed moving to next
+    -- stage it should be visible or first thing someone wants to see."
+    -- Guru cannot put the right name on that sentence without knowing
+    -- who moved first, so the gate records it. Nullable: gates opened
+    -- before this column existed simply do not know.
+    raised_by             TEXT
 );
 
 -- { id, pair_id, user_id, question_key, answer_text, readiness_scale } 
 -- question_key/readiness_scale are validated in code
 -- (stage_gate.STAGE_GATE_QUESTIONS), not duplicated into a CHECK here.
+-- ── GateAsk: what one person chose to put to the pair, per round ──
+-- 2026-09-04: the gate is a Guru-brokered exchange, not a form. You pick
+-- what you want to know; BOTH of you then answer it. asked_by is stored
+-- for the record only — it is never shown to the other person, because
+-- attributing a question turns it into an accusation.
+CREATE TABLE IF NOT EXISTS "GateAsk" (
+    id            TEXT PRIMARY KEY,
+    pair_id       TEXT NOT NULL REFERENCES "LockIn"(id),
+    round_no      INTEGER NOT NULL DEFAULT 1,
+    asked_by      TEXT NOT NULL REFERENCES "User"(id),
+    question_key  TEXT NOT NULL,
+    asked_at      TEXT NOT NULL,
+    UNIQUE (pair_id, round_no, question_key)
+);
+CREATE INDEX IF NOT EXISTS idx_gateask_pair ON "GateAsk" (pair_id, round_no);
+
 CREATE TABLE IF NOT EXISTS "GateResponse" (
     id               TEXT PRIMARY KEY,
     pair_id          TEXT NOT NULL REFERENCES "LockIn"(id),

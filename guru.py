@@ -46,27 +46,46 @@ CARDS = [
     ("AG", "Agreement of understanding", "The terms for this date",              "plan_view",        "plan",        d.DATE_SET,     d.RELATIONSHIP),
     ("BD", "Boundaries",             "How you would like to be greeted",         "boundaries_view",  "boundaries",  d.DATE_SET,     d.RELATIONSHIP),
     ("DB", "Post-date debrief",      "Two green flags, and what happens next",   "debrief_view",     "debrief",     d.DATE_SET,     d.RELATIONSHIP),
-    ("EX", "Expectations",           "Pace, and what you are open to discussing", "expectations_view", "expectations", d.FIRST_DATE, None),
-    ("SH", "Sharing",                "Contact details, and inviting someone home", "escalations_view", "escalations", d.FIRST_DATE, d.RELATIONSHIP),
-    ("NL", "Next level",             "When the two of you describe a different pace", "next_level_view", "next_level", d.FIRST_DATE, d.RELATIONSHIP),
+    # 2026-09-04: Expectations, Sharing and Next level were three tiles
+    # asking the same question — "which of these am I meant to open?".
+    # They are one screen now, so they are one card.
+    ("AD", "After the date",         "Expectations, sharing, and where this goes", "after_date_view", "after_date", d.FIRST_DATE, d.RELATIONSHIP),
     ("GT", "Checkpoint",             "Moving to the next stage, together",       "gate_view",        "gate",        d.FIRST_DATE,   d.RELATIONSHIP),
     ("VB", "Vibes",                  "What keeps this alive",                    "vibes_view",       "vibes",       d.RELATIONSHIP, None),
     ("HM", "Happily married",        "The end of the journey",                   "married_view",     "married",     d.RELATIONSHIP, None),
 ]
 
 
-# The cap this list is tuned against — the same discipline the nav is held
-# to. Nine cards after a first date is the crowding complaint moved one
-# screen down rather than fixed.
-MAX_CARDS = 7
+# How many cards sit under the action before the rest go behind one link.
+#
+# 2026-09-04, user's rule: "All other tabs being visible under guru,
+# doesn't make sense as well. Keep this intuitive rather than with
+# multiple options, which is very confusing." Seven tiles under the one
+# answer is the crowding complaint moved one screen down rather than
+# fixed. Two is what fits under an answer without competing with it.
+#
+# Nothing is taken away — the rest live at /guru/everything, because a
+# screen that silently drops a door you used yesterday is its own
+# confusion.
+MAX_CARDS = 2
 
 
-def cards(milestones: set[str]) -> list[dict[str, Any]]:
+def cards(milestones: set[str], *, exclude_endpoint: str | None = None) -> list[dict[str, Any]]:
     """Everything open to this user, in journey order.
 
     Double-gated on purpose: a card appears only if its own `needs` is met
     AND disclosure says the underlying surface is open. The second check
     is what stops Guru from ever offering a door the router would slam.
+
+    `exclude_endpoint` drops the card the next action already points at.
+    The same link twice, once as the answer and once as a tile, is the
+    "multiple options" the review was about.
+
+    Newest first. Only MAX_CARDS of these reach the hub, so table order —
+    which is journey order — would put the agreement and the boundaries
+    for a date that has already happened above the checkpoint someone
+    just raised. The most recently opened thing is the one most likely
+    to be wanted; the rest are a link away, not gone.
     """
     out = []
     for code, title, subtitle, endpoint, surface, needs, hides_at in CARDS:
@@ -76,8 +95,11 @@ def cards(milestones: set[str]) -> list[dict[str, Any]]:
             continue
         if not d.is_open(surface, milestones):
             continue
+        if endpoint == exclude_endpoint:
+            continue
         out.append({"code": code, "title": title, "subtitle": subtitle,
-                    "endpoint": endpoint, "surface": surface})
+                    "endpoint": endpoint, "surface": surface, "needs": needs})
+    out.sort(key=lambda c: d._RANK[c["needs"]], reverse=True)
     return out
 
 
@@ -107,6 +129,35 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             "around, but you will not appear in anyone's matches.",
             "verify_view", "Start verification")
 
+    # 2026-09-04, user's rule: "If one of them expressed moving to next
+    # stage it should be visible or first thing someone wants to see."
+    # It sits above everything below it deliberately — an unsigned
+    # agreement or a missing green flag can wait a day; someone asking
+    # whether this becomes exclusive cannot be the ninth tile down.
+    if f.get("gate_open"):
+        who = "%s has raised the next stage" % f["partner_name"] if (
+            f.get("gate_raised_by_partner") and f.get("partner_name")
+        ) else "The next stage is on the table"
+        if f.get("gate_nothing_asked_yet"):
+            return action(
+                who,
+                "Nothing is decided and nothing is signed. Guru will put whatever you want to "
+                "know to both of you — you each answer it, and neither of you sees the other's "
+                "answer until you have both given yours.",
+                "gate_view", "Open it with Guru")
+        if f.get("gate_waiting_on_me"):
+            return action(
+                who,
+                "Questions are on the table and yours are still open. There is no rush on the "
+                "answer — there is a deliberate pause afterwards precisely so neither of you "
+                "commits on the night you were asked.",
+                "gate_view", "Answer with Guru")
+        return action(
+            who,
+            "You have answered everything asked so far. Ask something else, or sit with it — "
+            "nothing can be committed until the pause has run.",
+            "gate_view", "Back to the checkpoint")
+
     if d.MATCHED not in milestones:
         return action(
             "Your week is running",
@@ -128,14 +179,14 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             "between you.",
             "calendar_view", "Set your availability")
 
-    if not f.get("agreement_signed"):
+    if not f.get("date_done") and not f.get("agreement_signed"):
         return action(
             "Sign the agreement",
             "Both of you sign before the date is confirmed. It is a readback of what you already "
             "told us, not a negotiation.",
             "plan_view", "Read and sign")
 
-    if not f.get("boundary_set"):
+    if not f.get("date_done") and not f.get("boundary_set"):
         return action(
             "Say how you would like to be greeted",
             "It goes into the agreement, so neither of you has to guess at the door.",

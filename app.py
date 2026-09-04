@@ -34,6 +34,7 @@ import db
 import demo
 import disclosure
 import escalations
+import gate_conversation
 import guru
 import guru_dating
 import guru_relationship
@@ -270,10 +271,10 @@ def inject_globals():
         "needs_verification": bool(user) and user["bgv_status"] != "verified",
         "nav_links": disclosure.nav_for(reached, reach_locked=reach_locked(user) if user else False),
         "milestones": reached,
-        # Segment J step 41. Driven by the same facts guru.next_action()
-        # reads, so the tracker and "what now?" cannot disagree about what
-        # has actually happened.
-        "journey_progress": progress.position(reached, _guru_facts(user)) if user else None,
+        # 2026-09-04: a stage, not a step count. "Step 11 of 12" invited
+        # the question "what are the other eleven?", which is the very
+        # confusion it existed to remove.
+        "journey_stage": progress.stage_view(user["journey_state"], reached) if user else None,
     }
 
 
@@ -814,6 +815,12 @@ def _dateplan_for_lockin(lockin_id: str) -> dict | None:
     return db.fetch_one(get_db(), "DatePlan", lockin_id=lockin_id)
 
 
+def _boundary_of(user_id: str) -> str | None:
+    """One person's greeting preference, from the one place it is stored."""
+    row = db.fetch_one(get_db(), "ChemistryEntry", user_id=user_id, key="physical_boundary")
+    return row["value"] if row else None
+
+
 def _plan_slot(plan: dict) -> tuple[int, int] | None:
     """Where this date sits in the simulated week, as (day_index, hour).
 
@@ -1220,7 +1227,12 @@ def plan_view():
     signatures = db.fetch_all(get_db(), "Signature", dateplan_id=plan["id"])
     my_signature = next((s for s in signatures if s["user_id"] == user["user_id"]), None)
     confirmed = dateplan.is_confirmed(signatures, active["user_a"], active["user_b"])
-    briefing = guru_dating.pre_date_briefing(partner_selections.get("greeting"))
+
+    # 2026-09-04: the greeting lives in ChemistryEntry, set on /boundaries,
+    # and nowhere else. It used to ALSO be a DatePlan selection — two
+    # fields for one thing, with the agreement reading only one of them.
+    my_boundary = _boundary_of(user["user_id"])
+    briefing = guru_dating.pre_date_briefing(_boundary_of(partner_id))
 
     return render_template(
         "plan.html",
@@ -1231,6 +1243,12 @@ def plan_view():
         confirmed=confirmed,
         briefing=briefing,
         ack_fields=dateplan.ACK_FIELDS,
+        my_boundary=my_boundary,
+        # Signed once is signed. The form comes back only if they ask for
+        # it, and the screen otherwise offers a way onward rather than the
+        # same request again.
+        signed=my_signature is not None and dateplan.is_fully_acknowledged(dict(my_signature)),
+        editing=request.args.get("edit") == "1",
         bill_split_labels=dateplan.BILL_SPLIT_LABELS,
         phase=clock_module.phase(get_clock()),
         cancellable=plan["status"] == "confirmed",
@@ -1252,8 +1270,8 @@ def plan_selections():
         return redirect(url_for("calendar_view"))
 
     my_role = "a" if active["user_a"] == user["user_id"] else "b"
+    # No greeting here any more — /boundaries owns it (2026-09-04).
     selections = {
-        "greeting": request.form.get("greeting"),
         "dietary": request.form.get("dietary"),
         "dress": request.form.get("dress"),
     }
@@ -1719,8 +1737,10 @@ def gate_view():
     if analysis is not None and gate[f"confirm_{my_role}"] and gate[f"confirm_{partner_role}"] and not has_mismatch:
         prerequisites = _prerequisites_for_couple(active["user_a"], active["user_b"])
 
+    conversation = _gate_conversation_state(dict(gate), active)
     return render_template(
         "gate.html",
+        conversation=conversation,
         gate=gate,
         lockin=active,
         partner=partner,
@@ -1735,6 +1755,118 @@ def gate_view():
     )
 
 
+def _clock_hours(clock) -> int:
+    """The simulated clock as a flat hour count, so a pause can be measured
+    across day and week boundaries without date arithmetic."""
+    return (clock.week - 1) * 24 * 7 + clock.day_index * 24 + clock.hour
+
+
+def _gate_conversation_state(gate: dict, active: dict) -> dict:
+    """Everything the gate screen needs, in Guru's words.
+
+    Nothing either person wrote reaches the other from here. What crosses
+    is which question was asked — unattributed — and a comparison of two
+    scale answers phrased as a shared position.
+    """
+    user = current_user()
+    round_no = gate.get("round_no") or 1
+    asks = db.fetch_all(get_db(), "GateAsk", pair_id=active["id"])
+    this_round = [a for a in asks if (a["round_no"] or 1) == round_no]
+    asked_keys = [a["question_key"] for a in this_round]
+
+    responses = db.fetch_all(get_db(), "GateResponse", pair_id=active["id"])
+    def answers_of(uid):
+        return {r["question_key"]: (r["readiness_scale"] or r["answer_text"])
+                for r in responses if r["user_id"] == uid}
+
+    partner_id = _partner_id_in_lockin(active, user["user_id"])
+    mine, theirs = answers_of(user["user_id"]), answers_of(partner_id)
+    now = _clock_hours(get_clock())
+
+    return {
+        "round_no": round_no,
+        "asked": [gate_conversation.relay(k) for k in asked_keys],
+        "asked_keys": asked_keys,
+        "i_asked": [a["question_key"] for a in this_round if a["asked_by"] == user["user_id"]],
+        "my_answers": mine,
+        "unanswered": [k for k in asked_keys if k not in mine],
+        "report": gate_conversation.report(asked_keys, mine, theirs),
+        "reflection": gate_conversation.reflection(gate.get("answers_closed_at"), now),
+        "may_commit": gate_conversation.may_commit(
+            asked_keys, mine, theirs, gate.get("answers_closed_at"), now),
+        "askable": gate_conversation.askable([a["question_key"] for a in asks]),
+        "max_asks": gate_conversation.MAX_ASKS_PER_ROUND,
+        "reflection_hours": gate_conversation.REFLECTION_HOURS,
+    }
+
+
+@app.route("/gate/ask", methods=["POST"])
+@login_required
+def gate_ask():
+    """Choose what you want to know. Both of you then answer it."""
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    gate = _gate_for_lockin(active["id"]) if active else None
+    if gate is None:
+        return redirect(url_for("guru_view"))
+
+    asks = db.fetch_all(get_db(), "GateAsk", pair_id=active["id"])
+    result = gate_conversation.validate_asks(
+        request.form.getlist("question_key"), [a["question_key"] for a in asks])
+    if not result["ok"]:
+        return redirect(url_for("gate_view", asked="invalid"))
+
+    round_no = gate.get("round_no") or 1
+    clock = get_clock()
+    for key in result["keys"]:
+        db.insert_row(get_db(), "GateAsk", {
+            "id": f"{active['id']}:{round_no}:{key}", "pair_id": active["id"],
+            "round_no": round_no, "asked_by": user["user_id"],
+            "question_key": key, "asked_at": str(clock),
+        })
+    # A new question reopens the round: the pause restarts, because there
+    # is something new to sit with.
+    db.insert_row(get_db(), "StageGate", {**dict(gate), "answers_closed_at": None})
+    return redirect(url_for("gate_view"))
+
+
+@app.route("/gate/respond", methods=["POST"])
+@login_required
+def gate_respond():
+    """Answer one of the questions on the table.
+
+    Scale answers are compared; free text is stored and never shown to the
+    other person. It is collected because writing it is what makes someone
+    think, not because anyone else will read it.
+    """
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    gate = _gate_for_lockin(active["id"]) if active else None
+    if gate is None:
+        return redirect(url_for("guru_view"))
+
+    key = request.form.get("question_key")
+    asks = {a["question_key"] for a in db.fetch_all(get_db(), "GateAsk", pair_id=active["id"])}
+    if key not in asks:
+        return redirect(url_for("gate_view"))
+
+    db.insert_row(get_db(), "GateResponse", {
+        "id": f"{active['id']}:{user['user_id']}:{key}",
+        "pair_id": active["id"], "user_id": user["user_id"], "question_key": key,
+        "readiness_scale": request.form.get("readiness_scale") or None,
+        "answer_text": (request.form.get("answer_text") or "").strip() or None,
+    })
+
+    # Once BOTH have answered everything asked, the pause starts. Started
+    # once and not restarted by a re-answer — otherwise editing a reply
+    # would reset everyone's clock.
+    state = _gate_conversation_state(dict(gate), active)
+    if state["report"]["complete"] and gate.get("answers_closed_at") is None:
+        db.insert_row(get_db(), "StageGate",
+                      {**dict(gate), "answers_closed_at": _clock_hours(get_clock())})
+    return redirect(url_for("gate_view"))
+
+
 @app.route("/gate/raise", methods=["POST"])
 @login_required
 def gate_raise():
@@ -1743,7 +1875,8 @@ def gate_raise():
     if active is None:
         return redirect(url_for("week"))
     if _gate_for_lockin(active["id"]) is None:
-        gate = stage_gate.open_gate(active["id"], "exclusivity_raised", str(get_clock()))
+        gate = stage_gate.open_gate(active["id"], "exclusivity_raised",
+                                    str(get_clock()), raised_by=user["user_id"])
         db.insert_row(get_db(), "StageGate", {"id": f"gate:{active['id']}", **gate, **_GATE_FLAG_DEFAULTS})
     return redirect(url_for("gate_view"))
 
@@ -1786,6 +1919,15 @@ def gate_confirm():
     gate = _gate_for_lockin(active["id"])
     if gate is None:
         return redirect(url_for("week"))
+
+    # 2026-09-04: the pause is enforced here, not merely hidden in the
+    # template. Someone who has just read that they see three things
+    # differently must not be able to commit in the same minute — that is
+    # the behaviour this whole feature exists to prevent, and a disabled
+    # button is not a rule.
+    if not _gate_conversation_state(dict(gate), active)["may_commit"]:
+        return redirect(url_for("gate_view", early="1"))
+
     updated = dict(gate)
     updated[f"confirm_{_my_role_in_lockin(active, user['user_id'])}"] = 1
     db.insert_row(get_db(), "StageGate", updated)
@@ -3568,9 +3710,10 @@ def _guru_facts(user: dict) -> dict:
         return {"married": user["journey_state"] == "married"}
     aligned = date_alignment.is_complete(user["stats"])
     married = user["journey_state"] == "married"
+    gate_facts = _gate_facts(user, active)
     plan = _dateplan_for_lockin(active["id"])
     if plan is None:
-        return {"aligned": aligned, "married": married}
+        return {"aligned": aligned, "married": married, **gate_facts}
     signature = db.fetch_one(get_db(), "Signature", dateplan_id=plan["id"], user_id=user["user_id"])
     entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
     row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
@@ -3579,11 +3722,92 @@ def _guru_facts(user: dict) -> dict:
     return {
         "agreement_signed": signature is not None and dateplan.is_fully_acknowledged(dict(signature)),
         "boundary_set": any(e["key"] == "physical_boundary" and e["value"] for e in entries),
+        # An unsigned agreement for a date that already happened is not a
+        # thing to chase — the evening is over. Guru asked for it anyway,
+        # which pushed the debrief down the list on the one night the
+        # debrief is the whole point.
+        "date_done": row is not None,
         "flags_given": len(outcome.get(f"{role}_green_flags") or []) >= guru_dating.MIN_GREEN_FLAGS,
         "decision_made": outcome.get(f"{role}_decision") is not None,
         "aligned": aligned,
         "married": married,
+        **gate_facts,
     }
+
+
+def _gate_facts(user: dict, active: dict) -> dict:
+    """Where an open stage gate stands, for Guru.
+
+    2026-09-04, user's rule: "If one of them expressed moving to next
+    stage it should be visible or first thing someone wants to see."
+    Guru had no knowledge of the gate at all — it was one tile among
+    nine. These three facts are what it needs to put it first and say
+    the true thing about it.
+    """
+    gate = _gate_for_lockin(active["id"])
+    if gate is None or gate["status"] not in ("open", "must_resolve"):
+        return {"gate_open": False}
+
+    round_no = gate["round_no"] or 1
+    asked = [a["question_key"] for a in db.fetch_all(get_db(), "GateAsk", pair_id=active["id"])
+             if (a["round_no"] or 1) == round_no]
+    mine = {r["question_key"] for r in
+            db.fetch_all(get_db(), "GateResponse", pair_id=active["id"], user_id=user["user_id"])}
+    raised_by = gate["raised_by"] if "raised_by" in gate.keys() else None
+    partner_id = _partner_id_in_lockin(active, user["user_id"])
+    partner = load_user(partner_id)
+    # with_view_fields is where `name` comes from — the raw row has none.
+    partner = with_view_fields(partner) if partner else None
+    return {
+        "gate_open": True,
+        "partner_name": partner.get("name") if partner else None,
+        # None means neither of them moved first — they arrived together
+        # at the debrief — so nobody gets named.
+        "gate_raised_by_partner": raised_by is not None and raised_by != user["user_id"],
+        "gate_waiting_on_me": [k for k in asked if k not in mine] != [],
+        "gate_nothing_asked_yet": not asked,
+    }
+
+
+@app.route("/after-date")
+@login_required
+def after_date_view():
+    """Everything that opens after a first date, on one screen.
+
+    2026-09-04, user's rule: "post date expectations all of these can be
+    clubbed together". Expectations, contact sharing and the next-level
+    conversation were three cards in Guru, and three cards asking to be
+    chosen between is the confusion the review was about. They are one
+    screen with three sections now — the same routes still exist for the
+    forms to post to, they just are not three separate invitations.
+    """
+    guard = unlocked_or_redirect("after_date")
+    if guard is not None:
+        return guard
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    if active is None:
+        return redirect(url_for("week"))
+
+    partner_id = _partner_id_in_lockin(active, user["user_id"])
+    partner = with_view_fields(load_user(partner_id))
+    entries = {e["key"]: e["value"]
+               for e in db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])}
+    share = _ceremony_pair_state(ceremony.CONTACT_SHARE, active["id"], active)
+    requests = db.fetch_all(get_db(), "ContactRequest", pair_id=active["id"])
+
+    return render_template(
+        "after_date.html",
+        partner=partner,
+        intimacy_keys=chemistry.INTIMACY_MANDATORY_KEYS,
+        entries=entries,
+        answered=len([k for k in chemistry.INTIMACY_MANDATORY_KEYS if entries.get(k)]),
+        total=len(chemistry.INTIMACY_MANDATORY_KEYS),
+        share_ceremony=share,
+        shared_channels=[r for r in requests if r["status"] == "accepted"],
+        pending_channels=[r for r in requests if r["status"] == "pending"],
+        unlocked=escalations.unlocks_available(active["dates_completed"]),
+    )
 
 
 @app.route("/guru")
@@ -3594,11 +3818,35 @@ def guru_view():
         return guard
     user = current_user()
     reached = _milestones_for(user)
+    action = guru.next_action(reached, facts=_guru_facts(user))
+    # 2026-09-04, user's rule: "Keep this intuitive rather than with
+    # multiple options, which is very confusing." One answer, two cards,
+    # and one link to the rest — not seven tiles competing with the
+    # answer above them.
+    open_cards = guru.cards(reached, exclude_endpoint=action["endpoint"])
     return render_template(
         "guru.html",
-        cards=guru.cards(reached),
-        action=guru.next_action(reached, facts=_guru_facts(user)),
+        cards=open_cards[:guru.MAX_CARDS],
+        more=max(len(open_cards) - guru.MAX_CARDS, 0),
+        action=action,
     )
+
+
+@app.route("/guru/everything")
+@login_required
+def guru_all_view():
+    """Every door currently open, for when the two on Guru are not it.
+
+    The cap on Guru is a cap on what competes with the answer, not on
+    what you are allowed to reach. Nothing is hidden — it is one link
+    further away.
+    """
+    guard = unlocked_or_redirect("guru")
+    if guard is not None:
+        return guard
+    user = current_user()
+    reached = _milestones_for(user)
+    return render_template("guru_all.html", cards=guru.cards(reached))
 
 
 def _mutually_open_pairs(limit: int = 25) -> list[dict]:

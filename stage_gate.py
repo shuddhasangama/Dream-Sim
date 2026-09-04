@@ -80,11 +80,20 @@ _ALL_KEYS = frozenset(_QUESTIONS_BY_KEY)
 _MATERIAL_GAP = 2
 
 
-def open_gate(pair_id: str, trigger: str, opened_at: str) -> dict[str, Any]:
-    """B1: either trigger routes into the same gate sequence."""
+def open_gate(pair_id: str, trigger: str, opened_at: str, raised_by: str | None = None) -> dict[str, Any]:
+    """B1: either trigger routes into the same gate sequence.
+
+    `raised_by` is who moved first. 2026-09-04, user's rule: "If one of
+    them expressed moving to next stage it should be visible or first
+    thing someone wants to see" — Guru cannot put the right name on that
+    sentence without it. It stays optional because a gate that both of
+    them walked into together (both picking "relationship" at the
+    debrief) has no single mover, and inventing one would be a lie.
+    """
     if trigger not in TRIGGERS:
         raise ValueError(f"trigger must be one of {TRIGGERS}, got {trigger!r}")
-    return {"pair_id": pair_id, "trigger": trigger, "status": "open", "opened_at": opened_at, "resolved_at": None}
+    return {"pair_id": pair_id, "trigger": trigger, "status": "open",
+            "opened_at": opened_at, "resolved_at": None, "raised_by": raised_by}
 
 
 def submit_gate_response(

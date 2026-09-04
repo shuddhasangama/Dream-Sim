@@ -1261,37 +1261,61 @@ select:focus {
 
 .optional-block { background: transparent; }
 
-/* ── journey step tracker (Segment J) ──────────────────────────────────
-   Deliberately thin and quiet. It answers "how far in am I?" for a demo
-   viewer without competing with whatever the screen is actually asking. */
+/* ── D·R·E·M stage indicator ───────────────────────────────────────────
+   2026-09-04: replaced a "step N of 12" counter. A count implied the
+   journey was a queue to get through, and invited "what are the other
+   eleven?" — the confusion it existed to remove. This says where you are
+   and nothing else. */
 
-.journey-bar {
+.stage-bar {
   width: 100%;
   max-width: 460px;
-  padding: 10px 20px 0;
+  padding: 12px 20px 0;
   box-sizing: border-box;
+  display: flex;
+  gap: 5px;
+  align-items: center;
 }
 
-.journey-bar-track {
-  height: 3px;
-  border-radius: 999px;
-  background: var(--border);
-  overflow: hidden;
-}
-
-.journey-bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--mint), var(--teal));
-  transition: width .3s ease;
-}
-
-.journey-bar-label {
-  display: block;
-  margin-top: 6px;
+.stage-pip {
+  flex: 1;
+  text-align: center;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: .06em;
+  font-size: 9px;
+  letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--muted);
+  padding: 5px 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
 }
+
+.stage-pip.done {
+  color: var(--mint);
+  border-color: rgba(61, 220, 151, .35);
+}
+
+.stage-pip.current {
+  color: #04231A;
+  background: linear-gradient(120deg, var(--mint), var(--teal));
+  border-color: transparent;
+  font-weight: 600;
+}
+
+/* ── back navigation ───────────────────────────────────────────────────
+   2026-09-04, user's rule: "Closing the app is not the solution". Every
+   signed-in screen gets one. Quiet by design — it is an escape hatch, not
+   a call to action. */
+
+.backlink {
+  display: inline-block;
+  margin-bottom: 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .05em;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.backlink:hover { color: var(--text-2); }

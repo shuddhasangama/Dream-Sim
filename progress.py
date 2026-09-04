@@ -1,18 +1,21 @@
-"""Where someone is in the journey, as a step number (Segment J, step 41).
+"""Which stage of the journey someone is in (Segment J, step 41).
 
-A walkthrough needs a spine. Without one the viewer sees a sequence of
-screens with no sense of how far in they are, and the demo's most common
-question — "how much of this is left?" — has no answer on screen.
+2026-09-04, user's rule: "I don't understand this 'Step 11 of 12 · In a
+relationship'. Just the status is good."
 
-The steps here are the JOURNEY's, not the app's routes. They are the
-things a person does, in the order the product makes them do them, and
-each one is `done` when the fact that proves it is true. That matters:
-a tracker driven by which page you last visited flatters the demo, and a
-tracker driven by evidence tells the truth about where the pair actually
-stands.
+He is right, and the counter was the wrong idea twice over. A number out
+of twelve implies the journey is a queue to get through, and it invited
+the question "what are the other eleven?" — which is exactly the
+confusion it was meant to remove.
 
-Facts come from the same dict guru.next_action() reads, so the tracker and
-Guru's "what now?" can never disagree about what has happened.
+What a person actually wants to know is where they ARE. That is the
+D·R·E·M stage indicator the roadmap already asked for (Phase 2), so this
+module serves that instead: four stages, the current one marked, no
+arithmetic.
+
+The step machinery underneath is kept, unexposed, because the walkthrough
+reset and the demo scaffolding still need to know what has happened. It
+just is not shown to a person any more.
 
 Pure functions. Nothing here touches the database.
 """
@@ -68,6 +71,44 @@ def steps(milestones: set[str], facts: dict[str, Any] | None = None) -> list[dic
             found_current = True
         out.append({"key": key, "label": label, "index": i + 1, "state": state, "done": done})
     return out
+
+
+# ── the four stages, which is all a person is shown ───────────────────────
+
+STAGES = [
+    ("dating", "Dating"),
+    ("relationship", "Relationship"),
+    ("engaged", "Engaged"),
+    ("married", "Married"),
+]
+_STAGE_KEYS = [key for key, _ in STAGES]
+_STAGE_LABELS = dict(STAGES)
+
+
+def stage_view(journey_state: str, milestones: set[str]) -> dict[str, Any]:
+    """The D·R·E·M indicator: four stages, the current one marked.
+
+    `journey_state` is the authority — it is the column the whole app
+    branches on. Milestones only decide whether to show the indicator at
+    all, because someone still being verified is not yet on the track and
+    a "Dating" pip would be telling them something untrue.
+
+    Any state that is not one of the four (onboarding, exiting, cooloff)
+    falls back to Dating rather than raising: an indicator is decoration,
+    and decoration must never be able to take a page down.
+    """
+    current = journey_state if journey_state in _STAGE_KEYS else "dating"
+    index = _STAGE_KEYS.index(current)
+    return {
+        "show": d.VERIFIED in milestones,
+        "current": current,
+        "label": _STAGE_LABELS[current],
+        "stages": [
+            {"key": key, "label": label,
+             "state": "done" if i < index else ("current" if i == index else "todo")}
+            for i, (key, label) in enumerate(STAGES)
+        ],
+    }
 
 
 def position(milestones: set[str], facts: dict[str, Any] | None = None) -> dict[str, Any]:

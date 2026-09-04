@@ -42,25 +42,53 @@
   </div>
 </div>
 
+{% if signed and not editing %}
+{# 2026-09-04, user's rule: "If the selections and boundaries are saved,
+   keep it same. Unless someone wants to edit it. But don't keep showing
+   that again. Route it back to Guru."
+   Re-presenting a form for something already done reads as "it did not
+   save". This is the readback, with a way to change it and a way out. #}
+<div class="card">
+  <div class="section-label">Signed</div>
+  <div class="plan-field-row"><span>Greeting</span><span>{{ (my_boundary or '—')|replace('-', ' ') }}</span></div>
+  <div class="plan-field-row"><span>Dietary notes</span><span>{{ my_selections.dietary or '—' }}</span></div>
+  <div class="plan-field-row"><span>Dress</span><span>{{ my_selections.dress or '—' }}</span></div>
+  <div class="hint" style="margin-top:10px;">
+    {% if confirmed %}Both of you have signed. Nothing else is needed before the evening.
+    {% else %}Waiting on {{ partner.name }} to sign.{% endif %}
+  </div>
+  <div class="action-row">
+    <a class="btn-secondary" href="{{ url_for('plan_view', edit=1) }}">Edit</a>
+    <a class="btn-primary" href="{{ url_for('guru_view') }}">Back to Guru</a>
+  </div>
+</div>
+{% else %}
 <div class="card">
   <div class="micro">Your selections — {{ partner.name }} sees these in the signed plan too</div>
+  {# 2026-09-04: the greeting used to be asked here AND on /boundaries.
+     Two fields, one concept, and the agreement only ever read one of them.
+     Boundaries is the one place it is set; this shows what was chosen. #}
+  <div class="plan-field-row">
+    <span>Greeting</span>
+    <span>
+      {% if my_boundary %}{{ my_boundary|replace('-', ' ') }}
+      {% else %}<a href="{{ url_for('boundaries_view') }}">not set yet →</a>{% endif %}
+    </span>
+  </div>
   <form method="post" action="{{ url_for('plan_selections') }}">
-    <div class="day-picker" style="margin-top:8px;">
-      <label class="day-check category-radio"><input type="radio" name="greeting" value="namaste" {% if my_selections.greeting == "namaste" %}checked{% endif %}>Namaste</label>
-      <label class="day-check category-radio"><input type="radio" name="greeting" value="handshake" {% if my_selections.greeting == "handshake" %}checked{% endif %}>Handshake</label>
-      <label class="day-check category-radio"><input type="radio" name="greeting" value="side-hug" {% if my_selections.greeting == "side-hug" %}checked{% endif %}>Side-hug</label>
-      <label class="day-check category-radio"><input type="radio" name="greeting" value="bow" {% if my_selections.greeting == "bow" %}checked{% endif %}>Bow</label>
-    </div>
     <input type="text" name="dietary" placeholder="Dietary notes / allergies" value="{{ my_selections.dietary or '' }}" style="margin-top:8px;">
     <div class="day-picker" style="margin-top:8px;">
       <label class="day-check category-radio"><input type="radio" name="dress" value="casual" {% if my_selections.dress == "casual" %}checked{% endif %}>Casual</label>
       <label class="day-check category-radio"><input type="radio" name="dress" value="smart casual" {% if my_selections.dress == "smart casual" %}checked{% endif %}>Smart casual</label>
       <label class="day-check category-radio"><input type="radio" name="dress" value="formal" {% if my_selections.dress == "formal" %}checked{% endif %}>Formal</label>
     </div>
+    {% if editing %}<input type="hidden" name="back" value="plan">{% endif %}
     <button type="submit" class="btn-secondary" style="margin-top:10px;">Save selections</button>
   </form>
 </div>
+{% endif %}
 
+{% if not signed %}
 <div class="card">
   <div class="micro">Sign &amp; confirm</div>
   {% if my_signature %}
@@ -84,13 +112,15 @@
   {% endif %}
 </div>
 {% endif %}
+{% endif %}
 
-<a class="btn-secondary" href="{{ url_for('week') }}">Back</a>
+{% if not signed and not my_boundary %}
 <div class="card">
   <div class="section-label">Before the evening</div>
   <div class="hint">Say how you would like to be greeted. It goes into the agreement, so neither of you has to guess at the door.</div>
   <a class="btn-secondary" style="margin-top:10px;" href="{{ url_for('boundaries_view') }}">Set your boundary →</a>
 </div>
+{% endif %}
 
 
 {% if cancellable %}

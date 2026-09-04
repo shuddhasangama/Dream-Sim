@@ -24,22 +24,26 @@
       </form>
     </nav>
     {% endif %}
-    {% if journey_progress %}
-    <div class="journey-bar" title="{{ journey_progress.label }}">
-      <div class="journey-bar-track">
-        <div class="journey-bar-fill" style="width: {{ journey_progress.percent }}%"></div>
-      </div>
-      <span class="journey-bar-label">
-        {% if journey_progress.complete %}
-          Journey complete
-        {% else %}
-          Step {{ journey_progress.step_number }} of {{ journey_progress.total }} ·
-          {{ journey_progress.label }}
-        {% endif %}
-      </span>
+    {# 2026-09-04: the stage you are in, not a step count. "Step 11 of 12"
+       invited the question "what are the other eleven?" — the confusion it
+       existed to remove. #}
+    {% if journey_stage and journey_stage.show %}
+    <div class="stage-bar">
+      {% for stage in journey_stage.stages %}
+      <span class="stage-pip {{ stage.state }}">{{ stage.label }}</span>
+      {% endfor %}
     </div>
     {% endif %}
     <main class="container">
+      {# 2026-09-04, user's rule: "Closing the app is not the solution".
+         Every signed-in screen gets a way out by default; a page with a
+         better destination overrides the block rather than remembering to
+         add a link of its own. #}
+      {% block back %}
+      {% if session_user %}
+      <a class="backlink" href="{{ url_for('dashboard') }}">‹ Dashboard</a>
+      {% endif %}
+      {% endblock %}
       {% block content %}{% endblock %}
     </main>
   </div>

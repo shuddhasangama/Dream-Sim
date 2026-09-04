@@ -40,8 +40,15 @@ class UnlocksAvailableTests(unittest.TestCase):
     def test_zero_dates_not_unlocked(self) -> None:
         self.assertFalse(unlocks_available(0))
 
-    def test_one_date_not_unlocked(self) -> None:
-        self.assertFalse(unlocks_available(1))
+    def test_one_date_unlocks_it(self) -> None:
+        """2026-09-04, user's rule: "request for no and socials can be kept
+        after first date". This used to demand two, while disclosure.py
+        opened the same surface after one — two gates disagreeing, with the
+        stricter winning silently and nothing on screen explaining why.
+
+        The ceremony is what makes it safe, not the count: nothing is
+        shared until both have read the terms and signed."""
+        self.assertTrue(unlocks_available(1))
 
     def test_two_dates_unlocked(self) -> None:
         self.assertTrue(unlocks_available(WEEK_2_DATES_REQUIRED))

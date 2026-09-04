@@ -29,32 +29,83 @@
 {% else %}
 
 {% if not both_answered %}
-<div class="card">
-  <div class="micro">Step 2 of 9 &middot; Stage-gate questionnaire (private — your answers aren't shown directly to {{ partner.name }})</div>
-  <div style="margin-top:6px;">{{ answered_keys|length }} / {{ questions|length }} answered</div>
+{# ── the conversation, brokered by Guru ────────────────────────────────
+   2026-09-04: nothing either person writes reaches the other. What
+   crosses is which question was asked — unattributed — and how two scale
+   answers compare, phrased as a shared position. #}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>
+    <div class="section-label" style="margin:0;">Round {{ conversation.round_no }}</div>
+    <div style="margin-top:6px;">{{ conversation.report.headline }}</div>
+  </div>
 </div>
 
-{% if next_question %}
+{% if conversation.asked %}
 <div class="card">
-  <div class="micro">{{ next_question.category.replace('_', ' ')|capitalize }}</div>
-  <div style="margin:8px 0;font-family:var(--font-serif, inherit);">{{ next_question.text }}</div>
-  <form method="post" action="{{ url_for('gate_answer') }}">
-    <input type="hidden" name="question_key" value="{{ next_question.key }}">
-    {% if next_question.kind == "scale" %}
-    <div class="day-picker">
-      {% for opt in next_question.options %}
-      <label class="day-check"><input type="radio" name="readiness_scale" value="{{ opt }}" required>{{ opt.replace('_', ' ') }}</label>
+  <div class="section-label">On the table</div>
+  <div class="hint">
+    Neither of you is told who asked what. You are both answering the same things.
+  </div>
+  {% for item in conversation.asked %}
+  <div class="clause">
+    <div class="clause-n">{{ loop.index }}</div>
+    <div style="flex:1;">
+      <div class="clause-title">{{ item.prompt }}</div>
+      {% if item.key in conversation.my_answers %}
+      <div class="clause-body">
+        You answered. {{ conversation.report.lines[loop.index0].note }}
+      </div>
+      {% else %}
+      <form method="post" action="{{ url_for('gate_respond') }}" style="margin-top:8px;">
+        <input type="hidden" name="question_key" value="{{ item.key }}">
+        {% if item.options %}
+        <div class="day-picker">
+          {% for option in item.options %}
+          <label class="day-check"><input type="radio" name="readiness_scale"
+                 value="{{ option }}" required>{{ option|replace('_', ' ') }}</label>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <textarea name="answer_text" rows="2" placeholder="In your own words — only Guru reads this"
+                  style="width:100%;margin-top:8px;padding:10px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--white);font:inherit;"></textarea>
+        <button type="submit" class="btn-secondary">Answer</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if conversation.askable and not conversation.unanswered %}
+<div class="card">
+  <div class="section-label">Anything else you want to know?</div>
+  <div class="hint">
+    Up to {{ conversation.max_asks }} at a time. Asking again restarts the pause — there is
+    something new to sit with.
+  </div>
+  <form method="post" action="{{ url_for('gate_ask') }}">
+    <div class="day-picker" style="margin-top:10px;">
+      {% for q in conversation.askable[:8] %}
+      <label class="day-check"><input type="checkbox" name="question_key" value="{{ q.key }}">{{ q.text }}</label>
       {% endfor %}
     </div>
-    {% else %}
-    <textarea name="answer_text" rows="3" style="width:100%;margin-top:4px;" placeholder="Your answer (leave blank to decline — that's free)"></textarea>
-    {% endif %}
-    <button type="submit" class="btn-primary" style="margin-top:10px;">Save answer</button>
+    <button type="submit" class="btn-secondary">Put these to us both</button>
   </form>
 </div>
-{% else %}
-<div class="card"><div class="micro">You've answered everything — waiting on {{ partner.name }}.</div></div>
 {% endif %}
+
+<div class="card">
+  <div class="section-label">Before either of you commits</div>
+  <div class="hint">{{ conversation.reflection.note }}</div>
+  {% if conversation.reflection.started and not conversation.reflection.may_commit %}
+  <div class="interest-flag" style="margin-top:10px;">
+    {{ conversation.reflection.elapsed }}h of {{ conversation.reflection_hours }}h.
+  </div>
+  {% endif %}
+</div>
+
 
 {% else %}
 <div class="card guru-card">

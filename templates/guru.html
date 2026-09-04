@@ -4,7 +4,7 @@
 <div class="eyebrow">Guru</div>
 <h1>What now?</h1>
 <div class="lede">
-  One answer, not a list. Everything else that is open to you right now is underneath.
+  One answer. Everything else is one link away, not spread across this screen.
 </div>
 
 {# ── the single next action ─────────────────────────────────────────────
@@ -23,8 +23,12 @@
   </div>
 </div>
 
+{# 2026-09-04, user's rule: "All other tabs being visible under guru,
+   doesn't make sense as well. Keep this intuitive rather than with
+   multiple options, which is very confusing." At most guru.MAX_CARDS
+   here; the remainder is a single link, never a longer list. #}
 {% if cards %}
-<div class="section-label" style="margin-top:26px;">Open to you now</div>
+<div class="section-label" style="margin-top:26px;">Also open</div>
 <div class="guru-cards">
   {% for card in cards %}
   <a class="guru-tile" href="{{ url_for(card.endpoint) }}">
@@ -36,13 +40,11 @@
   </a>
   {% endfor %}
 </div>
+{% endif %}
+
+{% if more %}
 <div class="hint" style="margin-top:12px;">
-  These appear and retire on their own as you move through the journey — that is why the
-  navigation above stays short. Nothing is hidden from you that you could act on.
-</div>
-{% else %}
-<div class="card">
-  <div class="hint">Nothing else is open yet. Cards appear here as you move through the journey.</div>
+  <a href="{{ url_for('guru_all_view') }}">Everything else that is open ({{ more }}) →</a>
 </div>
 {% endif %}
 {% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}After the date — {{ session_user_name }}{% endblock %}
+{% block back %}<a class="backlink" href="{{ url_for('guru_view') }}">‹ Guru</a>{% endblock %}
+{% block content %}
+<div class="eyebrow">Dating · After your first date</div>
+<h1>What opens now</h1>
+<div class="lede">
+  {# 2026-09-04, user's rule: "I think request for no and socials can be kept
+     after first date. Maybe post date expectations all of these can be
+     clubbed together." Three separate invitations in Guru made this look
+     like three decisions to choose between. It is one moment with three
+     parts, so it is one screen. #}
+  You have met {{ partner.name }} once. These three open together, because
+  they are the same conversation: what you each expect, what you are willing
+  to share, and whether this goes further. Nothing here is on a clock.
+</div>
+
+<div class="card">
+  <div class="section-label">1 · What you each expect</div>
+  <div class="hint">
+    Pace, boundaries, and how openly you will talk about health. Yours only —
+    {{ partner.name }} never sees these, and they stay editable, because
+    expectations genuinely change.
+  </div>
+  <div class="stat-rows" style="margin-top:8px;">
+    {% for key in intimacy_keys %}
+    <div class="stat-row">
+      <span>{{ key|replace('_', ' ')|capitalize }}</span>
+      <span>{% if entries.get(key) %}{{ entries[key]|replace('_', ' ') }}{% else %}—{% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="action-row">
+    <a class="btn-primary" href="{{ url_for('expectations_view') }}">
+      {% if answered == total %}Review{% else %}Fill these in — {{ answered }}/{{ total }}{% endif %}
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-label">2 · Numbers and socials</div>
+  {% if share_ceremony.both_complete %}
+  <div class="interest-flag yes">Both of you signed the sharing agreement.</div>
+  {% elif share_ceremony.mine_complete %}
+  <div class="hint">You have signed. Nothing is shared until {{ partner.name }} does too — one signature is half of one.</div>
+  {% else %}
+  <div class="hint">Before a number changes hands, both of you agree what it is for and how to take it back.</div>
+  {% endif %}
+  <div class="stat-rows" style="margin-top:8px;">
+    {% if shared_channels %}
+    <div class="stat-row"><span>Shared</span><span>{% for r in shared_channels %}{{ r.channel|capitalize }}{% if not loop.last %}, {% endif %}{% endfor %}</span></div>
+    {% endif %}
+    {% if pending_channels %}
+    <div class="stat-row"><span>Waiting</span><span>{% for r in pending_channels %}{{ r.channel|capitalize }}{% if not loop.last %}, {% endif %}{% endfor %}</span></div>
+    {% endif %}
+    {% if not shared_channels and not pending_channels %}
+    <div class="stat-row"><span>Shared</span><span>Nothing yet</span></div>
+    {% endif %}
+  </div>
+  <div class="micro" style="margin-top:6px;">Declining or ignoring a request costs nothing — it is never shown to {{ partner.name }} as a rejection.</div>
+  <div class="action-row">
+    {% if share_ceremony.both_complete %}
+    <a class="btn-primary" href="{{ url_for('escalations_view') }}">Exchange contact →</a>
+    {% elif share_ceremony.mine_complete %}
+    <a class="btn-secondary" href="{{ url_for('escalations_view') }}">See where this stands</a>
+    {% else %}
+    <a class="btn-primary" href="{{ share_ceremony.url }}">Read and sign →</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-label">3 · Whether this goes further</div>
+  {% if unlocked %}
+  <div class="hint">
+    Either of you can start the Next Level conversation. Guru asks; neither of
+    you sees an answer until you have both given yours.
+  </div>
+  <div class="action-row">
+    <a class="btn-secondary" href="{{ url_for('next_level_view') }}">Open it with Guru →</a>
+  </div>
+  {% else %}
+  <div class="hint">Opens once a date's feedback is fully in from both of you.</div>
+  {% endif %}
+</div>
+{% endblock %}

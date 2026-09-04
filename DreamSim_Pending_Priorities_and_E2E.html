@@ -1,0 +1,436 @@
+<title>Dream-Sim Pending &amp; E2E Plan — v3</title>
+<style>
+:root{color-scheme:light}
+body{font-family:Arial,Helvetica,sans-serif;margin:32px;color:#1f2937;background:#ffffff;line-height:1.5}
+h1{color:#312e81;margin-bottom:6px;font-size:26px}
+.sub{color:#6b7280;margin-top:0}
+h2{color:#312e81;font-size:19px;margin:38px 0 4px;padding-top:18px;border-top:3px solid #312e81}
+h2:first-of-type{margin-top:28px}
+.h2sub{color:#6b7280;margin:0 0 14px;font-size:13.5px;max-width:100ch}
+
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:14px;background:#ffffff}
+th,td{border:1px solid #cbd5e1;padding:9px 10px;vertical-align:top}
+th{background:#312e81;color:#ffffff;text-align:center;font-size:13px;position:sticky;top:0;z-index:2}
+th:first-child{text-align:left} th:nth-child(2){text-align:left}
+td:first-child{width:210px}
+.phase{font-weight:bold;background:#f5f3ff;color:#4c1d95;display:block}
+tr.band td{background:#fbfaff}
+
+.tick{text-align:center;font-size:17px;color:#312e81;width:62px}
+.tick.p1{color:#b91c1c;font-weight:bold}
+.tick.p2{color:#b45309}
+.tick.p3{color:#0f766e}
+.tick.lo{color:#94a3b8}
+
+td.st{text-align:center;width:96px;padding:7px 4px}
+.pill{display:inline-block;font-size:10.5px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase;padding:2.5px 7px;border-radius:10px;white-space:nowrap}
+.pill.done{background:#d1fae5;color:#065f46}
+.pill.part{background:#fef3c7;color:#92400e}
+.pill.none{background:#fee2e2;color:#991b1b}
+.pill.reuse{background:#e0e7ff;color:#3730a3}
+.was{display:block;margin-top:3px;font-size:9.5px;color:#7c3aed;letter-spacing:.03em;text-transform:uppercase;font-weight:bold}
+
+.note{margin-top:22px;padding:14px 16px;background:#f8fafc;border-left:4px solid #312e81}
+.note strong{color:#312e81}
+.note ul{margin:8px 0 0;padding-left:20px}
+.note li{margin-bottom:6px}
+.legend{margin:0 0 14px;font-size:13px;color:#4b5563}
+.legend span{margin-right:18px;white-space:nowrap}
+
+.tally{display:flex;flex-wrap:wrap;gap:0;margin:18px 0 26px;border:1px solid #cbd5e1;background:#f8fafc}
+.tally div{flex:1 1 120px;padding:12px 14px;border-right:1px solid #e2e8f0}
+.tally div:last-child{border-right:0}
+.tally b{display:block;font-size:24px;color:#312e81;line-height:1.1}
+.tally span{font-size:11.5px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em}
+
+.banner{margin:0 0 8px;padding:16px 18px;background:#eef2ff;border:1px solid #c7d2fe;border-left:5px solid #4338ca}
+.banner h3{margin:0 0 8px;color:#312e81;font-size:15px}
+.banner ul{margin:0;padding-left:20px}
+.banner li{margin-bottom:5px;font-size:13.5px}
+
+@media print{
+  body{margin:14px;font-size:10px}
+  table{font-size:9.5px} th,td{padding:4px 5px}
+  th{position:static}
+  h2{page-break-after:avoid} tr{page-break-inside:avoid}
+  .tally{display:none}
+}
+</style>
+
+<h1>Dream-Sim — Pending Activities, Priorities &amp; End-to-End Simulation Plan</h1>
+<p class="sub">Version 3 · 4 Sep 2026, evening · supersedes v2 from this morning. Purple <span class="was" style="display:inline">was&nbsp;X</span> marks under a status show what moved since <strong>v2</strong>.</p>
+
+<div class="banner">
+  <h3>What shipped in v3 — Segments G, H, I, J, and the nine UI points</h3>
+  <ul>
+    <li><strong>All ten journey segments A–J now run end to end.</strong> The four remaining ceremonies are attached (contact share, home invite, relationship entry, stage gate), the ₹2,999 checkpoint fee is charged where the checkpoint actually happens, and the duplicate signature path inside <code>/gate</code> is gone.</li>
+    <li><strong>The stage gate became a conversation, not a form.</strong> Each of you chooses what you want asked; Guru puts it to <em>both</em> of you unattributed; neither sees the other's words; and a 12-hour pause runs before anything can be committed — restarted every time a new question is asked. Nothing crosses between partners except through Guru.</li>
+    <li><strong>Guru shows one answer, not nine tiles.</strong> A stage gate someone has raised is now the first thing on the screen and names who raised it. At most two cards sit under the answer; the rest are one link away at <code>/guru/everything</code>.</li>
+    <li><strong>One post-date screen.</strong> Expectations, contact sharing and the next-level conversation were three separate invitations; they are three sections of <code>/after-date</code> now.</li>
+    <li><strong>The eight requested changes are in</strong> — sign + face on the date agreement, the debrief opening an hour after the date, socials and feedback after the first date, the ₹999 late-cancellation charge, the five mandatory Stats, city-driven defaults, REACH honouring only keyed-in filters, and date-alignment fields collected when there is a date rather than at sign-up.</li>
+    <li><strong>Schema drift can no longer ship.</strong> <code>reconcile_columns()</code> adds missing columns from the schema file on both backends at start-up — proved against a real PostgreSQL 16 built from yesterday's schema — so a deploy needs no manual <code>ALTER</code> and local and Railway cannot diverge.</li>
+    <li><strong>Tests: 699 → 909</strong> across 31 modules, verified on SQLite in-memory, SQLite on disk, and a real PostgreSQL server.</li>
+  </ul>
+</div>
+
+<div class="tally">
+  <div><b>208</b><span>Tracked activities</span></div>
+  <div><b>92</b><span>Done or fixed</span></div>
+  <div><b>36</b><span>Partial</span></div>
+  <div><b>80</b><span>Not started</span></div>
+  <div><b>34</b><span>Moved since v2</span></div>
+</div>
+
+<p class="legend">
+  <span><span class="pill done">Done</span> working in the deployed app</span>
+  <span><span class="pill part">Partial</span> engine or data model exists, not fully wired</span>
+  <span><span class="pill none">None</span> nothing exists</span>
+  <span><span class="was" style="display:inline">was&nbsp;X</span> moved since v2 (this morning)</span>
+</p>
+
+<h2>Section 1 — Pending activities by priority</h2>
+<p class="h2sub">Phases 1–8 keep the original structure and numbering. Phases 9–11 cover the agreement ceremony, Guru, the journey stages, exit, notifications and data protection.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Individual Block</th><th>Sub-block / Activity</th><th>Today</th><th>Priority&nbsp;1</th><th>Priority&nbsp;2</th><th>Priority&nbsp;3</th><th>Low</th></tr></thead>
+<tbody>
+
+<tr><td><span class="phase">Phase 1 — Deployment &amp; Foundation</span></td><td>Deployed URL / application availability</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>PostgreSQL connectivity and persistence</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Rotate the hardcoded Flask session secret into an environment variable</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Separate the 200 synthetic users from any environment real users can reach</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Adopt a schema migration tool — still no Alembic, but <code>reconcile_columns()</code> now adds missing columns from the schema file at start-up on both backends, and a lint fails the build if the two files diverge. A deploy needs no manual step; a column <em>rename</em> or a NOT NULL still does</td><td class="st"><span class="pill part">Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Error, empty-state and failure handling across all screens</td><td class="st"><span class="pill part">Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Structured application logging and error tracking, with no PII in either</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Run the 31 test modules (909 tests) in CI on every push — <strong>including one run against a real PostgreSQL server</strong>, which is the gap that let two deployment breaks through</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Scheduled database backups and a rehearsed restore</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">Phase 2 — UI/UX &amp; Product Alignment</span></td><td>Choose one design system — deployed (Sora/Fraunces) or mock-up (Bricolage Grotesque) — and retire the other</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Define the token set: colour, type scale, spacing, radius, shared by both codebases</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Four-tab bottom navigation: Week · Matches/Browse · Guru · You</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Map the ~71 Flask routes onto the 31 mock-up screens</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Mobile breakpoints — style.css has one media query, for Guru's card grid, and nothing else</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Persistent Dating · Relationship · Engaged · Married stage indicator</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Component library: chip, toggle, card, gate card, signature block, pillar tile, stat row</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Goal colour semantics applied consistently (Kids, Intimacy, Cohabitate, Travel)</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Screen-level labelled back navigation on every sub-screen — a default in the base template, so a new screen gets one without anyone remembering to add it</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Loading, empty, success and error states</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Accessibility: contrast on dark ground, focus states, touch targets, screen-reader labels</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr class="band"><td></td><td>Animations and visual micro-interactions</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td></td><td class="tick lo">✓</td></tr>
+
+<tr><td><span class="phase">Phase 3 — Login &amp; Authentication</span></td><td>Replace the 200-user picker with a real front door — sign-up and the three-step wizard are live; the picker stays at /pool for simulation</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Decide the primary identity: phone or email — both are accepted and normalised, neither is yet the key</td><td class="st"><span class="pill part">Partial</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Email registration and login with hashed password storage — the Account table has a password_hash column that nothing writes</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Sessions, authorization and logout backed by a real secret</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Password reset: identifier entry, tokenised link, expiry, single use</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Phone + OTP with a DLT-registered Indian SMS sender</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Email verification</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Rate limiting, lockout and brute-force protection</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Duplicate-account prevention — one verified human, one account</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Google / Apple sign-in</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr><td></td><td>Device list and sign-out-everywhere</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td></td><td class="tick lo">✓</td></tr>
+
+<tr class="band"><td><span class="phase">Phase 4 — Onboarding &amp; Profile</span></td><td>Self-service three-step onboarding wizard</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Step 1 Vision — Intimacy mandatory with 1–2 kinds, plus Kids / Cohabitate / Travel, Kids requiring Physical</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Step 2 Stats — 17 fields, of which Age, Education, Nationality, Salary and Profession are now mandatory and verified; city drives the currency, language ordering and dietary defaults</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Step 3 Chemistry — 12 activities into four buckets, with a minimum sort gate</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Mandatory information and field-level validation on every step</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Consolidated "You" profile screen — goal tags, verified stats, activity pool</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Inline edit for vision and stats, triggering re-verification when a verified field changes</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Save and resume partial onboarding across devices — the draft lives in the session only</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Match history — every match, pass, lock-in and stage milestone</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Profile completion status indicator</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Account controls: change password, change phone, export my data, delete account</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Referral code and invite link with the promised faster-REACH benefit</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+
+<tr><td><span class="phase">Phase 5 — Core Dream-Sim &amp; Simulation</span></td><td>Wall-clock mode: run the existing week machine against real IST time</td><td class="st"><span class="pill part">Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Scheduled jobs: match release, rotation, publish, weekly reports, cool-off expiry</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Decide one global week versus a per-user week offset</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Demo mode that advances the clock from the UI — +1 hour / next day / next week, plus seven named checkpoints on /admin/reset-week</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Three-slot weekly rotation with keenness, pass and lock-in</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>REACH filtering and the lever model, including the sensitive-lever rule — and now honouring <strong>only</strong> the filters actually keyed in, rather than inferring any</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Vision comparison view — goal by goal, Aligned / Partial / Differs / Open</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Missed-deadline handling extended from stale outcomes to every timed step</td><td class="st"><span class="pill part">Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Surface the Reality Check numbers: demand %, like-back %, reach percentile, verdict</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Decide whether the product has a headline alignment score</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Empty-REACH state and the lever nudge when fewer than three slots unlock</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Browse list for unverified users, with goal filters</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Simulation and event history</td><td class="st"><span class="pill part">Partial</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr><td></td><td>Timezone policy: IST-only versus per-user timezones on a shared weekly grid</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr><td></td><td>Multiple scenarios and comparisons</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td></td><td class="tick lo">✓</td></tr>
+<tr><td></td><td>Advanced predictive simulation</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td></td><td class="tick lo">✓</td></tr>
+
+<tr class="band"><td><span class="phase">Phase 6 — BGV &amp; External Integrations</span></td><td>Confirm BGV is the differentiator and where exactly it gates the journey — verified is required to appear in anyone's matches</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Define the five BGV statuses and the user and admin flow around each</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>BGV link flow: per-user link, hand off, callback, map the result — simulated with three outcomes, no vendor behind it</td><td class="st"><span class="pill part">Partial</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Per-field verification status — Age, Nationality, Profession, Salary bracket (raw salary removed on your instruction)</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Select the BGV provider and agree the check scope</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Document capture: what is uploaded, where it is stored, how long it is kept</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Verified badge and its consequences — verified sees Matches, unverified sees Browse</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Failure and appeal path for an unverifiable user — the failure outcomes exist, the appeal does not</td><td class="st"><span class="pill part">Partial</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Re-verification cadence, and the cost of editing an already-verified stat</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr class="band"><td></td><td>Automated BGV reminders and an admin dashboard</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr class="band"><td></td><td>Multiple BGV providers</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td></td><td class="tick lo">✓</td></tr>
+
+<tr><td><span class="phase">Phase 7 — Payment &amp; Monetization</span></td><td>Confirm the four price points, and whether payment precedes or follows verification</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Entitlement layer — one source of truth answering "is this paid for", keyed on (user, purpose, scope)</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Payment gateway integration: orders, checkout, webhook verification, idempotency — the stub is idempotent, no gateway is connected</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Availability fee ₹499 gating weekend slot submission</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Agreement fee ₹1,499 gating the signature on the date playbook</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Stage gate fee ₹2,999 at each checkpoint — charged at the checkpoint's own ceremony</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Guru subscription ₹4,999/month: mandate, renewal date, lapse state — a per-week scope exists, nothing recurs</td><td class="st"><span class="pill part">Partial</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Payment success, failure and retry handling — the stub models both outcomes; no retry UI</td><td class="st"><span class="pill part">Partial</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Cancellation charge — ₹999 inside the notice window, charged and recorded against the person who cancelled; free outside it</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Tax invoices and GST</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr><td></td><td>Refunds when a partner never counter-signs, and chargeback handling</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr><td></td><td>Subscription management screen and billing history</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr><td></td><td>Complex promotions and multiple gateways</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td></td><td class="tick lo">✓</td></tr>
+
+<tr class="band"><td><span class="phase">Phase 8 — Production Readiness &amp; Mobile</span></td><td>Secrets, environment variables and access security review</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Privacy Policy, Terms and user consent assessment</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Mobile strategy decision: responsive web vs PWA vs native — it decides push and face capture</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Backup and production data strategy</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Development / staging / production separation, with debug off outside local</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Monitoring, uptime and error tracking</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Release and rollback strategy</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Android / iOS implementation after product validation</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr class="band"><td></td><td>Scale and performance testing</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr class="band"><td></td><td>Separate native codebases and advanced offline features</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td></td><td class="tick lo">✓</td></tr>
+
+<tr><td><span class="phase">Phase 9 — Agreements, Consent &amp; Guru</span></td><td>Build the reusable ceremony component: playbook → digital signature → face capture → verified</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Complete the seven-clause agreement — all seven now render, each filled from what both parties already declared</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Digital signature capture UI — typed name, refused when blank</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Face capture / liveness check — the step and its gating exist; the check itself looks at nothing and no copy calls it identity verification</td><td class="st"><span class="pill part">Partial</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Consent versioning — clauses are regenerated at render time, so no snapshot of what was actually signed exists</td><td class="st"><span class="pill part">Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Counter-signature flow — both-sides gating is enforced (one signature confirms nothing); the notification to the other party is missing</td><td class="st"><span class="pill part">Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Legal review: confirm these are guidelines, not enforceable contracts, and word the UI so</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Decide what Guru is allowed to be, and which model runs behind it</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Guru safety rails: never comment on appearance, income or diagnosis; refusal and escalation</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Preserve the tested scope boundary — Dating Guru does not mediate or score</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Keep the "never use the word contract in identifiers or copy" naming rule in all new UI — now asserted by tests</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Evidence trail: timestamp, IP, device and consent version stored immutably — only the timestamp is kept</td><td class="st"><span class="pill part">Partial</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Guru hub screen — one next action, at most two cards, and everything else one link away. A stage gate someone raised outranks all of it</td><td class="st"><span class="pill done">Done</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Replace the "[Guru synthesis stub]" with real weekly report generation</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Guru mediation output: two-sided and non-blaming when a difference is shared — the stage gate now reports a gap as a shared position ("not in the same place") and never quotes or attributes either person</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Date prep screen: attire, grooming, gift suggestions, conversation topics</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Venue selection within the distance and budget bands the clauses promise</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Define exactly what lapses when the Guru subscription lapses</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Downloadable executed copy of a signed agreement</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+
+<tr class="band"><td><span class="phase">Phase 10 — Journey Stages &amp; Exit</span></td><td>Four Guru pillars: Air &amp; Resolve, Expenses, Mediator, Keep Romance Alive</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Stage gate with both-sides opt-in and gate analysis</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Entry criteria forms for Relationship, Engaged and Married — checked for the couple before a checkpoint can be committed</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Relationship entry sequence: confirm match → mandatory fields → consent, through the shared ceremony</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Stage gate checkpoint UI: ask, answer, pause, sign, verify face, pay — routed through the shared ceremony, charging the fee, with the duplicate signature path removed</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Contact sharing — Instagram, LinkedIn, mobile — mutual opt-in and revocable</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Invite Home flow with its own playbook, guidance and trusted contact</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Post-date branch: continue with the same person / return to the pool / enter Relationship</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Post-date feedback: minimum two green flags, maximum two red — enforced by the route, not just hidden in the UI</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>ROAD listing: routine, obligations, availability, vision</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Engaged and Married stage topics: wedding planning, family integration, festivals, shared calendar</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>16-week Relationship clock and the week-16 checkpoint</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Weekly report screen: sorted versus still-sorting counts, and the gap line</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Guru-initiated gate timing instead of a user-raised gate — either can raise it, but everything after that is Guru's: it composes the questions, holds the answers, and enforces the 12-hour pause before anyone can commit</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Exit flow: reasons, private feedback to Guru, and Guru's read back to the user</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>14-day cool-off countdown, and what the other partner sees during it</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Re-entry: consent acknowledgement, reset to Dating, and which history carries forward</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Asymmetric exit — one partner leaves and the other does not</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Decline handling on a stage gate, and the re-raise window</td><td class="st"><span class="pill part">Partial</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+
+<tr><td><span class="phase">Phase 11 — Safety, Notifications &amp; Data Protection</span></td><td>Counter-signature nudge — the one notification the product cannot work without</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Transactional email, SMS and push channel setup</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>DPDP Act: notice, purpose limitation, consent records, grievance officer</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Encrypt sensitive fields at rest (religion, salary bracket, ethnicity) with tight read scopes</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Retention schedule for BGV documents, exit feedback and pillar notes</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Guru data boundary: what a model call may see, and whether pillar text leaves the platform</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Report and block, and what happens to a signed agreement when someone is blocked</td><td class="st"><span class="pill none">None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td>Trigger map: every scheduled moment to a message, with quiet hours and a daily cap</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>The five notification preference toggles</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Unsubscribe handling across channels, and DLT registration for Indian SMS</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Working delete-my-account, including a partner's half of a shared couple record</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Moderation queue with warn, suspend, remove and refund actions</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Trusted contact: a real contact record and an actual outbound message</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Post-date safety check-in tied to the confirmed slot</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Red-flag escalation threshold — what two red flags from separate partners triggers</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Profile imagery decision: real photos, or initials-on-gradient as a deliberate stance</td><td class="st"><span class="pill none">None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td>Object storage, signed URLs, resizing and moderation on upload</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+<tr><td></td><td>Date evidence photos — the together_photo and bill_photo flags store no file today</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+
+</tbody></table>
+</div>
+
+<div class="note">
+  <strong>Priority guide:</strong> Priority 1 = assess or decide first, and blocks other work · Priority 2 = important next · Priority 3 = maturity improvement · Low = defer until the core product and real-user journey are validated.
+</div>
+
+<h2>Section 2 — Case 1 end-to-end simulation walkthrough</h2>
+<p class="h2sub">All ten segments A–J now run end to end. What is left in this table is refinement, not the walkthrough. <strong>Priority 1 means the walkthrough cannot run without it.</strong></p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Journey Segment</th><th>Step &amp; activity to build</th><th>Today</th><th>Priority&nbsp;1</th><th>Priority&nbsp;2</th><th>Priority&nbsp;3</th><th>Low</th></tr></thead>
+<tbody>
+
+<tr><td><span class="phase">A — Front door<br><em>complete</em></span></td><td><strong>1. Login screen</strong> — phone and email accepted without validation, creating a demo user</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>2. Vision entry</strong> — wizard step 1, with the Intimacy + one-more rule enforced</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>3. Stats entry</strong> — wizard step 2, 17 fields, salary → bracket</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>4. Chemistry entry</strong> — wizard step 3, 12 activities into four buckets</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>5. Finish registration</strong> — writes the user with journey_state = onboarding</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">B — Verification<br><em>complete</em></span></td><td><strong>6. BGV begin</strong> — Age, Nationality, Profession, Salary bracket shown as In review</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>7. BGV verified</strong> — simulated provider callback with all-pass, bracket-fails and all-fail outcomes</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>8. Log in as verified</strong> — the verified user enters the matching pool</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr><td><span class="phase">C — The dating week<br><em>complete</em></span></td><td><strong>9. REACH availability</strong> — pool reach plus the lever list</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>10. Match availability Mon / Tue / Wed</strong> — three-slot rotation with keenness and pass</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>11. Demo clock control</strong> — advance from the screen, plus seven named checkpoints</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>12. Calendar availability</strong> — weekend slots offered and the overlap reconciled</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>13. Lock-in decision recorded</strong> against the chosen match</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">D — Payment (stubbed)<br><em>complete</em></span></td><td><strong>14. Payment link</strong> — fee, what it unlocks, and that no money moves</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>15. Payment confirmed</strong> — writes an entitlement scoped to that date, so the next date charges again</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr><td><span class="phase">E — The ceremony<br><em>component complete,<br>1 of 5 wired</em></span></td><td><strong>16. Dates set</strong> — published slot, partner and venue shown</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>17. Playbook created</strong> — seven clauses auto-filled from both profiles; nothing typed by hand</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>18. Digital signature</strong> — typed name, both parties, one signature confirms nothing</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>19. Face capture</strong> — stub step, retryable, never described as identity verification</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>20. "Enter as verified"</strong> — closes the ceremony and waits on the partner</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>21. Parameterise 17–20 as one reusable component</strong> — five kinds, each scoped so the same kind recurs cleanly</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">F — Post-date<br><em>complete</em></span></td><td><strong>22. Post-date feedback</strong> — two green flags mandatory, two red maximum, on its own screen</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>23. Three-way branch</strong> — continue / back to the pool / enter Relationship, refused before the flags are in</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>24. Growth areas</strong> captured privately, never shown to the partner</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+
+<tr><td><span class="phase">G — Progressive disclosure<br><em>complete</em></span></td><td><strong>25. Request Instagram / LinkedIn / mobile</strong> — request, respond, revoke</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>26. Ceremony #2 — contact share.</strong> Now launched from the escalations flow and required by it: a contact request is free, but revealing a number is refused until <code>both_complete()</code> is true</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>27. Invite Home option</strong> — proposal, guidance, acknowledgement, trusted contact</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>28. Ceremony #3 — home invite.</strong> Wired the same way, and blocked behind ceremony #2 — contact details come before an address does</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>28b. Milestone gating for both.</strong> Both ceremonies now hang off the disclosure milestones. One rule, not two: <code>escalations</code> demanded two dates while disclosure opened at the first — they disagreed, and the first date won</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">H — Relationship stage</span></td><td><strong>29. Entry criteria for Relationship</strong> — extra Stats, Vision, Chemistry and Guru prerequisites, checked for the couple before the checkpoint can be committed</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>30. Ceremony #4 — relationship entry.</strong> The duplicate is retired — <code>/gate/consent</code> now routes into the shared ceremony, and the completed ceremony writes the gate row. One implementation of the rule</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>31. ROAD listed</strong> — routine, obligations, availability, vision</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>32. Guru engaged on four pillars</strong> — Air &amp; Resolve, Expenses, Mediator, Keep Romance Alive</td><td class="st"><span class="pill done">Done</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>33. Weekly report</strong> at the close of the stage week</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+
+<tr><td><span class="phase">I — Engaged &amp; Married</span></td><td><strong>34. Entry criteria for Engaged</strong> plus ceremony #5 — the stage_gate kind, now scoped per checkpoint so the same ceremony recurs cleanly at each one</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>35. Guru pillars in the Engaged stage</strong>, with wedding, family and festival topics layered on</td><td class="st"><span class="pill part">Partial</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr><td></td><td><strong>36. Entry criteria for Married</strong> plus ceremony #6 — the same kind again, a different scope</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>36b. ₹2,999 stage-gate fee</strong> — charged at the checkpoint's own ceremony, so it is connected at both ends rather than sitting in the fee table</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr><td></td><td><strong>37. "Happily Married" closing screen</strong> — deliberately the one screen in the product that asks for nothing</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">J — Demo scaffolding</span></td><td><strong>38. Scripted partner</strong> — a synthetic counterpart mirroring your stats, who always reciprocates</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>39. Demo mode flag</strong> — DEMO_MODE and PAYMENTS_ENABLED, tested in all three combinations</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>40. Reset the walkthrough</strong> — <code>/admin/reset-walkthrough</code> puts a chosen pair back to step 1, clears what the journey wrote, leaves both verified and dating, and returns the clock to Monday noon</td><td class="st"><span class="pill done">Done</span><span class="was">was Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>40b. Find a testable pair</strong> — the admin screen lists mutually-open pairs by running <code>matching.mutual_open()</code> over the live pool, so it cannot drift from the rules the week machine uses. No SQL. <em>The underlying finding stands: only four such pairs exist among 200+ users.</em></td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+<tr class="band"><td></td><td><strong>41. Stage indicator</strong> — a persistent Dating · Relationship · Engaged · Married bar. <em>Deliberately not</em> "step 12 of 37", which invited the question "what are the other twenty-five?" — the confusion it existed to remove</td><td class="st"><span class="pill done">Done</span><span class="was">was None</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+<tr class="band"><td></td><td>Guided-tour captions explaining each screen to a first-time viewer</td><td class="st"><span class="pill none">None</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+
+</tbody></table>
+</div>
+
+<div class="note">
+  <strong>What changed under Segments G–J, and what it cost.</strong> The expensive part really was already done — the ceremony was one component and the milestone table already knew the ordering — so this was wiring, as expected. Three things were not:
+  <ul>
+    <li><strong>Two gates disagreed with each other.</strong> <code>disclosure.py</code> opened contact sharing at the first date; <code>escalations.unlocks_available()</code> demanded two. Both were "the rule". The first date won, and the second rule was deleted rather than reconciled — two rules for one thing is how they drift.</li>
+    <li><strong>Guru had no knowledge of the stage gate at all.</strong> It was a tile in a list of nine, which is why "one of them has raised the next stage" could be the ninth thing you saw. <code>StageGate.raised_by</code> is new; without it Guru cannot say the true sentence about who moved first.</li>
+    <li><strong>Guru asked for a signature on a date that had already happened.</strong> Invisible while nine tiles competed for attention; the whole screen once there is one answer. Cutting the hub down is what surfaced it.</li>
+  </ul>
+</div>
+
+<h2>Section 3 — Your feedback of 4 September, point by point</h2>
+<p class="h2sub">Your words on the left, verbatim. What is deployed on the right. The third column is what the change turned out to cost or reveal — recorded because in three of these the feedback exposed something underneath it.</p>
+<div class="scroll">
+<table>
+<thead><tr><th style="width:32%">What you said</th><th>What it does now</th><th style="width:26%">What it turned up</th></tr></thead>
+<tbody>
+<tr><td>&ldquo;Review and sign the plan — this is not right. If the selections and boundaries are saved, keep it same. Unless someone wants to edit it. But don't keep showing that again. Route it back to Guru.&rdquo;</td><td>A signed plan shows a readback — greeting, dietary notes, dress — with an <strong>Edit</strong> button and a <strong>Back to Guru</strong> button. The form only returns if you ask for it.</td><td>Re-presenting a form for something already done reads as &ldquo;it did not save&rdquo;.</td></tr>
+<tr class="band"><td>&ldquo;Boundaries or greet comes twice. We need to make it only once.&rdquo;</td><td>The greeting is set in one place, <code>/boundaries</code>. The date plan shows what was chosen and links there if it is not set.</td><td>Two fields for one concept, and the agreement only ever read one of them.</td></tr>
+<tr><td>&ldquo;After date — showing boundaries and agreement of understanding doesn't make sense.&rdquo;</td><td>Neither appears on the post-date screen. The evening is over; there is nothing left to agree.</td><td>&mdash;</td></tr>
+<tr class="band"><td>&ldquo;I think request for no and socials can be kept after first date. Maybe post date expectations all of these can be clubbed together.&rdquo;</td><td>One screen, <code>/after-date</code>, with three sections: what you each expect, numbers and socials, and whether this goes further. Contact sharing now unlocks after <em>one</em> date, not two.</td><td>Two gates disagreed about this — disclosure said one date, escalations said two. The first date won.</td></tr>
+<tr><td>&ldquo;Please provide option to go back in most of the screens… especially at Guru. Closing the app is not the solution every screen.&rdquo;</td><td>Every signed-in screen has a labelled back link by default, from the base template. A screen with a better destination overrides it rather than remembering to add one.</td><td>Asserted by a test across the whole route table, so a new screen cannot ship without one.</td></tr>
+<tr class="band"><td>&ldquo;If one of them expressed moving to next stage it should be visible or first thing someone wants to see. All other tabs being visible under guru, doesn't make sense as well. Keep this intuitive rather than with multiple options, which is very confusing.&rdquo;</td><td>A raised stage gate is the first thing on Guru and names who raised it. Guru shows one answer plus at most two cards; everything else is one link away at <code>/guru/everything</code> — moved, not removed.</td><td>Required a new column, <code>StageGate.raised_by</code>: Guru could not otherwise say the true sentence about who moved first.</td></tr>
+<tr><td>&ldquo;I think questions that someone want to ask and themselves answer for stage gate would be good. Also it should be made little back and forth.&rdquo; &nbsp;+&nbsp; &ldquo;People not committing to things or committing too early without thinking is what made me to take up this problem to solve.&rdquo;</td><td>Each of you picks 1&ndash;3 questions. Guru puts each to <strong>both</strong> of you, unattributed. Neither sees the other's words &mdash; a scale gap comes back as &ldquo;you are not in the same place&rdquo;, never as a quote. When both have answered, a <strong>12-hour pause</strong> starts, and committing before it has run is refused by the route, not merely by a disabled button. Asking anything new <em>restarts</em> the pause.</td><td>The pause restarting is the point: a new question means a new thing to think about.</td></tr>
+<tr class="band"><td>&ldquo;I still want this to be through Guru. All stage gates need to be through guru. There is no direct conversation, which is totally avoided as we need to be sure about the messaging and the tone aspects of it so that it is very conducive and collaborative.&rdquo;</td><td>No partner text ever crosses. Guru composes every prompt from a fixed template, relays only which question was asked, and reports comparisons as a shared position rather than two positions.</td><td>Asserted by a test that writes a sentence as one partner and fails if any word of it appears on the other's screen.</td></tr>
+<tr><td>&ldquo;I don't understand this &lsquo;Step 11 of 12 · In a relationship&rsquo;. Just the status is good.&rdquo;</td><td>A Dating &middot; Relationship &middot; Engaged &middot; Married bar. No step count anywhere.</td><td>&ldquo;Step 11 of 12&rdquo; invited the question &ldquo;what are the other eleven?&rdquo; &mdash; the confusion it existed to remove.</td></tr>
+</tbody></table>
+</div>
+<p class="h2sub" style="margin-top:26px;"><strong>And the eight changes listed alongside them.</strong> All eight are deployed.</p>
+<div class="scroll">
+<table>
+<thead><tr><th style="width:34%">Change</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><strong>Digital signature and face capture on the date agreement</strong></td><td>Both, through the shared ceremony — the same component as every other agreement.</td></tr>
+<tr class="band"><td><strong>Debrief opens an hour after the date</strong></td><td><code>dateplan.debrief_opens_hour()</code>; before that the screen says when it opens rather than showing an empty form.</td></tr>
+<tr><td><strong>Exchange socials, and feedback, after the first date</strong></td><td>Both on <code>/after-date</code>, behind the contact-share ceremony. Declining or ignoring a request costs nothing and is never shown to the other person as a rejection.</td></tr>
+<tr class="band"><td><strong>Cancellation penalty</strong></td><td>₹999 inside the notice window, charged and recorded against the canceller. Free outside it, with the reason shown either way.</td></tr>
+<tr><td><strong>Stats mandatory: Age, Education, Nationality, Salary, Profession</strong></td><td>All five mandatory at sign-up and verified through BGV. Raw salary is still never shown — only the bracket.</td></tr>
+<tr class="band"><td><strong>Localise by city</strong></td><td>City drives currency, language ordering and dietary defaults (<code>locale_defaults.py</code>). Defaults and ordering only — the full list stays available, because a Tamil speaker in Kolkata is not an error to be corrected.</td></tr>
+<tr><td><strong>REACH uses only keyed-in filters</strong></td><td>No inferred filters. What you typed is what narrows the pool.</td></tr>
+<tr class="band"><td><strong>Date alignment fields collected later</strong></td><td>Budget, diet and cuisine are asked when there is a date to align, not on the sign-up form — they mean nothing until there is a bill and a table.</td></tr>
+</tbody></table>
+</div>
+<div class="note">
+  <strong>The three schema rules you set, and how each is now enforced.</strong>
+  <ul>
+    <li><strong>All mixed-case PostgreSQL identifiers are consistently quoted.</strong> A static lint fails the build if any table, index or foreign key is declared unquoted, or if the two schema files disagree.</li>
+    <li><strong>Foreign keys and indexes are checked along with table declarations.</strong> Same lint, same run — a table can no longer pass while its index quietly folds to lower case.</li>
+    <li><strong>Schema files are UTF-8 without a BOM.</strong> Checked on every schema file, including <code>drift-check.sql</code>.</li>
+  </ul>
+  And the requirement underneath all three &mdash; <em>&ldquo;the updated code doesn't corrupt anything already done&rdquo;</em> &mdash; is what <code>reconcile_columns()</code> answers: it only ever <strong>adds</strong>. A column that would need NOT NULL without a default is reported and left alone, never guessed at.
+</div>
+
+<h2>Section 4 — Found during the build, not on the original roadmap</h2>
+<p class="h2sub">Things that surfaced while building A–J. Eight are fixed. Nine are open, and none of them appeared anywhere in the original roadmap — which is the point of recording them here rather than in a commit message.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Finding</th><th>What it is, and why it matters</th><th>Today</th><th>Priority&nbsp;1</th><th>Priority&nbsp;2</th><th>Priority&nbsp;3</th><th>Low</th></tr></thead>
+<tbody>
+
+<tr><td><span class="phase">PostgreSQL identifier quoting</span></td><td>29 tables were declared unquoted while every query quoted them. PostgreSQL folds unquoted identifiers to lower case, so the app asked for <code>"Account"</code> and got <code>relation does not exist</code>. It broke the deployment and was invisible locally because every test runs on SQLite, which is case-insensitive. Fixed, and now fenced by a static lint that fails if any table, index or foreign key is declared unquoted, or if the two schema files disagree.</td><td class="st"><span class="pill done">Fixed</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">No test rendered a page</span></td><td>596 passing tests sat on top of a schema that could not be read, because every test exercised a pure module. Route-level tests now boot Flask and drive the client, so a missing template or a guard on the wrong key fails in the suite. Still SQLite — <strong>no test exercises PostgreSQL at all</strong>, which is the gap that let the above through.</td><td class="st"><span class="pill part">Partial</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr><td><span class="phase">The bill clause states something untrue</span></td><td>Clause 3 reads "Both parties declared a ₹1,500–2,500 band" — but <code>budget_estimate</code> comes from a fixed default and is never derived from either person's declared budget. On a real pair (₹₹ and ₹₹₹₹) the agreement asserted a band neither of them chose. Now derived from both declared budgets by <code>date_alignment.lower_budget()</code> — the lower of the two, so nobody is committed to a spend they did not choose.</td><td class="st"><span class="pill done">Fixed</span><span class="was">was Open</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">Cuisine is collected and ignored</span></td><td>Cuisine was added to Stats on your instruction, but the venue and the agreement's cuisine clause are still derived from diet alone. Two people who both picked Thai get "a vegetarian venue".</td><td class="st"><span class="pill none">Open</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+
+<tr><td><span class="phase">A fifth of verified users can match nobody</span></td><td>Distance is modelled city-to-city — 0 km within a city, 120 km or more between any two. But a minority of generated users carry a distance <em>minimum</em> above zero, so no candidate can ever satisfy it. On the deployed data that is roughly 21% of verified users, permanently unmatchable, in every week.</td><td class="st"><span class="pill none">Open</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">Only four pairs can match at all</span></td><td>Across 200+ seeded users, the live database has <strong>four</strong> mutually-open pairs. Even allowing for the distance bug, the filters are far too narrow for the pool size. This is a matching-model question, not a data one — and it is what a real user experiences as "no matches, ever".</td><td class="st"><span class="pill none">Open</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr><td><span class="phase">Two dealbreakers do nothing</span></td><td><code>non_smoker</code> and <code>non_drinker</code> are offered as dealbreakers and are always treated as satisfied. Smoking and drinking are now real Stats fields, so the check can finally be written — until it is, a user who set that dealbreaker is being quietly ignored.</td><td class="st"><span class="pill none">Open</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">The demo clock resets on every deploy</span></td><td>The simulated clock lives in <code>data/sim_state.json</code> on Railway's ephemeral filesystem, so every deploy silently returns the whole simulation to week 1, Monday noon. Mid-demo, that is indistinguishable from a bug. Either mount a volume at <code>/app/data</code> or move the clock into PostgreSQL.</td><td class="st"><span class="pill none">Open</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr><td><span class="phase">The seeded population cannot be reproduced</span></td><td>Every Stats field added since the database was seeded consumes RNG draws, so <code>generate_users.py --seed 42</code> no longer produces the population that is deployed. Nothing can be reasoned about offline any more — the database is the only source of truth. Worth pinning a seed dump, or re-seeding deliberately.</td><td class="st"><span class="pill none">Open</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">smoke_test.py is still broken</span></td><td>It imports a <code>load_users</code> that no longer exists, so it is excluded from every run. A broken test nobody runs is worse than no test — either fix it or delete it.</td><td class="st"><span class="pill none">Open</span></td><td></td><td class="tick p2">✓</td><td></td><td></td></tr>
+
+<tr><td><span class="phase">DATABASE_URL breaks the test suite</span></td><td>With <code>DATABASE_URL</code> set in a shell, the suite silently switches to PostgreSQL and 61 tests fail — the tests assume SQLite. Easy to hit while debugging the deployed database. The suite should either skip or adapt, rather than fail confusingly.</td><td class="st"><span class="pill none">Open</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+
+<tr class="band"><td><span class="phase">Nav crowding, and one sizing bug</span></td><td>Eleven navigation links, most meaningless before a match. Fixed by making Guru the hub — four to six links per stage now, from one milestone table. Also fixed: "Switch user" rendered at roughly twice the size of every link beside it, because <code>font: inherit</code> on a button picks up the nav's font rather than the link class's.</td><td class="st"><span class="pill done">Fixed</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr><td><span class="phase">ISO timestamps in signed copy</span></td><td>A DatePlan's slot was printed raw — <code>2026-01-10T19:30</code> — inside a clause someone is asked to sign. Now rendered as a sentence; the stored value is unchanged.</td><td class="st"><span class="pill done">Fixed</span></td><td></td><td></td><td class="tick p3">✓</td><td></td></tr>
+
+
+<tr class="band"><td><span class="phase">The drift checker had itself drifted</span></td><td><code>drift-check.sql</code> exists to catch columns the deployed database is missing. Its own expected-column list was hand-maintained, and two columns added yesterday never reached it — so it would have reported "clean" on exactly the deploy it was written for. It is generated from <code>schema_postgres.sql</code> now (<code>regen-drift-check.py</code>), and a test fails if the two ever disagree again.</td><td class="st"><span class="pill done">Fixed</span><span class="was">new</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr><td><span class="phase">Twelve tests failed on Windows only</span></td><td>Tests that opened a file-backed SQLite connection and never closed it passed on Linux and failed on Windows with <code>PermissionError WinError 32</code> — an open handle locks the file, so the temporary directory cannot be deleted. Every one was fixed, and a <code>conftest.py</code> guard now fails any test that leaks a connection, naming the file and the fix. 352 file-backed connections across the suite, none leaked.</td><td class="st"><span class="pill done">Fixed</span><span class="was">new</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr class="band"><td><span class="phase">CREATE TABLE IF NOT EXISTS never adds a column</span></td><td>The deeper version of the quoting bug. A column added to the schema file deploys cleanly and then every write to that table fails, because the statement is a no-op on a table that already exists. The obvious workaround — an <code>ALTER</code> run by hand on Railway — is precisely how the live database and the repo stop being the same thing. <code>reconcile_columns()</code> runs from the schema file at start-up on both backends instead. Verified end to end against a real PostgreSQL 16 built from the previous schema: one request, column present, no manual step. <strong>NOT NULL without a DEFAULT is reported, never attempted</strong> — that one genuinely needs a human.</td><td class="st"><span class="pill done">Fixed</span><span class="was">new</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+
+<tr><td><span class="phase">Still no PostgreSQL test in CI</span></td><td>The suite now runs green against a real PostgreSQL server when one is pointed at it, and this release was verified that way by hand. But nothing in CI does it, so the class of bug that broke the deployment twice is still caught only by someone remembering to check. This is the highest-value item left in this section.</td><td class="st"><span class="pill none">Open</span><span class="was">new</span></td><td class="tick p1">✓</td><td></td><td></td><td></td></tr>
+</tbody></table>
+</div>
+
+<div class="note">
+  <strong>The two worth deciding before more building.</strong>
+  <ul>
+    <li><strong>The matching model is too tight.</strong> Four viable pairs in a pool of 200 is not a data-seeding artefact — it is what the filter rules produce. Widening ranges, relaxing the distance model, or making REACH actively push people to widen are all product decisions, and every one of them changes what a user experiences on day one. <em>Unchanged since v2, and now the oldest open item on the list.</em></li>
+    <li><strong>Consent versioning.</strong> The bill clause is fixed, but the underlying problem is not: clauses are regenerated at render time, so nothing records what was actually signed. A document whose whole premise is "this is a readback of what you told us" needs to be able to show what it said on the day.</li>
+  </ul>
+</div>

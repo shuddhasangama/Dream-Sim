@@ -22,6 +22,8 @@ every line except the introspection query.
 
 from __future__ import annotations
 
+import pathlib
+import re
 import sqlite3
 import tempfile
 import unittest
@@ -239,3 +241,36 @@ class RealSchemaTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DriftCheckIsItselfChecked(unittest.TestCase):
+    """The drift checker drifted.
+
+    drift-check.sql exists because CREATE TABLE IF NOT EXISTS is a no-op
+    on an existing table, so a new column deploys cleanly and then every
+    write fails. Its expected-column list was hand-maintained, and
+    round_no and answers_closed_at shipped without ever reaching it — a
+    checker that reports "clean" on exactly the deploy it was written for.
+    It is generated from the schema now; this is what stops it going
+    stale again.
+    """
+
+    def rows_in_drift_check(self):
+        text = pathlib.Path("drift-check.sql").read_text(encoding="utf-8")
+        start = text.index("WITH expected(table_name, column_name) AS (VALUES")
+        end = text.index("\n)", start)
+        return set(re.findall(r"\('([A-Za-z_]+)','([A-Za-z_]+)'\)", text[start:end]))
+
+    def rows_in_schema(self):
+        schema = pathlib.Path("schema_postgres.sql").read_text(encoding="utf-8")
+        return {(table, name)
+                for table, columns in db._expected_columns(schema).items()
+                for name, _decl in columns}
+
+    def test_it_lists_exactly_what_the_schema_declares(self):
+        self.assertEqual(
+            self.rows_in_drift_check(), self.rows_in_schema(),
+            "drift-check.sql is out of date — run `python regen-drift-check.py`")
+
+    def test_the_column_added_today_is_in_it(self):
+        self.assertIn(("StageGate", "raised_by"), self.rows_in_drift_check())

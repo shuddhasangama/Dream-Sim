@@ -80,11 +80,11 @@ class CardGateTests(unittest.TestCase):
         self.assertIn("calendar", keys(MATCHED))
         self.assertNotIn("debrief", keys(MATCHED))
         self.assertIn("debrief", keys(DATE_SET))
-        self.assertNotIn("expectations", keys(DATE_SET))
-        self.assertIn("expectations", keys(AFTER_DATE))
+        self.assertNotIn("after_date", keys(DATE_SET))
+        self.assertIn("after_date", keys(AFTER_DATE))
 
     def test_the_dating_cards_retire_once_exclusive(self):
-        for surface in ("reach", "calendar", "debrief", "escalations", "gate"):
+        for surface in ("reach", "calendar", "debrief", "after_date", "gate"):
             with self.subTest(surface=surface):
                 self.assertNotIn(surface, keys(IN_RELATIONSHIP))
 
@@ -94,16 +94,50 @@ class CardGateTests(unittest.TestCase):
     def test_the_screens_pulled_out_of_the_nav_all_landed_here(self):
         """Expectations, Sharing, the Gate and Vibes stopped being tabs.
         If they had stopped being reachable instead, that is a regression
-        dressed up as a tidy-up."""
+        dressed up as a tidy-up.
+
+        2026-09-04: Expectations, Sharing and Next level stopped being
+        three cards too — they are three sections of /after-date. That is
+        one door instead of three, not three doors closed."""
         after = keys(AFTER_DATE)
-        for surface in ("expectations", "escalations", "gate"):
+        for surface in ("after_date", "gate"):
             self.assertIn(surface, after, surface)
         self.assertIn("vibes", keys(IN_RELATIONSHIP))
 
+    def test_the_clubbed_screen_replaced_three_separate_invitations(self):
+        """user's rule: "post date expectations all of these can be
+        clubbed together"."""
+        after = keys(AFTER_DATE)
+        for surface in ("expectations", "escalations", "next_level"):
+            with self.subTest(surface=surface):
+                self.assertNotIn(surface, after)
+                self.assertTrue(d.is_open(surface, AFTER_DATE),
+                                "still routable, just not a separate card")
+
     def test_the_hub_stays_readable(self):
+        """MAX_CARDS caps what competes with the one answer on /guru.
+        The full list lives at /guru/everything, so this is the cap the
+        SCREEN is held to — see the route test in
+        test_segment_ghij_routes.py."""
         for stage in ALL_STAGES:
             with self.subTest(stage=sorted(stage)):
-                self.assertLessEqual(len(guru.cards(stage)), guru.MAX_CARDS, keys(stage))
+                self.assertLessEqual(len(guru.cards(stage)[:guru.MAX_CARDS]), guru.MAX_CARDS)
+
+    def test_the_full_list_never_grows_back_into_the_old_navigation(self):
+        """Eleven links is what started this. /guru/everything is allowed
+        to be longer than the hub, but not unbounded."""
+        for stage in ALL_STAGES:
+            with self.subTest(stage=sorted(stage)):
+                self.assertLessEqual(len(guru.cards(stage)), 6, keys(stage))
+
+    def test_the_action_link_is_never_also_a_tile(self):
+        """The same door twice, once as the answer and once as a card, is
+        exactly the "multiple options" the review was about."""
+        for stage in ALL_STAGES:
+            action = guru.next_action(stage, facts=ALL_DONE)
+            shown = guru.cards(stage, exclude_endpoint=action["endpoint"])
+            with self.subTest(stage=sorted(stage)):
+                self.assertNotIn(action["endpoint"], [c["endpoint"] for c in shown])
 
     def test_every_card_carries_the_text_the_screen_renders(self):
         for stage in ALL_STAGES:
@@ -200,3 +234,88 @@ class NextActionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GateFirstTests(unittest.TestCase):
+    """2026-09-04, user's rule: "If one of them expressed moving to next
+    stage it should be visible or first thing someone wants to see."
+
+    It used to be the ninth tile down, and next_action() had no knowledge
+    of it at all.
+    """
+
+    OPEN = {**ALL_DONE, "gate_open": True, "partner_name": "Meera"}
+
+    def test_an_open_gate_outranks_everything_else(self):
+        for facts in ({"gate_open": True, "partner_name": "Meera"},   # nothing else done
+                      self.OPEN):                                     # everything else done
+            with self.subTest(facts=sorted(facts)):
+                action = guru.next_action(AFTER_DATE, facts=facts)
+                self.assertEqual(action["endpoint"], "gate_view")
+
+    def test_it_names_who_moved_first(self):
+        action = guru.next_action(AFTER_DATE, facts={**self.OPEN, "gate_raised_by_partner": True})
+        self.assertIn("Meera", action["headline"])
+
+    def test_it_names_nobody_when_they_arrived_together(self):
+        """Both picking "relationship" at the debrief has no single mover,
+        and inventing one would be a lie."""
+        action = guru.next_action(AFTER_DATE, facts={**self.OPEN, "gate_raised_by_partner": False})
+        self.assertNotIn("Meera", action["headline"])
+
+    def test_it_says_something_different_when_your_answers_are_open(self):
+        waiting = guru.next_action(AFTER_DATE, facts={**self.OPEN, "gate_waiting_on_me": True})
+        done = guru.next_action(AFTER_DATE, facts=self.OPEN)
+        self.assertNotEqual(waiting["body"], done["body"])
+        self.assertNotEqual(waiting["cta"], done["cta"])
+
+    def test_it_never_hurries_anyone(self):
+        """user's rule: "People not committing to things or committing too
+        early without thinking is what made me to take up this problem"."""
+        for facts in (self.OPEN,
+                      {**self.OPEN, "gate_waiting_on_me": True},
+                      {**self.OPEN, "gate_nothing_asked_yet": True}):
+            action = guru.next_action(AFTER_DATE, facts=facts)
+            with self.subTest(cta=action["cta"]):
+                for word in ("now", "today", "hurry", "don't wait", "before"):
+                    self.assertNotIn(word, action["cta"].lower())
+
+    def test_a_closed_gate_goes_back_to_the_ordinary_order(self):
+        action = guru.next_action(AFTER_DATE, facts={**ALL_DONE, "gate_open": False})
+        self.assertNotEqual(action["endpoint"], "gate_view")
+
+
+class StaleActionTests(unittest.TestCase):
+    """Guru asked for a signature on a date that had already happened.
+
+    Found while cutting the hub to two cards: with the list short, the
+    wrong answer at the top is the whole screen.
+    """
+
+    AFTER = {"flags_given": False, "decision_made": False, "date_done": True}
+
+    def test_it_does_not_chase_a_signature_for_an_evening_that_is_over(self):
+        action = guru.next_action(AFTER_DATE, facts=self.AFTER)
+        self.assertEqual(action["endpoint"], "debrief_view")
+
+    def test_it_still_chases_one_for_a_date_that_has_not_happened(self):
+        action = guru.next_action(DATE_SET, facts={"date_done": False})
+        self.assertEqual(action["endpoint"], "plan_view")
+
+    def test_a_second_date_asks_for_its_own_signature_again(self):
+        """The plan row is rebuilt per date, so date_done is about THIS
+        date — a couple on their second date signs again."""
+        action = guru.next_action(AFTER_DATE, facts={**ALL_DONE, "date_done": False,
+                                                     "agreement_signed": False})
+        self.assertEqual(action["endpoint"], "plan_view")
+
+
+class CardOrderTests(unittest.TestCase):
+    def test_the_newest_thing_is_the_first_card(self):
+        """Only MAX_CARDS reach the hub. In table order that put the
+        agreement for a date already had above the checkpoint just
+        raised."""
+        shown = [c["surface"] for c in guru.cards(AFTER_DATE)][:guru.MAX_CARDS]
+        self.assertIn("after_date", shown)
+        self.assertIn("gate", shown)
+        self.assertNotIn("plan", shown)

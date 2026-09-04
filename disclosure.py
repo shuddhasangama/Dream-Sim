@@ -124,6 +124,13 @@ SURFACES = [
     # Ceremony's endpoint takes a <kind>, so it can never be a nav link —
     # it is always entered from the thing being agreed to.
     ("ceremony",     "Ceremony",      "ceremony_view",     MATCHED,      None,         False),
+    # 2026-09-04, user's rule: "post date expectations all of these can be
+    # clubbed together". Expectations, sharing and next level were three
+    # separate cards asking the same question — "which of these am I
+    # supposed to open?" — so /after-date is the one screen that holds all
+    # three. The individual surfaces stay routable; they are just no longer
+    # three separate invitations.
+    ("after_date",   "After the date", "after_date_view",  FIRST_DATE,   RELATIONSHIP, False),
     ("expectations", "Expectations",  "expectations_view", FIRST_DATE,   None,         False),
     ("escalations",  "Sharing",       "escalations_view",  FIRST_DATE,   RELATIONSHIP, False),
     # Next Level is OFFERED on a material pace mismatch (next_level.py),

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Everything open — Dare to Dream{% endblock %}
+{% block back %}<a class="backlink" href="{{ url_for('guru_view') }}">‹ Guru</a>{% endblock %}
+{% block content %}
+<div class="eyebrow">Guru · Everything else</div>
+<h1>Every door that is open</h1>
+<div class="lede">
+  Guru shows you one answer at a time on purpose. This is the full list, for when
+  the thing you want is not the thing that is next. These appear and retire on
+  their own as you move through the journey.
+</div>
+
+{% if cards %}
+<div class="guru-cards">
+  {% for card in cards %}
+  <a class="guru-tile" href="{{ url_for(card.endpoint) }}">
+    <span class="guru-tile-code">{{ card.code }}</span>
+    <span class="guru-tile-body">
+      <span class="guru-tile-title">{{ card.title }}</span>
+      <span class="guru-tile-sub">{{ card.subtitle }}</span>
+    </span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="hint">Nothing else is open yet. Doors appear here as you move through the journey.</div>
+</div>
+{% endif %}
+{% endblock %}

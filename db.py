@@ -59,6 +59,7 @@ TABLES = {
     "StageGate",
     "GateResponse",
     "GateAnalysis",
+    "GateAsk",
     # Vision / Chemistry at Relationship entry (docs/relationship-stage-spec.md Part C)
     "VisionEntry",
     "VisionChange",
@@ -71,6 +72,7 @@ CONFLICT_COLUMNS = {
     "Verification": ("user_id", "field"),
     "Payment": ("user_id", "purpose", "scope_id"),
     "Ceremony": ("user_id", "kind", "scope_id"),
+    "GateAsk": ("pair_id", "round_no", "question_key"),
     "RoadProfile": ("user_id", "couple_id"),
     "Playbook": ("couple_id", "stage"),
     "GuruTopic": ("couple_id", "stage", "topic_key"),
