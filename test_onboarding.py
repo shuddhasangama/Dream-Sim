@@ -461,6 +461,12 @@ class BudgetAndEthnicityTests(unittest.TestCase):
         form["budget"] = "about 1500"
         self.assertFalse(onboarding.validate_stats(form)["ok"])
 
+    def test_budget_rejects_unknown_multi_select_values(self):
+        form = _valid_stats()
+        form["budget"] = ["about 1500"]
+        result = onboarding.validate_stats(form)
+        self.assertFalse(result["ok"])
+
     def test_budget_is_separate_from_the_salary_bracket(self):
         """Two people can share an income band and still be uncomfortable
         in each other's restaurants — that is the whole point of the field."""

@@ -235,13 +235,13 @@ class StatsScreenTests(RouteTestCase):
 class MultiSelectCoercionTests(unittest.TestCase):
     def test_ethnicity_caps_at_two(self):
         options = {"ethnicity": ["Indian", "European", "East Asian"]}
-        result = stats_edit.coerce("ethnicity", ["Indian", "European", "East Asian"], {}, options)
+        result = se.coerce("ethnicity", ["Indian", "European", "East Asian"], {}, options)
         self.assertFalse(result["ok"])
         self.assertIn("at most 2", result["error"])
 
     def test_multi_values_are_stored_as_lists(self):
         options = {"languages": ["English", "Hindi"], "cuisine": ["Italian", "Thai"]}
-        result = stats_edit.coerce("languages", ["Hindi", "English"], {}, options)
+        result = se.coerce("languages", ["Hindi", "English"], {}, options)
         self.assertTrue(result["ok"])
         self.assertEqual(result["value"], ["English", "Hindi"])
 

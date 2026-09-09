@@ -567,6 +567,10 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
         raw_budget = [raw_budget]
     budget_options = locale_defaults.budget_bands_for(str(form.get("city", "")).strip())
     chosen_budget = [value for value in budget_options if value in raw_budget]
+    if raw_budget and not chosen_budget:
+        return {"ok": False, "error": "That budget band is not one of the options.", "stats": None}
+    if len(chosen_budget) != len(set(raw_budget)):
+        return {"ok": False, "error": "Choose budget only from the declared bands.", "stats": None}
     if chosen_budget:
         stats["budget"] = chosen_budget
 
