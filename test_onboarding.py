@@ -37,7 +37,7 @@ def _valid_stats() -> dict:
     return {
         "age": "31", "height_cm": "178", "weight_kg": "74", "waist_in": "32",
         "salary": "1800000",
-        "budget": RESTAURANT_BUDGETS[1], "ethnicity": "Indian",
+        "budget": [RESTAURANT_BUDGETS[1]], "ethnicity": ["Indian"],
         "diet": "Everything", "cuisine": ["Italian", "Thai"],
         "smoking": "Never", "drinking": "Socially", "fitness_routine": "2-3 times a week",
         "education": "Master's", "profession": "Engineering",
@@ -474,7 +474,7 @@ class BudgetAndEthnicityTests(unittest.TestCase):
         form["ethnicity"] = "Prefer not to say"
         result = onboarding.validate_stats(form)
         self.assertTrue(result["ok"], result["error"])
-        self.assertEqual(result["stats"]["ethnicity"], "Prefer not to say")
+        self.assertEqual(result["stats"]["ethnicity"], ["Prefer not to say"])
 
     def test_ethnicity_never_becomes_a_matching_filter(self):
         """Declaring your own descent and screening others by theirs are
@@ -486,12 +486,26 @@ class BudgetAndEthnicityTests(unittest.TestCase):
         self.assertEqual(prefs["fixed"]["dealbreakers"], [])
 
     def test_offered_options_match_the_generated_population(self):
-        by_key = {k: opts for k, _, opts in onboarding.OPTIONAL_CHOICE_STATS}
-        # Budget is no longer a plain choice field: its bands come from the
-        # city's currency, so locale_defaults owns the list.
+        by_key = {k: opts for k, _, opts, _hint in onboarding.OPTIONAL_MULTI_STATS}
         import locale_defaults
         self.assertEqual(locale_defaults.budget_bands_for("Chennai"), RESTAURANT_BUDGETS)
         self.assertEqual(by_key["ethnicity"], ETHNICITIES)
+
+    def test_ethnicity_allows_two_but_not_three(self):
+        form = _valid_stats()
+        form["ethnicity"] = ETHNICITIES[:2]
+        self.assertTrue(onboarding.validate_stats(form)["ok"])
+        form["ethnicity"] = ETHNICITIES[:3]
+        result = onboarding.validate_stats(form)
+        self.assertFalse(result["ok"])
+        self.assertIn("at most 2", result["error"])
+
+    def test_budget_is_multi_select(self):
+        form = _valid_stats()
+        form["budget"] = RESTAURANT_BUDGETS[:2]
+        result = onboarding.validate_stats(form)
+        self.assertTrue(result["ok"], result["error"])
+        self.assertEqual(result["stats"]["budget"], RESTAURANT_BUDGETS[:2])
 
 
 class ActivitySortTests(unittest.TestCase):

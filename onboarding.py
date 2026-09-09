@@ -400,7 +400,6 @@ OPTIONAL_CHOICE_STATS = [
     ("drinking", "Drinking", DRINKING),
     ("fitness_routine", "Fitness routine", FITNESS_ROUTINES),
     ("marital_history", "Marital history", MARITAL_HISTORY),
-    ("ethnicity", "Ethnicity", ETHNICITIES),
     ("religion", "Religion", OWN_RELIGIONS),
 ]
 
@@ -417,8 +416,10 @@ DATE_ALIGNMENT_KEYS = ("budget", "diet", "cuisine")
 MULTI_STATS: list[tuple[str, str, list[str], str]] = []
 
 OPTIONAL_MULTI_STATS = [
+    ("ethnicity", "Ethnicity", ETHNICITIES, "choose up to 2"),
     ("languages", "Languages you speak", LANGUAGES_POOL, "pre-filled from your city"),
     ("cuisine", "Cuisine you enjoy", CUISINES, "used to pick a venue you both eat at"),
+    ("budget", "Restaurant budget", RESTAURANT_BUDGETS, "choose one or more acceptable bands"),
 ]
 
 # budget is what someone spends on one meal out, not what they earn — it
@@ -441,7 +442,6 @@ OPTIONAL_STAT_KEYS = (
     [k for k, _, _, _, _, _ in OPTIONAL_NUMERIC_STATS]
     + [k for k, _, _ in OPTIONAL_CHOICE_STATS]
     + [k for k, _, _, _ in OPTIONAL_MULTI_STATS]
-    + ["budget"]
 )
 
 # Salary is mandatory but never stored raw — only the derived band is.
@@ -517,6 +517,8 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
         chosen = [value for value in options if value in raw]
         if not chosen:
             return {"ok": False, "error": f"{label} — pick at least one.", "stats": None}
+        if key == "ethnicity" and len(chosen) > 2:
+            return {"ok": False, "error": "Ethnicity — choose at most 2.", "stats": None}
         stats[key] = sorted(chosen)
 
     # ── the optional half ───────────────────────────────────────────────
@@ -550,14 +552,23 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
         if isinstance(raw, str):
             raw = [raw]
         chosen = [value for value in options if value in raw]
+        if key == "ethnicity" and len(chosen) > 2:
+            return {"ok": False, "error": "Ethnicity — choose at most 2.", "stats": None}
         if chosen:
+            if key == "budget":
+                allowed = locale_defaults.budget_bands_for(str(form.get("city", "")).strip())
+                chosen = [value for value in allowed if value in chosen]
             stats[key] = sorted(chosen)
 
-    budget = str(form.get("budget", "")).strip()
-    if budget:
-        if budget not in locale_defaults.budget_bands_for(str(form.get("city", "")).strip()):
-            return {"ok": False, "error": "That budget band is not one of the options.", "stats": None}
-        stats["budget"] = budget
+    # Budget is a multi-select acceptable range. Keep the city-specific
+    # bands authoritative and preserve their canonical order.
+    raw_budget = form.get("budget") or []
+    if isinstance(raw_budget, str):
+        raw_budget = [raw_budget]
+    budget_options = locale_defaults.budget_bands_for(str(form.get("city", "")).strip())
+    chosen_budget = [value for value in budget_options if value in raw_budget]
+    if chosen_budget:
+        stats["budget"] = chosen_budget
 
     band = bracket_for(form.get("salary"))
     if band is None:

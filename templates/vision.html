@@ -3,6 +3,20 @@
 {% block content %}
 <div class="eyebrow">Additive-only &middot; nothing is ever deleted</div>
 <h1>Your Vision</h1>
+<div class="card">
+  <div class="micro section-label">Your current vision preference</div>
+  {% if signup_visions %}
+  <div class="chip-row" style="margin-top:8px;">
+    {% for v in signup_visions %}
+    <span class="chip">{{ v.key }}{% if v.stance %} · {{ v.stance|join(', ') if v.stance is iterable and v.stance is not string else v.stance }}{% endif %}</span>
+    {% endfor %}
+  </div>
+  <div class="micro" style="margin-top:8px;">This is the preference you gave during onboarding. Details you add below are additive.</div>
+  {% else %}
+  <div class="micro">No vision preference recorded yet.</div>
+  {% endif %}
+</div>
+
 
 {% for key in element_keys %}
 <div class="card">

@@ -113,18 +113,6 @@
         </select>
       </label>
       {% endfor %}
-      <label class="field-cell">
-        <span class="field-label">
-          Restaurant budget <span class="field-unit">{{ locale.currency.code }}</span>
-        </span>
-        <select class="field-input" name="budget">
-          <option value="">Skip for now</option>
-          {% for band in locale.budget_bands %}
-          <option value="{{ band }}" {% if (submitted.get('budget') or saved.get('budget')) == band %}selected{% endif %}>{{ band }}</option>
-          {% endfor %}
-        </select>
-        <span class="field-hint">Priced in {{ locale.currency.name }}, from your city.</span>
-      </label>
     </div>
   </div>
 
@@ -132,7 +120,7 @@
   <div class="card optional-block">
     <div class="section-label">{{ label }} — {{ hint }}</div>
     <div class="chip-row">
-      {% set shown = locale.languages if key == 'languages' else options %}
+      {% set shown = locale.languages if key == 'languages' else (locale.budget_bands if key == 'budget' else options) %}
       {% set preticked = locale.suggested_languages if key == 'languages' else [] %}
       {% for option in shown %}
       <label class="chip-check">

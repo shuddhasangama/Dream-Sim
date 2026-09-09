@@ -200,7 +200,15 @@ def load_pool() -> list[dict]:
 
 def load_user(user_id: str) -> dict | None:
     row = db.fetch_one(get_db(), "User", id=user_id)
-    return from_user_row(row) if row else None
+    if not row:
+        return None
+    user = from_user_row(row)
+    # Normalize legacy preference rows in memory so switching between
+    # users cannot expose an older shape to matching.py.
+    user["preferences"] = _sync_preferences_with_stats(
+        user, user.get("stats") or {}
+    )
+    return user
 
 
 def find_couple_for_user(user_id: str) -> dict | None:
@@ -393,6 +401,28 @@ def humanise_slot(value):
     except ValueError:
         return value
     return f"{stamp:%a} {stamp.day} {stamp:%b}, {stamp:%H:%M}"
+
+
+def _sync_preferences_with_stats(user: dict, stats: dict) -> dict:
+    """Keep REACH's optional stat-backed levers in step with the user's stats.
+    Adding a newly entered body stat unlocks its filter; clearing one removes
+    only that corresponding filter. Existing hand-tuned ranges are preserved."""
+    prefs = json.loads(json.dumps(user.get("preferences") or {}))
+    adjustable = dict(prefs.get("adjustable") or {})
+    defaults = onboarding.default_preferences(stats)["adjustable"]
+    for key in ("height_cm", "weight_kg", "waist_in"):
+        if stats.get(key) is None:
+            adjustable.pop(key, None)
+        elif key not in adjustable:
+            adjustable[key] = defaults[key]
+    if stats.get("religion"):
+        adjustable.setdefault("religion", ["same", "related"])
+    else:
+        adjustable.pop("religion", None)
+    prefs["fixed"] = dict(prefs.get("fixed") or {"dealbreakers": []})
+    prefs["fixed"].setdefault("dealbreakers", [])
+    prefs["adjustable"] = adjustable
+    return prefs
 
 
 def save_preferences(user_id: str, preferences: dict) -> None:
@@ -736,6 +766,13 @@ def reach():
     if reach_locked(user):
         return redirect(url_for("week"))
     pool = load_pool()
+    # Older users may predate one of the current REACH levers. Normalize
+    # only missing preference keys so switching users cannot 500 on legacy
+    # data and the filter is immediately usable.
+    normalized = _sync_preferences_with_stats(user, user.get("stats") or {})
+    if normalized != user.get("preferences"):
+        save_preferences(user["user_id"], normalized)
+        user = load_user(user["user_id"])
     counts = matching.reciprocity_counts(user, pool)
     deltas = [d for d in matching.whatif_deltas(user, pool) if d["lever"] not in _SLIDER_KEYS]
     sliders = build_sliders(user, pool)
@@ -747,6 +784,10 @@ def reach():
 @login_required
 def reach_widen():
     user = current_user()
+    normalized = _sync_preferences_with_stats(user, user.get("stats") or {})
+    if normalized != user.get("preferences"):
+        save_preferences(user["user_id"], normalized)
+        user = load_user(user["user_id"])
     if reach_locked(user):
         return jsonify({"error": "REACH is locked once you're past Dating"}), 403
 
@@ -769,6 +810,10 @@ def reach_widen():
 @login_required
 def reach_set_range():
     user = current_user()
+    normalized = _sync_preferences_with_stats(user, user.get("stats") or {})
+    if normalized != user.get("preferences"):
+        save_preferences(user["user_id"], normalized)
+        user = load_user(user["user_id"])
     if reach_locked(user):
         return jsonify({"error": "REACH is locked once you're past Dating"}), 403
 
@@ -858,6 +903,20 @@ def _get_or_generate_matches(user: dict, pool: list[dict], week: int, clock: clo
             )
         existing = db.fetch_all(get_db(), "Match", user_id=user["user_id"], week=week)
     return sorted(existing, key=lambda r: r["slot"])
+
+
+def _lockin_name_revealed(lockin: dict, user_id: str) -> bool:
+    """Names stay hidden until the date feedback has been filed.
+    The lock-in itself is required by this helper's context."""
+    plan = _dateplan_for_lockin(lockin["id"])
+    if plan is None:
+        return False
+    outcome_row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
+    if not outcome_row:
+        return False
+    outcome = _outcome_from_row(outcome_row)
+    role = "a" if lockin["user_a"] == user_id else "b"
+    return len(outcome.get(f"{role}_green_flags", [])) >= guru_dating.MIN_GREEN_FLAGS
 
 
 def _match_status(row: dict, clock: clock_module.SimulationClock) -> str:
@@ -1077,6 +1136,9 @@ def week():
 
     if active is not None:
         partner = with_view_fields(load_user(_partner_id_in_lockin(active, user["user_id"])))
+        name_revealed = _lockin_name_revealed(active, user["user_id"])
+        if not name_revealed:
+            partner = {**partner, "name": "Your match"}
         plan = _dateplan_for_lockin(active["id"])
         outcome_row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"]) if plan else None
         outcome = _outcome_from_row(outcome_row) if outcome_row else None
@@ -1108,7 +1170,7 @@ def week():
             {
                 "row": row,
                 "status": _match_status(row, clock),
-                "candidate": with_view_fields(candidate),
+                "candidate": {**with_view_fields(candidate), "name": "Your match"},
                 "their_interest_real": row["candidate_id"] in already_interested,
             }
         )
@@ -2207,7 +2269,10 @@ def stats_view():
         rows=rows,
         state=state,
         labels=onboarding.STAT_LABELS,
-        options=onboarding.STAT_OPTIONS,
+        options={
+            **onboarding.STAT_OPTIONS,
+            "budget": locale_defaults.budget_bands_for(user.get("city")),
+        },
         ranges=onboarding.STAT_RANGES,
         units=onboarding.STAT_UNITS,
         discloses=stats_edit.discloses_to_partner(state),
@@ -2245,7 +2310,12 @@ def stats_save():
         if field not in request.form:
             continue
         verdict = stats_edit.editable(field, state)
-        got = stats_edit.coerce(field, request.form.get(field), onboarding.STAT_RANGES)
+        raw_value = (request.form.getlist(field)
+                     if field in {"languages", "cuisine", "ethnicity", "budget"}
+                     else request.form.get(field))
+        option_map = dict(onboarding.STAT_OPTIONS)
+        option_map["budget"] = locale_defaults.budget_bands_for(user.get("city"))
+        got = stats_edit.coerce(field, raw_value, onboarding.STAT_RANGES, option_map)
         if not got["ok"]:
             errors.append(got["error"])
             continue
@@ -2267,6 +2337,9 @@ def stats_save():
 
     if saved:
         row["stats_json"] = json.dumps(stats, ensure_ascii=False)
+        row["preferences_json"] = json.dumps(
+            _sync_preferences_with_stats(user, stats), ensure_ascii=False
+        )
         db.insert_row(get_db(), "User", row)
 
         # In a relationship the change is disclosed rather than blocked.
@@ -2341,7 +2414,13 @@ def vision_view():
     grouped: dict[str, list[dict]] = {}
     for e in entries:
         grouped.setdefault(e["element_key"], []).append(e)
-    return render_template("vision.html", element_keys=vision.VISION_ELEMENT_KEYS, grouped=grouped, changes=changes)
+    return render_template(
+        "vision.html",
+        element_keys=vision.VISION_ELEMENT_KEYS,
+        grouped=grouped,
+        changes=changes,
+        signup_visions=user.get("visions") or [],
+    )
 
 
 @app.route("/vision/add", methods=["POST"])
@@ -4018,7 +4097,11 @@ def align_view():
     error = None
     submitted = None
     if request.method == "POST":
-        form = {**request.form.to_dict(), "cuisine": request.form.getlist("cuisine")}
+        form = {
+            **request.form.to_dict(),
+            "cuisine": request.form.getlist("cuisine"),
+            "budget": request.form.getlist("budget"),
+        }
         submitted = form
         result = date_alignment.validate(form, user.get("city"))
         if result["ok"]:
@@ -4026,6 +4109,9 @@ def align_view():
             stats = json.loads(row["stats_json"])
             stats.update(result["stats"])
             row["stats_json"] = json.dumps(stats, ensure_ascii=False)
+            row["preferences_json"] = json.dumps(
+                _sync_preferences_with_stats(user, stats), ensure_ascii=False
+            )
             db.insert_row(get_db(), "User", row)
             return redirect(url_for("calendar_view"))
         error = result["error"]

@@ -42,12 +42,22 @@
       <label class="field-cell">
         <span class="field-label">{{ labels[row.key] }}</span>
         {% if row.key in options %}
-        <select name="{{ row.key }}">
-          <option value="">Not set</option>
-          {% for option in options[row.key] %}
-          <option value="{{ option }}" {% if row.value|string == option %}selected{% endif %}>{{ option }}</option>
-          {% endfor %}
-        </select>
+          {% if row.key in ('languages', 'cuisine', 'ethnicity', 'budget') %}
+          <input type="hidden" name="{{ row.key }}" value="">
+          <select name="{{ row.key }}" multiple size="{% if row.key == 'ethnicity' %}4{% else %}5{% endif %}">
+            {% for option in options[row.key] %}
+            <option value="{{ option }}" {% if option in (row.value or []) %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+          {% if row.key == 'ethnicity' %}<span class="field-hint">Choose up to 2.</span>{% endif %}
+          {% else %}
+          <select name="{{ row.key }}">
+            <option value="">Not set</option>
+            {% for option in options[row.key] %}
+            <option value="{{ option }}" {% if row.value|string == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
         {% else %}
         <input type="number" inputmode="numeric" name="{{ row.key }}" value="{{ row.value or '' }}"
                min="{{ ranges[row.key][0] }}" max="{{ ranges[row.key][1] }}"

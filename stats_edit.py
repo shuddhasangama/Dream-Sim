@@ -146,27 +146,35 @@ def rows(stats: dict[str, Any], state: dict[str, bool]) -> list[dict[str, Any]]:
     return out
 
 
-def coerce(field: str, raw: str, ranges: dict[str, tuple[int, int]]) -> dict[str, Any]:
-    """Turn one submitted value into what belongs in stats_json.
+def coerce(field: str, raw: Any, ranges: dict[str, tuple[int, int]],
+           options: dict[str, list[str]] | None = None) -> dict[str, Any]:
+    """Coerce one submitted stat into its canonical stored shape.
 
-    2026-09-09 (evening): the stats editor stored whatever the form sent,
-    which is always a string. A saved weight landed as "70", and REACH's
-    slider does `self_value - min` — so the very next screen after saving
-    raised TypeError and returned a 500. The editor wrote a stat the rest
-    of the app could not read.
-
-    Numeric fields become ints and are bounds-checked here rather than
-    trusting the input's min/max, which is a client-side courtesy.
-    Everything else is text and passes through.
-
-    Returns {"ok", "value", "error"}. An empty value clears the field,
-    which is a legitimate thing to do and not an error.
+    Multi-select fields arrive as repeated form values. Validate them
+    server-side, with ethnicity capped at two choices.
     """
+    multi_fields = {"languages", "cuisine", "ethnicity", "budget"}
+    if field in multi_fields:
+        values = raw if isinstance(raw, list) else [raw] if raw is not None else []
+        values = [str(v).strip() for v in values if str(v).strip()]
+        allowed = (options or {}).get(field, [])
+        if not values:
+            return {"ok": True, "value": None, "error": None}
+        if any(v not in allowed for v in values):
+            return {"ok": False, "value": None, "error": f"{field} has an invalid choice."}
+        if field == "ethnicity" and len(set(values)) > 2:
+            return {"ok": False, "value": None, "error": "ethnicity allows at most 2 choices."}
+        return {"ok": True, "value": sorted(set(values)), "error": None}
+
+    if isinstance(raw, list):
+        raw = raw[0] if raw else ""
     raw = (raw or "").strip()
     if raw == "":
         return {"ok": True, "value": None, "error": None}
 
     if field not in ranges:
+        if options and field in options and raw not in options[field]:
+            return {"ok": False, "value": None, "error": f"{field} has an invalid choice."}
         return {"ok": True, "value": raw, "error": None}
 
     try:

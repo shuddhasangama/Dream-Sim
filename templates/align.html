@@ -14,12 +14,16 @@
   <div class="card">
     <div class="section-label">{{ labels.budget }}</div>
     <div class="hint">{{ blurbs.budget }}</div>
-    <select class="field-input" name="budget" style="margin-top:10px;">
-      <option value="">Choose…</option>
+    <div class="chip-row" style="margin-top:10px;">
       {% for band in options.budget %}
-      <option value="{{ band }}" {% if saved.get('budget') == band %}selected{% endif %}>{{ band }}</option>
+      <label class="chip-check">
+        <input type="checkbox" name="budget" value="{{ band }}"
+               {% if band in (saved.get('budget') or []) %}checked{% endif %}>
+        <span>{{ band }}</span>
+      </label>
       {% endfor %}
-    </select>
+    </div>
+    <div class="micro" style="margin-top:6px;">Choose one or more acceptable bands.</div>
   </div>
 
   <div class="card">
