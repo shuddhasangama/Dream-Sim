@@ -37,6 +37,7 @@ TABLES = {
     "Ceremony",
     "Couple",
     "RoadProfile",
+    "StatChange",
     "CalendarEntry",
     "Playbook",
     "Difference",

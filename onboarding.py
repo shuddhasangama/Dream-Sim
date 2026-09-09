@@ -38,6 +38,7 @@ from generate_users import (
     EDUCATION,
     INCOME_BANDS,
     INTIMACY_KINDS,
+    KIDS_ROUTES,
     KIDS_STANCES,
     LANGUAGES_POOL,
     MARITAL_HISTORY,
@@ -193,23 +194,26 @@ VISION_STANCE_AT_SIGNUP = None
 
 # Goals that take no detail at signup, in the order they are offered.
 SIMPLE_GOALS = ["Travel together", "Kids"]
-DETAILED_GOALS = {"Cohabitate": COHABIT_FOCUS}
+DETAILED_GOALS = {"Cohabitate": COHABIT_FOCUS, "Kids": KIDS_ROUTES}
 
 
 def validate_vision(
     intimacy_kinds: list[str],
     other_keys: list[str],
     cohabit_focus: list[str] | None = None,
+    kids_route: list[str] | None = None,
 ) -> dict[str, Any]:
     """Check a submitted vision against the rules above.
 
-    cohabit_focus is only consulted when Cohabitate is among other_keys;
-    picking a focus and then unticking Cohabitate discards it rather than
-    storing a preference for a goal the user did not choose.
+    cohabit_focus and kids_route are only consulted when their goal is
+    among other_keys; picking a detail and then unticking the goal
+    discards it rather than storing a preference for something the user
+    did not choose.
     """
     kinds = [k for k in INTIMACY_KINDS if k in (intimacy_kinds or [])]
     others = [k for k in OTHER_VISION_KEYS if k in (other_keys or [])]
     focus = [f for f in COHABIT_FOCUS if f in (cohabit_focus or [])]
+    routes = [r for r in KIDS_ROUTES if r in (kids_route or [])]
 
     if not kinds:
         return {"ok": False, "error": "Pick at least one kind of intimacy — every vision includes it."}
@@ -219,6 +223,8 @@ def validate_vision(
         return {"ok": False, "error": "Kids needs Physical intimacy selected too. Add it, or drop Kids."}
     if "Cohabitate" in others and not focus:
         return {"ok": False, "error": "Cohabitating means chores, expenses, or both — say which."}
+    if "Kids" in others and not routes:
+        return {"ok": False, "error": "Say how you are open to having kids — pick one or more."}
 
     return {
         "ok": True,
@@ -226,6 +232,7 @@ def validate_vision(
         "intimacy_kinds": sorted(kinds),
         "other_keys": others,
         "cohabit_focus": sorted(focus) if "Cohabitate" in others else [],
+        "kids_route": sorted(routes) if "Kids" in others else [],
     }
 
 
@@ -233,15 +240,17 @@ def build_visions(
     intimacy_kinds: list[str],
     other_keys: list[str],
     cohabit_focus: list[str] | None = None,
+    kids_route: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """The vision_json payload. Call only after validate_vision() passes."""
     focus = sorted(f for f in COHABIT_FOCUS if f in (cohabit_focus or []))
+    routes = sorted(r for r in KIDS_ROUTES if r in (kids_route or []))
+    detail = {"Cohabitate": focus, "Kids": routes}
     visions = [{"key": "Intimacy", "stance": sorted(intimacy_kinds)}]
     for key in OTHER_VISION_KEYS:
         if key not in other_keys:
             continue
-        stance = focus if key == "Cohabitate" else VISION_STANCE_AT_SIGNUP
-        visions.append({"key": key, "stance": stance})
+        visions.append({"key": key, "stance": detail.get(key) or VISION_STANCE_AT_SIGNUP})
     return visions
 
 
@@ -329,6 +338,38 @@ OPTIONAL_STAT_KEYS = (
 
 # Salary is mandatory but never stored raw — only the derived band is.
 MANDATORY_FIELD_LABELS = ("Age", "Education", "Nationality", "Salary", "Profession")
+
+
+# 2026-09-09: the stats editor needs a label and an option list per field.
+# DERIVED from the group tuples above rather than retyped, so a field
+# added to one of them cannot go missing from the editor — that class of
+# hand-kept second list is what let drift-check.sql go stale.
+
+STAT_LABELS: dict[str, str] = {
+    **{key: label for key, label, *_ in NUMERIC_STATS + OPTIONAL_NUMERIC_STATS},
+    **{key: label for key, label, _opts in CHOICE_STATS + OPTIONAL_CHOICE_STATS},
+    **{key: label for key, label, _opts, _hint in MULTI_STATS + OPTIONAL_MULTI_STATS},
+    "income_band": "Salary band",
+    "budget": "Restaurant budget",
+}
+
+STAT_OPTIONS: dict[str, list[str]] = {
+    **{key: list(opts) for key, _label, opts in CHOICE_STATS + OPTIONAL_CHOICE_STATS},
+    **{key: list(opts) for key, _label, opts, _hint in MULTI_STATS + OPTIONAL_MULTI_STATS},
+    "income_band": list(INCOME_BANDS),
+    "budget": list(RESTAURANT_BUDGETS),
+}
+
+# Fields typed rather than picked, with their bounds — the editor renders
+# a number input for these and a select for everything in STAT_OPTIONS.
+STAT_RANGES: dict[str, tuple[int, int]] = {
+    key: (lo, hi) for key, _label, _unit, lo, hi, _ph
+    in NUMERIC_STATS + OPTIONAL_NUMERIC_STATS
+}
+STAT_UNITS: dict[str, str] = {
+    key: unit for key, _label, unit, _lo, _hi, _ph
+    in NUMERIC_STATS + OPTIONAL_NUMERIC_STATS
+}
 
 
 def validate_stats(form: dict[str, Any]) -> dict[str, Any]:

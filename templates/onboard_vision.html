@@ -41,6 +41,21 @@
         <input type="checkbox" name="other_keys" value="Kids" {% if 'Kids' in chosen_others %}checked{% endif %}>
         <span>Kids</span>
       </label>
+      {# 2026-09-09, user's rule: "Underneath kids in Vision include 3
+         sub-options - 'Naturally', 'Surrogacy', 'Adoption'." Same shape
+         as Cohabitate's focus, for the same reason: two people can both
+         want children and mean routes that are years apart. #}
+      <div class="goal-detail">
+        <div class="hint">If you pick Kids — how are you open to having them? Pick as many as apply.</div>
+        <div class="chip-row" style="margin-top:8px;">
+          {% for route in kids_route_options %}
+          <label class="chip-check">
+            <input type="checkbox" name="kids_route" value="{{ route }}" {% if route in chosen_kids_route %}checked{% endif %}>
+            <span>{{ route }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
     </div>
 
     <div class="goal-block">
@@ -62,8 +77,9 @@
     </div>
 
     <div class="hint" style="margin-top:14px;">
-      Travel together and Kids take no detail now. How Kids actually works gets decided later,
-      together, at the Relationship stage — not here, on your own.
+      Travel together takes no detail now. Kids and Cohabitate do, because picking either without
+      saying what you mean says almost nothing — and they are revisited together, at the
+      Relationship stage, once it is a decision rather than a preference.
     </div>
   </div>
 

@@ -107,7 +107,17 @@ class NavTests(unittest.TestCase):
 
     def test_a_new_user_sees_a_short_menu(self):
         labels = self._labels(JUST_REGISTERED)
-        self.assertEqual(labels, ["Dashboard", "Verify", "Vision", "Chemistry"])
+        # 2026-09-09: Stats joins Vision and Chemistry — the three things
+        # you declare at sign-up and can come back to.
+        self.assertEqual(labels, ["Dashboard", "Verify", "Vision", "Chemistry", "Stats"])
+
+    def test_the_three_declared_at_signup_are_all_reachable(self):
+        """Vision and Chemistry had tabs from the start; Stats had no
+        route at all, which is what the user hit."""
+        labels = self._labels(JUST_REGISTERED)
+        for key in ("Vision", "Chemistry", "Stats"):
+            with self.subTest(key=key):
+                self.assertIn(key, labels)
 
     def test_a_verified_user_sees_no_couple_screens(self):
         labels = self._labels(VERIFIED)

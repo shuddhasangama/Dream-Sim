@@ -49,6 +49,15 @@
         {% if back %}<a class="backlink" href="{{ back.url }}">‹ {{ back.label }}</a>{% endif %}
       {% endif %}
       {% endblock %}
+      {# 2026-09-09: a rejected submit that says nothing is worse than one
+         that loses your input, because you cannot even tell it failed.
+         Four screens — chemistry, the gate, the debrief, vision — had no
+         error slot at all. One here covers every screen, including any
+         added later. A template with its own `error` block is unaffected;
+         this reads a different variable. #}
+      {% if remembered and remembered.error %}
+      <div class="card form-error">{{ remembered.error }}</div>
+      {% endif %}
       {% block content %}{% endblock %}
     </main>
   </div>

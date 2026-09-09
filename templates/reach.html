@@ -91,7 +91,10 @@
     </div>
     {% endfor %}
   </div>
-  <a class="btn-secondary" href="{{ url_for('vision_view') }}">Add the missing stats</a>
+  {# 2026-09-09, user's rule: "Add missing stats from 'REACH' takes to
+     'Vision' which is not correct." It did, and Vision is a different
+     screen with none of these fields on it. #}
+  <a class="btn-secondary" href="{{ url_for('stats_view') }}">Add the missing stats</a>
 </div>
 {% endif %}
 {% endblock %}

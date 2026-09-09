@@ -14,6 +14,8 @@ import json
 import unittest
 
 import onboarding
+
+from test_segment_efg_routes import RouteTestCase
 from generate_users import (
     COHABIT_FOCUS,
     DRINKING,
@@ -98,8 +100,9 @@ class VisionRuleTests(unittest.TestCase):
         self.assertFalse(blocked["ok"])
         self.assertIn("Physical", blocked["error"])
 
-        allowed = onboarding.validate_vision(["Emotional", "Physical"], ["Kids"])
-        self.assertTrue(allowed["ok"])
+        allowed = onboarding.validate_vision(
+            ["Emotional", "Physical"], ["Kids"], None, ["Naturally"])
+        self.assertTrue(allowed["ok"], allowed["error"])
 
     def test_unknown_values_are_dropped_not_stored(self):
         result = onboarding.validate_vision(["Emotional", "Telepathic"], ["Travel together", "Yachting"])
@@ -108,14 +111,17 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result["other_keys"], ["Travel together"])
 
     def test_built_visions_match_the_generated_shape(self):
-        visions = onboarding.build_visions(["Physical"], ["Kids", "Travel together"])
+        visions = onboarding.build_visions(
+            ["Physical"], ["Kids", "Travel together"], None, ["Naturally"])
         self.assertEqual(visions[0]["key"], "Intimacy")
         self.assertEqual(visions[0]["stance"], ["Physical"])
-        for entry in visions[1:]:
-            self.assertIn(entry["key"], OTHER_VISION_KEYS)
-            # Kids and Travel together carry no detail at signup; Kids is
-            # set later at /road/vision, once the couple reaches Relationship.
-            self.assertIsNone(entry["stance"])
+        by_key = {v["key"]: v["stance"] for v in visions[1:]}
+        for key in by_key:
+            self.assertIn(key, OTHER_VISION_KEYS)
+        # 2026-09-09: Kids now carries its route, the way Cohabitate
+        # carries its focus. Travel together still takes no detail.
+        self.assertEqual(by_key["Kids"], ["Naturally"])
+        self.assertIsNone(by_key["Travel together"])
 
 
 class CohabitateFocusTests(unittest.TestCase):
@@ -139,10 +145,12 @@ class CohabitateFocusTests(unittest.TestCase):
     def test_focus_is_discarded_when_cohabitate_is_not_chosen(self):
         """Unticking Cohabitate must not leave a preference behind for a
         goal the user did not pick."""
-        result = onboarding.validate_vision(["Physical"], ["Kids"], ["Chores split"])
-        self.assertTrue(result["ok"])
+        result = onboarding.validate_vision(
+            ["Physical"], ["Kids"], ["Chores split"], ["Naturally"])
+        self.assertTrue(result["ok"], result["error"])
         self.assertEqual(result["cohabit_focus"], [])
-        visions = onboarding.build_visions(["Physical"], ["Kids"], ["Chores split"])
+        visions = onboarding.build_visions(
+            ["Physical"], ["Kids"], ["Chores split"], ["Naturally"])
         self.assertNotIn("Cohabitate", [v["key"] for v in visions])
 
     def test_unknown_focus_values_are_dropped(self):
@@ -151,12 +159,51 @@ class CohabitateFocusTests(unittest.TestCase):
 
     def test_built_cohabitate_stance_is_a_sorted_list(self):
         visions = onboarding.build_visions(
-            ["Physical"], ["Cohabitate", "Kids", "Travel together"], ["Expenses sharing", "Chores split"]
+            ["Physical"], ["Cohabitate", "Kids", "Travel together"],
+            ["Expenses sharing", "Chores split"], ["Surrogacy", "Adoption"],
         )
         by_key = {v["key"]: v["stance"] for v in visions}
         self.assertEqual(by_key["Cohabitate"], sorted(COHABIT_FOCUS))
-        self.assertIsNone(by_key["Kids"])
+        self.assertEqual(by_key["Kids"], ["Adoption", "Surrogacy"])
         self.assertIsNone(by_key["Travel together"])
+
+
+class KidsRouteTests(unittest.TestCase):
+    """2026-09-09, user's rule: "Underneath kids in Vision include 3
+    sub-options - 'Naturally', 'Surrogacy', 'Adoption'."
+
+    Same shape as Cohabitate's focus, and for the same reason: two people
+    can both want children and mean routes years and lakhs apart."""
+
+    def test_kids_without_a_route_is_refused(self):
+        result = onboarding.validate_vision(["Physical"], ["Kids"], None, [])
+        self.assertFalse(result["ok"])
+        self.assertIn("how you are open to having kids", result["error"])
+
+    def test_any_single_route_is_enough(self):
+        for route in onboarding.KIDS_ROUTES:
+            with self.subTest(route=route):
+                self.assertTrue(
+                    onboarding.validate_vision(["Physical"], ["Kids"], None, [route])["ok"])
+
+    def test_all_three_together_are_allowed(self):
+        """Not exclusive on purpose — someone open to more than one route
+        is exactly who this distinction matters most for."""
+        result = onboarding.validate_vision(
+            ["Physical"], ["Kids"], None, list(onboarding.KIDS_ROUTES))
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["kids_route"], sorted(onboarding.KIDS_ROUTES))
+
+    def test_a_route_is_discarded_when_kids_is_not_chosen(self):
+        result = onboarding.validate_vision(
+            ["Physical"], ["Travel together"], None, ["Adoption"])
+        self.assertTrue(result["ok"], result["error"])
+        self.assertEqual(result["kids_route"], [])
+
+    def test_unknown_routes_are_dropped(self):
+        result = onboarding.validate_vision(
+            ["Physical"], ["Kids"], None, ["Adoption", "Cloning"])
+        self.assertEqual(result["kids_route"], ["Adoption"])
 
     def test_travel_together_alone_needs_no_detail(self):
         result = onboarding.validate_vision(["Emotional"], ["Travel together"], [])
@@ -492,3 +539,45 @@ class AccountRowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RetainOnFailureTests(RouteTestCase):
+    """2026-09-09, user's rule: "Retain/remember selections if 'Continue
+    to Stats' fails."
+
+    The step re-rendered from the saved draft — which validation had just
+    declined to write — so a rejected submit came back blank and the
+    error read as "start again" rather than "fix this one thing".
+    """
+
+    def post_vision(self, **form):
+        return self.client.post("/onboarding/vision", data=form).get_data(as_text=True)
+
+    def test_a_rejected_submit_keeps_what_was_ticked(self):
+        body = self.post_vision(intimacy_kinds=["Emotional"], other_keys=["Kids"])
+        self.assertIn("Kids needs Physical", body)
+        # both of their choices survive the rejection
+        self.assertIn('value="Emotional" checked', body.replace(" >", ">"))
+        self.assertIn('value="Kids" checked', body.replace(" >", ">"))
+
+    def test_it_keeps_the_sub_options_too(self):
+        body = self.post_vision(intimacy_kinds=["Emotional"], other_keys=["Kids"],
+                                kids_route=["Adoption"])
+        self.assertIn('value="Adoption" checked', body.replace(" >", ">"))
+
+    def test_a_rejected_submit_beats_an_older_saved_draft(self):
+        """Save a valid vision, come back, submit something invalid. The
+        newer rejected answer is still the most recent thing they said."""
+        self.client.post("/onboarding/vision", data={
+            "intimacy_kinds": ["Physical"], "other_keys": ["Travel together"]})
+        body = self.post_vision(intimacy_kinds=[], other_keys=["Cohabitate"])
+        self.assertIn('value="Cohabitate" checked', body.replace(" >", ">"))
+        self.assertNotIn('value="Travel together" checked', body.replace(" >", ">"))
+
+    def test_the_stats_step_already_kept_its_input(self):
+        """It read `submitted` before `saved` all along — asserted so the
+        two steps cannot drift apart again."""
+        body = self.client.post("/onboarding/stats", data={
+            "city": "Bangalore", "age": "34"}).get_data(as_text=True)
+        self.assertIn('value="34"', body)
+        self.assertIn('value="Bangalore" selected', body.replace(" >", ">"))

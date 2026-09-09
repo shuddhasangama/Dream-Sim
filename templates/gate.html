@@ -88,7 +88,8 @@
   <form method="post" action="{{ url_for('gate_ask') }}">
     <div class="day-picker" style="margin-top:10px;">
       {% for q in conversation.askable[:8] %}
-      <label class="day-check"><input type="checkbox" name="question_key" value="{{ q.key }}">{{ q.text }}</label>
+      <label class="day-check"><input type="checkbox" name="question_key" value="{{ q.key }}"
+             {% if q.key in (remembered.fields.get('question_key') or []) %}checked{% endif %}>{{ q.text }}</label>
       {% endfor %}
     </div>
     <button type="submit" class="btn-secondary">Put these to us both</button>

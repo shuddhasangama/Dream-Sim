@@ -516,6 +516,21 @@ CREATE TABLE IF NOT EXISTS VisionChange (
     guru_conversation_id  TEXT
 );
 
+-- 2026-09-09: a stat changed INSIDE a relationship, always disclosed to
+-- the partner. Modelled on VisionChange above, including its rule that
+-- there is no undisclosed variant — while dating the stats are frozen
+-- instead (see stats_edit.py), so this only ever holds relationship-stage
+-- changes.
+CREATE TABLE IF NOT EXISTS StatChange (
+    id                    TEXT PRIMARY KEY,
+    user_id               TEXT NOT NULL REFERENCES User(id),
+    field                 TEXT NOT NULL,
+    from_value            TEXT NOT NULL,
+    to_value              TEXT NOT NULL,
+    declared_at           TEXT NOT NULL,
+    disclosed_to_partner  INTEGER NOT NULL CHECK (disclosed_to_partner = 1)
+);
+
 -- { id, user_id, key, value, updated_at } — freely editable
 -- (chemistry.py upserts by (user_id, key)), unlike Vision above.
 CREATE TABLE IF NOT EXISTS ChemistryEntry (

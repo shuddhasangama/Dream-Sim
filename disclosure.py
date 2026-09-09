@@ -103,6 +103,12 @@ SURFACES = [
     ("verify",       "Verify",        "verify_view",       REGISTERED,   VERIFIED,     True),
     ("vision",       "Vision",        "vision_view",       REGISTERED,   None,         True),
     ("chemistry",    "Chemistry",     "chemistry_view",    REGISTERED,   None,         True),
+    # 2026-09-09, user's rule: "There is no way to edit or update the
+    # Stats. Please make this available." A tab, beside Vision and
+    # Chemistry — the other two things you declared at sign-up and can
+    # revisit. What is editable WHEN is stats_edit.py's business, not
+    # this table's: the screen is always reachable.
+    ("stats",        "Stats",         "stats_view",        REGISTERED,   None,         True),
     # REACH and the weekly rotation are the DATING machine. Once a couple
     # is exclusive they are not just unused, they are the wrong thing to
     # be offering, so both retire rather than lingering.
@@ -178,6 +184,7 @@ PARENT: dict[str, str | None] = {
     "verify":       "dashboard",
     "vision":       "dashboard",
     "chemistry":    "dashboard",
+    "stats":        "dashboard",
     "reach":        "dashboard",
     "week":         "dashboard",
     "guru":         "dashboard",

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Your stats — {{ session_user_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Your file · Stats</div>
+<h1>Your stats</h1>
+<div class="lede">
+  {# 2026-09-09, user's rule: "if someone is working on diet who can change
+     their weight or waist or dietary etc. This should be editable until
+     there is no matches available or keenness expressed. Cause we don't
+     want stats to change between the match and date."
+
+     Everything is shown, editable or not. A field that quietly is not
+     there reads as a bug; a field with the reason beside it reads as a
+     rule. stats_edit.py decides which. #}
+  {% if state.in_relationship %}
+    Change whatever you like. Anything you change here is shown to your partner —
+    not as an alert, as a line on the record.
+  {% elif state.keenness %}
+    One of you has said yes, so your stats are held until the date is done.
+    They open again afterwards.
+  {% elif state.live_match %}
+    Someone is looking at your profile this week. What is on your match card is
+    held until that window closes; everything else is yours to change now.
+  {% else %}
+    Nobody is looking right now, so this is the moment to bring these up to date.
+  {% endif %}
+</div>
+
+{% set open_rows = rows | selectattr('editable') | list %}
+{% set held_rows = rows | rejectattr('editable') | list %}
+
+<div class="card">
+  <div class="section-label">Yours to change</div>
+  {% if not open_rows %}
+  <div class="hint">Nothing is editable right now. It opens again after the date.</div>
+  {% endif %}
+  {% for row in open_rows %}
+  <form method="post" action="{{ url_for('stats_set') }}" class="stat-edit-row">
+    <input type="hidden" name="field" value="{{ row.key }}">
+    <span class="stat-edit-label">{{ labels[row.key] }}</span>
+    {% if row.key in options %}
+    <select name="value">
+      <option value="">Not set</option>
+      {% for option in options[row.key] %}
+      <option value="{{ option }}" {% if row.value == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+    {% else %}
+    <input type="number" name="value" value="{{ row.value or '' }}"
+           min="{{ ranges[row.key][0] }}" max="{{ ranges[row.key][1] }}"
+           placeholder="{{ units[row.key] }}">
+    {% endif %}
+    <button type="submit" class="btn-secondary">Save</button>
+  </form>
+  {% endfor %}
+</div>
+
+{% if held_rows %}
+<div class="card">
+  <div class="section-label">Held right now</div>
+  {% for row in held_rows %}
+  <div class="stat-held">
+    <div class="stat-held-top">
+      <span>{{ labels[row.key] }}</span>
+      <span>{{ row.value if row.value is not none and row.value != '' else '—' }}</span>
+    </div>
+    <div class="micro">{{ row.reason }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if discloses and changes %}
+<div class="card">
+  <div class="section-label">What your partner has been shown</div>
+  <div class="hint">Every change since you became exclusive. There is no undisclosed version of this.</div>
+  <div class="stat-rows" style="margin-top:8px;">
+    {% for c in changes %}
+    <div class="stat-row">
+      <span>{{ labels.get(c.field, c.field) }}</span>
+      <span>{{ c.from_value or '—' }} → {{ c.to_value or '—' }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

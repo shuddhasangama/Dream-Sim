@@ -35,6 +35,7 @@ import demo
 import disclosure
 import escalations
 import expectations
+import form_memory
 import gate_conversation
 import guru
 import guru_dating
@@ -49,6 +50,7 @@ import onboarding
 import outcomes
 import payments
 import progress
+import stats_edit
 import stage_gate
 import vision
 from generate_users import COHABIT_FOCUS, KIDS_STANCES, from_user_row, to_user_row
@@ -280,7 +282,39 @@ def inject_globals():
         # than from whatever each template remembered to write. A view
         # whose parent depends on context passes back_to=, which wins.
         "back_link": _back_link(),
+        # 2026-09-09: what a rejected submit is re-filled from. Present on
+        # every render so a template can use it without its route having
+        # to remember to pass it.
+        "remembered": _recall_form(),
     }
+
+
+def _remember_form(error: str | None = None, endpoint: str | None = None):
+    """Keep this submission so the screen it goes back to can re-fill it.
+
+    Call immediately before the redirect on a failed submit. The form is
+    read straight off the request, so a route does not have to assemble
+    its own copy, and multi-value fields survive as lists.
+    """
+    fields = {k: (v if len(v) > 1 else v[0])
+              for k, v in request.form.to_dict(flat=False).items()}
+    session["form_memory"] = form_memory.capture(
+        endpoint or (request.endpoint or ""), fields, error)
+
+
+def _recall_form() -> dict:
+    """What to re-fill the screen being rendered, and why it came back.
+
+    One-shot: reading it clears it, so a form is remembered for exactly
+    one render. Without that, a rejected submit would keep re-appearing
+    on every later visit to the same screen.
+    """
+    memory = session.get("form_memory")
+    endpoint = (request.endpoint or "").split(".")[-1]
+    got = form_memory.recall(memory, endpoint)
+    if got["recalled"]:
+        session.pop("form_memory", None)
+    return got
 
 
 def _back_link() -> dict | None:
@@ -1404,7 +1438,14 @@ def plan_feedback_flags():
 
     captured = guru_dating.capture_flags(request.form.getlist("green_flags"), request.form.getlist("red_flags"))
     if not captured["meets_minimum"]:
-        return redirect(url_for("week"))
+        # Two bugs, not one: the flags were dropped silently, and the
+        # failure path hardcoded "week" while the success path honours
+        # the form's own back field — so a rejected submit also threw you
+        # off the debrief screen.
+        _remember_form(
+            f"Pick at least {guru_dating.MIN_GREEN_FLAGS} green flags before this can be filed.",
+            endpoint=_feedback_back())
+        return redirect(url_for(_feedback_back()))
 
     my_role = "a" if active["user_a"] == user["user_id"] else "b"
     existing = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
@@ -1865,7 +1906,14 @@ def gate_ask():
     result = gate_conversation.validate_asks(
         request.form.getlist("question_key"), [a["question_key"] for a in asks])
     if not result["ok"]:
-        return redirect(url_for("gate_view", asked="invalid"))
+        # `asked=invalid` was read by nothing — gate_view never looked at
+        # request.args — so exceeding the cap cleared the chips and said
+        # nothing at all.
+        _remember_form(result.get("error")
+                       or f"Pick between {gate_conversation.MIN_ASKS_PER_ROUND} and "
+                          f"{gate_conversation.MAX_ASKS_PER_ROUND} questions.",
+                       endpoint="gate_view")
+        return redirect(url_for("gate_view"))
 
     round_no = gate.get("round_no") or 1
     clock = get_clock()
@@ -2101,6 +2149,112 @@ def gate_enter_relationship():
 #    Part C, docs/intimacy-expectations-spec.md Part A) ─────────────────────
 
 
+def _stats_situation(user: dict) -> dict:
+    """The three facts stats_edit.py decides on, read from the world.
+
+    live_match  a candidate has been revealed to this user this week and
+                the window has not closed. Somebody is deciding on these
+                stats right now.
+    keenness    either side has said yes — their interest in you, yours
+                in them, or a lock-in that came of it. Holds through the
+                date, which is the window the user asked us to protect.
+    """
+    week = get_week_number()
+    mine = db.fetch_all(get_db(), "Match", user_id=user["user_id"], week=week)
+    theirs = db.fetch_all(get_db(), "Match", candidate_id=user["user_id"], week=week)
+    clock = str(get_clock())
+
+    keenness = (
+        any(m["action"] == "interest" for m in mine)
+        or any(m["action"] == "interest" for m in theirs)
+        or _my_active_lockin(user["user_id"]) is not None
+    )
+    now = _clock_hours(get_clock())
+    def still_open(match):
+        closes = clock_module.SimulationClock.parse(week, match["window_closes_at"])
+        return _clock_hours(closes) > now
+
+    live = any(m["action"] == "none" and still_open(m) for m in mine + theirs)
+
+    return stats_edit.situation(
+        in_relationship=user["journey_state"] in disclosure.RELATIONSHIP_STATES,
+        keenness=keenness,
+        live_match=live,
+    )
+
+
+@app.route("/stats")
+@login_required
+def stats_view():
+    """Edit your stats — 2026-09-09, the user's rule: "There is no way to
+    edit or update the Stats. Please make this available."
+
+    What is editable and when is stats_edit.py's decision, not this
+    route's. Everything is shown either way: a field you cannot change
+    right now is shown WITH the reason, because a stat that quietly is
+    not there reads as a bug.
+    """
+    user = current_user()
+    state = _stats_situation(user)
+    return render_template(
+        "stats.html",
+        rows=stats_edit.rows(user["stats"] or {}, state),
+        state=state,
+        labels=onboarding.STAT_LABELS,
+        options=onboarding.STAT_OPTIONS,
+        ranges=onboarding.STAT_RANGES,
+        units=onboarding.STAT_UNITS,
+        discloses=stats_edit.discloses_to_partner(state),
+        missing=[f for f in stats_edit.ALL_FIELDS if not (user["stats"] or {}).get(f)],
+        changes=db.fetch_all(get_db(), "StatChange", user_id=user["user_id"]),
+    )
+
+
+@app.route("/stats/set", methods=["POST"])
+@login_required
+def stats_set():
+    """Write one field, if it is editable right now.
+
+    Re-checked here rather than trusting the screen: a disabled input is
+    a suggestion, and this is the rule the user actually asked for.
+    """
+    user = current_user()
+    field = (request.form.get("field") or "").strip()
+    value = (request.form.get("value") or "").strip()
+    if field not in stats_edit.ALL_FIELDS:
+        return redirect(url_for("stats_view"))
+
+    state = _stats_situation(user)
+    verdict = stats_edit.editable(field, state)
+    if not verdict["editable"]:
+        _remember_form(verdict["reason"], endpoint="stats_view")
+        return redirect(url_for("stats_view"))
+
+    row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
+    stats = json.loads(row["stats_json"])
+    before = stats.get(field)
+    if str(before or "") == value:
+        return redirect(url_for("stats_view"))
+
+    if value:
+        stats[field] = value
+    else:
+        stats.pop(field, None)
+    row["stats_json"] = json.dumps(stats, ensure_ascii=False)
+    db.insert_row(get_db(), "User", row)
+
+    # In a relationship the change is disclosed rather than blocked —
+    # the user's rule: "While they are in relationship or dating stats
+    # can change. Which can be captured and also notified to their
+    # match." VisionChange is the precedent, disclosure and all.
+    if stats_edit.discloses_to_partner(state):
+        record = stats_edit.change_record(
+            user["user_id"], field, before, value, str(get_clock()))
+        db.insert_row(get_db(), "StatChange", {"id": uuid.uuid4().hex[:12], **record})
+
+    return redirect(url_for("stats_view"))
+
+
 @app.route("/vision")
 @login_required
 def vision_view():
@@ -2137,6 +2291,8 @@ def vision_declare_change():
     to_value = (request.form.get("to_value") or "").strip()
     disclosed = "disclosed" in request.form
     if not (element_key and from_value and to_value):
+        _remember_form("A declared change needs the element, what it was, and what it is now.",
+                       endpoint="vision_view")
         return redirect(url_for("vision_view"))
     try:
         row = vision.declare_vision_change(
@@ -2198,6 +2354,9 @@ def chemistry_set_activities():
     submitted = {a: b for a, b in submitted.items() if b}
     result = onboarding.validate_activities(submitted)
     if not result["ok"]:
+        # Sorting twelve activities and losing all of it to a silent
+        # redirect was the worst instance of this in the app.
+        _remember_form(result["error"], endpoint="chemistry_view")
         return redirect(url_for("chemistry_view"))
     row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
     row["skills_json"] = json.dumps(onboarding.build_skills(result["activities"]), ensure_ascii=False)
@@ -2300,6 +2459,11 @@ def chemistry_set():
     key = (request.form.get("key") or "").strip()
     value = (request.form.get("value") or "").strip()
     if not key or not value:
+        # The success path honours `back`; this early return did not, so a
+        # blank submit bounced you from /expectations onto /chemistry.
+        back = request.form.get("back")
+        if back in ("boundaries_view", "expectations_view", "vibes_view"):
+            return redirect(url_for(back))
         return redirect(url_for("chemistry_view"))
     row = chemistry.set_entry(user["user_id"], key, value, str(get_clock()),
                               _clock_hours(get_clock()))
@@ -2950,24 +3114,40 @@ def onboard_vision():
     requires Physical — the same rules generate_users enforces."""
     draft = _draft()
     error = None
+    submitted = None
 
     if request.method == "POST":
+        # 2026-09-09, user's rule: "Retain/remember selections if
+        # 'Continue to Stats' fails." On a failed validation this used to
+        # fall through to `draft.get("vision")` — which validation had
+        # just declined to write — so the screen came back empty and the
+        # error read as "start again" rather than "fix this one thing".
+        submitted = {
+            "intimacy_kinds": request.form.getlist("intimacy_kinds"),
+            "other_keys": request.form.getlist("other_keys"),
+            "cohabit_focus": request.form.getlist("cohabit_focus"),
+            "kids_route": request.form.getlist("kids_route"),
+        }
         result = onboarding.validate_vision(
-            request.form.getlist("intimacy_kinds"),
-            request.form.getlist("other_keys"),
-            request.form.getlist("cohabit_focus"),
+            submitted["intimacy_kinds"],
+            submitted["other_keys"],
+            submitted["cohabit_focus"],
+            submitted["kids_route"],
         )
         if result["ok"]:
             draft["vision"] = {
                 "intimacy_kinds": result["intimacy_kinds"],
                 "other_keys": result["other_keys"],
                 "cohabit_focus": result["cohabit_focus"],
+                "kids_route": result["kids_route"],
             }
             _save_draft(draft)
             return redirect(url_for("onboard_stats"))
         error = result["error"]
 
-    saved = draft.get("vision") or {}
+    # What they just sent beats what was last saved. A rejected submission
+    # is still the most recent thing they said.
+    saved = submitted if submitted is not None else (draft.get("vision") or {})
     return render_template(
         "onboard_vision.html",
         **_onboarding_context(
@@ -2979,6 +3159,8 @@ def onboard_vision():
             chosen_others=saved.get("other_keys", []),
             cohabit_focus_options=onboarding.COHABIT_FOCUS,
             chosen_focus=saved.get("cohabit_focus", []),
+            kids_route_options=onboarding.KIDS_ROUTES,
+            chosen_kids_route=saved.get("kids_route", []),
         ),
     )
 
@@ -3090,6 +3272,7 @@ def onboard_finish():
             draft["vision"]["intimacy_kinds"],
             draft["vision"]["other_keys"],
             draft["vision"].get("cohabit_focus"),
+            draft["vision"].get("kids_route"),
         )
         user_row = onboarding.build_user_row(
             user_id=user_id,
@@ -3119,6 +3302,7 @@ def onboard_finish():
                 draft["vision"]["intimacy_kinds"],
                 draft["vision"]["other_keys"],
                 draft["vision"].get("cohabit_focus"),
+                draft["vision"].get("kids_route"),
             ),
             skills=onboarding.build_skills(draft["activities"]),
             bucket_labels={b[0]: b[2] for b in onboarding.BUCKETS},
@@ -3529,6 +3713,11 @@ def ceremony_step(kind):
         if ceremony.next_step(state) == ceremony.SIGN:
             # Refused — a blank name or an unticked term. Say which rather
             # than bouncing them back to an unchanged page with no reason.
+            # The ticked terms come back; the typed name does not (see
+            # form_memory.NEVER_REMEMBER — re-filling a signature would
+            # mean the second attempt was signed by the first attempt's
+            # keystrokes).
+            _remember_form(endpoint="ceremony_view")
             return redirect(url_for("ceremony_view", kind=kind, unsigned="1"))
     elif step == ceremony.FACE:
         # Reuses the existing stub rather than adding a second one. A fresh
@@ -3708,8 +3897,10 @@ def align_view():
         return redirect(url_for("week"))
 
     error = None
+    submitted = None
     if request.method == "POST":
         form = {**request.form.to_dict(), "cuisine": request.form.getlist("cuisine")}
+        submitted = form
         result = date_alignment.validate(form, user.get("city"))
         if result["ok"]:
             row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
@@ -3729,7 +3920,11 @@ def align_view():
         labels=date_alignment.LABELS,
         blurbs=date_alignment.BLURBS,
         options={f: date_alignment.options_for(f, user.get("city")) for f in date_alignment.FIELDS},
-        saved=user["stats"],
+        # 2026-09-09: the same bug /onboarding/vision had. validate()
+        # rejects on the FIRST missing field, so picking budget and diet
+        # and forgetting cuisine used to wipe all three — this re-renders
+        # from what was sent, not from stats it declined to write.
+        saved={**(user["stats"] or {}), **(submitted or {})},
         partner_name=display_name(partner_id, (partner or {}).get("gender", "female")),
         partner_pending=date_alignment.missing((partner or {}).get("stats", {})),
     )

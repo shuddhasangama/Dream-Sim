@@ -37,7 +37,8 @@
           {% for bucket_id, glyph, label in buckets %}
           <label class="bucket-pick" title="{{ label }}">
             <input type="radio" name="act__{{ activity }}" value="{{ bucket_id }}"
-                   {% if chosen.get(activity) == bucket_id %}checked{% endif %}>
+                   {# 2026-09-09: a rejected sort used to lose all twelve. #}
+                   {% if remembered.fields.get('act__' + activity, chosen.get(activity)) == bucket_id %}checked{% endif %}>
             <span class="bucket-glyph b-{{ bucket_id }}">{{ glyph }}</span>
           </label>
           {% endfor %}

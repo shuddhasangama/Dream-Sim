@@ -75,6 +75,16 @@ OTHER_VISION_KEYS = ["Kids", "Cohabitate", "Travel together"]
 # both says almost nothing, so its focus IS captured at signup. It stays
 # in VISION_STANCE_OPTIONS so it can still be revised at Relationship.
 KIDS_STANCES = ["Have kids & want more", "Have kids & don't want more", "Want kids", "Don't want kids"]
+
+# 2026-09-09, user's rule: "Underneath kids in Vision include 3
+# sub-options - 'Naturally', 'Surrogacy', 'Adoption'." This revises the
+# note above for Kids the same way 2026-09-03 revised it for Cohabitate:
+# "Kids" on its own turns out to say almost nothing, because two people
+# can both want children and mean routes to them that are years and
+# tens of lakhs apart. Pick one or more — they are not exclusive, and
+# people who are open to more than one route are the ones for whom this
+# matters most.
+KIDS_ROUTES = ["Naturally", "Surrogacy", "Adoption"]
 INTIMACY_KINDS = ["Emotional", "Physical"]  # 2026-08-28: Sexual removed at the user's request
 COHABIT_FOCUS = ["Chores split", "Expenses sharing"]
 

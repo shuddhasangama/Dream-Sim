@@ -115,7 +115,11 @@
   <form method="post" action="{{ url_for('ceremony_step', kind=kind) }}">
     {% for ack in acks %}
     <label class="term">
-      <input type="checkbox" name="acks" value="{{ ack.key }}" required>
+      {# 2026-09-09: re-ticked from the rejected attempt. The signature
+         itself is deliberately NOT re-filled — see
+         form_memory.NEVER_REMEMBER. #}
+      <input type="checkbox" name="acks" value="{{ ack.key }}" required
+             {% if ack.key in (remembered.fields.get('acks') or []) %}checked{% endif %}>
       <span>
         <span class="term-label">{{ ack.label }}</span>
         <span class="term-body">{{ ack.term }}</span>

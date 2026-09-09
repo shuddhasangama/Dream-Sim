@@ -7,3 +7,9 @@ __pycache__/
 # job once and are not part of the application.
 commit-*.cmd
 commit-message*.txt
+
+# Where the browser drops the zips and docs from a Claude session. Not
+# source, and the zips are ~1.5MB each. Added 2026-09-09 after an
+# extract would otherwise have reverted this line and swept a zip into
+# the next `git add -A`.
+Claude outputs/
