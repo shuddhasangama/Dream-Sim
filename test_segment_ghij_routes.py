@@ -302,11 +302,19 @@ class DemoScaffoldingTests(PairCase):
         self.assertNotIn("of 12", body)
 
     def test_every_signed_in_screen_has_a_way_back(self):
-        """2026-09-04, user's rule: "Closing the app is not the solution"."""
-        for path in ("/guru", "/week", "/dashboard", "/vision", "/chemistry"):
+        """2026-09-04, user's rule: "Closing the app is not the solution".
+
+        The Dashboard is the exception, and was the bug: it linked to
+        itself, because the rule was "every screen" rather than "every
+        screen that was opened from somewhere"."""
+        for path in ("/guru", "/week", "/vision", "/chemistry"):
             with self.subTest(path=path):
                 body = self.client.get(path).get_data(as_text=True)
                 self.assertIn("backlink", body)
+
+    def test_the_dashboard_does_not_link_to_itself(self):
+        body = self.client.get("/dashboard").get_data(as_text=True)
+        self.assertNotIn("backlink", body)
 
 
 if __name__ == "__main__":
@@ -453,9 +461,26 @@ class AfterDateScreenTests(PairCase):
         body = self.client.get("/after-date").get_data(as_text=True)
         self.assertIn("Read and sign", body)
 
-    def test_it_reports_expectations_progress(self):
+    def test_numbers_come_first_and_intimacy_last(self):
+        """2026-09-09, user's rule: "reorder the sequence with 'Numbers
+        and social' first and 'Intimacy' last. Again lets help people
+        take this up gradually. Don't want to scare women away with few
+        questions outright."
+
+        Asserted by position on the rendered page, because the numbering
+        alone would still pass if the cards were laid out backwards."""
         body = self.client.get("/after-date").get_data(as_text=True)
-        self.assertIn("0/5", body)
+        order = [body.index(s) for s in
+                 ("Numbers and socials", "Whether this goes further",
+                  "What you each expect")]
+        self.assertEqual(order, sorted(order), "sections are out of order")
+
+    def test_nothing_on_it_is_presented_as_owed(self):
+        """A progress counter on intimacy questions after one meeting
+        reads as a form to finish. It is not one."""
+        body = self.client.get("/after-date").get_data(as_text=True)
+        self.assertNotIn("0/5", body)
+        self.assertIn("none of it is needed before a second date", body)
 
     def test_it_has_a_way_back_to_guru(self):
         body = self.client.get("/after-date").get_data(as_text=True)

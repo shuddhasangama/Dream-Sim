@@ -2,16 +2,23 @@
 {% block title %}Expectations — Dare to Dream{% endblock %}
 {% block content %}
 <div class="eyebrow">After your first date</div>
-<h1>What you each expect</h1>
+<h1>What you expect</h1>
 <div class="lede">
-  These open now, and not before, because they are questions between two people who have met.
-  Everything here is editable at any time — expectations genuinely change.
+  {# 2026-09-09, user's rule: "We don't want to burden the user, not corner
+     them to answer, but help them pace out details to be answered."
+     Five questions on one screen after one meeting is a form. One
+     question, then its follow-up, then a third a day later, is a
+     conversation. expectations.py decides which of them is showing. #}
+  Yours alone. {% if has_partner %}Your match never sees these{% else %}Nobody else sees these{% endif %} —
+  they shape what Guru asks and when, nothing more. Answer one, or none;
+  they stay editable, because expectations genuinely change.
 </div>
 
 {% if mismatch and mismatch.mismatch %}
 <div class="card form-error">{{ mismatch.message }}</div>
 {% endif %}
 
+{# ── 1. Pace, and the two questions that belong to it ────────────────── #}
 <div class="card">
   <div class="section-label">Pace of physical intimacy</div>
   <form method="post" action="{{ url_for('chemistry_set') }}" class="chip-row" style="margin-top:10px;">
@@ -24,11 +31,47 @@
     </button>
     {% endfor %}
   </form>
+
+  {# 2026-09-09, user's rule: "'How much it matters to you' ... somehow
+     seems misplaced. Doesn't tie it to Pace of physical intimacy."
+     It was a card of its own, so it read as a fifth unrelated question.
+     It is the "why" of the answer directly above it, and it appears only
+     once there is an answer to explain. #}
+  {% if pacing.has_pace %}
+  <div class="follow-up">
+    <div class="follow-up-tie">Because you chose
+      <strong>{{ by_key['intimacy_pace']|replace('_', ' ') }}</strong></div>
+
+    <div class="section-label" style="margin-top:12px;">How much does that matter to you?</div>
+    <div class="hint">In your own words. It is what Guru reads back if the two of you turn out to want different things.</div>
+    <form method="post" action="{{ url_for('chemistry_set') }}">
+      <input type="hidden" name="key" value="intimacy_importance">
+      <input type="hidden" name="back" value="expectations_view">
+      <input class="field-input" type="text" name="value" maxlength="120"
+             value="{{ by_key.get('intimacy_importance', '') }}" placeholder="Optional">
+      <button type="submit" class="btn-secondary" style="margin-top:10px;">Save</button>
+    </form>
+
+    <div class="section-label" style="margin-top:16px;">Anything else you want on the record</div>
+    <form method="post" action="{{ url_for('chemistry_set') }}">
+      <input type="hidden" name="key" value="intimacy_notes">
+      <input type="hidden" name="back" value="expectations_view">
+      <input class="field-input" type="text" name="value" maxlength="240"
+             value="{{ by_key.get('intimacy_notes', '') }}" placeholder="Optional">
+      <button type="submit" class="btn-secondary" style="margin-top:10px;">Save</button>
+    </form>
+  </div>
+  {% endif %}
 </div>
 
+{# ── 2. Health openness — a pace, and then a day ─────────────────────── #}
+{% if pacing.health_open %}
 <div class="card">
   <div class="section-label">Openness to discussing sexual health and contraception</div>
-  <div class="hint">Whether you are willing to have the conversation — never what your answers are.</div>
+  <div class="hint">
+    Whether you are willing to have the conversation — never what your answers are.
+    Nobody is shown this except as a yes or no to talking about it.
+  </div>
   <form method="post" action="{{ url_for('chemistry_set') }}" class="chip-row" style="margin-top:10px;">
     <input type="hidden" name="key" value="health_openness">
     <input type="hidden" name="back" value="expectations_view">
@@ -41,25 +84,14 @@
   </form>
 </div>
 
-<div class="card">
-  <div class="section-label">How much it matters to you</div>
-  <form method="post" action="{{ url_for('chemistry_set') }}">
-    <input type="hidden" name="key" value="intimacy_importance">
-    <input type="hidden" name="back" value="expectations_view">
-    <input class="field-input" type="text" name="value" maxlength="120"
-           value="{{ by_key.get('intimacy_importance', '') }}" placeholder="In your own words">
-    <button type="submit" class="btn-primary" style="margin-top:10px;">Save</button>
-  </form>
+{% elif pacing.has_pace %}
+<div class="card waiting-card">
+  <div class="section-label">One more, tomorrow</div>
+  <div class="hint">
+    There is a third question about what you are open to discussing. It opens
+    about a day after the one above, on purpose — a question that appears the
+    moment you answer the last one is a form advancing, and this is not a form.
+  </div>
 </div>
-
-<div class="card">
-  <div class="section-label">Anything else you want on the record</div>
-  <form method="post" action="{{ url_for('chemistry_set') }}">
-    <input type="hidden" name="key" value="intimacy_notes">
-    <input type="hidden" name="back" value="expectations_view">
-    <input class="field-input" type="text" name="value" maxlength="240"
-           value="{{ by_key.get('intimacy_notes', '') }}" placeholder="Optional">
-    <button type="submit" class="btn-primary" style="margin-top:10px;">Save</button>
-  </form>
-</div>
+{% endif %}
 {% endblock %}

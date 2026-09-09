@@ -31,9 +31,18 @@
    before signing, is not one you have agreed to. #}
 <div class="card">
   <div class="section-label">The playbook</div>
+  {# 2026-09-09: this claimed every clause is filled from the pair's own
+     data. True of the date agreement, which is a readback; false of the
+     other four, whose terms are the same for everyone. Claiming it
+     anyway is the bill-clause mistake in a different place. #}
   <div class="hint" style="margin-bottom:14px;">
-    Every clause below is filled from what you and your match already told us. This is a readback,
-    not a negotiation — and it is a guideline between two people, not a legal instrument.
+    {% if kind == "date_agreement" %}
+    Every clause below is filled from what you and your match already told us — a readback, not a
+    negotiation.
+    {% else %}
+    These terms are the same for everyone, and they do not change once signed.
+    {% endif %}
+    This is a guideline between two people, not a legal instrument.
   </div>
   {% for c in clauses %}
   <div class="clause">
@@ -44,6 +53,37 @@
     </div>
   </div>
   {% endfor %}
+
+  {# ── signatures ───────────────────────────────────────────────────
+     2026-09-09, user's rule: "this needs to have digital signature of
+     both parties at the bottom." A party who has not signed is shown
+     as awaited rather than left out — the empty half is the half that
+     tells you where this stands. #}
+  {% if signatories %}
+  <div class="signature-block">
+    <div class="section-label">Signed by</div>
+    {% for s in signatories %}
+    <div class="signature-party{% if not s.complete %} awaiting{% endif %}">
+      <div class="signature-name">
+        {% if s.signed_name %}{{ s.signed_name }}{% else %}{{ s.name }}{% endif %}
+      </div>
+      <div class="signature-meta">
+        {% if s.complete %}
+          Signed {{ s.signed_at }}{% if s.face_verified %} · identity check passed{% endif %}
+        {% elif s.signed_name %}
+          Name given, check outstanding
+        {% else %}
+          Not yet signed
+        {% endif %}
+        · {% if s.is_me %}you{% else %}your match{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    <div class="micro" style="margin-top:10px;">
+      Both signatures are required. One on its own takes effect on nothing.
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {% if complete %}

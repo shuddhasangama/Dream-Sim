@@ -30,11 +30,20 @@ MANDATORY_KEYS = (
 )
 
 
-def set_entry(user_id: str, key: str, value: str, updated_at: str) -> dict[str, Any]:
+def set_entry(user_id: str, key: str, value: str, updated_at: str,
+              updated_at_hours: int | None = None) -> dict[str, Any]:
     """The ChemistryEntry row to persist for one key. Freely editable —
     the caller upserts by (user_id, key), overwriting any prior value,
-    unlike vision.py's add-only/declare-only model."""
-    return {"user_id": user_id, "key": key, "value": value, "updated_at": updated_at}
+    unlike vision.py's add-only/declare-only model.
+
+    `updated_at_hours` is the same moment as a flat hour count.
+    expectations.py needs to measure a delay across a week boundary, and
+    "Mon:12" cannot express which Monday. Optional so every existing
+    caller keeps working; a row without it simply has no pacing clock,
+    which reads as "not yet" rather than as an error.
+    """
+    return {"user_id": user_id, "key": key, "value": value,
+            "updated_at": updated_at, "updated_at_hours": updated_at_hours}
 
 
 def prerequisite_met(entries_for_user: list[dict[str, Any]]) -> dict[str, Any]:

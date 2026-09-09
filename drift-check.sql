@@ -229,6 +229,7 @@ WITH expected(table_name, column_name) AS (VALUES
   ('ChemistryEntry','key'),
   ('ChemistryEntry','value'),
   ('ChemistryEntry','updated_at'),
+  ('ChemistryEntry','updated_at_hours'),
   ('NextLevelThread','id'),
   ('NextLevelThread','pair_id'),
   ('NextLevelThread','opened_by'),

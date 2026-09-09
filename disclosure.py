@@ -155,6 +155,101 @@ BY_KEY = {key: (key, label, endpoint, unlocks, retires, nav)
           for key, label, endpoint, unlocks, retires, nav in SURFACES}
 
 
+# ── where "back" goes ─────────────────────────────────────────────────────
+# 2026-09-09, user's rule: "Please check in general whether the return
+# button at each level goes back to appropriate previous screen."
+#
+# Every signed-in screen used to fall back to the Dashboard, which is only
+# correct for the screens actually reached from it. Everything reached
+# from a Guru card sent you to the Dashboard instead of back to Guru, and
+# the ceremony had no way out at all.
+#
+# ONE table, like SURFACES and guru.CARDS. A screen with a single entry
+# point is listed here. A screen with several — the ceremony, the payment
+# screen — cannot be, so its view passes `back_to` and that wins.
+#
+# None means the screen is a destination in its own right (a nav tab, or
+# the Dashboard itself, which must not link to itself).
+
+PARENT: dict[str, str | None] = {
+    # Nav tabs: reached from the navigation, so the Dashboard is a
+    # reasonable parent — except the Dashboard, which would self-link.
+    "dashboard":    None,
+    "verify":       "dashboard",
+    "vision":       "dashboard",
+    "chemistry":    "dashboard",
+    "reach":        "dashboard",
+    "week":         "dashboard",
+    "guru":         "dashboard",
+    "relationship": "dashboard",
+    "journey":      "dashboard",
+
+    # Reached from a Guru card or from Guru's one next action.
+    "align":        "guru_view",
+    "calendar":     "guru_view",
+    "plan":         "guru_view",
+    "debrief":      "guru_view",
+    "gate":         "guru_view",
+    "after_date":   "guru_view",
+    "vibes":        "guru_view",
+    "married":      "guru_view",
+
+    # The three sections of the post-date screen. Opened from there, so
+    # they go back there — not to Guru, which is one level further out.
+    "expectations": "after_date_view",
+    "escalations":  "after_date_view",
+    "next_level":   "after_date_view",
+
+    # Boundaries is reached from the date plan ("set your boundary"), and
+    # the plan is what you are in the middle of when you go there.
+    "boundaries":   "plan_view",
+
+    # The ceremony's parent depends on what is being agreed to, so the
+    # view computes it — see DYNAMIC_PARENT below.
+    "ceremony":     None,
+}
+
+# Surfaces whose parent cannot be a constant because the screen is
+# entered from more than one place. Their views pass `back_to`, which
+# wins over this table.
+#
+# Distinguished from a plain None so the two meanings stay apart: None
+# alone says "this is a destination in its own right" (the Dashboard),
+# and that is not the same claim as "the view knows better than I do".
+
+DYNAMIC_PARENT = {"ceremony"}
+
+
+# Screens with no timing rule of their own, so no place in SURFACES, but
+# which still need a way out. Keyed by endpoint rather than surface key.
+#
+# The onboarding wizard is deliberately absent: it carries its own
+# step-back ("< Back" to the previous step), and a second back link
+# pointing somewhere else would be two different meanings of the word on
+# one screen.
+
+ENDPOINT_PARENT: dict[str, str] = {
+    "guru_all_view":     "guru_view",
+    # ROAD is reached from Journey and from the Relationship pillars.
+    # Journey is where it is listed and counted, so that is the way back.
+    "road_routine":      "journey_view",
+    "road_obligations":  "journey_view",
+    "road_availability": "journey_view",
+    "road_vision":       "journey_view",
+    "admin_pairs":       "dashboard",
+    "admin_reset_week":  "dashboard",
+}
+
+
+def parent_of(key: str) -> str | None:
+    """The endpoint a screen's back link should point at, or None when the
+    screen is a destination in its own right."""
+    return PARENT.get(key)
+
+
+ENDPOINT_TO_KEY = {endpoint: key for key, _l, endpoint, _u, _r, _n in SURFACES}
+
+
 def is_open(key: str, milestones: set[str]) -> bool:
     """Whether this surface is available to a user at these milestones.
     Unknown keys are open — this decides visibility, and a typo here must

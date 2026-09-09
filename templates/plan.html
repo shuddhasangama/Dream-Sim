@@ -8,7 +8,6 @@
   <div class="plan-field-row"><span>Date &amp; time</span><span>{{ plan.datetime }}</span></div>
   <div class="plan-field-row"><span>Meal</span><span>{{ plan.meal|capitalize }}</span></div>
   <div class="plan-field-row"><span>Venue</span><span>{{ plan.venue or "Decide together" }}</span></div>
-  <div class="plan-field-row"><span>Cancellation</span><span>Free with {{ notice_hours }}h notice · {{ cancellation_fee }} inside it</span></div>
   <div class="plan-field-row"><span>Scope</span><span>Single date instance only — expires on completion</span></div>
 </div>
 
@@ -104,7 +103,7 @@
   {% else %}
   <form method="post" action="{{ url_for('plan_sign') }}">
     <div class="ack-row"><input type="checkbox" name="ack_conduct" required> Code of conduct &amp; courtesies</div>
-    <div class="ack-row"><input type="checkbox" name="ack_cancellation" required> Cancellation policy</div>
+    <div class="ack-row"><input type="checkbox" name="ack_cancellation" required> Turning up</div>
     <div class="ack-row"><input type="checkbox" name="ack_not_a_relationship" required> This is not a relationship or a playbook</div>
     <div class="ack-row"><input type="checkbox" name="ack_liability" required> Platform liability</div>
     <button type="submit" class="btn-primary" style="margin-top:12px;">Verify face &amp; sign</button>
@@ -123,21 +122,18 @@
 {% endif %}
 
 
-{% if cancellable %}
-<div class="card">
-  <div class="section-label">Need to cancel?</div>
-  <div class="hint">{{ cancellation.reason }}</div>
-  {% if cancellation.late %}
-  <div class="interest-flag" style="margin-top:10px;">
-    Inside the {{ notice_hours }}-hour window. Cancelling now charges
-    {{ cancellation_fee }} and is recorded against you.
-  </div>
-  {% endif %}
-  <form method="post" action="{{ url_for('plan_cancel') }}">
-    <button type="submit" class="btn-secondary">
-      {% if cancellation.late %}Cancel anyway — {{ cancellation_fee }}{% else %}Cancel this date{% endif %}
-    </button>
-  </form>
-</div>
-{% endif %}
+{# 2026-09-09, user's rule: "Can you please take out the part of
+   Cancellation stated 'Free within 24 hours'... We already have 2 levels
+   of check with someone sharing their availability and then doing a
+   payment option and digital signing for the date. We wouldn't like to
+   suggest or have something for cancellation."
+
+   Both the field row and the "Need to cancel?" card are gone. Offering a
+   free window on the screen where someone is being asked to commit is an
+   invitation to back out, and the product exists because people commit
+   too easily or not at all.
+
+   The consequence has not gone anywhere: clause 8 of the agreement
+   states it, and the charge still applies to a late cancellation or a
+   no-show. Somebody who genuinely cannot attend goes to Guru. #}
 {% endblock %}

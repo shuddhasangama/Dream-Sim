@@ -24,6 +24,7 @@ from pathlib import Path
 from unittest import mock
 
 import ceremony
+import ceremony as ceremony_module
 import db
 import guru_dating
 
@@ -600,11 +601,41 @@ class CancellationTests(RouteTestCase):
         self.client.post("/plan/cancel")
         self.assertNotEqual(db.fetch_one(self.conn, "LockIn", id=self.lock)["status"], "active")
 
-    def test_the_screen_states_the_cost_before_you_click(self):
-        self.set_clock(week=1, day="Sat", hour=10)
-        body = self.client.get("/plan").get_data(as_text=True)
-        self.assertIn("₹999", body)
-        self.assertIn("24-hour window", body)
+    def test_the_plan_screen_never_offers_a_way_out(self):
+        """2026-09-09, user's rule: "We already have 2 levels of check
+        with someone sharing their availability and then doing a payment
+        option and digital signing for the date. We wouldn't like to
+        suggest or have something for cancellation."
+
+        The charge below still applies. What changed is that nothing on
+        the screen where you are being asked to commit advertises the
+        alternative."""
+        for hour, day in ((10, "Sat"), (12, "Thu")):
+            self.set_clock(week=1, day=day, hour=hour)
+            body = self.client.get("/plan").get_data(as_text=True)
+            with self.subTest(day=day):
+                self.assertNotIn("₹999", body)
+                self.assertNotIn("Need to cancel", body)
+                self.assertNotIn("/plan/cancel", body)
+                self.assertNotIn("Free with", body)
+
+    def test_the_consequence_is_still_stated_in_the_agreement(self):
+        """Removing the advertisement is not the same as hiding the term.
+        It is stated once, where terms belong."""
+        clause = next(c for c in ceremony_module.date_clauses(
+            {"cancellation_fee": "₹999", "notice_hours": 24})
+            if c["title"] == "Not turning up")
+        self.assertIn("₹999", clause["body"])
+        self.assertIn("24 hours", clause["body"])
+
+    def test_the_cancel_route_still_works_for_an_assisted_cancellation(self):
+        """Deliberately unreachable from the UI, not deleted. Somebody who
+        genuinely cannot attend goes to Guru, and this is what Guru
+        triggers on their behalf."""
+        self.set_clock(week=1, day="Thu", hour=12)
+        self.assertEqual(self.client.post("/plan/cancel").status_code, 302)
+        self.assertEqual(
+            db.fetch_one(self.conn, "DatePlan", id=self.plan)["status"], "cancelled")
 
     def test_an_unconfirmed_plan_has_nothing_to_cancel(self):
         db.insert_row(self.conn, "DatePlan",

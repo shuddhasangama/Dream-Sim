@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% block title %}After the date — {{ session_user_name }}{% endblock %}
-{% block back %}<a class="backlink" href="{{ url_for('guru_view') }}">‹ Guru</a>{% endblock %}
 {% block content %}
 <div class="eyebrow">Dating · After your first date</div>
 <h1>What opens now</h1>
@@ -9,36 +8,20 @@
      after first date. Maybe post date expectations all of these can be
      clubbed together." Three separate invitations in Guru made this look
      like three decisions to choose between. It is one moment with three
-     parts, so it is one screen. #}
-  You have met {{ partner.name }} once. These three open together, because
-  they are the same conversation: what you each expect, what you are willing
-  to share, and whether this goes further. Nothing here is on a clock.
+     parts, so it is one screen.
+
+     2026-09-09, the follow-up: "reorder the sequence with 'Numbers and
+     social' first and 'Intimacy' last. Again lets help people take this up
+     gradually. Don't want to scare women away with few questions
+     outright." Swapping a number is the smallest of the three steps;
+     opening on intimacy questions after ONE meeting is the largest. The
+     order was exactly backwards. #}
+  You have met {{ partner.name }} once. Start wherever you like, or nowhere —
+  nothing here is on a clock, and none of it is needed before a second date.
 </div>
 
 <div class="card">
-  <div class="section-label">1 · What you each expect</div>
-  <div class="hint">
-    Pace, boundaries, and how openly you will talk about health. Yours only —
-    {{ partner.name }} never sees these, and they stay editable, because
-    expectations genuinely change.
-  </div>
-  <div class="stat-rows" style="margin-top:8px;">
-    {% for key in intimacy_keys %}
-    <div class="stat-row">
-      <span>{{ key|replace('_', ' ')|capitalize }}</span>
-      <span>{% if entries.get(key) %}{{ entries[key]|replace('_', ' ') }}{% else %}—{% endif %}</span>
-    </div>
-    {% endfor %}
-  </div>
-  <div class="action-row">
-    <a class="btn-primary" href="{{ url_for('expectations_view') }}">
-      {% if answered == total %}Review{% else %}Fill these in — {{ answered }}/{{ total }}{% endif %}
-    </a>
-  </div>
-</div>
-
-<div class="card">
-  <div class="section-label">2 · Numbers and socials</div>
+  <div class="section-label">1 · Numbers and socials</div>
   {% if share_ceremony.both_complete %}
   <div class="interest-flag yes">Both of you signed the sharing agreement.</div>
   {% elif share_ceremony.mine_complete %}
@@ -70,7 +53,7 @@
 </div>
 
 <div class="card">
-  <div class="section-label">3 · Whether this goes further</div>
+  <div class="section-label">2 · Whether this goes further</div>
   {% if unlocked %}
   <div class="hint">
     Either of you can start the Next Level conversation. Guru asks; neither of
@@ -82,5 +65,27 @@
   {% else %}
   <div class="hint">Opens once a date's feedback is fully in from both of you.</div>
   {% endif %}
+</div>
+
+<div class="card">
+  <div class="section-label">3 · What you each expect</div>
+  <div class="hint">
+    Pace, and what you are open to talking about later on. Yours only —
+    {{ partner.name }} never sees these, and they stay editable, because
+    expectations genuinely change.
+  </div>
+  <div class="stat-rows" style="margin-top:8px;">
+    {% for key in intimacy_keys %}
+    <div class="stat-row">
+      <span>{{ key|replace('_', ' ')|capitalize }}</span>
+      <span>{% if entries.get(key) %}{{ entries[key]|replace('_', ' ') }}{% else %}—{% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="action-row">
+    <a class="btn-secondary" href="{{ url_for('expectations_view') }}">
+      {% if answered == total %}Review{% else %}Open when you are ready{% endif %}
+    </a>
+  </div>
 </div>
 {% endblock %}

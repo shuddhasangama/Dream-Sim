@@ -34,6 +34,7 @@ import db
 import demo
 import disclosure
 import escalations
+import expectations
 import gate_conversation
 import guru
 import guru_dating
@@ -275,7 +276,57 @@ def inject_globals():
         # the question "what are the other eleven?", which is the very
         # confusion it existed to remove.
         "journey_stage": progress.stage_view(user["journey_state"], reached) if user else None,
+        # 2026-09-09: where "back" goes, from disclosure.PARENT rather
+        # than from whatever each template remembered to write. A view
+        # whose parent depends on context passes back_to=, which wins.
+        "back_link": _back_link(),
     }
+
+
+def _back_link() -> dict | None:
+    """The one back link for this screen: label and url, or None when the
+    screen is a destination in its own right.
+
+    Resolved from the endpoint being rendered, so a new screen inherits a
+    correct link by being listed in disclosure.PARENT — rather than by
+    someone remembering to add one to its template.
+    """
+    endpoint = (request.endpoint or "").split(".")[-1]
+    key = disclosure.ENDPOINT_TO_KEY.get(endpoint)
+    parent = (disclosure.parent_of(key) if key is not None
+              else disclosure.ENDPOINT_PARENT.get(endpoint))
+    if parent is None:
+        return None
+    return _link_to(parent)
+
+
+def _link_to_url(url: str, fallback_label: str = "Back") -> dict:
+    """A back link for a URL we were handed rather than an endpoint.
+
+    The payment screen is entered with ?next=, so the place to go back to
+    is whatever sent you there. Matching the URL to its endpoint lets the
+    link name that screen instead of saying "Back" at everyone; when the
+    match fails the destination is still right, only the label is generic.
+    """
+    try:
+        endpoint, _args = app.url_map.bind("localhost").match(url.split("?")[0])
+        named = _link_to(endpoint)
+        if named is not None:
+            return {"label": named["label"], "url": url}
+    except Exception:
+        pass
+    return {"label": fallback_label, "url": url}
+
+
+def _link_to(endpoint: str) -> dict | None:
+    """Label and url for an endpoint, named as the surface names itself so
+    the link reads as the screen you are going back to."""
+    key = disclosure.ENDPOINT_TO_KEY.get(endpoint)
+    label = disclosure.BY_KEY[key][1] if key in disclosure.BY_KEY else endpoint
+    try:
+        return {"label": label, "url": url_for(endpoint)}
+    except Exception:
+        return None
 
 
 def deterministic_couple_id(user_a_id: str, user_b_id: str) -> str:
@@ -2201,9 +2252,22 @@ def expectations_view():
     if partner_id:
         mismatch = chemistry.on_chemistry_update(entries, db.fetch_all(get_db(), "ChemistryEntry", user_id=partner_id))
 
+    # 2026-09-09: the five questions are a sequence, not a page. Which of
+    # them is showing is expectations.py's decision, from the pace answer
+    # and how long ago it was given — ChemistryEntry.updated_at is
+    # already that timestamp, so nothing new is stored.
+    by_key = {e["key"]: e["value"] for e in entries}
+    pace_row = next((e for e in entries if e["key"] == expectations.PACE), None)
+    pacing = expectations.state(
+        by_key,
+        pace_row["updated_at_hours"] if pace_row else None,
+        _clock_hours(get_clock()),
+    )
+
     return render_template(
         "expectations.html",
-        by_key={e["key"]: e["value"] for e in entries},
+        by_key=by_key,
+        pacing=pacing,
         pace_options=chemistry.INTIMACY_PACE_OPTIONS,
         health_options=chemistry.HEALTH_OPENNESS_OPTIONS,
         mismatch=mismatch,
@@ -2237,7 +2301,8 @@ def chemistry_set():
     value = (request.form.get("value") or "").strip()
     if not key or not value:
         return redirect(url_for("chemistry_view"))
-    row = chemistry.set_entry(user["user_id"], key, value, str(get_clock()))
+    row = chemistry.set_entry(user["user_id"], key, value, str(get_clock()),
+                              _clock_hours(get_clock()))
     db.insert_row(get_db(), "ChemistryEntry", {"id": f"{user['user_id']}:{key}", **row})
     # Back to whichever screen asked. These keys now live on three
     # different surfaces (see disclosure.py), so a single hardcoded
@@ -3245,6 +3310,9 @@ def pay_view(purpose):
         "pay.html",
         view=payments.checkout_view(purpose, scope_id, paid),
         next_url=request.args.get("next") or url_for("week"),
+        # Entered with ?next= from whatever needed paying for, so that is
+        # the way back — not the Dashboard, and not a dead end.
+        back_to=_link_to_url(request.args.get("next") or url_for("week")),
     )
 
 
@@ -3292,6 +3360,39 @@ def _ceremony_scope(kind: str) -> str | None:
     return active["id"]
 
 
+def _ceremony_signatories(peers: list[dict]) -> list[dict]:
+    """Both parties and where each stands, for the block at the foot of
+    the playbook.
+
+    2026-09-09, user's rule: "this needs to have digital signature of both
+    parties at the bottom." An agreement that ends at its last clause
+    shows no evidence it was ever signed — you had to infer it from a
+    banner further up. Ordered with the reader first, and a party who has
+    not signed is shown as awaited rather than omitted, because the empty
+    half is the informative half.
+    """
+    user = current_user()
+    active = _my_active_lockin(user["user_id"])
+    if active is None:
+        return []
+    by_user = {p["user_id"]: p for p in peers}
+    partner_id = _partner_id_in_lockin(active, user["user_id"])
+
+    out = []
+    for user_id, is_me in ((user["user_id"], True), (partner_id, False)):
+        row = by_user.get(user_id)
+        who = load_user(user_id)
+        out.append({
+            "is_me": is_me,
+            "name": with_view_fields(who)["name"] if who else "Your match",
+            "signed_name": (row or {}).get("signed_name"),
+            "signed_at": (row or {}).get("signed_at"),
+            "face_verified": bool((row or {}).get("face_verified")),
+            "complete": bool(row) and ceremony.is_complete(row),
+        })
+    return out
+
+
 def _ceremony_state(kind: str, scope_id: str) -> dict:
     user = current_user()
     row = db.fetch_one(get_db(), "Ceremony", user_id=user["user_id"], kind=kind, scope_id=scope_id)
@@ -3328,6 +3429,14 @@ def _date_ceremony_context(scope_id: str) -> dict:
         "my_diet": (user.get("stats") or {}).get("diet"),
         "their_diet": (partner.get("stats") or {}).get("diet") if partner else None,
         "greeting": greeting,
+        # 2026-09-09: clause 1 names the parties, per the sample
+        # playbook's section 1. An agreement between "First party" and
+        # "Second party" is a template; one with two names on it is an
+        # agreement.
+        "my_name": with_view_fields(user)["name"],
+        "partner_name": with_view_fields(partner)["name"] if partner else None,
+        "cancellation_fee": payments.amount_label(payments.CANCELLATION),
+        "notice_hours": dateplan.CANCELLATION_NOTICE_HOURS,
     }
 
 
@@ -3360,6 +3469,7 @@ def ceremony_view(kind):
 
     return render_template(
         "ceremony.html",
+        back_to=_link_to(CEREMONY_PARENT[kind]),
         kind=kind,
         meta=meta,
         state=state,
@@ -3373,6 +3483,7 @@ def ceremony_view(kind):
         fee_gate=fee_gate,
         fee_label=payments.amount_label(fee_gate) if fee_gate else None,
         face_failed=request.args.get("face") == "failed",
+        signatories=_ceremony_signatories(peers),
         waiting_on_partner=(
             ceremony.is_complete(state)
             and len([p for p in peers if ceremony.is_complete(p)]) < 2
@@ -3444,6 +3555,20 @@ def ceremony_step(kind):
     if face_failed:
         return redirect(url_for("ceremony_view", kind=kind, face="failed"))
     return redirect(url_for("ceremony_view", kind=kind))
+
+
+# 2026-09-09, user's rule: "Again there is no way to go back to where you
+# were before." The ceremony is entered from four different places, so it
+# is the one screen whose parent cannot live in disclosure.PARENT — it
+# depends on what is being agreed to.
+
+CEREMONY_PARENT = {
+    ceremony.DATE_AGREEMENT:     "plan_view",
+    ceremony.CONTACT_SHARE:      "after_date_view",
+    ceremony.HOME_INVITE:        "escalations_view",
+    ceremony.RELATIONSHIP_ENTRY: "gate_view",
+    ceremony.STAGE_GATE:         "gate_view",
+}
 
 
 def _ceremony_pair_state(kind: str, scope_id: str, active: dict) -> dict:
@@ -3614,6 +3739,16 @@ def align_view():
 @login_required
 def plan_cancel():
     """Cancel a confirmed date.
+
+    2026-09-09: NOT LINKED FROM ANY SCREEN, deliberately. The user's rule
+    was "We wouldn't like to suggest or have something for cancellation"
+    — availability and then payment-and-signature are already two
+    deliberate commitments, and offering a way out beside them undoes
+    both. So this is an ASSISTED action: someone who genuinely cannot
+    attend goes to Guru, and this is what gets triggered for them.
+
+    It is unreachable in the UI on purpose. Do not "fix" that by adding
+    a button.
 
     2026-09-04, user's rule: dates are set on Thursday for the weekend, so
     a free cancellation is an invitation to change your mind at everyone

@@ -1319,3 +1319,28 @@ select:focus {
 }
 
 .backlink:hover { color: var(--text-2); }
+
+/* ── the signature block at the foot of a playbook ──────────────────────
+   2026-09-09. Two parties, always both shown; the one who has not signed
+   reads as awaited rather than absent. Deliberately plainer than the
+   cards around it — this is the part of the screen that is standing in
+   for a signed page. */
+.signature-block{margin-top:22px;padding-top:16px;border-top:1px solid var(--border);}
+.signature-party{padding:10px 0;border-bottom:1px dashed var(--border);}
+.signature-party:last-of-type{border-bottom:0;}
+.signature-name{font-family:"Fraunces",Georgia,serif;font-size:19px;font-style:italic;
+  color:var(--white);line-height:1.3;}
+.signature-party.awaiting .signature-name{font-style:normal;font-family:inherit;
+  font-size:15px;color:var(--muted);}
+.signature-meta{font-size:11.5px;color:var(--muted);margin-top:3px;letter-spacing:.02em;}
+
+/* ── a question that belongs to the answer above it ─────────────────────
+   2026-09-09. "How much it matters" read as unrelated when it was a card
+   of its own. Indented and rule-marked so it is visibly subordinate to
+   the pace answer it is asking about. */
+.follow-up{margin-top:16px;padding-left:14px;border-left:2px solid var(--border);}
+.follow-up-tie{font-size:12px;color:var(--muted);letter-spacing:.02em;}
+.follow-up-tie strong{color:var(--text-2);font-weight:600;}
+/* A question that is not here yet. Deliberately flat — it is not an
+   action, and it must not look like one. */
+.waiting-card{opacity:.72;border-style:dashed;}

@@ -111,9 +111,11 @@ ACKS: dict[str, list[tuple[str, str, str]]] = {
         ("ack_conduct", "Code of conduct and courtesies",
          "I will greet them by name, keep my phone face-down, answer honestly, and "
          "respect the greeting preference on the record without comment."),
-        ("ack_cancellation", "Cancellation policy",
-         "I understand that cancelling inside 24 hours of the slot carries a fee, and "
-         "that not turning up is recorded against me."),
+        # 2026-09-09: reworded away from "cancellation policy". The old
+        # label read as a service being offered. It is a consequence.
+        ("ack_cancellation", "Turning up",
+         "I have paid for and am signing a confirmed slot. I understand that not appearing, "
+         "or cancelling inside 24 hours of it, carries a charge and is recorded."),
         ("ack_not_a_relationship", "What this is not",
          "This is one meeting to establish whether a second is warranted. It creates no "
          "relationship, no exclusivity and no expectation beyond the evening."),
@@ -317,9 +319,30 @@ def both_complete(states: list[dict[str, Any]], user_a: str, user_b: str) -> boo
 
 
 def date_clauses(ctx: dict[str, Any]) -> list[dict[str, str]]:
-    """The seven clauses for one date. `ctx` carries the plan's own
-    values; anything missing degrades to a readable placeholder rather
-    than rendering None at someone."""
+    """The date agreement, one clause per numbered section.
+
+    2026-09-09: rebuilt against docs/DatePlaybookSample.pdf, which set out
+    twelve sections against the seven that existed. Payment, safety,
+    verification, dispute resolution, data and term were simply absent.
+
+    Two departures from that document, both decided by the user:
+
+    * CANCELLATION (its section 5) states the consequence and does not
+      advertise the window. "Free with 24 hours' notice" printed on the
+      screen where someone is being asked to commit is an invitation to
+      back out, and the whole product exists because people commit too
+      easily or not at all. The charge still applies; nothing sells it.
+
+    * COMPLIANCE RATING (its section 7) is not written, because there is
+      no rating system. Clause 7 says only what is true: a background
+      check happened at sign-up, and feedback is recorded afterwards. An
+      agreement whose premise is "this is a readback" cannot assert a
+      mechanism that does not exist — the same mistake the bill clause
+      made when it claimed a band nobody had declared.
+
+    `ctx` carries the plan's own values; anything missing degrades to a
+    readable placeholder rather than rendering None at someone.
+    """
     slot = ctx.get("slot", "the agreed slot")
     meal = (ctx.get("meal") or "meal").lower()
     cuisine = ctx.get("cuisine") or "a cuisine you both eat"
@@ -328,38 +351,73 @@ def date_clauses(ctx: dict[str, Any]) -> list[dict[str, str]]:
     my_diet = ctx.get("my_diet") or "as declared"
     their_diet = ctx.get("their_diet") or "as declared"
     greeting = ctx.get("greeting")
+    me = ctx.get("my_name") or "First party"
+    them = ctx.get("partner_name") or "Second party"
+    fee = ctx.get("cancellation_fee") or "a charge"
+    notice = ctx.get("notice_hours") or 24
 
     courtesies = (
-        "Each party shall greet the other by name; keep phones face-down and silent for "
-        "the duration; and answer questions honestly, including “I would rather not say”."
+        "Greet each other by name. Phones face-down and silent throughout. Answer honestly, "
+        "including \u201cI would rather not say\u201d."
     )
     if greeting:
         courtesies = (
-            f"Greeting preference on the record: {greeting.replace('-', ' ')}, to be respected "
-            "without comment. " + courtesies
+            f"Greeting on the record: {greeting.replace('-', ' ')}, respected without comment. "
+            + courtesies
         )
 
     return [
-        {"n": "1", "title": "Purpose",
-         "body": "A single meeting, for the sole purpose of establishing whether a second "
-                 "meeting is warranted. No expectation beyond that is created by this agreement."},
+        {"n": "1", "title": "Who, and what this covers",
+         "body": f"{me} and {them}, for one meeting arranged through Dare to Dream. It sits "
+                 "under the dating-stage understanding between you and creates no relationship, "
+                 "no exclusivity and no commitment beyond the evening itself."},
         {"n": "2", "title": "Time and place",
-         "body": f"{slot} — {meal} at a {cuisine} venue convenient to both parties, confirmed "
-                 "in advance."},
-        {"n": "3", "title": "The bill",
-         "body": f"Both parties declared a {budget} band. The bill shall be settled "
-                 f"{split}, requested at the table, and settled without contest. Neither party "
-                 "shall treat payment as leverage."},
-        {"n": "4", "title": "Dietary terms",
-         "body": f"First party: {my_diet}. Second party: {their_diet}. The venue shall carry "
-                 "options satisfying both. No commentary on the other party's plate."},
-        {"n": "5", "title": "Courtesies", "body": courtesies},
-        {"n": "6", "title": "Exit",
-         "body": "Either party may end the meeting at any point, without further explanation, "
-                 "and shall be seen safely to transport."},
-        {"n": "7", "title": "Confidentiality",
-         "body": "Nothing disclosed at this meeting shall be repeated, screenshotted, or "
-                 "posted. Flags recorded afterwards are visible to Guru only."},
+         "body": f"{slot} \u2014 {meal} at a {cuisine} venue convenient to both of you, confirmed "
+                 "in advance. A public venue, chosen from the slot you both offered."},
+        {"n": "3", "title": "Fees",
+         "body": "The date fee is paid to the platform before this agreement opens, and it is "
+                 "what puts these terms in front of you both. Neither of you sends money to the "
+                 "other, for this booking or because of it."},
+        {"n": "4", "title": "The bill",
+         "body": f"You both declared a {budget} band. The bill is settled {split}, requested at "
+                 "the table, and settled without contest. The method is fixed for this date "
+                 "unless you both agree otherwise beforehand. Neither of you treats payment as "
+                 "leverage."},
+        {"n": "5", "title": "Dietary terms",
+         "body": f"First party: {my_diet}. Second party: {their_diet}. The venue carries options "
+                 "for both. No commentary on the other person's plate."},
+        {"n": "6", "title": "Conduct",
+         "body": courtesies + " Harassment, discrimination and abuse end the meeting and the "
+                 "match. Nothing is recorded, photographed or posted without the other person "
+                 "saying yes first. This meeting is not an occasion to solicit work, money or "
+                 "anything else."},
+        {"n": "7", "title": "Verification, and what happens after",
+         "body": "This match was made on the strength of a background check completed at "
+                 "sign-up, and you each confirm your details are still current. After the date "
+                 "you each record feedback. It goes to Guru, not to each other."},
+        {"n": "8", "title": "Not turning up",
+         "body": f"You have both paid for and signed a confirmed slot. Not appearing, or "
+                 f"cancelling inside {notice} hours of it, carries {fee} and is recorded. If "
+                 "something genuinely prevents you attending, tell Guru rather than the door."},
+        {"n": "9", "title": "Leaving early",
+         "body": "Either of you may end the meeting at any point, without explanation, and is "
+                 "seen safely to transport. This is not the same as not turning up and carries "
+                 "nothing."},
+        {"n": "10", "title": "Safety",
+         "body": "Tell someone outside this app where you are going and when you expect to "
+                 "leave. Anything that worries you \u2014 during or afterwards \u2014 is reported "
+                 "through the app and read by a person."},
+        {"n": "11", "title": "What the platform is",
+         "body": "Dare to Dream introduces people, arranges the slot, and records what you both "
+                 "agree to. It is not at the meeting, does not supervise it, and is not "
+                 "responsible for what either of you does there. You are two adults meeting a "
+                 "stranger; take the ordinary care that deserves. Anything unresolved comes to "
+                 "Guru first."},
+        {"n": "12", "title": "What is shared, and for how long",
+         "body": "Only your names, verified badges and the confirmed venue and time pass between "
+                 "you. Not your contact details, and not where you live. Nothing said at this "
+                 "meeting is repeated, screenshotted or posted. This agreement covers the single "
+                 "date in clause 2 and expires when it is over."},
     ]
 
 
@@ -376,16 +434,26 @@ def clauses_for(kind: str, ctx: dict[str, Any] | None = None) -> list[dict[str, 
         return date_clauses(ctx)
 
     if kind == CONTACT_SHARE:
-        channel = ctx.get("channel") or "the channel requested"
+        # 2026-09-09: this used to interpolate ctx["channel"], which is
+        # never set — the ceremony is scoped to the pair, not to one
+        # handle — so clause 1 rendered "Your the channel requested
+        # becomes visible". The placeholder is gone rather than filled:
+        # one signature covers whichever channels you each accept, so
+        # naming one of them would be the wrong claim even when it read
+        # as a sentence.
         return _simple_clauses([
-            ("What is shared", f"Your {channel} becomes visible to the other party, and theirs "
-                               "to you. Neither is shared until both have signed."),
-            ("Withdrawal", "Either party may revoke at any time. Revoking hides the detail "
-                           "again; it does not un-send anything already sent elsewhere."),
-            ("Use", "Contact details are for contacting each other. They shall not be added to "
-                    "any list, shared onward, or used to find the other party elsewhere."),
-            ("No obligation", "Sharing a channel creates no expectation of a reply, a pace, or "
-                              "a continued exchange."),
+            ("What you are sharing",
+             "Only the handles or numbers you each accept, one at a time. Neither of you sees "
+             "anything until you have both signed."),
+            ("Taking it back",
+             "Either of you can undo this whenever you want. It hides the detail again. It "
+             "cannot unsend a message already sent."),
+            ("What it is for",
+             "Reaching each other. Not for adding to a list, passing on, or looking each other "
+             "up elsewhere."),
+            ("No obligation",
+             "A number is not a promise to reply, to reply quickly, or to keep replying. "
+             "Neither of you owes the other a pace."),
         ])
 
     if kind == HOME_INVITE:

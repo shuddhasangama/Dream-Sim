@@ -36,12 +36,17 @@
     {% endif %}
     <main class="container">
       {# 2026-09-04, user's rule: "Closing the app is not the solution".
-         Every signed-in screen gets a way out by default; a page with a
-         better destination overrides the block rather than remembering to
-         add a link of its own. #}
+         2026-09-09, the follow-up: it has to go back to the screen you
+         actually came from, not to the Dashboard from everywhere.
+
+         Resolved from disclosure.PARENT, so a new screen inherits a
+         correct link by being listed in that one table. A view whose
+         parent depends on context — the ceremony, the payment screen —
+         passes back_to, which wins over the table. #}
       {% block back %}
       {% if session_user %}
-      <a class="backlink" href="{{ url_for('dashboard') }}">‹ Dashboard</a>
+        {% set back = back_to or back_link %}
+        {% if back %}<a class="backlink" href="{{ back.url }}">‹ {{ back.label }}</a>{% endif %}
       {% endif %}
       {% endblock %}
       {% block content %}{% endblock %}

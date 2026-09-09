@@ -24,7 +24,17 @@ def _entry(key: str, value: str = "x") -> dict:
 class SetEntryTests(unittest.TestCase):
     def test_builds_a_row(self) -> None:
         row = set_entry("u_a", "love_language", "words of affirmation", "2026-03-01")
-        self.assertEqual(row, {"user_id": "u_a", "key": "love_language", "value": "words of affirmation", "updated_at": "2026-03-01"})
+        self.assertEqual(row, {"user_id": "u_a", "key": "love_language",
+                               "value": "words of affirmation",
+                               "updated_at": "2026-03-01", "updated_at_hours": None})
+
+    def test_it_carries_a_flat_hour_count_when_given_one(self):
+        """updated_at is "Mon:12" with no week in it, so it cannot
+        measure a delay across a week boundary. expectations.py reads
+        this instead."""
+        row = set_entry("u_a", "intimacy_pace", "slow", "Mon:12", 180)
+        self.assertEqual(row["updated_at_hours"], 180)
+        self.assertEqual(row["updated_at"], "Mon:12")
 
 
 class PrerequisiteMetTests(unittest.TestCase):

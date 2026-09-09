@@ -523,6 +523,12 @@ CREATE TABLE IF NOT EXISTS "ChemistryEntry" (
     key         TEXT NOT NULL,
     value       TEXT NOT NULL,
     updated_at  TEXT NOT NULL,
+    -- 2026-09-09: updated_at is "Mon:12" with no week in it, so it
+    -- cannot measure a delay that crosses a week boundary. This is the
+    -- same flat hour count StageGate.answers_closed_at uses, written
+    -- alongside it rather than replacing it — updated_at is what the
+    -- screens display, this is what the pacing arithmetic reads.
+    updated_at_hours INTEGER,
     UNIQUE (user_id, key)
 );
 

@@ -13,8 +13,11 @@ skip-ahead cases get more attention here than the happy path.
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 import ceremony
+
+from test_segment_efg_routes import RouteTestCase, app_module
 
 
 def fresh(kind=ceremony.DATE_AGREEMENT):
@@ -232,12 +235,76 @@ class ClauseTests(unittest.TestCase):
         for c in ceremony.date_clauses({}):
             self.assertNotIn("None", c["body"])
 
-    def test_a_recorded_greeting_leads_the_courtesies_clause(self):
-        with_greeting = ceremony.date_clauses({"greeting": "no-contact"})
-        without = ceremony.date_clauses({})
-        courtesies = next(c for c in with_greeting if c["title"] == "Courtesies")
-        self.assertIn("no contact", courtesies["body"])
-        self.assertNotIn("no contact", next(c for c in without if c["title"] == "Courtesies")["body"])
+    def test_a_recorded_greeting_leads_the_conduct_clause(self):
+        conduct = lambda ctx: next(c for c in ceremony.date_clauses(ctx)
+                                   if c["title"] == "Conduct")
+        self.assertIn("no contact", conduct({"greeting": "no-contact"})["body"])
+        self.assertNotIn("no contact", conduct({})["body"])
+
+
+class DatePlaybookCoverageTests(unittest.TestCase):
+    """The agreement against docs/DatePlaybookSample.pdf.
+
+    2026-09-09, user's rule: "'Agreement of understanding' is missing the
+    key components listed in the attached pdf." Six of its twelve
+    sections had no clause at all.
+    """
+
+    def clauses(self):
+        return ceremony.date_clauses({})
+
+    def blob(self):
+        return " ".join(c["title"] + " " + c["body"] for c in self.clauses()).lower()
+
+    def test_it_covers_every_section_of_the_sample(self):
+        for topic, needle in [
+            ("parties and scope",   "creates no relationship"),
+            ("date details",        "venue"),
+            ("payment and fees",    "neither of you sends money"),
+            ("bill split",          "settled without contest"),
+            ("cancellation",        "not appearing"),
+            ("code of conduct",     "harassment"),
+            ("verification",        "background check"),
+            ("safety",              "tell someone outside this app"),
+            ("liability",           "does not supervise"),
+            ("dispute resolution",  "comes to guru first"),
+            ("data and privacy",    "not where you live"),
+            ("term",                "expires when it is over"),
+        ]:
+            with self.subTest(section=topic):
+                self.assertIn(needle, self.blob())
+
+    def test_it_never_advertises_a_free_cancellation_window(self):
+        """user's rule: "Can you please take out the part of Cancellation
+        stated 'Free within 24 hours'... We wouldn't like to suggest or
+        have something for cancellation."
+
+        The consequence is stated once. Nothing sells the way out."""
+        blob = self.blob()
+        for phrase in ("free with", "free within", "no fee", "at no charge"):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, blob)
+
+    def test_it_does_not_promise_a_rating_system_that_does_not_exist(self):
+        """The sample's section 7 describes per-date ratings, a standing,
+        and suspension thresholds. None of it is built, and a readback
+        cannot assert a mechanism that is not there."""
+        blob = self.blob()
+        for phrase in ("rating", "rate one another", "suspension", "compliance"):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, blob)
+
+    def test_it_names_both_parties_when_it_knows_them(self):
+        named = ceremony.date_clauses({"my_name": "Arjun", "partner_name": "Meera"})
+        self.assertIn("Arjun", named[0]["body"])
+        self.assertIn("Meera", named[0]["body"])
+
+    def test_leaving_early_is_not_the_same_as_not_turning_up(self):
+        """One carries a charge; the other explicitly carries nothing.
+        Collapsing them would make ending a bad date feel expensive."""
+        by_title = {c["title"]: c["body"] for c in self.clauses()}
+        self.assertIn("carries nothing", by_title["Leaving early"])
+        self.assertIn("recorded", by_title["Not turning up"])
 
     def test_the_relationship_entry_says_what_it_is_not(self):
         blob = " ".join(c["body"] for c in ceremony.clauses_for(ceremony.RELATIONSHIP_ENTRY)).lower()
@@ -266,3 +333,64 @@ class IdentityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SignatureBlockTests(RouteTestCase):
+    """Both parties, at the foot of the playbook.
+
+    2026-09-09, user's rule: "this needs to have digital signature of both
+    parties at the bottom." The agreement ended at its last clause; you
+    had to infer from a banner further up whether anyone had signed.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.login(self.make_user("u1"))
+        self.make_user("u2")
+        self.lock = self.make_lockin("u1", "u2")
+        self.plan = self.make_plan(self.lock, status="confirmed")
+
+    def page(self):
+        return self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}").get_data(as_text=True)
+
+    def sign_as(self, user_id):
+        self.login(user_id)
+        self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
+        self.client.post(f"/ceremony/{ceremony.DATE_AGREEMENT}/step")
+        self.client.post(f"/ceremony/{ceremony.DATE_AGREEMENT}/step", data={
+            "signed_name": f"Name {user_id}",
+            "acks": list(ceremony.ack_keys(ceremony.DATE_AGREEMENT))})
+        with mock.patch.object(app_module.dateplan, "verify_face", return_value=True):
+            self.client.post(f"/ceremony/{ceremony.DATE_AGREEMENT}/step")
+
+    def test_both_parties_appear_before_either_has_signed(self):
+        """The empty half is the informative half — it is how you see
+        this is waiting on someone."""
+        body = self.page()
+        self.assertIn("signature-block", body)
+        self.assertEqual(body.count("signature-party"), 2)
+        self.assertIn("Not yet signed", body)
+
+    def test_a_signature_shows_the_name_that_was_typed(self):
+        self.sign_as("u1")
+        body = self.page()
+        self.assertIn("Name u1", body)
+
+    def test_the_unsigned_half_still_shows_while_waiting(self):
+        self.sign_as("u1")
+        body = self.page()
+        self.assertIn("Not yet signed", body)
+        self.assertIn("your match", body)
+
+    def test_both_signatures_show_once_both_have_signed(self):
+        self.sign_as("u1")
+        self.sign_as("u2")
+        self.login("u1")
+        body = self.page()
+        for name in ("Name u1", "Name u2"):
+            with self.subTest(name=name):
+                self.assertIn(name, body)
+        self.assertNotIn("Not yet signed", body)
+
+    def test_it_says_one_signature_binds_nothing(self):
+        self.assertIn("One on its own takes effect on nothing", self.page())
