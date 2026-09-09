@@ -141,28 +141,94 @@ class StatsScreenTests(RouteTestCase):
         self.assertIn("stats_view", link)
         self.assertNotIn("vision_view", link)
 
-    def test_a_soft_stat_saves(self):
-        self.client.post("/stats/set", data={"field": "smoking", "value": "never"})
-        row = dict(db.fetch_one(self.conn, "User", id="u1"))
+    def test_one_save_writes_every_changed_field(self):
+        """2026-09-09 (evening), user's rule: "Save across each tab makes
+        it too many clicks. Whatever has been changed should be saved.
+        Non one at a time"."""
         import json
-        self.assertEqual(json.loads(row["stats_json"]).get("smoking"), "never")
+        self.client.post("/stats/save", data={
+            "smoking": "Never", "drinking": "Socially", "weight_kg": "72"})
+        stats = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
+        self.assertEqual(stats.get("smoking"), "Never")
+        self.assertEqual(stats.get("drinking"), "Socially")
+        self.assertEqual(stats.get("weight_kg"), 72)
+
+    def test_a_number_is_stored_as_a_number(self):
+        """The 500 the user hit. Storing "72" as text meant REACH's
+        slider did `str - int` on the very next screen."""
+        import json
+        self.client.post("/stats/save", data={"weight_kg": "72"})
+        stats = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
+        self.assertIsInstance(stats["weight_kg"], int)
+
+    def test_a_number_outside_its_bounds_is_refused(self):
+        import json
+        self.client.post("/stats/save", data={"weight_kg": "999"})
+        stats = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
+        self.assertNotIn("weight_kg", stats)
+        self.assertIn("form-error", self.client.get("/stats").get_data(as_text=True))
 
     def test_a_verified_stat_is_refused_by_the_route(self):
         """Re-checked server-side. A disabled input is a suggestion."""
         import json
         before = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
-        self.client.post("/stats/set", data={"field": "profession", "value": "Astronaut"})
+        self.client.post("/stats/save", data={"profession": "Astronaut"})
         after = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
         self.assertEqual(before.get("profession"), after.get("profession"))
 
-    def test_a_refusal_says_why_on_the_screen(self):
-        self.client.post("/stats/set", data={"field": "profession", "value": "Astronaut"})
-        self.assertIn("form-error", self.client.get("/stats").get_data(as_text=True))
+    def test_it_says_what_it_saved(self):
+        """user's rule: "the saved option visible in 'Stats' edit UI"."""
+        self.client.post("/stats/save", data={"smoking": "Never"})
+        body = self.client.get("/stats").get_data(as_text=True)
+        self.assertIn("Saved", body)
+        self.assertIn("Smoking", body)
+
+    def test_the_confirmation_does_not_survive_a_reload(self):
+        self.client.post("/stats/save", data={"smoking": "Never"})
+        self.client.get("/stats")
+        self.assertNotIn("save-note", self.client.get("/stats").get_data(as_text=True))
+
+    def test_saving_nothing_says_nothing(self):
+        self.client.post("/stats/save", data={})
+        self.assertNotIn("save-note", self.client.get("/stats").get_data(as_text=True))
 
     def test_held_fields_are_shown_rather_than_hidden(self):
         body = self.client.get("/stats").get_data(as_text=True)
-        self.assertIn("Held right now", body)
+        self.assertIn("Verified — held", body)
         self.assertIn("Profession", body)
+
+    def test_a_verified_field_can_be_sent_for_re_checking(self):
+        """2026-09-09 (evening), the user's correction: "Mandatory
+        columns can be selected for reverify. This will be needed, sorry
+        it was a miss from my end earlier"."""
+        self.client.post("/stats/reverify", data={"field": ["profession"]})
+        row = db.fetch_one(self.conn, "Verification", user_id="u1", field="profession")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["status"], "in_review")
+
+    def test_asking_for_a_re_check_does_not_change_the_value(self):
+        """The request is a form; the new value is not. It moves when the
+        check clears, not when the person says so."""
+        import json
+        before = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
+        self.client.post("/stats/reverify", data={"field": ["age"]})
+        after = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
+        self.assertEqual(before.get("age"), after.get("age"))
+
+    def test_salary_is_re_checked_under_the_name_bgv_uses(self):
+        """A person declares a salary; what gets checked is the band."""
+        self.client.post("/stats/reverify", data={"field": ["income_band"]})
+        self.assertIsNotNone(
+            db.fetch_one(self.conn, "Verification", user_id="u1", field="salary_bracket"))
+
+    def test_only_verified_fields_can_be_sent(self):
+        self.client.post("/stats/reverify", data={"field": ["smoking"]})
+        self.assertIsNone(
+            db.fetch_one(self.conn, "Verification", user_id="u1", field="smoking"))
+
+    def test_a_field_already_in_review_says_so(self):
+        self.client.post("/stats/reverify", data={"field": ["profession"]})
+        self.assertIn("being re-checked", self.client.get("/stats").get_data(as_text=True))
 
 
 if __name__ == "__main__":

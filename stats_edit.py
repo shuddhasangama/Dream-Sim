@@ -70,10 +70,22 @@ FREE = ("smoking", "drinking", "fitness_routine", "marital_history",
 EDITABLE = CANDIDATE_FACING + FREE
 ALL_FIELDS = VERIFIED + EDITABLE
 
+# The stats key and the BGV key are not always the same word: a person
+# declares a salary, and what gets checked is the BAND. Anything absent
+# here is checked under its own name.
+BGV_FIELD = {"income_band": "salary_bracket"}
+
+
+def bgv_field(field: str) -> str:
+    """The verification key for a stats field."""
+    return BGV_FIELD.get(field, field)
+
+
 # Why each group is what it is, in words a person should read.
 VERIFIED_REASON = (
-    "Verified at sign-up. A badge you can retype is not a badge — "
-    "contact support to change it."
+    "Vouched for by a background check, so it is not typed over. If one "
+    "has genuinely changed, send it back to be re-checked — the value "
+    "moves when the check clears, not when you say so."
 )
 LIVE_MATCH_REASON = (
     "Someone is looking at your profile this week. This one is on your "
@@ -132,6 +144,41 @@ def rows(stats: dict[str, Any], state: dict[str, bool]) -> list[dict[str, Any]]:
         verdict = editable(field, state)
         out.append({"key": field, "value": stats.get(field), **verdict})
     return out
+
+
+def coerce(field: str, raw: str, ranges: dict[str, tuple[int, int]]) -> dict[str, Any]:
+    """Turn one submitted value into what belongs in stats_json.
+
+    2026-09-09 (evening): the stats editor stored whatever the form sent,
+    which is always a string. A saved weight landed as "70", and REACH's
+    slider does `self_value - min` — so the very next screen after saving
+    raised TypeError and returned a 500. The editor wrote a stat the rest
+    of the app could not read.
+
+    Numeric fields become ints and are bounds-checked here rather than
+    trusting the input's min/max, which is a client-side courtesy.
+    Everything else is text and passes through.
+
+    Returns {"ok", "value", "error"}. An empty value clears the field,
+    which is a legitimate thing to do and not an error.
+    """
+    raw = (raw or "").strip()
+    if raw == "":
+        return {"ok": True, "value": None, "error": None}
+
+    if field not in ranges:
+        return {"ok": True, "value": raw, "error": None}
+
+    try:
+        number = int(float(raw))
+    except (TypeError, ValueError):
+        return {"ok": False, "value": None, "error": f"{field} has to be a number."}
+
+    low, high = ranges[field]
+    if not low <= number <= high:
+        return {"ok": False, "value": None,
+                "error": f"{field} has to be between {low} and {high}."}
+    return {"ok": True, "value": number, "error": None}
 
 
 def change_record(user_id: str, field: str, before: Any, after: Any,

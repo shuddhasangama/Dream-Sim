@@ -17,8 +17,22 @@ def _all(status: str) -> dict[str, str]:
 
 
 class FieldSetTests(unittest.TestCase):
-    def test_the_four_fields_are_age_nationality_profession_bracket(self):
-        self.assertEqual(bgv.FIELD_KEYS, ["age", "nationality", "profession", "salary_bracket"])
+    def test_the_checked_fields_are_the_mandatory_ones(self):
+        """2026-09-09 (evening): education joined the four. It was shown
+        as mandatory at sign-up and treated as verified by the stats
+        editor, but nothing ever checked it — a lock with nothing behind
+        it. A degree is an ordinary BGV item, so it became one."""
+        self.assertEqual(
+            bgv.FIELD_KEYS,
+            ["age", "nationality", "profession", "education", "salary_bracket"])
+
+    def test_every_field_the_stats_editor_locks_is_actually_checked(self):
+        """The two lists have to agree, or the editor refuses an edit on
+        the strength of a check that never happens."""
+        import stats_edit
+        for field in stats_edit.VERIFIED:
+            with self.subTest(field=field):
+                self.assertIn(stats_edit.bgv_field(field), bgv.FIELD_KEYS)
 
     def test_the_raw_salary_is_never_verified(self):
         """Revised 2026-09-03. A person declares a salary in Stats so the

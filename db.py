@@ -154,6 +154,65 @@ def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> Any:
     return conn
 
 
+# ── uniqueness that the schema file cannot safely carry ──────────────────
+# 2026-09-09 (evening), user's rule: "Avoiding duplicates is essential."
+# Account.email and Account.phone had PLAIN indexes, so nothing stopped
+# two accounts sharing either.
+#
+# These are NOT in the schema file, deliberately. init_db() runs that file
+# as one script, so a CREATE UNIQUE INDEX that fails — which is exactly
+# what happens if the deployed database already holds a duplicate — would
+# take down every request rather than one feature. Applied here instead,
+# one at a time, reporting rather than raising: the same discipline
+# reconcile_columns() uses for a NOT NULL it cannot safely add.
+#
+# The app checks for duplicates before writing either way (see
+# app._identifier_clash). This is the backstop, not the gate.
+
+# Tables where a UNIQUE conflict must RAISE rather than replace. Any
+# table carrying a unique key other than its primary key belongs here —
+# see the SQLite branch of insert_row() for why.
+NO_SILENT_REPLACE = {"Account"}
+
+UNIQUE_INDEXES = [
+    ("uq_account_email", "Account", "email"),
+    ("uq_account_phone", "Account", "phone"),
+]
+
+
+def enforce_unique_indexes(conn: Any) -> list[dict[str, str]]:
+    """Create each unique index if it is missing. Returns what could not
+    be created and why, rather than raising — a database that already
+    holds duplicates needs a person, not a crash loop.
+
+    NULLs do not collide under a unique index on either backend, which is
+    what we want: an account may carry only one of the two identifiers.
+    """
+    problems = []
+    for name, table, column in UNIQUE_INDEXES:
+        target = _table_name(conn, table)
+        sql = f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {target} ({column})'
+        try:
+            if _is_postgres_connection(conn):
+                with conn.cursor() as cur:
+                    cur.execute(sql)
+            else:
+                conn.execute(sql)
+            _commit(conn)
+        except Exception as exc:            # noqa: BLE001 — reported, not swallowed
+            _rollback(conn)
+            problems.append({"index": name, "table": table, "column": column,
+                             "error": str(exc)})
+    return problems
+
+
+def _rollback(conn: Any) -> None:
+    try:
+        conn.rollback()
+    except Exception:                        # noqa: BLE001
+        pass
+
+
 def init_db(
     conn: Any,
     schema_path: str | Path | None = None,
@@ -178,6 +237,7 @@ def init_db(
 
         _commit(conn)
         reconcile_columns(conn, schema_path)
+        enforce_unique_indexes(conn)
         return
 
     path = Path(schema_path) if schema_path else SQLITE_SCHEMA_PATH
@@ -185,6 +245,7 @@ def init_db(
     conn.executescript(sql)
     _commit(conn)
     reconcile_columns(conn, schema_path)
+    enforce_unique_indexes(conn)
 
 
 # ── keeping an existing database level with the schema file ───────────────
@@ -339,6 +400,24 @@ def insert_row(conn: Any, table: str, row: dict[str, Any]) -> Any:
                 f"VALUES ({placeholders}) "
                 f"ON CONFLICT ({conflict_target}) DO NOTHING"
             )
+    elif table in NO_SILENT_REPLACE:
+        # 2026-09-09 (evening): INSERT OR REPLACE resolves a UNIQUE
+        # conflict by DELETING the row it collides with. Harmless while
+        # the only unique key was the primary key; actively dangerous the
+        # moment Account.email became unique, because a duplicate sign-up
+        # would silently delete somebody's account instead of being
+        # refused.
+        #
+        # Upsert on the id, exactly as the PostgreSQL branch above does.
+        # A conflict on any OTHER unique column then raises, which is
+        # what a duplicate identifier should do.
+        placeholders = ", ".join(placeholder for _ in row)
+        updates = ", ".join(f"{c} = excluded.{c}" for c in columns_list if c != "id")
+        sql = (
+            f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders}) "
+            + (f"ON CONFLICT (id) DO UPDATE SET {updates}" if updates
+               else "ON CONFLICT (id) DO NOTHING")
+        )
     else:
         placeholders = ", ".join(placeholder for _ in row)
         sql = (

@@ -23,62 +23,48 @@
       </label>
       {% endfor %}
     </div>
-    <div class="hint" style="margin-top:9px;">Kids can only be chosen if Physical is selected here.</div>
+    {# 2026-09-09 (evening), user's rule: "Kids with Surrogacy or Adoption
+       doesn't require Physical Intimacy to be Mandatory." The old copy
+       said Kids needed Physical, full stop — which quietly assumed one
+       route to children. #}
+    <div class="hint" style="margin-top:9px;">
+      Physical is needed only if you want kids <strong>naturally</strong>. Surrogacy and adoption do not.
+    </div>
   </div>
 
   <div class="card">
     <div class="section-label">And at least one of these</div>
-
+    {# One loop over onboarding.DETAILED_GOALS rather than a hand-written
+       block per goal. Every goal carries sub-options now, so a goal added
+       to that table appears here without another edit. #}
+    {% for goal in goals %}
     <div class="goal-block">
       <label class="chip-check">
-        <input type="checkbox" name="other_keys" value="Travel together" {% if 'Travel together' in chosen_others %}checked{% endif %}>
-        <span>Travel together</span>
+        <input type="checkbox" name="other_keys" value="{{ goal.key }}"
+               {% if goal.key in chosen_others %}checked{% endif %}>
+        <span>{{ goal.key }}</span>
       </label>
-    </div>
-
-    <div class="goal-block">
-      <label class="chip-check">
-        <input type="checkbox" name="other_keys" value="Kids" {% if 'Kids' in chosen_others %}checked{% endif %}>
-        <span>Kids</span>
-      </label>
-      {# 2026-09-09, user's rule: "Underneath kids in Vision include 3
-         sub-options - 'Naturally', 'Surrogacy', 'Adoption'." Same shape
-         as Cohabitate's focus, for the same reason: two people can both
-         want children and mean routes that are years apart. #}
       <div class="goal-detail">
-        <div class="hint">If you pick Kids — how are you open to having them? Pick as many as apply.</div>
+        <div class="hint">{{ goal.hint }}</div>
         <div class="chip-row" style="margin-top:8px;">
-          {% for route in kids_route_options %}
+          {% for option in goal.options %}
           <label class="chip-check">
-            <input type="checkbox" name="kids_route" value="{{ route }}" {% if route in chosen_kids_route %}checked{% endif %}>
-            <span>{{ route }}</span>
+            <input type="checkbox" name="{{ goal.field }}" value="{{ option }}"
+                   {% if option in goal.chosen %}checked{% endif %}>
+            <span>{{ option }}</span>
           </label>
           {% endfor %}
         </div>
       </div>
     </div>
+    {% endfor %}
 
-    <div class="goal-block">
-      <label class="chip-check">
-        <input type="checkbox" name="other_keys" value="Cohabitate" {% if 'Cohabitate' in chosen_others %}checked{% endif %}>
-        <span>Cohabitate</span>
-      </label>
-      <div class="goal-detail">
-        <div class="hint">If you pick Cohabitate — what are you actually agreeing about? Pick one or both.</div>
-        <div class="chip-row" style="margin-top:8px;">
-          {% for focus in cohabit_focus_options %}
-          <label class="chip-check">
-            <input type="checkbox" name="cohabit_focus" value="{{ focus }}" {% if focus in chosen_focus %}checked{% endif %}>
-            <span>{{ focus }}</span>
-          </label>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
+    {# 2026-09-09 (evening), user's rule: "Ensure that if sub options are
+       chose automatically parent option is chosen across all Visions."
+       Handled server-side in onboarding.selected_goals(), so it holds
+       whether or not the browser runs the script below. #}
     <div class="hint" style="margin-top:14px;">
-      Travel together takes no detail now. Kids and Cohabitate do, because picking either without
-      saying what you mean says almost nothing — and they are revisited together, at the
+      Ticking any detail picks its goal for you. Each of these is revisited together at the
       Relationship stage, once it is a decision rather than a preference.
     </div>
   </div>
@@ -88,4 +74,24 @@
     <button type="submit" class="btn-primary">Continue to stats →</button>
   </div>
 </form>
+
+<script>
+  // Progressive enhancement only. The rule is enforced in
+  // onboarding.selected_goals(); this just makes the parent tick appear
+  // as you choose a detail, rather than after the round trip.
+  document.querySelectorAll('.goal-block').forEach(function (block) {
+    var parent = block.querySelector('input[name="other_keys"]');
+    var details = block.querySelectorAll('.goal-detail input[type="checkbox"]');
+    details.forEach(function (box) {
+      box.addEventListener('change', function () {
+        if (box.checked) { parent.checked = true; }
+      });
+    });
+    parent.addEventListener('change', function () {
+      if (!parent.checked) {
+        details.forEach(function (box) { box.checked = false; });
+      }
+    });
+  });
+</script>
 {% endblock %}

@@ -33,6 +33,11 @@ FIELDS = [
     ("age", "Age", "Confirms you are who you say, and old enough to be here."),
     ("nationality", "Nationality", "Checked against the document you provide."),
     ("profession", "Profession", "Checked with your employer or your registration."),
+    # 2026-09-09 (evening): Education was shown as mandatory at sign-up
+    # and treated as verified by the stats editor, but nothing ever
+    # checked it — a lock with nothing behind it. A degree is an ordinary
+    # BGV item, so it becomes one rather than the claim being dropped.
+    ("education", "Education", "Checked with the awarding institution."),
     ("salary_bracket", "Salary bracket", "Only the band is checked, and only the band is ever shown."),
 ]
 FIELD_KEYS = [key for key, _, _ in FIELDS]

@@ -4,19 +4,11 @@
 <div class="eyebrow">Your file · Stats</div>
 <h1>Your stats</h1>
 <div class="lede">
-  {# 2026-09-09, user's rule: "if someone is working on diet who can change
-     their weight or waist or dietary etc. This should be editable until
-     there is no matches available or keenness expressed. Cause we don't
-     want stats to change between the match and date."
-
-     Everything is shown, editable or not. A field that quietly is not
-     there reads as a bug; a field with the reason beside it reads as a
-     rule. stats_edit.py decides which. #}
   {% if state.in_relationship %}
-    Change whatever you like. Anything you change here is shown to your partner —
+    Change whatever you like. Anything you change is shown to your partner —
     not as an alert, as a line on the record.
   {% elif state.keenness %}
-    One of you has said yes, so your stats are held until the date is done.
+    One of you has said yes, so these are held until the date is done.
     They open again afterwards.
   {% elif state.live_match %}
     Someone is looking at your profile this week. What is on your match card is
@@ -26,48 +18,88 @@
   {% endif %}
 </div>
 
+{% if just_saved %}
+<div class="save-note">Saved — {{ just_saved|join(', ') }}</div>
+{% endif %}
+{% if just_sent %}
+<div class="save-note">Sent for re-checking — {{ just_sent|join(', ') }}</div>
+{% endif %}
+
 {% set open_rows = rows | selectattr('editable') | list %}
 {% set held_rows = rows | rejectattr('editable') | list %}
 
-<div class="card">
-  <div class="section-label">Yours to change</div>
-  {% if not open_rows %}
-  <div class="hint">Nothing is editable right now. It opens again after the date.</div>
-  {% endif %}
-  {% for row in open_rows %}
-  <form method="post" action="{{ url_for('stats_set') }}" class="stat-edit-row">
-    <input type="hidden" name="field" value="{{ row.key }}">
-    <span class="stat-edit-label">{{ labels[row.key] }}</span>
-    {% if row.key in options %}
-    <select name="value">
-      <option value="">Not set</option>
-      {% for option in options[row.key] %}
-      <option value="{{ option }}" {% if row.value == option %}selected{% endif %}>{{ option }}</option>
-      {% endfor %}
-    </select>
-    {% else %}
-    <input type="number" name="value" value="{{ row.value or '' }}"
-           min="{{ ranges[row.key][0] }}" max="{{ ranges[row.key][1] }}"
-           placeholder="{{ units[row.key] }}">
+{# 2026-09-09 (evening), user's rule: "Save across each tab makes it too
+   many clicks. Whatever has been changed should be saved. Non one at a
+   time." One form, one button, every changed field written together. #}
+<form method="post" action="{{ url_for('stats_save') }}">
+  <div class="card">
+    <div class="section-label">Yours to change</div>
+    {% if not open_rows %}
+    <div class="hint">Nothing is editable right now. These open again after the date.</div>
     {% endif %}
-    <button type="submit" class="btn-secondary">Save</button>
-  </form>
-  {% endfor %}
-</div>
+    <div class="field-grid">
+      {% for row in open_rows %}
+      <label class="field-cell">
+        <span class="field-label">{{ labels[row.key] }}</span>
+        {% if row.key in options %}
+        <select name="{{ row.key }}">
+          <option value="">Not set</option>
+          {% for option in options[row.key] %}
+          <option value="{{ option }}" {% if row.value|string == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+        {% else %}
+        <input type="number" inputmode="numeric" name="{{ row.key }}" value="{{ row.value or '' }}"
+               min="{{ ranges[row.key][0] }}" max="{{ ranges[row.key][1] }}"
+               placeholder="{{ units[row.key] }}">
+        {% endif %}
+      </label>
+      {% endfor %}
+    </div>
+    {% if open_rows %}
+    <div class="action-row">
+      <button type="submit" class="btn-save">Save changes</button>
+    </div>
+    {% endif %}
+  </div>
+</form>
 
 {% if held_rows %}
-<div class="card">
-  <div class="section-label">Held right now</div>
-  {% for row in held_rows %}
-  <div class="stat-held">
-    <div class="stat-held-top">
-      <span>{{ labels[row.key] }}</span>
-      <span>{{ row.value if row.value is not none and row.value != '' else '—' }}</span>
+{# 2026-09-09 (evening), user's rule: "Mandatory columns can be selected
+   for reverify." Locked is not the same as stuck — a genuine job change
+   had no route at all before this. The value does not move here; the
+   check does. #}
+<form method="post" action="{{ url_for('stats_reverify') }}">
+  <div class="card">
+    <div class="section-label">Verified — held</div>
+    <div class="hint">
+      These are vouched for, so they are not typed over. Tick anything that has
+      genuinely changed and send it back to be re-checked.
     </div>
-    <div class="micro">{{ row.reason }}</div>
+    <div class="field-grid">
+      {% for row in held_rows %}
+      <label class="field-cell held{% if row.rechecking %} rechecking{% endif %}">
+        <span class="field-label">
+          {% if row.why == 'verified' and not row.rechecking %}
+          <input type="checkbox" name="field" value="{{ row.key }}">
+          {% endif %}
+          {{ labels[row.key] }}
+        </span>
+        <span class="field-value">
+          {{ row.value if row.value is not none and row.value != '' else '—' }}
+          {% if row.rechecking %}<em>being re-checked</em>{% endif %}
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+    {% if held_rows | selectattr('why', 'equalto', 'verified') | rejectattr('rechecking') | list %}
+    <div class="action-row">
+      <button type="submit" class="btn-save secondary">Send ticked for re-checking</button>
+    </div>
+    {% endif %}
+    <div class="micro" style="margin-top:8px;">{{ held_rows[0].reason }}</div>
   </div>
-  {% endfor %}
-</div>
+</form>
 {% endif %}
 
 {% if discloses and changes %}

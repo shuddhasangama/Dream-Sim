@@ -1345,18 +1345,99 @@ select:focus {
    action, and it must not look like one. */
 .waiting-card{opacity:.72;border-style:dashed;}
 
-/* ── the stats editor ───────────────────────────────────────────────────
-   2026-09-09. One row per field: label, control, save. Held fields are
-   shown too, with the reason underneath — a stat that quietly is not
-   there reads as a bug, one with a reason reads as a rule. */
-.stat-edit-row{display:flex;align-items:center;gap:10px;padding:9px 0;
-  border-bottom:1px solid var(--border);margin:0;}
-.stat-edit-row:last-of-type{border-bottom:0;}
-.stat-edit-label{flex:1 1 40%;font-size:13.5px;color:var(--text-2);}
-.stat-edit-row select,.stat-edit-row input{flex:1 1 40%;margin:0;}
-.stat-edit-row button{flex:0 0 auto;padding:7px 14px;font-size:12px;}
-.stat-held{padding:9px 0;border-bottom:1px solid var(--border);}
-.stat-held:last-of-type{border-bottom:0;}
-.stat-held-top{display:flex;justify-content:space-between;gap:12px;
-  font-size:13.5px;color:var(--muted);}
-.stat-held-top span:last-child{color:var(--text-2);}
+/* ── field grid: one layout for every set of fields ─────────────────────
+   2026-09-09 (evening), user's rule: "Stats optional and mandatory
+   sections under sign-up are not consistent. Keep optional attributes
+   layout consistent with that of Mandatory sections. Not sure why we
+   have extra/waste space."
+
+   They were two different layouts because they were written at different
+   times. This is the one both use now, and the stats editor as well.
+
+   Built mobile-first for the app port: a single column under 560px with
+   full-width controls, two columns above it. Controls are 44px tall,
+   which is the minimum comfortable tap target, and the whole cell is a
+   <label> so the tap area is the row rather than the input alone. */
+.field-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px;}
+@media (min-width:560px){.field-grid{grid-template-columns:1fr 1fr;gap:14px 18px;}}
+.field-cell{display:flex;flex-direction:column;gap:5px;margin:0;min-width:0;}
+.field-label{font-size:12px;color:var(--muted);letter-spacing:.02em;
+  display:flex;align-items:center;gap:7px;}
+.field-cell select,.field-cell input[type="number"],.field-cell input[type="text"]{
+  width:100%;min-height:44px;margin:0;box-sizing:border-box;}
+.field-cell.held{opacity:.75;}
+.field-cell .field-value{min-height:44px;display:flex;align-items:center;
+  padding:0 12px;border:1px dashed var(--border);border-radius:12px;
+  font-size:14px;color:var(--text-2);background:transparent;}
+.field-cell .field-value em{font-style:normal;font-size:11px;color:var(--gold);
+  margin-left:auto;}
+.field-cell.rechecking .field-value{border-style:solid;border-color:var(--gold);}
+.field-cell input[type="checkbox"]{min-height:0;width:18px;height:18px;margin:0;
+  accent-color:var(--mint);flex:0 0 auto;}
+.field-hint{font-size:11px;color:var(--muted);}
+
+/* A save that acts on the whole form, not one field. Smaller than a
+   primary CTA on purpose — it confirms an edit, it does not advance the
+   journey. 2026-09-09: "Make the save button smaller and the saved
+   option visible". */
+.btn-save{padding:9px 18px;font-size:13px;font-weight:600;border-radius:11px;
+  border:0;cursor:pointer;background:var(--mint);color:#0C0912;min-height:40px;}
+.btn-save.secondary{background:transparent;color:var(--text-2);
+  border:1px solid var(--border);}
+.save-note{margin:14px 0 0;padding:10px 14px;border-radius:12px;font-size:13px;
+  background:rgba(61,220,151,.10);border:1px solid rgba(61,220,151,.34);
+  color:var(--mint);}
+
+/* ══ App-readiness pass ═════════════════════════════════════════════════
+   2026-09-09 (evening), user's rule: "Please keep in mind that we plan to
+   have it as an app. So make the visuals app-friendly for future
+   porting."
+
+   Not a redesign — the layout is already a 460px single column, which is
+   a phone. These are the things that read as "website in a webview"
+   rather than as an app, and each is cheap to fix now and awkward later.
+
+   Deliberately NOT done here: bottom tab bar, gestures, native
+   transitions. Those are porting decisions, not CSS. */
+
+/* 1. Tap targets. A 30px chip is fine with a mouse and a coin-toss with a
+      thumb; 44px is the figure both Apple and Google publish. The chip
+      keeps its visual size and grows its HIT area, so nothing looks
+      chunkier. */
+.chip-check { min-height: 44px; }
+.chip-check span { display: inline-flex; align-items: center; min-height: 34px; }
+.navlink { min-height: 40px; display: inline-flex; align-items: center; }
+.btn-primary, .btn-secondary { min-height: 46px; }
+.day-check { min-height: 44px; }
+
+/* 2. The grey flash on tap, and the 300ms delay behind it. Both are
+      browser defaults that make a webview feel wrong immediately. */
+* { -webkit-tap-highlight-color: transparent; }
+a, button, label, select, input { touch-action: manipulation; }
+
+/* 3. Don't let iOS zoom the page when a field is focused. It does that
+      below 16px, and the zoom does not undo itself. */
+input, select, textarea { font-size: 16px; }
+
+/* 4. Notch and home-indicator space. Harmless in a browser, necessary in
+      a fullscreen webview. */
+.container { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+.topnav { padding-top: env(safe-area-inset-top); }
+
+/* 5. Momentum scrolling, and no rubber-band on the page itself — the
+      giveaway that a native shell is wrapping a web page. */
+body { -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; }
+
+/* 6. Hover styles are a lie on a touchscreen: they stick after a tap
+      until you tap elsewhere. Keep them only where hover exists. */
+@media (hover: none) {
+  .navlink:hover, .btn-primary:hover, .btn-secondary:hover,
+  .guru-tile:hover { background: inherit; border-color: inherit; }
+}
+
+/* 7. Text selection off on controls — long-pressing a button and getting
+      a selection handle is unmistakably not-an-app. Left ON for content. */
+.chip-check span, .navlink, .btn-primary, .btn-secondary, .btn-save,
+.day-check, .stage-pip, .wizard-label {
+  -webkit-user-select: none; user-select: none;
+}

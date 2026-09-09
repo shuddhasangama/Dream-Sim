@@ -88,7 +88,15 @@ KIDS_ROUTES = ["Naturally", "Surrogacy", "Adoption"]
 INTIMACY_KINDS = ["Emotional", "Physical"]  # 2026-08-28: Sexual removed at the user's request
 COHABIT_FOCUS = ["Chores split", "Expenses sharing"]
 
-INCOME_BANDS = ["₹ · under 12L", "₹₹ · 12L – 25L", "₹₹₹ · 25L – 50L", "₹₹₹₹ · 50L+"]
+# 2026-09-09 (evening), user's rule: "Also include these multiple
+# selectable sub options under Travel Together - Relaxing escapes,
+# Adventure & outdoors, Culture & cities, Road trips." Travel together
+# was the last goal carrying no detail, and "we both like travelling"
+# hides the same gap Kids and Cohabitate did — one person means a beach
+# and the other means a trek.
+TRAVEL_STYLES = ["Relaxing escapes", "Adventure & outdoors", "Culture & cities", "Road trips"]
+
+INCOME_BANDS =["₹ · under 12L", "₹₹ · 12L – 25L", "₹₹₹ · 25L – 50L", "₹₹₹₹ · 50L+"]
 INCOME_BAND_WEIGHTS = [0.15, 0.40, 0.30, 0.15]
 
 # Per-person spend on one meal out — distinct from INCOME_BANDS, which is

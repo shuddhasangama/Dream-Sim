@@ -40,6 +40,7 @@ from generate_users import (
     INTIMACY_KINDS,
     KIDS_ROUTES,
     KIDS_STANCES,
+    TRAVEL_STYLES,
     LANGUAGES_POOL,
     MARITAL_HISTORY,
     OTHER_VISION_KEYS,
@@ -163,6 +164,44 @@ def normalise_identifiers(email: str | None, phone: str | None) -> dict[str, Any
     }
 
 
+def duplicate_identifier(email: str | None, phone: str | None,
+                         taken_emails: set[str] | None = None,
+                         taken_phones: set[str] | None = None) -> str | None:
+    """Which identifier is already somebody else's, if either is.
+
+    2026-09-09 (evening), user's rule: "Hopefully there are tests to check
+    that phone number and emails cannot be duplicate. Or same email or
+    phone number not used with different phone number or emails. Avoiding
+    duplicates is essential."
+
+    There were no such tests, because there was no such rule — Account
+    carried plain indexes on both columns, not unique ones, so nothing
+    stopped two accounts sharing either.
+
+    Each identifier is checked INDEPENDENTLY, which is the second half of
+    what was asked. Someone who signs up with (E, P) blocks a later (E, Q)
+    and a later (F, P) alike: pairing a taken email with a fresh phone
+    does not make it fresh.
+
+    Compares normalised values, so "  Foo@Bar.com " and "foo@bar.com" are
+    the same address, and +91 98765 43210 and 919876543210 the same
+    number. Pass the values normalise_identifiers() returned.
+
+    Returns "email", "phone", or None.
+    """
+    if email and email in (taken_emails or set()):
+        return "email"
+    if phone and phone in (taken_phones or set()):
+        return "phone"
+    return None
+
+
+DUPLICATE_MESSAGE = {
+    "email": "That email address already has an account. Sign in instead, or use another address.",
+    "phone": "That phone number already has an account. Sign in instead, or use another number.",
+}
+
+
 def account_row(user_id: str, email: str | None, phone: str | None, created_at: str) -> dict[str, Any]:
     """The Account row to persist. password_hash stays NULL for now —
     the column exists so Phase 3 can fill it without a schema change."""
@@ -193,8 +232,71 @@ def account_row(user_id: str, email: str | None, phone: str | None, created_at: 
 VISION_STANCE_AT_SIGNUP = None
 
 # Goals that take no detail at signup, in the order they are offered.
-SIMPLE_GOALS = ["Travel together", "Kids"]
-DETAILED_GOALS = {"Cohabitate": COHABIT_FOCUS, "Kids": KIDS_ROUTES}
+# 2026-09-09 (evening): every goal now carries sub-options, so there are
+# no "simple" goals left. Kept as an empty tuple rather than deleted so a
+# stale import fails loudly rather than silently importing something else.
+SIMPLE_GOALS: list[str] = []
+
+# The sub-options each goal carries. ONE table — the form, the validation
+# and the payload all read it, so adding a goal's detail is one edit here
+# rather than three in step.
+DETAILED_GOALS = {
+    "Cohabitate": COHABIT_FOCUS,
+    "Kids": KIDS_ROUTES,
+    "Travel together": TRAVEL_STYLES,
+}
+
+# The form field each goal's sub-options arrive under.
+DETAIL_FIELD = {
+    "Cohabitate": "cohabit_focus",
+    "Kids": "kids_route",
+    "Travel together": "travel_style",
+}
+
+# The question each goal's sub-options answer, on the form.
+DETAIL_HINT = {
+    "Cohabitate": "What are you actually agreeing about? Pick one or both.",
+    "Kids": "How are you open to having them? Pick as many as apply.",
+    "Travel together": "What kind of travelling do you mean? Pick as many as apply.",
+}
+
+# What to say when a goal is picked with none of its sub-options.
+DETAIL_PROMPT = {
+    "Cohabitate": "Cohabitating means chores, expenses, or both — say which.",
+    "Kids": "Say how you are open to having kids — pick one or more.",
+    "Travel together": "Say what kind of travelling you mean — pick one or more.",
+}
+
+# Sub-options that carry a prerequisite of their own.
+#
+# 2026-09-09 (evening), user's rule: "Kids with Surrogacy or Adoption
+# doesn't require Physical Intimacy to be Mandatory." The rule was
+# attached to the GOAL, which quietly assumed one route to children and
+# made the other two unreachable for anyone who had not also ticked
+# Physical. It belongs on the sub-option.
+NEEDS_PHYSICAL = {"Naturally"}
+
+
+def _details(**submitted: list[str] | None) -> dict[str, list[str]]:
+    """Each goal's sub-options, filtered to values we actually offer."""
+    return {
+        goal: [o for o in options if o in (submitted.get(DETAIL_FIELD[goal]) or [])]
+        for goal, options in DETAILED_GOALS.items()
+    }
+
+
+def selected_goals(other_keys: list[str] | None,
+                   details: dict[str, list[str]]) -> list[str]:
+    """Which goals are chosen, counting a sub-option as choosing its parent.
+
+    2026-09-09 (evening), user's rule: "Ensure that if sub options are
+    chose automatically parent option is chosen across all Visions."
+    Ticking "Adoption" and not "Kids" is not an incomplete answer, it is
+    an obvious one — and refusing it taught people the form was fussy
+    rather than that they had missed something.
+    """
+    chosen = set(other_keys or [])
+    return [k for k in OTHER_VISION_KEYS if k in chosen or details.get(k)]
 
 
 def validate_vision(
@@ -202,37 +304,44 @@ def validate_vision(
     other_keys: list[str],
     cohabit_focus: list[str] | None = None,
     kids_route: list[str] | None = None,
+    travel_style: list[str] | None = None,
 ) -> dict[str, Any]:
     """Check a submitted vision against the rules above.
 
-    cohabit_focus and kids_route are only consulted when their goal is
-    among other_keys; picking a detail and then unticking the goal
-    discards it rather than storing a preference for something the user
-    did not choose.
+    A goal's sub-options are only kept when that goal ends up selected;
+    picking a detail and then unticking the goal discards it rather than
+    storing a preference for something the user did not choose. But note
+    selected_goals(): ticking only the detail SELECTS the goal, so the
+    discard applies to unticking, not to never having ticked.
     """
     kinds = [k for k in INTIMACY_KINDS if k in (intimacy_kinds or [])]
-    others = [k for k in OTHER_VISION_KEYS if k in (other_keys or [])]
-    focus = [f for f in COHABIT_FOCUS if f in (cohabit_focus or [])]
-    routes = [r for r in KIDS_ROUTES if r in (kids_route or [])]
+    details = _details(cohabit_focus=cohabit_focus, kids_route=kids_route,
+                       travel_style=travel_style)
+    others = selected_goals(other_keys, details)
 
     if not kinds:
         return {"ok": False, "error": "Pick at least one kind of intimacy — every vision includes it."}
     if not others:
         return {"ok": False, "error": "Pick at least one more end goal alongside Intimacy."}
-    if "Kids" in others and "Physical" not in kinds:
-        return {"ok": False, "error": "Kids needs Physical intimacy selected too. Add it, or drop Kids."}
-    if "Cohabitate" in others and not focus:
-        return {"ok": False, "error": "Cohabitating means chores, expenses, or both — say which."}
-    if "Kids" in others and not routes:
-        return {"ok": False, "error": "Say how you are open to having kids — pick one or more."}
+
+    needs_physical = {o for goal in others for o in details[goal]} & NEEDS_PHYSICAL
+    if needs_physical and "Physical" not in kinds:
+        return {"ok": False,
+                "error": "Having kids naturally needs Physical intimacy selected too. "
+                         "Add it, or choose surrogacy or adoption instead."}
+
+    for goal in others:
+        if not details[goal]:
+            return {"ok": False, "error": DETAIL_PROMPT[goal]}
 
     return {
         "ok": True,
         "error": None,
         "intimacy_kinds": sorted(kinds),
         "other_keys": others,
-        "cohabit_focus": sorted(focus) if "Cohabitate" in others else [],
-        "kids_route": sorted(routes) if "Kids" in others else [],
+        "cohabit_focus": sorted(details["Cohabitate"]) if "Cohabitate" in others else [],
+        "kids_route": sorted(details["Kids"]) if "Kids" in others else [],
+        "travel_style": sorted(details["Travel together"]) if "Travel together" in others else [],
     }
 
 
@@ -241,16 +350,15 @@ def build_visions(
     other_keys: list[str],
     cohabit_focus: list[str] | None = None,
     kids_route: list[str] | None = None,
+    travel_style: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """The vision_json payload. Call only after validate_vision() passes."""
-    focus = sorted(f for f in COHABIT_FOCUS if f in (cohabit_focus or []))
-    routes = sorted(r for r in KIDS_ROUTES if r in (kids_route or []))
-    detail = {"Cohabitate": focus, "Kids": routes}
+    details = _details(cohabit_focus=cohabit_focus, kids_route=kids_route,
+                       travel_style=travel_style)
     visions = [{"key": "Intimacy", "stance": sorted(intimacy_kinds)}]
-    for key in OTHER_VISION_KEYS:
-        if key not in other_keys:
-            continue
-        visions.append({"key": key, "stance": detail.get(key) or VISION_STANCE_AT_SIGNUP})
+    for key in selected_goals(other_keys, details):
+        visions.append({"key": key,
+                        "stance": sorted(details[key]) or VISION_STANCE_AT_SIGNUP})
     return visions
 
 

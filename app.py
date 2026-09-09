@@ -2196,62 +2196,139 @@ def stats_view():
     """
     user = current_user()
     state = _stats_situation(user)
+    checks = {r["field"]: r["status"]
+              for r in db.fetch_all(get_db(), "Verification", user_id=user["user_id"])}
+    rows = stats_edit.rows(user["stats"] or {}, state)
+    for row in rows:
+        row["check"] = checks.get(stats_edit.bgv_field(row["key"]))
+        row["rechecking"] = row["check"] == bgv.IN_REVIEW
     return render_template(
         "stats.html",
-        rows=stats_edit.rows(user["stats"] or {}, state),
+        rows=rows,
         state=state,
         labels=onboarding.STAT_LABELS,
         options=onboarding.STAT_OPTIONS,
         ranges=onboarding.STAT_RANGES,
         units=onboarding.STAT_UNITS,
         discloses=stats_edit.discloses_to_partner(state),
-        missing=[f for f in stats_edit.ALL_FIELDS if not (user["stats"] or {}).get(f)],
         changes=db.fetch_all(get_db(), "StatChange", user_id=user["user_id"]),
+        # One-shot confirmations, popped so a reload does not repeat them.
+        just_saved=session.pop("stats_saved", None),
+        just_sent=session.pop("stats_reverifying", None),
     )
 
 
-@app.route("/stats/set", methods=["POST"])
+@app.route("/stats/save", methods=["POST"])
 @login_required
-def stats_set():
-    """Write one field, if it is editable right now.
+def stats_save():
+    """Save everything that changed, in one submit.
 
-    Re-checked here rather than trusting the screen: a disabled input is
-    a suggestion, and this is the rule the user actually asked for.
+    2026-09-09 (evening), user's rule: "Save across each tab makes it too
+    many clicks. Whatever has been changed should be saved. Non one at a
+    time." One button per field meant a click per field and a page
+    reload between each.
+
+    Every field is still re-checked here rather than trusted from the
+    form — a field the screen showed as held is refused even if the
+    request says otherwise, because a disabled input is a suggestion.
     """
     user = current_user()
-    field = (request.form.get("field") or "").strip()
-    value = (request.form.get("value") or "").strip()
-    if field not in stats_edit.ALL_FIELDS:
-        return redirect(url_for("stats_view"))
-
     state = _stats_situation(user)
-    verdict = stats_edit.editable(field, state)
-    if not verdict["editable"]:
-        _remember_form(verdict["reason"], endpoint="stats_view")
-        return redirect(url_for("stats_view"))
 
     row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
     stats = json.loads(row["stats_json"])
-    before = stats.get(field)
-    if str(before or "") == value:
+
+    saved, refused, errors = [], [], []
+    changes = []
+
+    for field in stats_edit.ALL_FIELDS:
+        if field not in request.form:
+            continue
+        verdict = stats_edit.editable(field, state)
+        got = stats_edit.coerce(field, request.form.get(field), onboarding.STAT_RANGES)
+        if not got["ok"]:
+            errors.append(got["error"])
+            continue
+
+        before, after = stats.get(field), got["value"]
+        if _same_stat(before, after):
+            continue
+        if not verdict["editable"]:
+            # Only counts as refused if they actually tried to change it.
+            refused.append(onboarding.STAT_LABELS.get(field, field))
+            continue
+
+        if after is None:
+            stats.pop(field, None)
+        else:
+            stats[field] = after
+        saved.append(onboarding.STAT_LABELS.get(field, field))
+        changes.append((field, before, after))
+
+    if saved:
+        row["stats_json"] = json.dumps(stats, ensure_ascii=False)
+        db.insert_row(get_db(), "User", row)
+
+        # In a relationship the change is disclosed rather than blocked.
+        if stats_edit.discloses_to_partner(state):
+            for field, before, after in changes:
+                record = stats_edit.change_record(
+                    user["user_id"], field, before, after, str(get_clock()))
+                db.insert_row(get_db(), "StatChange", {"id": uuid.uuid4().hex[:12], **record})
+
+    if errors or refused:
+        parts = list(errors)
+        if refused:
+            parts.append("Held right now, so not changed: " + ", ".join(refused) + ".")
+        _remember_form(" ".join(parts), endpoint="stats_view")
+    elif saved:
+        session["stats_saved"] = saved
+
+    return redirect(url_for("stats_view"))
+
+
+def _same_stat(before, after) -> bool:
+    """Whether a submitted value actually differs from what is stored.
+
+    Compared as text on purpose: the form sends "70" for a stored 70, and
+    without this every submit would look like a change to every field —
+    which in a relationship would file a StatChange row for each of them.
+    """
+    return ("" if before is None else str(before)) == ("" if after is None else str(after))
+
+
+@app.route("/stats/reverify", methods=["POST"])
+@login_required
+def stats_reverify():
+    """Send a verified field back for a re-check.
+
+    2026-09-09 (evening), user's rule: "Mandatory columns can be selected
+    for reverify. This will be needed, sorry it was a miss from my end
+    earlier." The earlier decision — verified fields simply not editable
+    — left a genuine job change or a mistyped age with no route at all.
+
+    This does not change the value. It marks the field as being
+    re-checked, which is BGV's job to resolve; the stat itself only moves
+    when the check clears.
+    """
+    user = current_user()
+    fields = [f for f in request.form.getlist("field") if f in stats_edit.VERIFIED]
+    if not fields:
         return redirect(url_for("stats_view"))
 
-    if value:
-        stats[field] = value
-    else:
-        stats.pop(field, None)
-    row["stats_json"] = json.dumps(stats, ensure_ascii=False)
-    db.insert_row(get_db(), "User", row)
+    for field in fields:
+        key = stats_edit.bgv_field(field)
+        existing = db.fetch_one(get_db(), "Verification",
+                                user_id=user["user_id"], field=key)
+        db.insert_row(get_db(), "Verification", {
+            **(dict(existing) if existing else {"id": f"{user['user_id']}:{key}"}),
+            "user_id": user["user_id"], "field": key,
+            "status": bgv.IN_REVIEW,
+            "note": "Re-check requested by the user.",
+            "updated_at": str(get_clock()),
+        })
 
-    # In a relationship the change is disclosed rather than blocked —
-    # the user's rule: "While they are in relationship or dating stats
-    # can change. Which can be captured and also notified to their
-    # match." VisionChange is the precedent, disclosure and all.
-    if stats_edit.discloses_to_partner(state):
-        record = stats_edit.change_record(
-            user["user_id"], field, before, value, str(get_clock()))
-        db.insert_row(get_db(), "StatChange", {"id": uuid.uuid4().hex[:12], **record})
-
+    session["stats_reverifying"] = [onboarding.STAT_LABELS.get(f, f) for f in fields]
     return redirect(url_for("stats_view"))
 
 
@@ -3083,23 +3160,45 @@ def home():
     return redirect(url_for("signup"))
 
 
+def _identifier_clash(email: str | None, phone: str | None,
+                      exclude_user_id: str | None = None) -> str | None:
+    """Whether this email or phone already belongs to somebody else.
+
+    Read as a query rather than trusting a unique index alone: the index
+    is the backstop, and a constraint violation surfaces as a 500 rather
+    than as a sentence the person can act on.
+    """
+    rows = [r for r in db.fetch_all(get_db(), "Account")
+            if r["user_id"] != exclude_user_id]
+    return onboarding.duplicate_identifier(
+        email, phone,
+        {r["email"] for r in rows if r["email"]},
+        {r["phone"] for r in rows if r["phone"]},
+    )
+
+
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     """Step 1. Phone and email, neither validated — Case 1's unvalidated
-    front door. Shape hints are shown, nothing is enforced."""
+    front door. Shape hints are shown, nothing is enforced, EXCEPT that
+    an identifier already in use is refused (2026-09-09 evening)."""
     draft = _draft()
     error = None
     hints = {}
 
     if request.method == "POST":
         result = onboarding.normalise_identifiers(request.form.get("email"), request.form.get("phone"))
-        if result["ok"]:
+        taken = _identifier_clash(result["email"], result["phone"])
+        if result["ok"] and taken is None:
             draft["email"] = result["email"]
             draft["phone"] = result["phone"]
             _save_draft(draft)
             return redirect(url_for("onboard_vision"))
-        error = result["error"]
+        error = onboarding.DUPLICATE_MESSAGE[taken] if taken else result["error"]
         hints = result
+        # Keep what they typed. Refusing a duplicate and clearing the box
+        # is two punishments for one mistake.
+        draft = {**draft, "email": result["email"], "phone": result["phone"]}
 
     return render_template(
         "signup.html",
@@ -3125,14 +3224,15 @@ def onboard_vision():
         submitted = {
             "intimacy_kinds": request.form.getlist("intimacy_kinds"),
             "other_keys": request.form.getlist("other_keys"),
-            "cohabit_focus": request.form.getlist("cohabit_focus"),
-            "kids_route": request.form.getlist("kids_route"),
+            **{field: request.form.getlist(field)
+               for field in onboarding.DETAIL_FIELD.values()},
         }
         result = onboarding.validate_vision(
             submitted["intimacy_kinds"],
             submitted["other_keys"],
             submitted["cohabit_focus"],
             submitted["kids_route"],
+            submitted["travel_style"],
         )
         if result["ok"]:
             draft["vision"] = {
@@ -3140,10 +3240,16 @@ def onboard_vision():
                 "other_keys": result["other_keys"],
                 "cohabit_focus": result["cohabit_focus"],
                 "kids_route": result["kids_route"],
+                "travel_style": result["travel_style"],
             }
             _save_draft(draft)
             return redirect(url_for("onboard_stats"))
         error = result["error"]
+        # A sub-option selects its parent, so show that as ticked even on
+        # a rejected submit — otherwise the screen argues with the rule.
+        submitted["other_keys"] = onboarding.selected_goals(
+            submitted["other_keys"],
+            {goal: submitted[field] for goal, field in onboarding.DETAIL_FIELD.items()})
 
     # What they just sent beats what was last saved. A rejected submission
     # is still the most recent thing they said.
@@ -3154,13 +3260,17 @@ def onboard_vision():
             "onboard_vision",
             error=error,
             intimacy_kinds=onboarding.INTIMACY_KINDS,
-            other_keys=onboarding.OTHER_VISION_KEYS,
             chosen_kinds=saved.get("intimacy_kinds", []),
             chosen_others=saved.get("other_keys", []),
-            cohabit_focus_options=onboarding.COHABIT_FOCUS,
-            chosen_focus=saved.get("cohabit_focus", []),
-            kids_route_options=onboarding.KIDS_ROUTES,
-            chosen_kids_route=saved.get("kids_route", []),
+            # One entry per goal, from onboarding.DETAILED_GOALS, so the
+            # form and the validation cannot disagree about what exists.
+            goals=[{
+                "key": goal,
+                "options": options,
+                "field": onboarding.DETAIL_FIELD[goal],
+                "hint": onboarding.DETAIL_HINT[goal],
+                "chosen": saved.get(onboarding.DETAIL_FIELD[goal], []),
+            } for goal, options in onboarding.DETAILED_GOALS.items()],
         ),
     )
 
@@ -3267,12 +3377,20 @@ def onboard_finish():
         return redirect(url_for("onboard_chemistry"))
 
     if request.method == "POST":
+        # Re-checked at the write, not only at /signup: the two are
+        # minutes apart, and someone can have the wizard open twice.
+        taken = _identifier_clash(draft.get("email"), draft.get("phone"))
+        if taken is not None:
+            _remember_form(onboarding.DUPLICATE_MESSAGE[taken], endpoint="signup")
+            return redirect(url_for("signup"))
+
         user_id = onboarding.new_user_id()
         visions = onboarding.build_visions(
             draft["vision"]["intimacy_kinds"],
             draft["vision"]["other_keys"],
             draft["vision"].get("cohabit_focus"),
             draft["vision"].get("kids_route"),
+            draft["vision"].get("travel_style"),
         )
         user_row = onboarding.build_user_row(
             user_id=user_id,
@@ -3303,6 +3421,7 @@ def onboard_finish():
                 draft["vision"]["other_keys"],
                 draft["vision"].get("cohabit_focus"),
                 draft["vision"].get("kids_route"),
+                draft["vision"].get("travel_style"),
             ),
             skills=onboarding.build_skills(draft["activities"]),
             bucket_labels={b[0]: b[2] for b in onboarding.BUCKETS},
