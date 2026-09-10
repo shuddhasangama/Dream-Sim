@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Errors — admin{% endblock %}
+{% block content %}
+<div class="eyebrow">Admin</div>
+<h1>What broke</h1>
+<div class="lede">
+  Every 500 the app has served, newest first. Search by the reference code the person quoted.
+  Field <em>names</em> are recorded; nothing anyone typed is.
+</div>
+
+<form method="get" action="{{ url_for('admin_errors') }}" class="card">
+  <div class="field-grid">
+    <label class="field-cell">
+      <span class="field-label">Reference</span>
+      <input class="field-input" type="text" name="ref" value="{{ reference }}" placeholder="DC-4KQ7-M2">
+    </label>
+  </div>
+  <button type="submit" class="btn-primary">Find it</button>
+  {% if reference %}<a class="btn-secondary" href="{{ url_for('admin_errors') }}">Show all</a>{% endif %}
+</form>
+
+{% if not rows %}
+<div class="card"><div class="hint">
+  {% if reference %}Nothing recorded under {{ reference }}.{% else %}Nothing has broken yet.{% endif %}
+</div></div>
+{% else %}
+<div class="hint">{{ total }} recorded{% if total > 100 %}, showing the most recent 100{% endif %}.</div>
+{% for row in rows %}
+<div class="card">
+  <div class="lever-row">
+    <div class="error-code">{{ row.reference }}</div>
+    <div class="micro">{{ row.occurred_at }} · build {{ row.build or 'local' }}</div>
+  </div>
+  <div class="section-label">{{ row.error_type }} · {{ row.status }}</div>
+  <div class="clause-body">{{ row.message }}</div>
+  <div class="micro" style="margin-top:8px;">
+    {{ row.method }} {{ row.path }}{% if row.endpoint %} → {{ row.endpoint }}{% endif %}
+    {% if row.user_id %} · user {{ row.user_id }}{% endif %}
+    {% if row.context.form_fields %} · posted: {{ row.context.form_fields|join(', ') }}{% endif %}
+  </div>
+  {% if row.stack %}
+  <details style="margin-top:10px;">
+    <summary class="micro">Traceback</summary>
+    <pre class="traceback">{{ row.stack }}</pre>
+  </details>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

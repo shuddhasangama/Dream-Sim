@@ -1,0 +1,44 @@
+{# Deliberately does NOT extend base.html.
+
+   base.html reads session_user, nav_links and journey_stage from a
+   context processor that runs a database query. If that is what failed,
+   extending it would raise inside the error handler and hand the person
+   a Werkzeug page — which is the exact thing this template exists to
+   stop. Standalone, same stylesheet, no context needed. #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ copy.title }} — Dare to Dream</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="page">
+    <main class="container error-page">
+      <div class="eyebrow">{{ status }}</div>
+      <h1>{{ copy.title }}</h1>
+      <div class="lede">{{ copy.body }}</div>
+
+      {% if reference %}
+      <div class="card error-ref">
+        <div class="section-label">If you tell us about this, quote this</div>
+        <div class="error-code">{{ reference }}</div>
+        <div class="micro">
+          It points at exactly what went wrong — the screen, the moment, and the fault itself.
+          Nothing you typed is stored against it.
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="action-row">
+        <a class="btn-primary" href="{{ url_for('dashboard') }}">Back to your dashboard</a>
+        <a class="btn-secondary" href="{{ url_for('guru_view') }}">Ask Guru</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -6,6 +6,7 @@ import copy
 import unittest
 
 from generate_users import generate_users
+import matching
 from matching import (
     apply_lever_widen,
     available_levers,
@@ -220,13 +221,44 @@ class FitsFiltersTests(unittest.TestCase):
         self.assertTrue(fits_filters(a, doesnt_want))
         self.assertFalse(fits_filters(a, wants))
 
-    def test_unmodeled_dealbreaker_is_vacuously_satisfied(self) -> None:
-        # non_smoker/non_drinker have no backing Stats field in this
-        # simulation — documented in matching.py, verified here.
+    def test_the_smoking_dealbreaker_is_no_longer_vacuous(self) -> None:
+        """This used to assert the opposite. non_smoker and non_drinker
+        had no backing Stats field, so a person who set one was quietly
+        ignored; smoking and drinking are real fields now, so it is
+        enforced. Kept as the record of the change."""
+        a = _base_user()
+        a["preferences"]["fixed"]["dealbreakers"] = ["non_smoker"]
+
+        b = _candidate()
+        b["stats"]["smoking"] = "Regular"
+        self.assertFalse(fits_filters(a, b))
+
+        b["stats"]["smoking"] = "Never"
+        self.assertTrue(fits_filters(a, b))
+
+    def test_quitting_satisfies_the_smoking_dealbreaker(self) -> None:
         a = _base_user()
         a["preferences"]["fixed"]["dealbreakers"] = ["non_smoker"]
         b = _candidate()
+        b["stats"]["smoking"] = "Quitting"
         self.assertTrue(fits_filters(a, b))
+
+    def test_a_blank_answer_does_not_satisfy_it(self) -> None:
+        """Same rule as veg_only: a hard exclusion is not waived because
+        the other person left the field empty."""
+        a = _base_user()
+        a["preferences"]["fixed"]["dealbreakers"] = ["non_drinker"]
+        b = _candidate()
+        b["stats"].pop("drinking", None)
+        self.assertFalse(fits_filters(a, b))
+
+    def test_setting_it_to_any_switches_it_back_off(self) -> None:
+        a = _base_user()
+        a["preferences"]["fixed"]["dealbreakers"] = ["non_smoker"]
+        b = _candidate()
+        b["stats"]["smoking"] = "Regular"
+        self.assertFalse(fits_filters(a, b))
+        self.assertTrue(fits_filters(matching.set_ignored(a, "non_smoker", True), b))
 
 
 class MutualOpenTests(unittest.TestCase):
@@ -451,7 +483,8 @@ class BuildReachInputTests(unittest.TestCase):
         payload = build_reach_input(a, pool)
         self.assertEqual(
             set(payload.keys()),
-            {"user_id", "phase", "preferences", "reciprocity", "whatif", "locked"},
+            {"user_id", "phase", "preferences", "reciprocity", "whatif", "locked",
+             "filters", "ignored"},
         )
         self.assertEqual(payload["phase"], "searching")
         self.assertEqual(payload["preferences"], a["preferences"])

@@ -65,7 +65,10 @@
     {% for s in signatories %}
     <div class="signature-party{% if not s.complete %} awaiting{% endif %}">
       <div class="signature-name">
-        {% if s.signed_name %}{{ s.signed_name }}{% else %}{{ s.name }}{% endif %}
+        {# 2026-09-10: signed_DISPLAY, not signed_name. The raw typed name
+           here revealed the legal name to the other party the moment
+           they signed — see ceremony.signature_display(). #}
+        {% if s.signed_display %}{{ s.signed_display }}{% else %}{{ s.name }}{% endif %}
       </div>
       <div class="signature-meta">
         {% if s.complete %}

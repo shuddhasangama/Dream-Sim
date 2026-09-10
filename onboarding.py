@@ -204,7 +204,15 @@ DUPLICATE_MESSAGE = {
 
 def account_row(user_id: str, email: str | None, phone: str | None, created_at: str) -> dict[str, Any]:
     """The Account row to persist. password_hash stays NULL for now —
-    the column exists so Phase 3 can fill it without a schema change."""
+    the column exists so Phase 3 can fill it without a schema change.
+
+    2026-09-10: verification_required is 1 here and 0 everywhere else,
+    which is the entire grandfathering rule. This function only ever runs
+    for somebody signing up NOW, so every account it writes is asked to
+    confirm a contact; the seeded pool has no Account row at all, and the
+    rows written before today keep the column default. Nothing that
+    already works starts failing.
+    """
     return {
         "id": f"acct_{user_id}",
         "user_id": user_id,
@@ -213,6 +221,7 @@ def account_row(user_id: str, email: str | None, phone: str | None, created_at: 
         "password_hash": None,
         "verified_email": 0,
         "verified_phone": 0,
+        "verification_required": 1,
         "created_at": created_at,
     }
 

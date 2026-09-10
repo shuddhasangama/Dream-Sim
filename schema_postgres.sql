@@ -633,6 +633,10 @@ CREATE TABLE IF NOT EXISTS "Account" (
     password_hash   TEXT,
     verified_email  INTEGER NOT NULL DEFAULT 0 CHECK (verified_email IN (0, 1)),
     verified_phone  INTEGER NOT NULL DEFAULT 0 CHECK (verified_phone IN (0, 1)),
+    -- 2026-09-10. 1 only for accounts created once sign-up verification
+    -- existed. Every row written before today keeps the default 0, which
+    -- reads as "grandfathered" — see signup_verification.is_required().
+    verification_required INTEGER NOT NULL DEFAULT 0 CHECK (verification_required IN (0, 1)),
     created_at      TEXT NOT NULL,
     UNIQUE (user_id)
 );
@@ -699,3 +703,54 @@ CREATE TABLE IF NOT EXISTS "Ceremony" (
     UNIQUE (user_id, kind, scope_id)
 );
 CREATE INDEX IF NOT EXISTS idx_ceremony_scope ON "Ceremony" (kind, scope_id);
+
+
+-- ── ErrorReport ───────────────────────────────────────────────────────
+-- 2026-09-10, user's rule: "Can we have basic error handling so that
+-- Internal server error is not shown. Enough details are captured for
+-- issue resolution and debugging."
+--
+-- Written best-effort by errors.record(), on its own connection, because
+-- the database is exactly the thing that may be broken when a 500 fires.
+-- The stderr line is the copy that always exists; this is the one that
+-- can be searched by the reference the person read off their screen.
+--
+-- Field NAMES only, never values — see errors._NEVER_RECORD.
+CREATE TABLE IF NOT EXISTS "ErrorReport" (
+    id           TEXT PRIMARY KEY,
+    reference    TEXT NOT NULL,
+    occurred_at  TEXT NOT NULL,
+    status       INTEGER,
+    build        TEXT,
+    user_id      TEXT,
+    method       TEXT,
+    path         TEXT,
+    endpoint     TEXT,
+    error_type   TEXT,
+    message      TEXT,
+    stack        TEXT,
+    context_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_errorreport_ref ON "ErrorReport" (reference);
+CREATE INDEX IF NOT EXISTS idx_errorreport_at ON "ErrorReport" (occurred_at);
+
+
+-- ── SignupVerification ────────────────────────────────────────────────
+-- 2026-09-10, user's rule: "For the existing/simulated users can we leave
+-- the email/phone verification for now. Can we do this as a process for
+-- the new users signup."
+--
+-- One row per code issued. The code itself is NOT stored — only an
+-- HMAC of it, because six digits is trivially brute-forced from a dump.
+CREATE TABLE IF NOT EXISTS "SignupVerification" (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES "User"(id),
+    channel      TEXT NOT NULL CHECK (channel IN ('email', 'phone')),
+    destination  TEXT NOT NULL,
+    code_hash    TEXT NOT NULL,
+    sent_at      TEXT NOT NULL,
+    expires_at   TEXT NOT NULL,
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    consumed_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_signupverification_user ON "SignupVerification" (user_id, channel);

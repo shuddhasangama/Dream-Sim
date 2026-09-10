@@ -1,31 +1,76 @@
-/* Dare to Dream — simulation play-tester design system */
+/* Dare to Dream — the mock-up's design system, applied to the app.
+
+   2026-09-10, user's rule: "I want the Design system to be consistent
+   with the Mock-up as they are more user friendly and visually
+   appealing."
+
+   Two systems had been running side by side since the beginning: the
+   deployed app on #0C0912 with Sora, Fraunces and a mint/gold/coral
+   palette, and the mock-up on #141020 with Bricolage Grotesque, a coral
+   accent and a colour per end goal. This file moves to the mock-up's.
+
+   It is a TOKEN swap, not a rewrite. Every name below already existed
+   and is already used by 1,400 lines of rules and forty templates, so
+   changing the values moves the whole product at once and cannot leave
+   half the screens on the old palette. The only additions are the four
+   goal colours, which the app never had a way to express.
+
+   Goal colour semantics, from the mock-up:
+     Kids        amber
+     Intimacy    coral   (also the product's primary accent)
+     Cohabitate  mint
+     Travel      lilac
+*/
 
 :root {
-  --bg: #0C0912;
-  --card: #14101C;
-  --border: #241E2E;
+  /* ── ground ─────────────────────────────────────────────────────── */
+  --bg: #141020;              /* was #0C0912 */
+  --card: #1C1730;            /* was #14101C */
+  --card-2: #241D3C;          /* one step up, for a card inside a card */
+  --border: #2A2340;          /* was #241E2E */
+  --border-strong: #3A3154;
+
+  /* ── accent ─────────────────────────────────────────────────────── */
+  --coral-1: #FF4D6D;         /* the mock-up's accent, was #FF6B5E */
+  --coral-2: #FF7E5F;         /* warm second stop for the gradients */
   --mint: #3DDC97;
-  --teal: #2CC5C5;
-  --coral-1: #FF6B5E;
-  --coral-2: #FF9548;
-  --gold: #E8B54D;
+  --teal: #35C4C4;
+  --gold: #F5A524;            /* amber, was #E8B54D */
+  --lilac: #A78BFA;           /* new — Travel, and the calmer highlight */
+
+  /* ── end goals ──────────────────────────────────────────────────── */
+  /* The mock-up gives each goal a colour and keeps it everywhere. The
+     app had no token for this at all, so a vision tile looked like any
+     other card. */
+  --goal-kids: var(--gold);
+  --goal-intimacy: var(--coral-1);
+  --goal-cohabitate: var(--mint);
+  --goal-travel: var(--lilac);
+
+  /* ── text ───────────────────────────────────────────────────────── */
   --white: #FFFFFF;
-  --text-2: #C7C0D4;
-  --muted: #655C72;
+  --text-2: #C9C2DC;          /* was #C7C0D4 */
+  --muted: #6E6688;           /* was #655C72 */
 
   /* Dating match slots — docs/dating-stage-spec.md §11 */
   --slot1-accent: #B9A3C9;
-  --slot1-bg: #171320;
+  --slot1-bg: #1B1630;
   --slot2-accent: #8FB4E8;
-  --slot2-bg: #111C28;
-  --slot3-accent: #E8B54D;
-  --slot3-bg: #241F12;
+  --slot2-bg: #151E33;
+  --slot3-accent: #F5A524;
+  --slot3-bg: #2A2117;
 
-  --font-display: 'Sora', system-ui, sans-serif;
-  --font-eyebrow: 'Fraunces', Georgia, serif;
-  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+  /* ── type ───────────────────────────────────────────────────────── */
+  /* Bricolage Grotesque carries the mock-up. It has a real weight and
+     width range, so it can do the display AND the interface without a
+     second family — which is why the mock-up reads as one thing.
+     Plex Mono stays for anything that lines up in columns. */
+  --font-display: 'Bricolage Grotesque', 'Sora', system-ui, sans-serif;
+  --font-eyebrow: 'Bricolage Grotesque', 'Sora', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Courier New', monospace;
 
-  --radius: 16px;
+  --radius: 18px;             /* the mock-up's cards are a touch softer */
+  --radius-sm: 12px;
 }
 
 * {
@@ -60,12 +105,12 @@ body {
 
 .eyebrow {
   font-family: var(--font-eyebrow);
-  font-style: italic;
-  font-weight: 500;
-  font-size: 15px;
-  color: var(--gold);
-  letter-spacing: 0.2px;
-  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--coral-1);
+  margin-bottom: 8px;
 }
 
 h1 {
@@ -160,11 +205,10 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-eyebrow);
-  font-style: italic;
-  font-weight: 600;
-  font-size: 16px;
-  color: #2A0C0A;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: #3A0A16;
 }
 
 /* ── buttons ────────────────────────────────────────────────────────── */
@@ -189,8 +233,8 @@ a {
 
 .btn-primary,
 .btn-widen {
-  background: linear-gradient(120deg, var(--mint), var(--teal));
-  color: #04231A;
+  background: linear-gradient(120deg, var(--coral-1), var(--coral-2));
+  color: #2A0710;
 }
 
 .btn-primary:hover,
@@ -595,8 +639,8 @@ a {
 }
 
 .stage-node.active {
-  color: #04231A;
-  background: linear-gradient(120deg, var(--mint), var(--teal));
+  color: #1B0F2E;
+  background: linear-gradient(120deg, var(--lilac), #C4B0FF);
   border-color: transparent;
 }
 
@@ -1207,8 +1251,8 @@ select:focus {
 }
 
 .clause-title {
-  font-family: var(--font-eyebrow);
-  font-style: italic;
+  font-family: var(--font-display);
+  font-weight: 600;
   font-size: 13px;
   color: var(--gold);
 }
@@ -1297,8 +1341,8 @@ select:focus {
 }
 
 .stage-pip.current {
-  color: #04231A;
-  background: linear-gradient(120deg, var(--mint), var(--teal));
+  color: #1B0F2E;
+  background: linear-gradient(120deg, var(--lilac), #C4B0FF);
   border-color: transparent;
   font-weight: 600;
 }
@@ -1448,3 +1492,166 @@ body { -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; }
 .multi-field .field-label { margin-bottom: 8px; }
 .multi-field .field-unit { margin-left: 6px; opacity: .8; }
 .chip-check.chip-disabled span { opacity: .38; cursor: not-allowed; }
+
+/* ── REACH: ignore / show all ─────────────────────────────────────────
+   2026-09-10, user's rule: "Can we have ignore/showall option in REACH -
+   so that some filters are ignored and the answer can be any."
+
+   A switched-off filter has to READ as switched off across the whole row
+   — not just a tick in a box — because the person is scanning seven of
+   these for the one costing them everybody. */
+
+.filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-showall {
+  padding: 7px 14px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.filter-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.filter-row:hover {
+  background: var(--card-2);
+}
+
+.filter-row.is-any {
+  background: var(--card-2);
+  border-color: var(--border-strong);
+}
+
+.filter-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--coral-1);
+  cursor: pointer;
+}
+
+.filter-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.filter-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Switched off: the name goes quiet and picks up the "any" mark, so the
+   state is legible without reading the count. */
+.filter-row.is-any .filter-name {
+  color: var(--text-2);
+}
+
+.filter-row.is-any .filter-name::after {
+  content: "any";
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bg);
+  background: var(--mint);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.filter-blurb {
+  color: var(--muted);
+}
+
+.filter-delta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mint);
+  text-align: right;
+  padding-top: 2px;
+  white-space: nowrap;
+}
+
+.filter-row.is-any .filter-delta {
+  color: var(--muted);
+}
+
+/* ── error page ──────────────────────────────────────────────────────
+   2026-09-10, user's rule: "Can we have basic error handling so that
+   Internal server error is not shown." */
+
+.error-page {
+  padding-top: 40px;
+}
+
+.error-ref {
+  border-color: var(--border-strong);
+}
+
+.error-code {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--coral-1);
+  margin: 6px 0 8px;
+}
+
+.traceback {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin: 8px 0 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* ── end-goal colour semantics ────────────────────────────────────────
+   From the mock-up: each end goal keeps its colour everywhere it
+   appears, so a Kids tile is recognisable before it is read. */
+
+[data-goal] {
+  --goal: var(--muted);
+  border-left: 3px solid var(--goal);
+}
+
+[data-goal="Kids"]              { --goal: var(--goal-kids); }
+[data-goal="Intimacy"]          { --goal: var(--goal-intimacy); }
+[data-goal="Cohabitate"]        { --goal: var(--goal-cohabitate); }
+[data-goal="Travel together"]   { --goal: var(--goal-travel); }
+
+.goal-tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--goal, var(--text-2));
+}

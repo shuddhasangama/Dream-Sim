@@ -33,6 +33,7 @@ import dateplan
 import db
 import demo
 import disclosure
+import errors
 import escalations
 import expectations
 import form_memory
@@ -51,6 +52,7 @@ import outcomes
 import payments
 import progress
 import stats_edit
+import signup_verification
 import stage_gate
 import vision
 from generate_users import COHABIT_FOCUS, KIDS_STANCES, from_user_row, to_user_row
@@ -158,6 +160,72 @@ def get_db():
         g.db = db.get_connection()
         db.init_db(g.db)
     return g.db
+
+
+# ── when something breaks ──────────────────────────────────────────────────
+# 2026-09-10, user's rule: "Can we have basic error handling so that
+# Internal server error is not shown. Enough details are captured for issue
+# resolution and debugging which will serve as a pointer for you."
+#
+# One handler shape for every status. The person gets the product's own
+# page and a reference code; we get the incident on stderr and, where the
+# database is still working, in ErrorReport.
+
+
+def _current_user_id() -> str | None:
+    try:
+        return session.get("user_id")
+    except Exception:
+        return None
+
+
+def _handle(status: int, exc: BaseException | None, log_it: bool):
+    detail = errors.describe(request, _current_user_id(), exc, status)
+    if log_it:
+        errors.log(detail)
+        errors.record(db.get_connection, detail)
+
+    copy = errors.copy_for(status)
+    # An API caller gets JSON with the same reference, so a failing fetch
+    # in app.js can show the person something better than "failed".
+    wants_json = (request.path.startswith("/api/")
+                  or request.accept_mimetypes.best == "application/json"
+                  or request.is_json)
+    if wants_json:
+        return jsonify({"error": copy["title"], "detail": copy["body"],
+                        "reference": detail["reference"] if log_it else None}), status
+    return render_template("error.html", status=status, copy=copy,
+                           reference=detail["reference"] if log_it else None), status
+
+
+@app.errorhandler(400)
+def _error_400(exc):
+    return _handle(400, exc, log_it=False)
+
+
+@app.errorhandler(403)
+def _error_403(exc):
+    return _handle(403, exc, log_it=False)
+
+
+@app.errorhandler(404)
+def _error_404(exc):
+    # A mistyped URL is not an incident. Recording every one of them fills
+    # the table with crawler noise and buries the errors that matter.
+    return _handle(404, exc, log_it=False)
+
+
+@app.errorhandler(Exception)
+def _error_unhandled(exc):
+    """Everything that is not a deliberate abort(). This is the one the
+    user was seeing as "Internal Server Error"."""
+    from werkzeug.exceptions import HTTPException
+    if isinstance(exc, HTTPException):
+        # Flask routes known statuses to the handlers above; anything else
+        # (405, 413, …) keeps its own status and is still shown in our
+        # own page rather than Werkzeug's.
+        return _handle(exc.code or 500, exc, log_it=(exc.code or 500) >= 500)
+    return _handle(500, exc, log_it=True)
 
 
 @app.teardown_appcontext
@@ -682,7 +750,8 @@ def logout():
 def dashboard():
     user = current_user()
     couple = find_couple_for_user(user["user_id"]) if user["journey_state"] != "dating" else None
-    return render_template("dashboard.html", user=user, couple=couple)
+    return render_template("dashboard.html", user=user, couple=couple,
+                           verification=verification_status(user["user_id"]))
 
 
 # ── /reach ──────────────────────────────────────────────────────────────
@@ -775,6 +844,40 @@ def locked_lever_view(user: dict) -> list[dict]:
     ]
 
 
+_FILTER_BLURBS = {
+    "age": "Any age in the pool.",
+    "height_cm": "Any height.",
+    "weight_kg": "Any weight.",
+    "waist_in": "Any waist.",
+    "distance_km": "Anywhere, not just your city.",
+    "nationality": "Any nationality.",
+    "religion": "Any religion, or none.",
+    "veg_only": "People who eat anything, too.",
+    "wants_kids": "Whether or not they have Kids in their vision.",
+    "no_kids_wanted": "Whether or not they have Kids in their vision.",
+    "non_smoker": "Whatever they answered about smoking.",
+    "non_drinker": "Whatever they answered about drinking.",
+}
+
+
+def filter_view(user: dict, pool: list[dict]) -> list[dict]:
+    """The ignore/show-all row for each filter, with what it costs.
+
+    2026-09-10, user's rule: "Can we have ignore/showall option in REACH -
+    so that some filters are ignored and the answer can be any."
+
+    The count beside each toggle is the point. Seven filters AND-ed
+    together in both directions is fourteen conditions, and no one can
+    tell by looking which of them is the one holding everybody out.
+    matching.filter_states() measures each one against the live pool, so
+    the screen answers that instead of asking the person to guess.
+    """
+    return [
+        {**entry, "blurb": _FILTER_BLURBS.get(entry["name"], "")}
+        for entry in matching.filter_states(user, pool)
+    ]
+
+
 @app.route("/reach")
 @login_required
 def reach():
@@ -785,8 +888,63 @@ def reach():
     counts = matching.reciprocity_counts(user, pool)
     deltas = [d for d in matching.whatif_deltas(user, pool) if d["lever"] not in _SLIDER_KEYS]
     sliders = build_sliders(user, pool)
+    filters = filter_view(user, pool)
     return render_template("reach.html", counts=counts, deltas=deltas, sliders=sliders,
-                           locked_levers=locked_lever_view(user))
+                           locked_levers=locked_lever_view(user),
+                           filters=filters,
+                           ignored_count=sum(1 for f in filters if f["ignored"]),
+                           all_ignored=bool(filters) and all(f["ignored"] for f in filters))
+
+
+@app.route("/reach/ignore", methods=["POST"])
+@login_required
+def reach_ignore():
+    """Set one filter to "any", or put it back. Nothing is deleted: the
+    range or dealbreaker stays exactly where it was and returns intact
+    when the person switches it on again."""
+    user = current_user()
+    if reach_locked(user):
+        return jsonify({"error": "REACH is locked once you're past Dating"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    name = payload.get("filter")
+    if name not in matching.IGNORABLE:
+        return jsonify({"error": f"{name!r} cannot be set to any"}), 400
+
+    updated = matching.set_ignored(user, name, bool(payload.get("ignore")))
+    save_preferences(user["user_id"], updated["preferences"])
+    return jsonify(_reach_state(user["user_id"]))
+
+
+@app.route("/reach/show-all", methods=["POST"])
+@login_required
+def reach_show_all():
+    """Every filter to any at once, or every filter back on."""
+    user = current_user()
+    if reach_locked(user):
+        return jsonify({"error": "REACH is locked once you're past Dating"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    updated = matching.set_ignored_all(user, bool(payload.get("ignore")))
+    save_preferences(user["user_id"], updated["preferences"])
+    return jsonify(_reach_state(user["user_id"]))
+
+
+def _reach_state(user_id: str) -> dict:
+    """The whole screen's numbers, recomputed from storage. Every REACH
+    action returns this rather than a partial patch, so the counts on the
+    screen can never disagree with what is saved."""
+    pool = load_pool()
+    fresh = load_user(user_id)
+    filters = filter_view(fresh, pool)
+    return {
+        "counts": matching.reciprocity_counts(fresh, pool),
+        "deltas": [d for d in matching.whatif_deltas(fresh, pool)
+                   if d["lever"] not in _SLIDER_KEYS],
+        "filters": filters,
+        "ignored_count": sum(1 for f in filters if f["ignored"]),
+        "all_ignored": bool(filters) and all(f["ignored"] for f in filters),
+    }
 
 
 @app.route("/reach/widen", methods=["POST"])
@@ -801,14 +959,9 @@ def reach_widen():
     if lever not in matching.LEVERS:
         return jsonify({"error": f"unknown lever {lever!r}"}), 400
 
-    pool = load_pool()
     widened = matching.apply_lever_widen(user, lever)
     save_preferences(user["user_id"], widened["preferences"])
-
-    fresh_user = load_user(user["user_id"])
-    counts = matching.reciprocity_counts(fresh_user, pool)
-    deltas = [d for d in matching.whatif_deltas(fresh_user, pool) if d["lever"] not in _SLIDER_KEYS]
-    return jsonify({"counts": counts, "deltas": deltas})
+    return jsonify(_reach_state(user["user_id"]))
 
 
 @app.route("/reach/set-range", methods=["POST"])
@@ -827,14 +980,9 @@ def reach_set_range():
     except (TypeError, ValueError):
         return jsonify({"error": "min/max must be numbers"}), 400
 
-    pool = load_pool()
     updated = matching.set_range(user, lever, lo, hi)
     save_preferences(user["user_id"], updated["preferences"])
-
-    fresh_user = load_user(user["user_id"])
-    counts = matching.reciprocity_counts(fresh_user, pool)
-    deltas = [d for d in matching.whatif_deltas(fresh_user, pool) if d["lever"] not in _SLIDER_KEYS]
-    return jsonify({"counts": counts, "deltas": deltas})
+    return jsonify(_reach_state(user["user_id"]))
 
 
 # ── Dating stage (docs/dating-stage-spec.md) ───────────────────────────────
@@ -1171,6 +1319,21 @@ def week_act():
     action = request.form.get("action")
     if action not in ("interest", "pass"):
         abort(400)
+
+    # 2026-09-10: the one place contact verification actually gates.
+    # Passing is always allowed — nobody should be trapped with a
+    # candidate because they have not confirmed an email. Expressing
+    # interest is what can lead to a lock-in, and a lock-in is two people
+    # committing to meet, with money and a signature behind it. An
+    # unreachable contact matters exactly there and nowhere earlier.
+    #
+    # For everyone already in the database this is False, so nothing that
+    # works today stops working — see signup_verification.is_required().
+    if action == "interest" and not contact_verified(user["user_id"]):
+        _remember_form("Confirm your email or phone before you say yes to someone — "
+                       "it is how we reach you once a date is set.",
+                       endpoint="week")
+        return redirect(url_for("verify_contact"))
 
     match_id = request.form.get("match_id")
     row = db.fetch_one(get_db(), "Match", id=match_id) if match_id else None
@@ -3535,6 +3698,111 @@ def onboard_finish():
     )
 
 
+# ── confirming a contact, for new sign-ups only ────────────────────────────
+# 2026-09-10, user's rule: "For the existing/simulated users can we leave
+# the email/phone verification for now. Can we do this as a process for
+# the new users signup."
+
+
+def _account_for(user_id: str) -> dict | None:
+    row = db.fetch_one(get_db(), "Account", user_id=user_id)
+    return dict(row) if row else None
+
+
+def _latest_challenge(user_id: str, channel: str) -> dict | None:
+    rows = [dict(r) for r in db.fetch_all(get_db(), "SignupVerification",
+                                          user_id=user_id, channel=channel)]
+    rows.sort(key=lambda r: r.get("sent_at") or "")
+    return rows[-1] if rows else None
+
+
+def verification_status(user_id: str) -> dict:
+    return signup_verification.status(_account_for(user_id))
+
+
+def contact_verified(user_id: str) -> bool:
+    """The gate. False only for an account created since this existed
+    that has confirmed neither channel."""
+    return signup_verification.is_satisfied(_account_for(user_id))
+
+
+@app.route("/verify-contact", methods=["GET"])
+@login_required
+def verify_contact():
+    user = current_user()
+    state = verification_status(user["user_id"])
+    # `remembered` reaches the template through the context processor,
+    # which is where every other screen reads its error from.
+    return render_template("verify_contact.html", state=state,
+                           sent=session.pop("verification_shown_code", None),
+                           channel_sent=session.pop("verification_channel", None))
+
+
+@app.route("/verify-contact/send", methods=["POST"])
+@login_required
+def verify_contact_send():
+    user = current_user()
+    channel = (request.form.get("channel") or "").strip()
+    account = _account_for(user["user_id"])
+    if channel not in signup_verification.CHANNELS or not (account or {}).get(channel):
+        _remember_form("There is nothing to send a code to on that channel.",
+                       endpoint="verify_contact")
+        return redirect(url_for("verify_contact"))
+
+    previous = _latest_challenge(user["user_id"], channel)
+    if not signup_verification.can_resend(previous):
+        _remember_form(
+            f"A code went out less than a minute ago. Give it "
+            f"{signup_verification.RESEND_COOLDOWN_SECONDS} seconds before asking again.",
+            endpoint="verify_contact")
+        return redirect(url_for("verify_contact"))
+
+    code = signup_verification.new_code()
+    row = signup_verification.challenge_row(
+        user["user_id"], channel, account[channel], code)
+    db.insert_row(get_db(), "SignupVerification", row)
+    get_db().commit()
+
+    outcome = signup_verification.deliver(channel, account[channel], code)
+    # Nothing is sent yet, so the code is shown on screen and the screen
+    # says so. A page claiming to have sent an SMS it did not send is
+    # worse than one that admits the channel is not built.
+    if outcome.get("show_on_screen"):
+        session["verification_shown_code"] = outcome["show_on_screen"]
+        session["verification_channel"] = channel
+    return redirect(url_for("verify_contact"))
+
+
+@app.route("/verify-contact/check", methods=["POST"])
+@login_required
+def verify_contact_check():
+    user = current_user()
+    channel = (request.form.get("channel") or "").strip()
+    if channel not in signup_verification.CHANNELS:
+        abort(400)
+
+    row = _latest_challenge(user["user_id"], channel)
+    verdict = signup_verification.check(row, request.form.get("code", ""))
+
+    if row is not None and verdict["reason"] == "wrong":
+        # Count the try. Without this the attempt cap is decoration.
+        db.insert_row(get_db(), "SignupVerification",
+                      {**row, "attempts": int(row.get("attempts") or 0) + 1})
+
+    if not verdict["ok"]:
+        get_db().commit()
+        _remember_form(verdict["message"], endpoint="verify_contact")
+        return redirect(url_for("verify_contact"))
+
+    db.insert_row(get_db(), "SignupVerification",
+                  {**row, "consumed_at": str(get_clock())})
+    account = _account_for(user["user_id"])
+    db.insert_row(get_db(), "Account",
+                  {**account, f"verified_{channel}": 1})
+    get_db().commit()
+    return redirect(url_for("dashboard"))
+
+
 @app.route("/onboarding/restart", methods=["POST"])
 def onboard_restart():
     session.pop("onboarding", None)
@@ -3790,10 +4058,23 @@ def _ceremony_signatories(peers: list[dict]) -> list[dict]:
     for user_id, is_me in ((user["user_id"], True), (partner_id, False)):
         row = by_user.get(user_id)
         who = load_user(user_id)
+        signed_name = (row or {}).get("signed_name")
+        # 2026-09-10: the template used to prefer signed_name over the
+        # masked one, so the moment a partner signed, their real legal
+        # name replaced the mask and appeared on the other person's
+        # screen. Signing disclosed exactly what the mask exists to hide.
+        #
+        # Your own signature is always shown to you in full — it is your
+        # name. Theirs is initialled until you have met, on the same
+        # _have_met() rule as everywhere else, and the full name is still
+        # recorded against the signature either way.
         out.append({
             "is_me": is_me,
             "name": (named_for(user["user_id"], who) or {}).get("name", MASKED_NAME),
-            "signed_name": (row or {}).get("signed_name"),
+            "signed_name": signed_name,
+            "signed_display": ceremony.signature_display(
+                signed_name,
+                revealed=is_me or _have_met(user["user_id"], user_id)),
             "signed_at": (row or {}).get("signed_at"),
             "face_verified": bool((row or {}).get("face_verified")),
             "complete": bool(row) and ceremony.is_complete(row),
@@ -4437,6 +4718,29 @@ def _mutually_open_pairs(limit: int = 25) -> list[dict]:
             if len(pairs) >= limit:
                 return pairs
     return pairs
+
+
+@app.route("/admin/errors")
+def admin_errors():
+    """Look up what actually happened, by the reference the person read
+    off their screen. Newest first, and one row can be opened in full.
+
+    This is the "pointer" half of the user's rule — the friendly page is
+    useless on its own unless the code on it leads somewhere."""
+    conn = get_db()
+    reference = (request.args.get("ref") or "").strip().upper()
+    if reference:
+        rows = [dict(r) for r in db.fetch_all(conn, "ErrorReport", reference=reference)]
+    else:
+        rows = [dict(r) for r in db.fetch_all(conn, "ErrorReport")]
+    rows.sort(key=lambda r: r.get("occurred_at") or "", reverse=True)
+    for row in rows:
+        try:
+            row["context"] = json.loads(row.get("context_json") or "{}")
+        except (ValueError, TypeError):
+            row["context"] = {}
+    return render_template("admin_errors.html", rows=rows[:100],
+                           reference=reference, total=len(rows))
 
 
 @app.route("/admin/pairs")

@@ -383,13 +383,17 @@ class SignatureBlockTests(RouteTestCase):
         self.assertIn("your match", body)
 
     def test_both_signatures_show_once_both_have_signed(self):
+        """2026-09-10: this used to assert that BOTH full names appear.
+        They no longer do, and that was the defect — signing revealed the
+        legal name the rest of the product masks. Your own signature is
+        shown to you in full; theirs is initialled until you have met."""
         self.sign_as("u1")
         self.sign_as("u2")
         self.login("u1")
         body = self.page()
-        for name in ("Name u1", "Name u2"):
-            with self.subTest(name=name):
-                self.assertIn(name, body)
+        self.assertIn("Name u1", body)                  # mine, in full
+        self.assertNotIn("Name u2", body)               # theirs, masked
+        self.assertIn("N. U.", body)                    # but visibly signed
         self.assertNotIn("Not yet signed", body)
 
     def test_it_says_one_signature_binds_nothing(self):

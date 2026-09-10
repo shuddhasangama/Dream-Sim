@@ -14,6 +14,59 @@
   </div>
 </div>
 
+{# ── ignore / show all ─────────────────────────────────────────────
+   2026-09-10, user's rule: "Can we have ignore/showall option in REACH -
+   so that some filters are ignored and the answer can be any."
+
+   The number beside each switch is the part that matters. Seven filters
+   AND-ed in both directions is fourteen conditions, and nobody can tell
+   by looking which one is holding everybody out. Measured against the
+   live pool, mutually — so it never flatters itself. #}
+<div class="card filter-panel">
+  <div class="lever-row">
+    <div class="section-label" style="margin:0;">What you are filtering on</div>
+    <button class="btn-secondary btn-showall" id="show-all"
+            data-ignore="{{ 'false' if all_ignored else 'true' }}">
+      {% if all_ignored %}Put my filters back{% else %}Show everyone{% endif %}
+    </button>
+  </div>
+  <div class="hint" id="ignored-summary">
+    {% if ignored_count %}
+      {{ ignored_count }} of {{ filters|length }} set to any. Nothing was deleted — switch one
+      back on and your range returns exactly as you left it.
+    {% else %}
+      Set any of these to <strong>any</strong> and it stops narrowing your pool. The count shows
+      what each one is costing you right now.
+    {% endif %}
+  </div>
+
+  <div class="filter-rows" id="filter-rows">
+    {% for f in filters %}
+    <label class="filter-row{% if f.ignored %} is-any{% endif %}" data-filter="{{ f.name }}">
+      <input type="checkbox" class="filter-any" {% if f.ignored %}checked{% endif %}>
+      <span class="filter-body">
+        <span class="filter-name">{{ f.label }}{% if f.sensitive %}<span class="sensitive-tag">yours to explore</span>{% endif %}</span>
+        <span class="filter-blurb micro">{{ f.blurb }}</span>
+      </span>
+      <span class="filter-delta micro">
+        {% if f.ignored %}
+          {% if f.delta_if_ignored > 0 %}−{{ f.delta_if_ignored }} if switched back on{% else %}set to any{% endif %}
+        {% elif f.delta_if_ignored > 0 %}
+          +{{ f.delta_if_ignored }} if set to any
+        {% else %}
+          costs you nobody
+        {% endif %}
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="micro" style="margin-top:10px;">
+    Widening yours only helps where theirs already lets you in — both of you have to be open,
+    which is why one of these can read “costs you nobody”.
+  </div>
+</div>
+
 <div class="micro section-label">Drag either end — set your own range</div>
 <div id="slider-list">
   {% for s in sliders %}

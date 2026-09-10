@@ -58,6 +58,10 @@ TABLES = {
     "HomeInvite",
     # Dating exit / Relationship entry gate (docs/relationship-stage-spec.md Part B)
     "StageGate",
+    # Error capture (errors.py) — written best-effort when a route fails
+    "ErrorReport",
+    # Contact verification for new sign-ups (signup_verification.py)
+    "SignupVerification",
     "GateResponse",
     "GateAnalysis",
     "GateAsk",

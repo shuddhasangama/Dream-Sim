@@ -33,7 +33,89 @@ function renderReach(data) {
     `;
     list.appendChild(card);
   });
+
+  renderFilters(data);
 }
+
+// 2026-09-10: the ignore/show-all rows. Re-rendered from the same payload
+// every action returns, so the counts beside a switch can never disagree
+// with what is saved.
+function renderFilters(data) {
+  const rows = document.getElementById("filter-rows");
+  if (!rows || !data.filters) return;
+
+  rows.innerHTML = "";
+  data.filters.forEach((f) => {
+    let delta;
+    if (f.ignored) {
+      delta = f.delta_if_ignored > 0
+        ? `\u2212${f.delta_if_ignored} if switched back on` : "set to any";
+    } else {
+      delta = f.delta_if_ignored > 0
+        ? `+${f.delta_if_ignored} if set to any` : "costs you nobody";
+    }
+    const label = document.createElement("label");
+    label.className = "filter-row" + (f.ignored ? " is-any" : "");
+    label.dataset.filter = f.name;
+    label.innerHTML = `
+      <input type="checkbox" class="filter-any" ${f.ignored ? "checked" : ""}>
+      <span class="filter-body">
+        <span class="filter-name">${f.label}${f.sensitive ? '<span class="sensitive-tag">yours to explore</span>' : ""}</span>
+        <span class="filter-blurb micro">${f.blurb || ""}</span>
+      </span>
+      <span class="filter-delta micro">${delta}</span>
+    `;
+    rows.appendChild(label);
+  });
+
+  const summary = document.getElementById("ignored-summary");
+  if (summary) {
+    summary.innerHTML = data.ignored_count
+      ? `${data.ignored_count} of ${data.filters.length} set to any. Nothing was deleted — switch one back on and your range returns exactly as you left it.`
+      : "Set any of these to <strong>any</strong> and it stops narrowing your pool. The count shows what each one is costing you right now.";
+  }
+  const showAll = document.getElementById("show-all");
+  if (showAll) {
+    showAll.dataset.ignore = data.all_ignored ? "false" : "true";
+    showAll.textContent = data.all_ignored ? "Put my filters back" : "Show everyone";
+  }
+}
+
+async function postReach(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(url + " failed");
+  renderReach(await res.json());
+}
+
+document.addEventListener("change", (event) => {
+  const box = event.target.closest(".filter-any");
+  if (!box) return;
+  const row = box.closest(".filter-row");
+  row.classList.toggle("is-any", box.checked);
+  postReach("/reach/ignore", { filter: row.dataset.filter, ignore: box.checked })
+    .catch(() => {
+      // Put the switch back where it was rather than showing a state
+      // the server did not accept.
+      box.checked = !box.checked;
+      row.classList.toggle("is-any", box.checked);
+    });
+});
+
+document.addEventListener("click", (event) => {
+  const btn = event.target.closest("#show-all");
+  if (!btn || btn.disabled) return;
+  const wanted = btn.dataset.ignore === "true";
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Working…";
+  postReach("/reach/show-all", { ignore: wanted })
+    .catch(() => { btn.textContent = original; })
+    .finally(() => { btn.disabled = false; });
+});
 
 async function widenLever(lever, btn) {
   const originalText = btn.textContent;

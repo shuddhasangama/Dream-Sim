@@ -96,6 +96,13 @@ _RELIGION_FAMILY = {
 
 _VEG_COMPATIBLE_DIETS = {"Vegetarian", "Vegan", "Jain"}
 
+# 2026-09-10: the values these read live in generate_users.SMOKING /
+# DRINKING. Kept as literals here rather than imported, because matching
+# must not depend on the generator — a self-registered user picks from
+# the same list in onboarding.
+_NON_SMOKER_OK = {"Never", "Quitting"}
+_NON_DRINKER_OK = {"Never", "Socially"}
+
 # Every one of these is a [min, max] range in preferences.adjustable,
 # checked directly against the matching stats.KEY on the candidate.
 # distance_km is also a range but isn't a stats field (it's derived from
@@ -120,13 +127,88 @@ def _has_vision(user: dict[str, Any], key: str) -> bool:
     return any(v["key"] == key for v in user["visions"])
 
 
+# ── "any" / ignore ────────────────────────────────────────────────────────
+# 2026-09-10, user's rule: "Can we have ignore/showall option in REACH -
+# so that some filters are ignored and the answer can be any. Like
+# religion, budget, Nationality, smoking etc."
+#
+# Stored as preferences["ignored"], a plain list of names. Deliberately
+# NOT a sentinel inside adjustable[lever]: that field holds ranges and
+# lists, and putting the string "any" in it is exactly the shape that put
+# a KeyError in the middle of a pool scan on 2026-09-10. A separate list
+# is additive, JSON-safe, and absent on every row written before today —
+# which reads as "nothing ignored", so no existing user changes.
+#
+# Ignoring is not deleting. The range or the dealbreaker stays exactly
+# where the person left it and comes back the moment they switch it on
+# again, which is what makes it safe to offer as a one-click experiment.
+IGNORABLE_LEVERS = ("age", "height_cm", "weight_kg", "waist_in",
+                    "distance_km", "nationality", "religion")
+IGNORABLE_DEALBREAKERS = ("veg_only", "wants_kids", "no_kids_wanted",
+                          "non_smoker", "non_drinker")
+IGNORABLE = IGNORABLE_LEVERS + IGNORABLE_DEALBREAKERS
+
+# Gender is absent on purpose. It is not a preference in this model, it
+# is who the person is looking for, and there is no orientation field to
+# read yet — see fits_filters().
+
+
+def ignored_set(preferences: dict[str, Any] | None) -> set[str]:
+    """What this person has switched off. Tolerant of every shape a row
+    written before today can be in."""
+    raw = (preferences or {}).get("ignored")
+    if isinstance(raw, str):
+        raw = [raw]
+    return {name for name in (raw or []) if name in IGNORABLE}
+
+
+def is_ignored(preferences: dict[str, Any] | None, name: str) -> bool:
+    return name in ignored_set(preferences)
+
+
+def set_ignored(user: dict[str, Any], name: str, ignore: bool) -> dict[str, Any]:
+    """Switch one filter off (or back on). Returns a new user dict."""
+    if name not in IGNORABLE:
+        raise ValueError(f"{name!r} cannot be set to any")
+    current = ignored_set(user.get("preferences"))
+    current = current | {name} if ignore else current - {name}
+    return {**user, "preferences": {**user["preferences"],
+                                    "ignored": sorted(current)}}
+
+
+def set_ignored_all(user: dict[str, Any], ignore: bool) -> dict[str, Any]:
+    """Show everyone, or put every filter back. The bulk action behind
+    "Show all" — and the reason ignoring never deletes anything."""
+    return {**user, "preferences": {
+        **user["preferences"],
+        "ignored": sorted(IGNORABLE) if ignore else [],
+    }}
+
+
+def active_filter_names(user: dict[str, Any]) -> list[str]:
+    """Filters this person is actually being narrowed by right now."""
+    prefs = user["preferences"]
+    off = ignored_set(prefs)
+    names = [lever for lever in IGNORABLE_LEVERS
+             if lever in prefs["adjustable"] and lever not in off]
+    names += [tag for tag in prefs["fixed"]["dealbreakers"] if tag not in off]
+    return names
+
+
 def _dealbreaker_satisfied(tag: str, candidate: dict[str, Any]) -> bool:
     """Check one of user_a's fixed.dealbreakers tags against candidate B.
 
-    Only tags backed by a modeled attribute are enforced. "non_smoker" and
-    "non_drinker" have no corresponding field in this simulation's Stats
-    (deliberately scoped to age/height/income/diet/education/nationality/
-    religion) and are treated as vacuously satisfied rather than invented.
+    2026-09-10: "non_smoker" and "non_drinker" used to be treated as
+    vacuously satisfied, because there was no field to check. There is
+    now — smoking and drinking are real Stats — so a person who set that
+    dealbreaker stops being quietly ignored. A blank answer does NOT
+    satisfy it, for the same reason a blank diet does not satisfy
+    veg_only: a hard exclusion is not waived because the other person
+    left the field empty.
+
+    "Quitting" counts as satisfying non_smoker. Someone who has set that
+    dealbreaker is excluding a smoking habit, and refusing the person
+    doing something about theirs is not what they asked for.
 
     wants_kids/no_kids_wanted check the Kids vision's PRESENCE, not a
     stance — generate_users.py no longer decides a Kids stance at Dating
@@ -135,6 +217,10 @@ def _dealbreaker_satisfied(tag: str, candidate: dict[str, Any]) -> bool:
     candidate having "Kids" among their selected visions means; its
     absence is what "no_kids_wanted" checks for.
     """
+    if tag == "non_smoker":
+        return candidate["stats"].get("smoking") in _NON_SMOKER_OK
+    if tag == "non_drinker":
+        return candidate["stats"].get("drinking") in _NON_DRINKER_OK
     if tag == "veg_only":
         # An undeclared diet cannot satisfy a veg-only dealbreaker. Same
         # rule as the range levers: a hard exclusion is not waived just
@@ -179,8 +265,11 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
         return False
 
     prefs = user_a["preferences"]
+    off = ignored_set(prefs)
 
     for tag in prefs["fixed"]["dealbreakers"]:
+        if tag in off:
+            continue
         if not _dealbreaker_satisfied(tag, user_b):
             return False
 
@@ -197,7 +286,7 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     #     makes filling your stats in worth doing: undeclared fields keep
     #     you out of granular searches rather than sailing through them.
     for field in RANGE_LEVERS:
-        if field not in adj:
+        if field not in adj or field in off:
             continue
         lo, hi = adj[field]
         value = b_stats.get(field)
@@ -206,12 +295,13 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
         if not (lo <= value <= hi):
             return False
 
-    dist_lo, dist_hi = adj["distance_km"]
-    distance = city_distance_km(user_a["city"], user_b["city"])
-    if not (dist_lo <= distance <= dist_hi):
-        return False
+    if "distance_km" not in off:
+        dist_lo, dist_hi = adj["distance_km"]
+        distance = city_distance_km(user_a["city"], user_b["city"])
+        if not (dist_lo <= distance <= dist_hi):
+            return False
 
-    if "nationality" in adj:
+    if "nationality" in adj and "nationality" not in off:
         if not _nationality_fits(adj["nationality"], b_stats.get("nationality")):
             return False
 
@@ -219,7 +309,7 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     # both relative to user_a's own, so with either missing there is no
     # question to answer and the filter simply does not apply.
     own_religion = user_a["stats"].get("religion")
-    if "religion" in adj and own_religion:
+    if "religion" in adj and own_religion and "religion" not in off:
         if not _religion_fits(adj["religion"], own_religion, b_stats.get("religion")):
             return False
 
@@ -503,7 +593,12 @@ def whatif_deltas(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict
     baseline = sum(1 for c in candidates if mutual_open(user, c))
 
     results = []
+    off = ignored_set(user["preferences"])
     for lever in available_levers(user):
+        if lever in off:
+            # Widening a filter that is already set to any changes
+            # nothing. Offering it would be a control that does not work.
+            continue
         widened, from_value, to_value = _widened_user(user, lever)
         new_mutual = sum(1 for c in candidates if mutual_open(widened, c))
         entry = {
@@ -518,6 +613,56 @@ def whatif_deltas(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict
     return results
 
 
+_FILTER_LABELS = {
+    "age": "Age", "height_cm": "Height", "weight_kg": "Weight",
+    "waist_in": "Waist", "distance_km": "Distance", "nationality": "Nationality",
+    "religion": "Religion", "veg_only": "Vegetarian only",
+    "wants_kids": "Wants kids", "no_kids_wanted": "Does not want kids",
+    "non_smoker": "Non-smoker", "non_drinker": "Non-drinker",
+}
+
+
+def filter_states(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every filter this person has, whether it is switched on, and what
+    switching it off would actually do to their reach.
+
+    This is the honest version of an "ignore" control. A toggle that only
+    said "any" would leave someone guessing which of seven filters is the
+    one costing them everybody; the count next to it says so outright.
+
+    `delta_if_ignored` is measured the same way whatif_deltas() measures a
+    widen — mutually open, both directions — so the number cannot flatter
+    itself. Setting a filter to any only helps where the other person's
+    filters already admit you.
+    """
+    candidates = _pool_excluding_self(user, pool)
+    baseline = sum(1 for c in candidates if mutual_open(user, c))
+    prefs = user["preferences"]
+    off = ignored_set(prefs)
+
+    names = [lever for lever in IGNORABLE_LEVERS if lever in prefs["adjustable"]]
+    names += [tag for tag in prefs["fixed"]["dealbreakers"] if tag in IGNORABLE_DEALBREAKERS]
+
+    out = []
+    for name in names:
+        ignored = name in off
+        flipped = set_ignored(user, name, not ignored)
+        after = sum(1 for c in candidates if mutual_open(flipped, c))
+        out.append({
+            "name": name,
+            "label": _FILTER_LABELS.get(name, name),
+            "kind": "lever" if name in IGNORABLE_LEVERS else "dealbreaker",
+            "ignored": ignored,
+            "value": prefs["adjustable"].get(name),
+            # Positive means "switching this to any brings in this many
+            # more people". For one already ignored it is the cost of
+            # putting it back, and reads as a negative number.
+            "delta_if_ignored": (after - baseline) if not ignored else (baseline - after),
+            "sensitive": name in _SENSITIVE_LEVERS,
+        })
+    return out
+
+
 def build_reach_input(user: dict[str, Any], pool: list[dict[str, Any]], phase: str = "searching") -> dict[str, Any]:
     """Assemble the full REACH input payload (docs/agent-1-reach.pdf §3)."""
     return {
@@ -527,4 +672,6 @@ def build_reach_input(user: dict[str, Any], pool: list[dict[str, Any]], phase: s
         "reciprocity": reciprocity_counts(user, pool),
         "whatif": whatif_deltas(user, pool),
         "locked": locked_levers(user),
+        "filters": filter_states(user, pool),
+        "ignored": sorted(ignored_set(user["preferences"])),
     }

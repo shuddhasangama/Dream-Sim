@@ -292,6 +292,34 @@ def sign(state: dict[str, Any], typed_name: str, acks: list[str], signed_at: str
             "acks_json": json.dumps(given)}
 
 
+def signature_display(signed_name: str | None, revealed: bool) -> str | None:
+    """How a signature reads on screen.
+
+    2026-09-10, user's rule: "the digital signature of both the
+    participants are definitely needed, though morphed until the date
+    itself. As the name visibility is hidden."
+
+    Both halves matter. The signature has to be THERE — an agreement that
+    shows one signature and a blank is an agreement nobody can see the
+    state of. And it has to be masked, or signing becomes the thing that
+    discloses the name every other screen is careful with.
+
+    So the initials are shown, not a placeholder: "P. S." is visibly a
+    person who signed, where "Second party" is a form field. The full
+    name is stored untouched on the Ceremony row and appears the moment
+    the two of them have met.
+    """
+    name = (signed_name or "").strip()
+    if not name:
+        return None
+    if revealed:
+        return name
+    initials = [part[0].upper() for part in name.split() if part and part[0].isalpha()]
+    if not initials:
+        return "\u2014"
+    return ". ".join(initials) + "."
+
+
 def capture_face(state: dict[str, Any]) -> dict[str, Any]:
     """STUB. Records that the step was taken. Nothing is looked at, and
     no user-facing copy should call this identity verification."""

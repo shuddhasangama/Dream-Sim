@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Confirm your contact — Dare to Dream{% endblock %}
+{% block content %}
+<div class="eyebrow">Sign-up</div>
+<h1>Confirm how we reach you</h1>
+
+{% if state.satisfied %}
+<div class="card">
+  <div class="section-label">Done</div>
+  <div class="hint">
+    {% if state.verified_email %}Your email is confirmed.{% endif %}
+    {% if state.verified_phone %}Your phone is confirmed.{% endif %}
+    Nothing else is needed here.
+  </div>
+  <a class="btn-primary" href="{{ url_for('dashboard') }}">Back to your dashboard</a>
+</div>
+{% else %}
+
+<div class="lede">
+  One of these is enough. It is what lets us reach you when a match locks in — and it is the
+  only thing standing between you and locking one in.
+</div>
+
+{% if remembered.error %}<div class="card form-error">{{ remembered.error }}</div>{% endif %}
+
+{% if not state.can_deliver %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>
+    We cannot actually send an email or a text yet — that part of the product is not built.
+    So the code appears on this screen instead. It is the simulation being honest with you
+    rather than pretending a message went out.
+  </div>
+</div>
+{% endif %}
+
+{% if sent %}
+<div class="card">
+  <div class="section-label">Your code{% if channel_sent %} for {{ channel_sent }}{% endif %}</div>
+  <div class="error-code">{{ sent }}</div>
+  <div class="micro">Good for 15 minutes.</div>
+</div>
+{% endif %}
+
+{% for channel in ('email', 'phone') %}
+{% set destination = state.email if channel == 'email' else state.phone %}
+{% set done = state.verified_email if channel == 'email' else state.verified_phone %}
+{% if destination %}
+<div class="card">
+  <div class="lever-row">
+    <div>
+      <div class="section-label">{{ channel|capitalize }}</div>
+      <div class="clause-body">{{ destination }}</div>
+    </div>
+    {% if done %}<span class="sensitive-tag">Confirmed</span>{% endif %}
+  </div>
+
+  {% if not done %}
+  <form method="post" action="{{ url_for('verify_contact_send') }}" style="margin-top:10px;">
+    <input type="hidden" name="channel" value="{{ channel }}">
+    <button type="submit" class="btn-secondary">Send me a code</button>
+  </form>
+
+  <form method="post" action="{{ url_for('verify_contact_check') }}" style="margin-top:10px;">
+    <input type="hidden" name="channel" value="{{ channel }}">
+    <div class="field-grid">
+      <label class="field-cell">
+        <span class="field-label">The six digits</span>
+        <input class="field-input" type="text" name="code" inputmode="numeric"
+               autocomplete="one-time-code" maxlength="6" placeholder="000000">
+      </label>
+    </div>
+    <button type="submit" class="btn-primary">Confirm this {{ channel }}</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+{% endfor %}
+
+<div class="action-row">
+  <a class="btn-secondary" href="{{ url_for('dashboard') }}">Do this later</a>
+</div>
+{% endif %}
+{% endblock %}

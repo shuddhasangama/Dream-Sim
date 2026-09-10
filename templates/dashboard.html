@@ -1,6 +1,21 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — {{ session_user_name }}{% endblock %}
 {% block content %}
+{# 2026-09-10: only ever shown to an account created since sign-up
+   verification existed, and only while neither channel is confirmed.
+   The seeded pool has no Account row, so it never sees this. #}
+{% if verification and verification.required and not verification.satisfied %}
+<div class="card guru-card">
+  <div class="guru-avatar">G</div>
+  <div>
+    Confirm your {{ verification.pending|join(' or ') }} when you get a moment. You can look
+    around without it — but saying yes to a match needs a way to reach you.
+    <div style="margin-top:10px;">
+      <a class="btn-secondary" href="{{ url_for('verify_contact') }}">Confirm it now</a>
+    </div>
+  </div>
+</div>
+{% endif %}
 <div class="eyebrow">Your file</div>
 <h1>{{ session_user_name }}</h1>
 <div class="micro">Stage: {{ user.journey_state }} · Week {{ week_number }}</div>

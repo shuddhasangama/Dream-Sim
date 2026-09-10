@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import unittest
 
+import ceremony
 import db
 
 from test_segment_efg_routes import RouteTestCase, app_module
@@ -97,3 +98,37 @@ class MaskingTests(RouteTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SignatureMaskingTests(unittest.TestCase):
+    """2026-09-10, the defect the build board found: signing revealed the
+    masked name. "the digital signature of both the participants are
+    definitely needed, though morphed until the date itself."
+    """
+
+    def test_a_partners_signature_shows_initials_before_they_meet(self):
+        self.assertEqual(ceremony.signature_display("Priya Sharma", revealed=False), "P. S.")
+
+    def test_and_the_full_name_once_they_have(self):
+        self.assertEqual(ceremony.signature_display("Priya Sharma", revealed=True), "Priya Sharma")
+
+    def test_your_own_signature_is_never_masked_from_you(self):
+        """is_me passes revealed=True — it is your own name."""
+        self.assertEqual(ceremony.signature_display("Dhareshwar G M", revealed=True),
+                         "Dhareshwar G M")
+
+    def test_an_unsigned_party_shows_nothing_rather_than_a_stray_dot(self):
+        for value in (None, "", "   "):
+            with self.subTest(value=value):
+                self.assertIsNone(ceremony.signature_display(value, revealed=False))
+
+    def test_one_word_and_punctuation_only_names_do_not_crash(self):
+        self.assertEqual(ceremony.signature_display("Meera", revealed=False), "M.")
+        self.assertEqual(ceremony.signature_display("...", revealed=False), "—")
+
+    def test_the_masked_form_never_contains_the_name(self):
+        for name in ("Priya Sharma", "Ananya Rao Desai", "Kavya"):
+            with self.subTest(name=name):
+                shown = ceremony.signature_display(name, revealed=False)
+                for part in name.split():
+                    self.assertNotIn(part, shown)
