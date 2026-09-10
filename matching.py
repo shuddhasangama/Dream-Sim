@@ -459,7 +459,27 @@ def suggest_range(pool: list[dict[str, Any]], lever: str, gender: str | None = N
     supported here."""
     if lever not in RANGE_LEVERS:
         raise ValueError(f"suggest_range only supports {RANGE_LEVERS}, not {lever!r}")
-    values = sorted(u["stats"][lever] for u in pool if gender is None or u["gender"] == gender)
+
+    # 2026-09-10: this used to read u["stats"][lever] directly, which
+    # assumed every person in the pool had answered every body stat.
+    #
+    # They have not since 2026-09-04, when height, weight and waist became
+    # OPTIONAL ("REACH filters on what the user actually keyed in"). The
+    # first person to skip one — which is what a self-registered user
+    # does — put a KeyError in the middle of a generator that runs over
+    # the WHOLE pool, so REACH returned a 500 to every OTHER user who had
+    # that lever. Latent for as long as the pool was purely generated,
+    # because generate_users fills in everything.
+    #
+    # A recommended range is computed from the people who answered. That
+    # is the honest definition as well as the safe one.
+    values = sorted(
+        value for value in (
+            u.get("stats", {}).get(lever)
+            for u in pool if gender is None or u.get("gender") == gender
+        )
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    )
     if not values:
         return None
 

@@ -1276,7 +1276,9 @@ def calendar_confirm():
     if not date_alignment.ready_for_pair(user["stats"], partner["stats"]):
         return redirect(url_for("align_view"))
 
-    venue = calendar_dating.suggest_venue(day, meal, user["stats"]["diet"], partner["stats"]["diet"])
+    # Diet is optional too — same class of bug as suggest_range had.
+    venue = calendar_dating.suggest_venue(
+        day, meal, user["stats"].get("diet"), partner["stats"].get("diet"))
 
     # The bill clause used to assert "both parties declared" a band that
     # came from a hardcoded default and matched neither of them. It now

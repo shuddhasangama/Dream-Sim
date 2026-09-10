@@ -77,11 +77,16 @@ class OneBadRowTests(unittest.TestCase):
         pool[3] = {**pool[3], "stats": {**pool[3]["stats"], **patch}}
         return pool
 
-    def test_a_text_weight_used_to_break_the_pool(self):
-        """Kept as a record of the failure mode: this is what a row looks
-        like BEFORE normalise_stats sees it."""
-        with self.assertRaises(TypeError):
-            matching.suggest_range(self.poisoned(weight_kg="58"), "weight_kg")
+    def test_a_text_weight_no_longer_breaks_the_pool(self):
+        """This used to assert TypeError — a record of the failure mode
+        before normalise_stats. Since 2026-09-10 suggest_range keeps only
+        real numbers, so the one bad row is skipped instead of taking the
+        screen down with it. normalise_stats is still the repair; this is
+        the seatbelt behind it."""
+        got = matching.suggest_range(self.poisoned(weight_kg="58"), "weight_kg")
+        self.assertIsNotNone(got)
+        self.assertEqual(got, matching.suggest_range(
+            [u for i, u in enumerate(self.pool) if i != 3], "weight_kg"))
 
     def test_normalising_the_row_repairs_the_pool(self):
         pool = [{**u, "stats": onboarding.normalise_stats(u["stats"])}
@@ -379,3 +384,91 @@ class OpenReachDuringRegistrationTests(RouteTestCase):
         stored = json.loads(dict(db.fetch_one(self.conn, "User", id=user_id))["stats_json"])
         self.assertEqual(stored["budget"], [bands[1], bands[2]])
         self.assertEqual(self.client.get("/reach").status_code, 200)
+
+
+class SkippedOptionalStatTests(RouteTestCase):
+    """2026-09-10, user's report, third time: "Again clicking on Open
+    Reach after registation ended up with Internal Server error."
+
+    My first two explanations — corrupted stat rows, then the
+    multi-budget regression — were real defects but were NOT this. This
+    is. suggest_range() read u["stats"][lever] straight, which assumed
+    every person in the pool had answered every body stat. Since
+    2026-09-04 height/weight/waist are OPTIONAL, and skipping one is
+    exactly what a self-registered user does. That KeyError sits inside a
+    generator running over the WHOLE pool, so it 500s REACH for every
+    OTHER user who holds that lever — never for the person who skipped,
+    which is why it hid behind the generated pool for a week.
+    """
+
+    def seed(self, n=20):
+        for u in generate_users.generate_users(n, seed=7):
+            row = app_module.onboarding.build_user_row(
+                user_id=u["user_id"], city=u["city"], gender=u["gender"],
+                stats=u["stats"], visions=u["visions"], activities={})
+            row["bgv_status"] = "verified"
+            row["journey_state"] = "dating"
+            row["preferences_json"] = json.dumps(u["preferences"], ensure_ascii=False)
+            db.insert_row(self.conn, "User", row)
+        self.conn.commit()
+
+    register = OpenReachDuringRegistrationTests.register
+
+    def test_suggest_range_ignores_the_people_who_skipped(self):
+        """The unit-level statement of the defect."""
+        pool = generate_users.generate_users(20, seed=7)
+        answered = [dict(u) for u in pool]
+        skipper = {**answered[2]["stats"]}
+        for lever in ("height_cm", "weight_kg", "waist_in"):
+            skipper.pop(lever, None)
+        answered[2] = {**answered[2], "stats": skipper}
+
+        for lever in ("height_cm", "weight_kg", "waist_in"):
+            with self.subTest(lever=lever):
+                got = matching.suggest_range(answered, lever)
+                self.assertIsNotNone(got)                       # used to KeyError
+                self.assertEqual(got, matching.suggest_range(
+                    [u for u in answered if lever in u["stats"]], lever))
+
+    def test_it_returns_none_when_nobody_answered(self):
+        pool = [{**u, "stats": {k: v for k, v in u["stats"].items() if k != "waist_in"}}
+                for u in generate_users.generate_users(6, seed=7)]
+        self.assertIsNone(matching.suggest_range(pool, "waist_in"))
+
+    def test_one_registrant_who_skipped_does_not_500_reach_for_anyone(self):
+        """The reported symptom, end to end. She skips the optional body
+        stats; he fills them in, which is what gives him the levers that
+        run over her row."""
+        self.seed()
+        self.register("female", "skipper@x.com")            # no height/weight/waist
+        self.client.post("/logout")
+        self.register("male", "filled@x.com",
+                      height_cm="178", weight_kg="74", waist_in="32")
+        self.assertEqual(self.client.get("/reach").status_code, 200)
+        self.assertEqual(self.client.get("/week").status_code, 200)
+
+    def test_and_not_for_the_person_who_skipped_either(self):
+        self.seed()
+        self.register("male", "filled2@x.com",
+                      height_cm="178", weight_kg="74", waist_in="32")
+        self.client.post("/logout")
+        self.register("female", "skipper2@x.com")
+        self.assertEqual(self.client.get("/reach").status_code, 200)
+
+    def test_unlocking_a_lever_later_still_sees_a_pool_with_skippers(self):
+        """The order the user actually hit: register bare, come back,
+        save stats in the editor, then open REACH."""
+        self.seed()
+        self.register("female", "later@x.com")
+        self.client.post("/logout")
+        self.register("male", "editor@x.com")
+        self.client.post("/stats/save", data={
+            "height_cm": "178", "weight_kg": "74", "waist_in": "32"})
+        self.assertEqual(self.client.get("/reach").status_code, 200)
+
+    def test_a_skipped_diet_does_not_break_the_venue_suggestion(self):
+        """Same class of bug, found by the same fuzz: app.py read
+        user["stats"]["diet"] straight, and diet is optional too."""
+        self.seed()
+        self.register("female", "nodiet@x.com", diet="")
+        self.assertEqual(self.client.get("/dashboard").status_code, 200)
