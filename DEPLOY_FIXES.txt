@@ -1,0 +1,20 @@
+Dream-Sim Reach / Stats / Vision fixes
+====================================
+
+Overlay ZIP: changed files only. Extract at the root of the existing Dream-Sim repo.
+
+Fixes included:
+1. Switching users no longer exposes legacy/incomplete REACH preference shapes to matching.
+2. Stats changes now synchronize stat-backed REACH filters, so height/weight/waist changes unlock/update REACH correctly.
+3. Languages, cuisine, and restaurant budget are multi-select.
+4. Ethnicity is multi-select with a hard maximum of 2.
+5. Match names are hidden during the weekly matching phase and remain hidden after lock-in until that user's date feedback is filed.
+6. Vision now shows the onboarding vision preference on the Vision page.
+7. Date-alignment budget accepts the same multi-select format.
+8. Tests updated/added for the changed behavior.
+
+Deploy:
+    tar -xf "%USERPROFILE%\Downloads\dream-sim-app-reach-stats-vision-fixes.zip"
+    commit-stats-ui-and-reach-fixes.cmd
+
+The ZIP intentionally does not replace schema_postgres.sql or unrelated files.

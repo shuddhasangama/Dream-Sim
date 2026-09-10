@@ -102,7 +102,7 @@
   <div class="card optional-block">
     <div class="section-label">About you</div>
     <div class="field-grid">
-      {% for key, label, options in optional_choice_stats %}
+      {% for key, label, options in optional_choice_stats if key not in multi %}
       <label class="field-cell">
         <span class="field-label">{{ label }}</span>
         <select class="field-input" name="{{ key }}">
@@ -114,13 +114,52 @@
       </label>
       {% endfor %}
     </div>
+
+    {# 2026-09-09 (evening), user's rule: "language, Cuisine and budget can
+       be multi-selectable. Ethnicity - maximum of 2 selectable." Budget
+       because two people pick a venue together, so one band is a
+       narrower search than it needs to be; ethnicity because mixed
+       descent is not a dropdown. #}
+    <div class="multi-field">
+      <div class="field-label">
+        Restaurant budget <span class="field-unit">{{ locale.currency.code }} · pick any that suit you</span>
+      </div>
+      <div class="chip-row">
+        {% for band in locale.budget_bands %}
+        <label class="chip-check">
+          <input type="checkbox" name="budget" value="{{ band }}"
+                 {% if band in (submitted.get('budget') or saved.get('budget') or []) %}checked{% endif %}>
+          <span>{{ band }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="field-hint">Priced in {{ locale.currency.name }}, from your city.</div>
+    </div>
+
+    {% for key, label, options in optional_choice_stats if key in multi %}
+    <div class="multi-field">
+      <div class="field-label">
+        {{ label }}
+        {% if caps.get(key) %}<span class="field-unit">pick up to {{ caps[key] }}</span>{% endif %}
+      </div>
+      <div class="chip-row"{% if caps.get(key) %} data-cap="{{ caps[key] }}"{% endif %}>
+        {% for option in options %}
+        <label class="chip-check">
+          <input type="checkbox" name="{{ key }}" value="{{ option }}"
+                 {% if option in (submitted.get(key) or saved.get(key) or []) %}checked{% endif %}>
+          <span>{{ option }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
   </div>
 
   {% for key, label, options, hint in optional_multi_stats %}
   <div class="card optional-block">
     <div class="section-label">{{ label }} — {{ hint }}</div>
     <div class="chip-row">
-      {% set shown = locale.languages if key == 'languages' else (locale.budget_bands if key == 'budget' else options) %}
+      {% set shown = locale.languages if key == 'languages' else options %}
       {% set preticked = locale.suggested_languages if key == 'languages' else [] %}
       {% for option in shown %}
       <label class="chip-check">
@@ -140,4 +179,22 @@
     <button type="submit" class="btn-primary">Continue to chemistry →</button>
   </div>
 </form>
+
+<script>
+  // Progressive enhancement only — the cap is enforced in
+  // validate_stats(), which refuses with a message.
+  document.querySelectorAll('.chip-row[data-cap]').forEach(function (group) {
+    var cap = parseInt(group.dataset.cap, 10);
+    var boxes = group.querySelectorAll('input[type="checkbox"]');
+    function apply() {
+      var picked = group.querySelectorAll('input:checked').length;
+      boxes.forEach(function (box) {
+        box.disabled = !box.checked && picked >= cap;
+        box.closest('.chip-check').classList.toggle('chip-disabled', box.disabled);
+      });
+    }
+    boxes.forEach(function (box) { box.addEventListener('change', apply); });
+    apply();
+  });
+</script>
 {% endblock %}

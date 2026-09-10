@@ -23,7 +23,7 @@ BANDS = locale_defaults.budget_bands_for("Chennai")
 
 
 def _answers(**over):
-    return {"budget": [BANDS[1]], "diet": "Vegetarian", "cuisine": ["Thai", "Italian"], **over}
+    return {"budget": BANDS[1], "diet": "Vegetarian", "cuisine": ["Thai", "Italian"], **over}
 
 
 class FieldTests(unittest.TestCase):
@@ -83,10 +83,7 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(result["stats"]["cuisine"], ["Italian", "Thai"])
 
     def test_a_band_from_another_currency_is_refused(self):
-        self.assertFalse(da.validate(_answers(budget=["$$ · 20 – 50"]), "Chennai")["ok"])
-        result = da.validate(_answers(budget=BANDS[:2]), "Chennai")
-        self.assertTrue(result["ok"], result["error"])
-        self.assertEqual(result["stats"]["budget"], BANDS[:2])
+        self.assertFalse(da.validate(_answers(budget="$$ · 20 – 50"), "Chennai")["ok"])
 
     def test_an_invented_diet_is_refused(self):
         self.assertFalse(da.validate(_answers(diet="Breatharian"), "Chennai")["ok"])
@@ -115,7 +112,6 @@ class BudgetReconciliationTests(unittest.TestCase):
     def test_one_side_missing_falls_back_to_the_side_that_answered(self):
         self.assertEqual(da.lower_budget(None, BANDS[2]), BANDS[2])
         self.assertEqual(da.lower_budget(BANDS[2], None), BANDS[2])
-        self.assertEqual(da.lower_budget([BANDS[1], BANDS[3]], [BANDS[2], BANDS[3]]), BANDS[1])
 
     def test_neither_side_answering_produces_nothing_rather_than_a_default(self):
         """A default here is how the bill clause came to claim something

@@ -1441,3 +1441,10 @@ body { -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; }
 .day-check, .stage-pip, .wizard-label {
   -webkit-user-select: none; user-select: none;
 }
+
+/* A multi-select field: a labelled group of chips rather than a dropdown.
+   2026-09-09 (evening) — languages, cuisine, budget and ethnicity. */
+.multi-field { margin-top: 16px; }
+.multi-field .field-label { margin-bottom: 8px; }
+.multi-field .field-unit { margin-left: 6px; opacity: .8; }
+.chip-check.chip-disabled span { opacity: .38; cursor: not-allowed; }

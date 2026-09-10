@@ -352,6 +352,50 @@ LEVER_STAT = {
 }
 
 
+# How wide a newly unlocked range starts, either side of the person's own
+# value. Wide enough to be useful on day one, narrow enough that it is
+# obviously theirs to adjust — REACH's whole point is that you move it.
+_UNLOCK_SPREAD = {"height_cm": 12, "weight_kg": 15, "waist_in": 5}
+
+
+def unlock_levers_for(preferences: dict[str, Any],
+                      stats: dict[str, Any]) -> dict[str, Any]:
+    """Open any lever whose backing stat now exists.
+
+    2026-09-09 (evening), user's rule: "Filters/Stats you have just
+    keyedin/unlocked is not getting updated. even after Stats - height,
+    weight, waist have been updated."
+
+    They were not, and locked_levers() was telling the truth about it: a
+    lever exists only where the backing preference range does, and saving
+    a STAT never touched preferences. So "fill this in to unlock the
+    filter" was an instruction the app did not itself honour.
+
+    Only ever ADDS. A range someone has already set is theirs and is left
+    exactly as it is — this opens doors, it does not redecorate.
+    Returns a new dict; does not mutate the input.
+    """
+    adjustable = dict((preferences or {}).get("adjustable") or {})
+    out = {**(preferences or {}), "adjustable": adjustable}
+
+    for lever, stat_key in LEVER_STAT.items():
+        if lever in adjustable:
+            continue
+        value = (stats or {}).get(stat_key)
+        if value in (None, "", []):
+            continue
+
+        if lever in _UNLOCK_SPREAD and isinstance(value, (int, float)):
+            spread = _UNLOCK_SPREAD[lever]
+            adjustable[lever] = [int(value) - spread, int(value) + spread]
+        elif lever == "religion":
+            # Not a range. Opens on the person's own answer, which is the
+            # narrowest honest starting point — and a sensitive lever, so
+            # it is never widened for them automatically.
+            adjustable[lever] = [value] if isinstance(value, str) else list(value)
+    return out
+
+
 def available_levers(user: dict[str, Any]) -> list[str]:
     """The levers this user can actually move."""
     adj = user["preferences"]["adjustable"]

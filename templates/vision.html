@@ -1,22 +1,41 @@
 {% extends "base.html" %}
 {% block title %}Vision — {{ session_user_name }}{% endblock %}
 {% block content %}
-<div class="eyebrow">Additive-only &middot; nothing is ever deleted</div>
+<div class="eyebrow">Your file &middot; Vision</div>
 <h1>Your Vision</h1>
+<div class="lede">
+  What you are here for. These were matched before anything else about you —
+  before the stats, before the chemistry.
+</div>
+
+{# 2026-09-09 (evening), user's report: "Why does Clicking on the Vision
+   doesn't show the User's vision preference." Because it never did: the
+   screen only ever rendered the RELATIONSHIP-stage detail entries below,
+   which use a different vocabulary and are empty until a couple reaches
+   that stage. #}
 <div class="card">
-  <div class="micro section-label">Your current vision preference</div>
-  {% if signup_visions %}
-  <div class="chip-row" style="margin-top:8px;">
-    {% for v in signup_visions %}
-    <span class="chip">{{ v.key }}{% if v.stance %} · {{ v.stance|join(', ') if v.stance is iterable and v.stance is not string else v.stance }}{% endif %}</span>
+  <div class="section-label">Your end goals</div>
+  {% if goals %}
+  <div class="stat-rows" style="margin-top:8px;">
+    {% for goal in goals %}
+    <div class="stat-row">
+      <span>{{ goal.key }}</span>
+      <span>{% if goal.detail %}{{ goal.detail|join(' · ') }}{% else %}—{% endif %}</span>
+    </div>
     {% endfor %}
   </div>
-  <div class="micro" style="margin-top:8px;">This is the preference you gave during onboarding. Details you add below are additive.</div>
+  <div class="micro" style="margin-top:10px;">
+    Chosen at sign-up. A genuine change of mind is declared rather than edited —
+    it is disclosed to your partner and kept in full history, never silent.
+  </div>
   {% else %}
-  <div class="micro">No vision preference recorded yet.</div>
+  <div class="hint">Nothing recorded yet. Your vision is set during sign-up.</div>
   {% endif %}
 </div>
 
+{% if show_detail %}
+<div class="section-label" style="margin-top:26px;">Detail you have added together</div>
+<div class="micro" style="margin-bottom:10px;">Additive-only &mdash; nothing here is ever deleted.</div>
 
 {% for key in element_keys %}
 <div class="card">
@@ -57,5 +76,6 @@
   <div class="micro">&middot; {{ c.element_key }}: "{{ c.from_value }}" &rarr; "{{ c.to_value }}" ({{ c.declared_at }})</div>
   {% endfor %}
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}

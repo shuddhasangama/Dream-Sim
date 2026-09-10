@@ -400,6 +400,7 @@ OPTIONAL_CHOICE_STATS = [
     ("drinking", "Drinking", DRINKING),
     ("fitness_routine", "Fitness routine", FITNESS_ROUTINES),
     ("marital_history", "Marital history", MARITAL_HISTORY),
+    ("ethnicity", "Ethnicity", ETHNICITIES),
     ("religion", "Religion", OWN_RELIGIONS),
 ]
 
@@ -416,10 +417,8 @@ DATE_ALIGNMENT_KEYS = ("budget", "diet", "cuisine")
 MULTI_STATS: list[tuple[str, str, list[str], str]] = []
 
 OPTIONAL_MULTI_STATS = [
-    ("ethnicity", "Ethnicity", ETHNICITIES, "choose up to 2"),
     ("languages", "Languages you speak", LANGUAGES_POOL, "pre-filled from your city"),
     ("cuisine", "Cuisine you enjoy", CUISINES, "used to pick a venue you both eat at"),
-    ("budget", "Restaurant budget", RESTAURANT_BUDGETS, "choose one or more acceptable bands"),
 ]
 
 # budget is what someone spends on one meal out, not what they earn — it
@@ -442,6 +441,7 @@ OPTIONAL_STAT_KEYS = (
     [k for k, _, _, _, _, _ in OPTIONAL_NUMERIC_STATS]
     + [k for k, _, _ in OPTIONAL_CHOICE_STATS]
     + [k for k, _, _, _ in OPTIONAL_MULTI_STATS]
+    + ["budget"]
 )
 
 # Salary is mandatory but never stored raw — only the derived band is.
@@ -474,6 +474,82 @@ STAT_RANGES: dict[str, tuple[int, int]] = {
     key: (lo, hi) for key, _label, _unit, lo, hi, _ph
     in NUMERIC_STATS + OPTIONAL_NUMERIC_STATS
 }
+# Stats that are a LIST of choices, not one. Derived from the multi
+# groups plus the two promoted on 2026-09-09 (evening) at the user's
+# request — "language, Cuisine and budget can be multi-selectable".
+MULTI_VALUE_STATS: tuple[str, ...] = tuple(
+    key for key, _label, _opts, _hint in MULTI_STATS + OPTIONAL_MULTI_STATS
+) + ("budget", "ethnicity")
+
+# How many choices each capped field allows. Absent means no cap.
+#
+# "Ethnicity - maximum of 2 selectable" (2026-09-09 evening). Two is the
+# number that covers mixed descent without turning a self-description
+# into a checklist — and ethnicity is still never a matching filter, only
+# something a person says about themselves.
+MULTI_VALUE_LIMIT: dict[str, int] = {"ethnicity": 2}
+
+
+def normalise_stats(stats: dict[str, Any]) -> dict[str, Any]:
+    """Coerce a stats dict into the shapes the rest of the app assumes.
+
+    WHY THIS EXISTS, 2026-09-09 (evening)
+    The first stats editor stored whatever the form sent, which is always
+    a string. Two shapes broke:
+
+      * A numeric stat as text — "58" rather than 58. Harmless to store
+        and harmless to display, which is why it got past a smoke test;
+        fatal inside matching.whatif_deltas() and suggest_range(), which
+        compare it against ints. One corrupted row took REACH down for
+        every OTHER user whose pool contained them, which is why the
+        error looked unrelated to the person who caused it.
+
+      * A list stat as a single string — "English" rather than
+        ["English"]. Silent: `"Thai" in "South Indian, Thai"` is True by
+        substring, so a filter appears to work while meaning something
+        else entirely.
+
+    Applied on READ, in from_user_row(), so rows already written to the
+    deployed database are repaired as they are loaded and no migration
+    is needed. Writes are also correct now; this is what makes the
+    existing damage stop mattering.
+
+    Unrepairable values are DROPPED rather than guessed at — a weight of
+    "heavy" becomes absent, which reads as "not answered" everywhere,
+    instead of becoming a number nobody chose.
+    """
+    if not stats:
+        return {}
+
+    out = dict(stats)
+    for key in STAT_RANGES:
+        if key not in out or isinstance(out[key], int):
+            continue
+        try:
+            out[key] = int(float(str(out[key]).strip()))
+        except (TypeError, ValueError):
+            out.pop(key, None)
+
+    for key in MULTI_VALUE_STATS:
+        if key not in out or out[key] is None:
+            continue
+        value = out[key]
+        if isinstance(value, str):
+            # A bare string is one choice. A comma-joined one is several,
+            # which is how an older single-select rendered a list back.
+            out[key] = [part.strip() for part in value.split(",") if part.strip()]
+        elif not isinstance(value, list):
+            out[key] = [value]
+        limit = MULTI_VALUE_LIMIT.get(key)
+        if limit is not None:
+            out[key] = out[key][:limit]
+
+    for key, limit in MULTI_VALUE_LIMIT.items():
+        if key in out and isinstance(out[key], list):
+            out[key] = out[key][:limit]
+    return out
+
+
 STAT_UNITS: dict[str, str] = {
     key: unit for key, _label, unit, _lo, _hi, _ph
     in NUMERIC_STATS + OPTIONAL_NUMERIC_STATS
@@ -517,8 +593,6 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
         chosen = [value for value in options if value in raw]
         if not chosen:
             return {"ok": False, "error": f"{label} — pick at least one.", "stats": None}
-        if key == "ethnicity" and len(chosen) > 2:
-            return {"ok": False, "error": "Ethnicity — choose at most 2.", "stats": None}
         stats[key] = sorted(chosen)
 
     # ── the optional half ───────────────────────────────────────────────
@@ -540,6 +614,10 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
         stats[key] = value
 
     for key, label, options in OPTIONAL_CHOICE_STATS:
+        # 2026-09-09 (evening): ethnicity moved to multi-select, capped —
+        # handled below rather than here.
+        if key in MULTI_VALUE_STATS:
+            continue
         value = str(form.get(key, "")).strip()
         if not value:
             continue
@@ -552,27 +630,37 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
         if isinstance(raw, str):
             raw = [raw]
         chosen = [value for value in options if value in raw]
-        if key == "ethnicity" and len(chosen) > 2:
-            return {"ok": False, "error": "Ethnicity — choose at most 2.", "stats": None}
         if chosen:
-            if key == "budget":
-                allowed = locale_defaults.budget_bands_for(str(form.get("city", "")).strip())
-                chosen = [value for value in allowed if value in chosen]
             stats[key] = sorted(chosen)
 
-    # Budget is a multi-select acceptable range. Keep the city-specific
-    # bands authoritative and preserve their canonical order.
-    raw_budget = form.get("budget") or []
-    if isinstance(raw_budget, str):
-        raw_budget = [raw_budget]
-    budget_options = locale_defaults.budget_bands_for(str(form.get("city", "")).strip())
-    chosen_budget = [value for value in budget_options if value in raw_budget]
-    if raw_budget and not chosen_budget:
-        return {"ok": False, "error": "That budget band is not one of the options.", "stats": None}
-    if len(chosen_budget) != len(set(raw_budget)):
-        return {"ok": False, "error": "Choose budget only from the declared bands.", "stats": None}
-    if chosen_budget:
-        stats["budget"] = chosen_budget
+    # 2026-09-09 (evening), user's rule: "language, Cuisine and budget can
+    # be multi-selectable. Ethnicity - maximum of 2 selectable."
+    #
+    # Budget is a list because two people pick a venue together and a
+    # single band makes that a narrower search than it needs to be.
+    # Ethnicity is a list because mixed descent is not a dropdown — and
+    # it is capped, because a self-description is not a checklist either.
+    for key, label, options in (
+        ("budget", "Restaurant budget",
+         locale_defaults.budget_bands_for(str(form.get("city", "")).strip())),
+        ("ethnicity", "Ethnicity", dict(
+            (k, opts) for k, _l, opts in OPTIONAL_CHOICE_STATS)["ethnicity"]),
+    ):
+        raw = form.get(key) or []
+        if isinstance(raw, str):
+            raw = [raw] if raw.strip() else []
+        chosen = [value for value in options if value in raw]
+        unknown = [value for value in raw if value not in options]
+        if unknown:
+            return {"ok": False,
+                    "error": f"{label} — {unknown[0]!r} is not one of the options.",
+                    "stats": None}
+        limit = MULTI_VALUE_LIMIT.get(key)
+        if limit is not None and len(chosen) > limit:
+            return {"ok": False,
+                    "error": f"{label} — pick at most {limit}.", "stats": None}
+        if chosen:
+            stats[key] = sorted(chosen)
 
     band = bracket_for(form.get("salary"))
     if band is None:

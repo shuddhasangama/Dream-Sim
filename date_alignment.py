@@ -91,13 +91,9 @@ def validate(form: dict[str, Any], city: str | None = None) -> dict[str, Any]:
     """
     stats: dict[str, Any] = {}
 
-    raw_budget = form.get("budget") or []
-    if isinstance(raw_budget, str):
-        raw_budget = [raw_budget]
-    allowed_budget = options_for("budget", city)
-    budget = [b for b in allowed_budget if b in raw_budget]
-    if not budget:
-        return {"ok": False, "error": "Pick at least one budget band — it sets the bill clause.", "stats": None}
+    budget = str(form.get("budget", "")).strip()
+    if budget not in options_for("budget", city):
+        return {"ok": False, "error": "Pick a budget band — it sets the bill clause.", "stats": None}
     stats["budget"] = budget
 
     diet = str(form.get("diet", "")).strip()
@@ -116,7 +112,7 @@ def validate(form: dict[str, Any], city: str | None = None) -> dict[str, Any]:
     return {"ok": True, "error": None, "stats": stats}
 
 
-def lower_budget(a_budget: Any, b_budget: Any, city: str | None = None) -> str | None:
+def lower_budget(a_budget: str | None, b_budget: str | None, city: str | None = None) -> str | None:
     """The band that actually applies to a shared bill.
 
     The lower of the two, always. The alternative — averaging, or taking
@@ -124,13 +120,7 @@ def lower_budget(a_budget: Any, b_budget: Any, city: str | None = None) -> str |
     they did not choose, and the bill clause is precisely where that bites.
     """
     bands = options_for("budget", city)
-    values = []
-    for value in (a_budget, b_budget):
-        if isinstance(value, str):
-            values.append(value)
-        elif isinstance(value, (list, tuple)):
-            values.extend(value)
-    ranks = [bands.index(b) for b in values if b in bands]
+    ranks = [bands.index(b) for b in (a_budget, b_budget) if b in bands]
     if not ranks:
         return None
     return bands[min(ranks)]

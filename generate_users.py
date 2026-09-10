@@ -378,8 +378,16 @@ def from_user_row(row: dict[str, Any]) -> dict[str, Any]:
     can be called on data loaded straight out of the database. Adds
     journey_state as an extra key; the matching/cadence functions ignore
     keys they don't use, so this doesn't break anything that consumes it."""
+    import onboarding
+
     stats_all = json.loads(row["stats_json"])
     stats = {k: v for k, v in stats_all.items() if k not in ("city", "gender", "age_band")}
+    # 2026-09-09 (evening): repair on read. The first stats editor wrote
+    # numbers as text and lists as single strings, and those rows are
+    # already in the deployed database — one of them took REACH down for
+    # every other user whose pool contained it. Normalising here fixes
+    # every read path at once and needs no migration.
+    stats = onboarding.normalise_stats(stats)
     return {
         "user_id": row["id"],
         "city": stats_all.get("city"),

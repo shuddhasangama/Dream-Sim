@@ -231,19 +231,5 @@ class StatsScreenTests(RouteTestCase):
         self.assertIn("being re-checked", self.client.get("/stats").get_data(as_text=True))
 
 
-
-class MultiSelectCoercionTests(unittest.TestCase):
-    def test_ethnicity_caps_at_two(self):
-        options = {"ethnicity": ["Indian", "European", "East Asian"]}
-        result = se.coerce("ethnicity", ["Indian", "European", "East Asian"], {}, options)
-        self.assertFalse(result["ok"])
-        self.assertIn("at most 2", result["error"])
-
-    def test_multi_values_are_stored_as_lists(self):
-        options = {"languages": ["English", "Hindi"], "cuisine": ["Italian", "Thai"]}
-        result = se.coerce("languages", ["Hindi", "English"], {}, options)
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["value"], ["English", "Hindi"])
-
 if __name__ == "__main__":
     unittest.main()

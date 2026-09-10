@@ -38,26 +38,16 @@
     <div class="hint">Nothing is editable right now. These open again after the date.</div>
     {% endif %}
     <div class="field-grid">
-      {% for row in open_rows %}
+      {% for row in open_rows if row.key not in multi %}
       <label class="field-cell">
         <span class="field-label">{{ labels[row.key] }}</span>
         {% if row.key in options %}
-          {% if row.key in ('languages', 'cuisine', 'ethnicity', 'budget') %}
-          <input type="hidden" name="{{ row.key }}" value="">
-          <select name="{{ row.key }}" multiple size="{% if row.key == 'ethnicity' %}4{% else %}5{% endif %}">
-            {% for option in options[row.key] %}
-            <option value="{{ option }}" {% if option in (row.value or []) %}selected{% endif %}>{{ option }}</option>
-            {% endfor %}
-          </select>
-          {% if row.key == 'ethnicity' %}<span class="field-hint">Choose up to 2.</span>{% endif %}
-          {% else %}
-          <select name="{{ row.key }}">
-            <option value="">Not set</option>
-            {% for option in options[row.key] %}
-            <option value="{{ option }}" {% if row.value|string == option %}selected{% endif %}>{{ option }}</option>
-            {% endfor %}
-          </select>
-          {% endif %}
+        <select name="{{ row.key }}">
+          <option value="">Not set</option>
+          {% for option in options[row.key] %}
+          <option value="{{ option }}" {% if row.value|string == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
         {% else %}
         <input type="number" inputmode="numeric" name="{{ row.key }}" value="{{ row.value or '' }}"
                min="{{ ranges[row.key][0] }}" max="{{ ranges[row.key][1] }}"
@@ -66,6 +56,31 @@
       </label>
       {% endfor %}
     </div>
+
+    {# 2026-09-09 (evening), user's rule: "language, Cuisine and budget can
+       be multi-selectable. Ethnicity - maximum of 2 selectable."
+
+       These were single dropdowns, which is what turned languages and
+       cuisine from lists into strings — and `"Thai" in "South Indian,
+       Thai"` being True by substring made the damage invisible. #}
+    {% for row in open_rows if row.key in multi %}
+    {% set chosen = row.value if row.value is not string and row.value is iterable else ([row.value] if row.value else []) %}
+    <div class="multi-field">
+      <div class="field-label">
+        {{ labels[row.key] }}
+        {% if caps.get(row.key) %}<span class="field-unit">pick up to {{ caps[row.key] }}</span>{% endif %}
+      </div>
+      <div class="chip-row"{% if caps.get(row.key) %} data-cap="{{ caps[row.key] }}"{% endif %}>
+        {% for option in options[row.key] %}
+        <label class="chip-check">
+          <input type="checkbox" name="{{ row.key }}" value="{{ option }}"
+                 {% if option in chosen %}checked{% endif %}>
+          <span>{{ option }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
     {% if open_rows %}
     <div class="action-row">
       <button type="submit" class="btn-save">Save changes</button>
@@ -73,6 +88,25 @@
     {% endif %}
   </div>
 </form>
+
+<script>
+  // Progressive enhancement only — the cap is enforced in
+  // stats_edit.coerce(), which refuses the save with a message. This
+  // just stops you picking a third one and finding out afterwards.
+  document.querySelectorAll('.chip-row[data-cap]').forEach(function (group) {
+    var cap = parseInt(group.dataset.cap, 10);
+    var boxes = group.querySelectorAll('input[type="checkbox"]');
+    function apply() {
+      var picked = group.querySelectorAll('input:checked').length;
+      boxes.forEach(function (box) {
+        box.disabled = !box.checked && picked >= cap;
+        box.closest('.chip-check').classList.toggle('chip-disabled', box.disabled);
+      });
+    }
+    boxes.forEach(function (box) { box.addEventListener('change', apply); });
+    apply();
+  });
+</script>
 
 {% if held_rows %}
 {# 2026-09-09 (evening), user's rule: "Mandatory columns can be selected

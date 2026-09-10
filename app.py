@@ -185,6 +185,52 @@ def display_name(user_id: str, gender: str) -> str:
     return f"{first} {last}"
 
 
+# ── when a match's name becomes visible ───────────────────────────────────
+# 2026-09-09 (evening), user's rule: "the match names to be not visible
+# until after the date feedback is provided and lock-in."
+#
+# Nothing enforced this. A candidate's name sat on the weekly match card
+# above the Pass / Express interest buttons — somebody you have no
+# relationship with at all — and stayed visible through every screen
+# after it.
+#
+# The line is per PAIR, not per person: having met one match does not
+# reveal the next one's name. It is drawn where disclosure.py already
+# draws FIRST_DATE — a recorded DateOutcome for a date the two of them
+# had — which is the same moment the post-date screens open.
+#
+# TO RELAX THIS: set NAMES_BEFORE_MEETING = True and names appear as they
+# did before. Nothing else needs changing.
+
+NAMES_BEFORE_MEETING = False
+MASKED_NAME = "Your match"
+
+
+def _have_met(viewer_id: str, other_id: str) -> bool:
+    """Whether these two have had a date with feedback recorded."""
+    if viewer_id == other_id:
+        return True
+    for lock in db.fetch_all(get_db(), "LockIn"):
+        if {lock["user_a"], lock["user_b"]} != {viewer_id, other_id}:
+            continue
+        plan = _dateplan_for_lockin(lock["id"])
+        if plan and db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"]):
+            return True
+    return False
+
+
+def named_for(viewer_id: str, other: dict | None, masked: str = MASKED_NAME) -> dict | None:
+    """`other` as the viewer may see them — name included only once the
+    two of them have actually met. Everything else about the profile is
+    unchanged: this hides a name, not a person."""
+    if other is None:
+        return None
+    shown = with_view_fields(other)
+    if NAMES_BEFORE_MEETING or _have_met(viewer_id, other["user_id"]):
+        return shown
+    return {**shown, "name": masked}
+
+
 def with_view_fields(user: dict) -> dict:
     """Attach display-only fields to a generate_users()-shaped dict without
     touching the underlying data."""
@@ -200,15 +246,7 @@ def load_pool() -> list[dict]:
 
 def load_user(user_id: str) -> dict | None:
     row = db.fetch_one(get_db(), "User", id=user_id)
-    if not row:
-        return None
-    user = from_user_row(row)
-    # Normalize legacy preference rows in memory so switching between
-    # users cannot expose an older shape to matching.py.
-    user["preferences"] = _sync_preferences_with_stats(
-        user, user.get("stats") or {}
-    )
-    return user
+    return from_user_row(row) if row else None
 
 
 def find_couple_for_user(user_id: str) -> dict | None:
@@ -401,28 +439,6 @@ def humanise_slot(value):
     except ValueError:
         return value
     return f"{stamp:%a} {stamp.day} {stamp:%b}, {stamp:%H:%M}"
-
-
-def _sync_preferences_with_stats(user: dict, stats: dict) -> dict:
-    """Keep REACH's optional stat-backed levers in step with the user's stats.
-    Adding a newly entered body stat unlocks its filter; clearing one removes
-    only that corresponding filter. Existing hand-tuned ranges are preserved."""
-    prefs = json.loads(json.dumps(user.get("preferences") or {}))
-    adjustable = dict(prefs.get("adjustable") or {})
-    defaults = onboarding.default_preferences(stats)["adjustable"]
-    for key in ("height_cm", "weight_kg", "waist_in"):
-        if stats.get(key) is None:
-            adjustable.pop(key, None)
-        elif key not in adjustable:
-            adjustable[key] = defaults[key]
-    if stats.get("religion"):
-        adjustable.setdefault("religion", ["same", "related"])
-    else:
-        adjustable.pop("religion", None)
-    prefs["fixed"] = dict(prefs.get("fixed") or {"dealbreakers": []})
-    prefs["fixed"].setdefault("dealbreakers", [])
-    prefs["adjustable"] = adjustable
-    return prefs
 
 
 def save_preferences(user_id: str, preferences: dict) -> None:
@@ -766,13 +782,6 @@ def reach():
     if reach_locked(user):
         return redirect(url_for("week"))
     pool = load_pool()
-    # Older users may predate one of the current REACH levers. Normalize
-    # only missing preference keys so switching users cannot 500 on legacy
-    # data and the filter is immediately usable.
-    normalized = _sync_preferences_with_stats(user, user.get("stats") or {})
-    if normalized != user.get("preferences"):
-        save_preferences(user["user_id"], normalized)
-        user = load_user(user["user_id"])
     counts = matching.reciprocity_counts(user, pool)
     deltas = [d for d in matching.whatif_deltas(user, pool) if d["lever"] not in _SLIDER_KEYS]
     sliders = build_sliders(user, pool)
@@ -784,10 +793,6 @@ def reach():
 @login_required
 def reach_widen():
     user = current_user()
-    normalized = _sync_preferences_with_stats(user, user.get("stats") or {})
-    if normalized != user.get("preferences"):
-        save_preferences(user["user_id"], normalized)
-        user = load_user(user["user_id"])
     if reach_locked(user):
         return jsonify({"error": "REACH is locked once you're past Dating"}), 403
 
@@ -810,10 +815,6 @@ def reach_widen():
 @login_required
 def reach_set_range():
     user = current_user()
-    normalized = _sync_preferences_with_stats(user, user.get("stats") or {})
-    if normalized != user.get("preferences"):
-        save_preferences(user["user_id"], normalized)
-        user = load_user(user["user_id"])
     if reach_locked(user):
         return jsonify({"error": "REACH is locked once you're past Dating"}), 403
 
@@ -903,20 +904,6 @@ def _get_or_generate_matches(user: dict, pool: list[dict], week: int, clock: clo
             )
         existing = db.fetch_all(get_db(), "Match", user_id=user["user_id"], week=week)
     return sorted(existing, key=lambda r: r["slot"])
-
-
-def _lockin_name_revealed(lockin: dict, user_id: str) -> bool:
-    """Names stay hidden until the date feedback has been filed.
-    The lock-in itself is required by this helper's context."""
-    plan = _dateplan_for_lockin(lockin["id"])
-    if plan is None:
-        return False
-    outcome_row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
-    if not outcome_row:
-        return False
-    outcome = _outcome_from_row(outcome_row)
-    role = "a" if lockin["user_a"] == user_id else "b"
-    return len(outcome.get(f"{role}_green_flags", [])) >= guru_dating.MIN_GREEN_FLAGS
 
 
 def _match_status(row: dict, clock: clock_module.SimulationClock) -> str:
@@ -1121,7 +1108,8 @@ def week():
         couple = find_couple_for_user(user["user_id"])
         partner = load_user(partner_id_in(couple, user["user_id"])) if couple else None
         return render_template(
-            "week.html", mode="post_dating", couple=couple, partner=with_view_fields(partner) if partner else None
+            "week.html", mode="post_dating", couple=couple,
+            partner=named_for(user["user_id"], partner) if partner else None
         )
 
     active = _my_active_lockin(user["user_id"])
@@ -1135,10 +1123,7 @@ def week():
             active = None
 
     if active is not None:
-        partner = with_view_fields(load_user(_partner_id_in_lockin(active, user["user_id"])))
-        name_revealed = _lockin_name_revealed(active, user["user_id"])
-        if not name_revealed:
-            partner = {**partner, "name": "Your match"}
+        partner = named_for(user["user_id"], load_user(_partner_id_in_lockin(active, user["user_id"])))
         plan = _dateplan_for_lockin(active["id"])
         outcome_row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"]) if plan else None
         outcome = _outcome_from_row(outcome_row) if outcome_row else None
@@ -1170,7 +1155,7 @@ def week():
             {
                 "row": row,
                 "status": _match_status(row, clock),
-                "candidate": {**with_view_fields(candidate), "name": "Your match"},
+                "candidate": named_for(user["user_id"], candidate),
                 "their_interest_real": row["candidate_id"] in already_interested,
             }
         )
@@ -1225,7 +1210,7 @@ def calendar_view():
         return redirect(url_for("plan_view"))  # slot already confirmed
 
     partner_id = _partner_id_in_lockin(active, user["user_id"])
-    partner = with_view_fields(load_user(partner_id))
+    partner = named_for(user["user_id"], load_user(partner_id))
     my_slots = {(r["day"], r["meal_slot"]) for r in db.fetch_all(get_db(), "Availability", lockin_id=active["id"], user_id=user["user_id"])}
     their_rows = db.fetch_all(get_db(), "Availability", lockin_id=active["id"], user_id=partner_id)
     their_slots = [(r["day"], r["meal_slot"]) for r in their_rows]
@@ -1365,7 +1350,7 @@ def plan_view():
         return redirect(url_for("calendar_view"))
 
     partner_id = _partner_id_in_lockin(active, user["user_id"])
-    partner = with_view_fields(load_user(partner_id))
+    partner = named_for(user["user_id"], load_user(partner_id))
     my_role = "a" if active["user_a"] == user["user_id"] else "b"
     partner_role = "b" if my_role == "a" else "a"
     my_selections = db.load_json_field(plan[f"selections_{my_role}_json"], {})
@@ -1618,7 +1603,7 @@ def escalations_view():
         return render_template("escalations.html", unlocked=False, dates_completed=active["dates_completed"])
 
     partner_id = _partner_id_in_lockin(active, user["user_id"])
-    partner = with_view_fields(load_user(partner_id))
+    partner = named_for(user["user_id"], load_user(partner_id))
 
     contact_requests = db.fetch_all(get_db(), "ContactRequest", pair_id=active["id"])
     my_sent = [r for r in contact_requests if r["requester_id"] == user["user_id"]]
@@ -1874,7 +1859,7 @@ def gate_view():
     my_role = _my_role_in_lockin(active, user["user_id"])
     partner_role = "b" if my_role == "a" else "a"
     partner_id = _partner_id_in_lockin(active, user["user_id"])
-    partner = with_view_fields(load_user(partner_id))
+    partner = named_for(user["user_id"], load_user(partner_id))
 
     my_responses = db.fetch_all(get_db(), "GateResponse", pair_id=gate["pair_id"], user_id=user["user_id"])
     partner_responses = db.fetch_all(get_db(), "GateResponse", pair_id=gate["pair_id"], user_id=partner_id)
@@ -2269,12 +2254,11 @@ def stats_view():
         rows=rows,
         state=state,
         labels=onboarding.STAT_LABELS,
-        options={
-            **onboarding.STAT_OPTIONS,
-            "budget": locale_defaults.budget_bands_for(user.get("city")),
-        },
+        options=onboarding.STAT_OPTIONS,
         ranges=onboarding.STAT_RANGES,
         units=onboarding.STAT_UNITS,
+        multi=onboarding.MULTI_VALUE_STATS,
+        caps=onboarding.MULTI_VALUE_LIMIT,
         discloses=stats_edit.discloses_to_partner(state),
         changes=db.fetch_all(get_db(), "StatChange", user_id=user["user_id"]),
         # One-shot confirmations, popped so a reload does not repeat them.
@@ -2301,7 +2285,12 @@ def stats_save():
     state = _stats_situation(user)
 
     row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
-    stats = json.loads(row["stats_json"])
+    stored = json.loads(row["stats_json"])
+    # Repair on write as well as on read. Without this the comparison
+    # below sees a stored "58" and a submitted 58 as unchanged — true as
+    # text, and it would leave the corrupt value on disk forever.
+    stats = onboarding.normalise_stats(stored)
+    needs_repair = stats != stored
 
     saved, refused, errors = [], [], []
     changes = []
@@ -2310,12 +2299,12 @@ def stats_save():
         if field not in request.form:
             continue
         verdict = stats_edit.editable(field, state)
-        raw_value = (request.form.getlist(field)
-                     if field in {"languages", "cuisine", "ethnicity", "budget"}
+        # A multi-value field arrives as several values under one name.
+        submitted = (request.form.getlist(field)
+                     if field in onboarding.MULTI_VALUE_STATS
                      else request.form.get(field))
-        option_map = dict(onboarding.STAT_OPTIONS)
-        option_map["budget"] = locale_defaults.budget_bands_for(user.get("city"))
-        got = stats_edit.coerce(field, raw_value, onboarding.STAT_RANGES, option_map)
+        got = stats_edit.coerce(field, submitted, onboarding.STAT_RANGES,
+                                onboarding.MULTI_VALUE_LIMIT)
         if not got["ok"]:
             errors.append(got["error"])
             continue
@@ -2335,11 +2324,19 @@ def stats_save():
         saved.append(onboarding.STAT_LABELS.get(field, field))
         changes.append((field, before, after))
 
-    if saved:
+    if saved or needs_repair:
         row["stats_json"] = json.dumps(stats, ensure_ascii=False)
+        # 2026-09-09 (evening), user's rule: "Filters/Stats you have just
+        # keyedin/unlocked is not getting updated. even after Stats -
+        # height, weight, waist have been updated."
+        #
+        # They were not. A REACH lever exists only where the backing
+        # preference range does (matching.available_levers), and saving a
+        # STAT never touched preferences — so filling in your weight left
+        # the weight filter locked, and REACH looked identical.
         row["preferences_json"] = json.dumps(
-            _sync_preferences_with_stats(user, stats), ensure_ascii=False
-        )
+            matching.unlock_levers_for(json.loads(row["preferences_json"]), stats),
+            ensure_ascii=False)
         db.insert_row(get_db(), "User", row)
 
         # In a relationship the change is disclosed rather than blocked.
@@ -2414,12 +2411,35 @@ def vision_view():
     grouped: dict[str, list[dict]] = {}
     for e in entries:
         grouped.setdefault(e["element_key"], []).append(e)
+
+    # 2026-09-09 (evening), user's report: "Why does Clicking on the
+    # Vision doesn't show the User's vision preference."
+    #
+    # Because it never did. The screen rendered the RELATIONSHIP-stage
+    # detail entries, keyed by vision.VISION_ELEMENT_KEYS ("children",
+    # "cohabitation", …) — a different vocabulary from the goals chosen
+    # at sign-up ("Kids", "Cohabitate", …), and empty for anyone who has
+    # not reached that stage. So the screen showed six cards saying
+    # "Nothing added yet" and none of the person's actual answers.
+    goals = []
+    for entry in (user.get("visions") or []):
+        stance = entry.get("stance")
+        goals.append({
+            "key": entry.get("key"),
+            "detail": list(stance) if isinstance(stance, list) else
+                      ([stance] if stance else []),
+        })
+
     return render_template(
         "vision.html",
+        goals=goals,
+        # The additive-detail half only means something once a couple is
+        # working through ROAD together; before that it is six empty
+        # boxes above the thing the person came to see.
+        show_detail=user["journey_state"] in disclosure.RELATIONSHIP_STATES,
         element_keys=vision.VISION_ELEMENT_KEYS,
         grouped=grouped,
         changes=changes,
-        signup_visions=user.get("visions") or [],
     )
 
 
@@ -2648,7 +2668,7 @@ def next_level_view():
         return redirect(url_for("week"))
     my_role = _my_role_in_lockin(active, user["user_id"])
     partner_id = _partner_id_in_lockin(active, user["user_id"])
-    partner = with_view_fields(load_user(partner_id))
+    partner = named_for(user["user_id"], load_user(partner_id))
 
     threads = db.fetch_all(get_db(), "NextLevelThread", pair_id=active["id"])
     my_entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
@@ -2719,7 +2739,7 @@ def relationship_view():
     couple = find_couple_for_user(user["user_id"]) if user["journey_state"] != "dating" else None
     if couple is None:
         return redirect(url_for("journey_view"))
-    partner = with_view_fields(load_user(partner_id_in(couple, user["user_id"])))
+    partner = named_for(user["user_id"], load_user(partner_id_in(couple, user["user_id"])))
     playbook = db.fetch_one(get_db(), "Playbook", couple_id=couple["id"], stage=couple["stage"])
     generic = db.load_json_field(playbook["tier_generic_json"], []) if playbook else []
     specific = db.load_json_field(playbook["tier_vision_json"], []) if playbook else []
@@ -2846,7 +2866,7 @@ def journey_view():
     exception_count = 0
     next_stage_name = None
     if couple:
-        partner = with_view_fields(load_user(partner_id_in(couple, user["user_id"])))
+        partner = named_for(user["user_id"], load_user(partner_id_in(couple, user["user_id"])))
         road = get_road(user["user_id"], couple["id"])
         road_block_count = len(db.load_json_field(road["routine_json"], []))
         exception_count = len(
@@ -2883,7 +2903,7 @@ def married_view():
     if couple is None or couple["stage"] != "married":
         return redirect(url_for("journey_view"))
     partner_id = partner_id_in(couple, user["user_id"])
-    partner = with_view_fields(load_user(partner_id))
+    partner = named_for(user["user_id"], load_user(partner_id))
 
     # What it took to get here, counted from the record rather than
     # asserted: every ceremony either of them completed along the way.
@@ -3064,7 +3084,7 @@ def road_availability():
     free_blocks = [b for b in blocks if b["category"] == "free"]
     derived = derive_availability(blocks)
     shared_keys = shared_availability_keys(user["user_id"], couple["id"])
-    partner = with_view_fields(load_user(partner_id_in(couple, user["user_id"])))
+    partner = named_for(user["user_id"], load_user(partner_id_in(couple, user["user_id"])))
     overlap = couple_availability_overlap(couple, user["user_id"])
     overlap_count = sum(len(v) for v in overlap.values())
 
@@ -3130,7 +3150,7 @@ def road_vision():
     if couple is None:
         return redirect(url_for("journey_view"))
 
-    partner = with_view_fields(load_user(partner_id_in(couple, user["user_id"])))
+    partner = named_for(user["user_id"], load_user(partner_id_in(couple, user["user_id"])))
     my_pending = [v for v in user["visions"] if v["key"] in VISION_STANCE_OPTIONS]
     partner_visions = {v["key"]: v["stance"] for v in partner["visions"] if v["key"] in VISION_STANCE_OPTIONS}
 
@@ -3369,8 +3389,10 @@ def onboard_stats():
         # each one with getlist so "Italian, Thai" survives as both.
         submitted = {
             **request.form.to_dict(),
+            # Every multi-value field, not just the two declared groups —
+            # budget and ethnicity joined them on 2026-09-09 (evening).
             **{key: request.form.getlist(key)
-               for key, _, _, _ in onboarding.MULTI_STATS + onboarding.OPTIONAL_MULTI_STATS},
+               for key in onboarding.MULTI_VALUE_STATS},
         }
         result = onboarding.validate_stats(submitted)
         if result["ok"]:
@@ -3401,6 +3423,8 @@ def onboard_stats():
             multi_stats=onboarding.MULTI_STATS,
             income_bands=onboarding.INCOME_BANDS,
             mandatory_labels=onboarding.MANDATORY_FIELD_LABELS,
+            multi=onboarding.MULTI_VALUE_STATS,
+            caps=onboarding.MULTI_VALUE_LIMIT,
             # City decides currency, which languages lead the list, and
             # which diets do. Asking for any of that separately is a
             # question the city already answered.
@@ -3766,7 +3790,7 @@ def _ceremony_signatories(peers: list[dict]) -> list[dict]:
         who = load_user(user_id)
         out.append({
             "is_me": is_me,
-            "name": with_view_fields(who)["name"] if who else "Your match",
+            "name": (named_for(user["user_id"], who) or {}).get("name", MASKED_NAME),
             "signed_name": (row or {}).get("signed_name"),
             "signed_at": (row or {}).get("signed_at"),
             "face_verified": bool((row or {}).get("face_verified")),
@@ -3816,7 +3840,7 @@ def _date_ceremony_context(scope_id: str) -> dict:
         # "Second party" is a template; one with two names on it is an
         # agreement.
         "my_name": with_view_fields(user)["name"],
-        "partner_name": with_view_fields(partner)["name"] if partner else None,
+        "partner_name": (named_for(user["user_id"], partner) or {}).get("name"),
         "cancellation_fee": payments.amount_label(payments.CANCELLATION),
         "notice_hours": dateplan.CANCELLATION_NOTICE_HOURS,
     }
@@ -4069,7 +4093,9 @@ def debrief_view():
         my_red=(outcome or {}).get(f"{role}_red_flags") or [],
         flags_given=len(my_green) >= guru_dating.MIN_GREEN_FLAGS,
         my_decision=(outcome or {}).get(f"{role}_decision"),
-        partner_name=display_name(partner_id, (partner or {}).get("gender", "female")),
+        # Through the same seam as everything else — this used to call
+        # display_name() directly and so bypassed the masking entirely.
+        partner_name=(named_for(user["user_id"], partner) or {}).get("name", MASKED_NAME),
     )
 
 
@@ -4097,11 +4123,7 @@ def align_view():
     error = None
     submitted = None
     if request.method == "POST":
-        form = {
-            **request.form.to_dict(),
-            "cuisine": request.form.getlist("cuisine"),
-            "budget": request.form.getlist("budget"),
-        }
+        form = {**request.form.to_dict(), "cuisine": request.form.getlist("cuisine")}
         submitted = form
         result = date_alignment.validate(form, user.get("city"))
         if result["ok"]:
@@ -4109,9 +4131,6 @@ def align_view():
             stats = json.loads(row["stats_json"])
             stats.update(result["stats"])
             row["stats_json"] = json.dumps(stats, ensure_ascii=False)
-            row["preferences_json"] = json.dumps(
-                _sync_preferences_with_stats(user, stats), ensure_ascii=False
-            )
             db.insert_row(get_db(), "User", row)
             return redirect(url_for("calendar_view"))
         error = result["error"]
@@ -4130,7 +4149,9 @@ def align_view():
         # and forgetting cuisine used to wipe all three — this re-renders
         # from what was sent, not from stats it declined to write.
         saved={**(user["stats"] or {}), **(submitted or {})},
-        partner_name=display_name(partner_id, (partner or {}).get("gender", "female")),
+        # Through the same seam as everything else — this used to call
+        # display_name() directly and so bypassed the masking entirely.
+        partner_name=(named_for(user["user_id"], partner) or {}).get("name", MASKED_NAME),
         partner_pending=date_alignment.missing((partner or {}).get("stats", {})),
     )
 
@@ -4292,7 +4313,7 @@ def _gate_facts(user: dict, active: dict) -> dict:
     partner_id = _partner_id_in_lockin(active, user["user_id"])
     partner = load_user(partner_id)
     # with_view_fields is where `name` comes from — the raw row has none.
-    partner = with_view_fields(partner) if partner else None
+    partner = named_for(user["user_id"], partner)
     return {
         "gate_open": True,
         "partner_name": partner.get("name") if partner else None,
@@ -4325,7 +4346,7 @@ def after_date_view():
         return redirect(url_for("week"))
 
     partner_id = _partner_id_in_lockin(active, user["user_id"])
-    partner = with_view_fields(load_user(partner_id))
+    partner = named_for(user["user_id"], load_user(partner_id))
     entries = {e["key"]: e["value"]
                for e in db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])}
     share = _ceremony_pair_state(ceremony.CONTACT_SHARE, active["id"], active)
