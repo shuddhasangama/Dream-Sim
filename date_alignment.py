@@ -91,10 +91,17 @@ def validate(form: dict[str, Any], city: str | None = None) -> dict[str, Any]:
     """
     stats: dict[str, Any] = {}
 
-    budget = str(form.get("budget", "")).strip()
-    if budget not in options_for("budget", city):
+    # 2026-09-10: budget is multi-select now, so accept a list here too —
+    # this screen used to str() it, which turned ["a", "b"] into the text
+    # "['a', 'b']", failed the membership check, and refused a perfectly
+    # good answer with "Pick a budget band".
+    raw = form.get("budget") or []
+    picks = raw if isinstance(raw, (list, tuple)) else [raw]
+    bands = options_for("budget", city)
+    chosen = [str(b).strip() for b in picks if str(b).strip() in bands]
+    if not chosen:
         return {"ok": False, "error": "Pick a budget band — it sets the bill clause.", "stats": None}
-    stats["budget"] = budget
+    stats["budget"] = sorted(chosen, key=bands.index)
 
     diet = str(form.get("diet", "")).strip()
     if diet not in DIETS:
@@ -112,15 +119,31 @@ def validate(form: dict[str, Any], city: str | None = None) -> dict[str, Any]:
     return {"ok": True, "error": None, "stats": stats}
 
 
-def lower_budget(a_budget: str | None, b_budget: str | None, city: str | None = None) -> str | None:
+def lower_budget(a_budget: Any, b_budget: Any, city: str | None = None) -> str | None:
     """The band that actually applies to a shared bill.
 
     The lower of the two, always. The alternative — averaging, or taking
     the higher — quietly commits the person with less money to an evening
     they did not choose, and the bill clause is precisely where that bites.
+
+    2026-09-10: budget became multi-select ("language, Cuisine and budget
+    can be multi-selectable"), so either side may now be a LIST of bands.
+    Each side reduces to its own lowest band first, then the rule above
+    applies unchanged.
+
+    This mattered: with a list on one side, `b in bands` was False, that
+    side dropped out of the comparison entirely, and the clause took the
+    OTHER person's band — the higher one, in the case that was tested.
+    Exactly the harm the paragraph above exists to prevent.
     """
     bands = options_for("budget", city)
-    ranks = [bands.index(b) for b in (a_budget, b_budget) if b in bands]
+
+    def lowest(value: Any) -> int | None:
+        picks = value if isinstance(value, (list, tuple, set)) else [value]
+        ranks = [bands.index(b) for b in picks if b in bands]
+        return min(ranks) if ranks else None
+
+    ranks = [rank for rank in (lowest(a_budget), lowest(b_budget)) if rank is not None]
     if not ranks:
         return None
     return bands[min(ranks)]

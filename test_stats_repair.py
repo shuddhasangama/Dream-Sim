@@ -227,3 +227,155 @@ class VisionScreenTests(RouteTestCase):
     def test_it_appears_once_they_are_in_a_relationship(self):
         self.make_with_vision("u_r", journey_state="relationship")
         self.assertIn("Detail you have added together", self.page())
+
+
+class BudgetIsAListNowTests(unittest.TestCase):
+    """2026-09-10: budget became multi-select, and two things downstream
+    still assumed one band.
+
+    The dangerous one was the bill clause. With a list on one side,
+    `b in bands` was False, that side dropped out of the comparison
+    entirely, and the clause took the OTHER person's band — the higher
+    one — which is precisely the harm lower_budget() exists to prevent.
+    """
+
+    def setUp(self):
+        import date_alignment
+        self.da = date_alignment
+        self.bands = date_alignment.options_for("budget", "Bangalore")
+
+    def test_the_lower_band_still_wins_when_one_side_is_a_list(self):
+        low, mid, high = self.bands[1], self.bands[2], self.bands[3]
+        self.assertEqual(self.da.lower_budget([low, mid], high, "Bangalore"), low)
+        self.assertEqual(self.da.lower_budget(high, [low, mid], "Bangalore"), low)
+
+    def test_and_when_both_sides_are_lists(self):
+        low, mid, high = self.bands[1], self.bands[2], self.bands[3]
+        self.assertEqual(self.da.lower_budget([mid, high], [low, high], "Bangalore"), low)
+
+    def test_a_scalar_still_works(self):
+        """Rows written before the change still hold a bare string."""
+        self.assertEqual(
+            self.da.lower_budget(self.bands[1], self.bands[2], "Bangalore"), self.bands[1])
+
+    def test_neither_side_answering_is_still_none(self):
+        self.assertIsNone(self.da.lower_budget(None, [], "Bangalore"))
+
+    def test_the_alignment_screen_accepts_a_list(self):
+        """It used to str() the value, so ["a", "b"] became the text
+        "['a', 'b']", failed the membership check, and refused a
+        perfectly good answer with "Pick a budget band"."""
+        got = self.da.validate(
+            {"budget": [self.bands[1], self.bands[2]], "diet": "Everything",
+             "cuisine": ["Thai"]}, "Bangalore")
+        self.assertTrue(got["ok"], got["error"])
+        self.assertEqual(got["stats"]["budget"], [self.bands[1], self.bands[2]])
+
+    def test_it_still_refuses_an_empty_or_bogus_budget(self):
+        for value in ([], ["not a band"], ""):
+            with self.subTest(value=value):
+                got = self.da.validate(
+                    {"budget": value, "diet": "Everything", "cuisine": ["Thai"]},
+                    "Bangalore")
+                self.assertFalse(got["ok"])
+
+
+class OpenReachDuringRegistrationTests(RouteTestCase):
+    """2026-09-10, user's report: "Clicking on Open REACH during
+    registration is failing. Also, can you look this up from both men and
+    women. Also it is failing to bring the keyed in/updated stats being
+    visible in REACH."
+
+    All three are the same cause. A brand-new registrant's REACH runs
+    whatif_deltas() and suggest_range() over the WHOLE pool — so a single
+    corrupted row anywhere in it breaks the screen for the newcomer, in
+    both genders, and neither their keyed-in stats nor their unlocked
+    filters ever render.
+    """
+
+    def seed(self, n=40, poison=True):
+        for u in generate_users.generate_users(n, seed=42):
+            row = app_module.onboarding.build_user_row(
+                user_id=u["user_id"], city=u["city"], gender=u["gender"],
+                stats=u["stats"], visions=u["visions"], activities={})
+            row["bgv_status"] = "verified"
+            row["journey_state"] = "dating"
+            row["preferences_json"] = json.dumps(u["preferences"], ensure_ascii=False)
+            db.insert_row(self.conn, "User", row)
+        if poison:
+            # exactly what the shipped editor wrote
+            victim = dict(db.fetch_one(self.conn, "User", id="u_0004"))
+            stats = json.loads(victim["stats_json"])
+            stats.update(weight_kg="58", height_cm="165", languages="English")
+            victim["stats_json"] = json.dumps(stats)
+            db.insert_row(self.conn, "User", victim)
+        self.conn.commit()
+
+    def register(self, gender, email, **extra):
+        c = self.client
+        c.post("/signup", data={"email": email})
+        c.post("/onboarding/vision", data={
+            "intimacy_kinds": ["Emotional", "Physical"],
+            "other_keys": ["Kids"], "kids_route": ["Naturally"]})
+        c.post("/onboarding/stats", data={
+            "city": "Bangalore", "gender": gender, "age": "31",
+            "education": "Master's", "nationality": "IN",
+            "profession": "Engineering", "salary": "1800000",
+            "diet": "Everything", "religion": "Hindu",
+            "languages": ["English"], "cuisine": ["Thai"],
+            "ethnicity": ["Indian"], **extra})
+        c.post("/onboarding/chemistry", data={
+            "act__Cooking": "good", "act__Yoga": "improve",
+            "act__Tennis": "maybe", "act__Salsa": "no"})
+        c.post("/onboarding/finish")
+        with c.session_transaction() as sess:
+            return sess.get("user_id")
+
+    def test_a_new_registrant_can_open_reach_in_either_gender(self):
+        self.seed()
+        for gender in ("female", "male"):
+            with self.subTest(gender=gender):
+                self.register(gender, f"{gender}@x.com")
+                self.assertEqual(self.client.get("/reach").status_code, 200)
+                self.client.post("/logout")
+
+    def test_the_dashboard_offers_it_before_verification(self):
+        """"during registration" — the button is on the Dashboard the
+        moment the wizard finishes, before BGV has run."""
+        self.seed()
+        self.register("female", "f@x.com")
+        self.assertIn("Open REACH", self.client.get("/dashboard").get_data(as_text=True))
+
+    def test_stats_keyed_in_at_signup_are_visible_in_reach(self):
+        self.seed()
+        self.register("female", "f@x.com",
+                      height_cm="170", weight_kg="68", waist_in="30")
+        body = self.client.get("/reach").get_data(as_text=True)
+        for value in ("170", "68", "30"):
+            with self.subTest(value=value):
+                self.assertIn(f"You: {value}", body)
+
+    def test_stats_added_later_appear_too(self):
+        """The other half of the report — updated, not just keyed in."""
+        self.seed()
+        self.register("female", "f@x.com")
+        before = self.client.get("/reach").get_data(as_text=True)
+        self.assertNotIn("You: 170", before)
+
+        self.client.post("/stats/save", data={
+            "height_cm": "170", "weight_kg": "68", "waist_in": "30"})
+        after = self.client.get("/reach").get_data(as_text=True)
+        for value in ("170", "68", "30"):
+            with self.subTest(value=value):
+                self.assertIn(f"You: {value}", after)
+
+    def test_a_multi_budget_does_not_block_registration(self):
+        """budget went multi-select on 2026-09-09 (evening); this is the
+        path that was never exercised end to end."""
+        self.seed()
+        bands = app_module.locale_defaults.budget_bands_for("Bangalore")
+        user_id = self.register("male", "m@x.com", budget=[bands[1], bands[2]])
+        self.assertIsNotNone(user_id)
+        stored = json.loads(dict(db.fetch_one(self.conn, "User", id=user_id))["stats_json"])
+        self.assertEqual(stored["budget"], [bands[1], bands[2]])
+        self.assertEqual(self.client.get("/reach").status_code, 200)

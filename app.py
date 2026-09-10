@@ -4123,7 +4123,10 @@ def align_view():
     error = None
     submitted = None
     if request.method == "POST":
-        form = {**request.form.to_dict(), "cuisine": request.form.getlist("cuisine")}
+        form = {**request.form.to_dict(),
+                "cuisine": request.form.getlist("cuisine"),
+                # multi-select since 2026-09-10, like sign-up and the editor
+                "budget": request.form.getlist("budget")}
         submitted = form
         result = date_alignment.validate(form, user.get("city"))
         if result["ok"]:
