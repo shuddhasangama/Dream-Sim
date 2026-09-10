@@ -419,13 +419,11 @@ a {
   font-size: 13px;
 }
 
-.slider-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-top: 10px;
-}
+/* 2026-09-10: .slider-card is gone — a slider is no longer a card of its
+   own, it is the control inside a .filter row, which carries the name and
+   the Any switch with it. Kept as an alias only so an older template
+   still renders sanely if one is missed. */
+.slider-card { padding: 12px 0; border-bottom: 1px solid var(--border); }
 
 .slider-values {
   font-family: var(--font-mono);
@@ -1501,103 +1499,164 @@ body { -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; }
    — not just a tick in a box — because the person is scanning seven of
    these for the one costing them everybody. */
 
-.filter-panel {
+/* ── one filter, one row ──────────────────────────────────────────────
+   2026-09-10, user's rule: "wanted the Any filter to be right within the
+   respective stats. Having 2 separate makes it too cumbersome and
+   exhaustive. Make it simple/minimalistic please. Keep it in the same
+   box."
+
+   Replaces .filter-panel / .filter-row, which were a separate list of
+   switches above a separate list of sliders. */
+
+.filter-bar {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .btn-showall {
-  padding: 7px 14px;
+  padding: 6px 12px;
   font-size: 12px;
-  white-space: nowrap;
 }
 
-.filter-rows {
+.filter {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.filter:last-child { border-bottom: 0; }
+
+.filter-head {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 4px;
-}
-
-.filter-row {
-  display: grid;
-  grid-template-columns: 20px 1fr auto;
-  gap: 12px;
-  align-items: start;
-  padding: 11px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  cursor: pointer;
-}
-
-.filter-row:hover {
-  background: var(--card-2);
-}
-
-.filter-row.is-any {
-  background: var(--card-2);
-  border-color: var(--border-strong);
-}
-
-.filter-row input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  margin: 2px 0 0;
-  accent-color: var(--coral-1);
-  cursor: pointer;
-}
-
-.filter-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .filter-name {
   font-weight: 600;
-  font-size: 14px;
-  color: var(--white);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-/* Switched off: the name goes quiet and picks up the "any" mark, so the
-   state is legible without reading the count. */
-.filter-row.is-any .filter-name {
-  color: var(--text-2);
-}
-
-.filter-row.is-any .filter-name::after {
-  content: "any";
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--bg);
-  background: var(--mint);
-  border-radius: 4px;
-  padding: 1px 6px;
-}
-
-.filter-blurb {
+.filter-readout {
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
-}
-
-.filter-delta {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--mint);
-  text-align: right;
-  padding-top: 2px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
-.filter-row.is-any .filter-delta {
+/* The Any switch. A checkbox with a label, so it works with the keyboard
+   and with the script off — it posts nothing on its own, but it reads
+   correctly to a screen reader either way. */
+.any-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 11.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
   color: var(--muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  user-select: none;
+}
+.any-switch input { accent-color: var(--coral-1); margin: 0; }
+.any-switch:hover { border-color: var(--coral-1); color: var(--white); }
+.filter.is-any .any-switch {
+  border-color: var(--coral-1);
+  color: var(--coral-1);
+  background: rgba(255, 77, 109, .10);
+}
+
+/* Set to Any: the control stays in place and goes quiet, so you can see
+   what it will be when you switch back. */
+.filter.is-any .slider-track-wrap { opacity: .3; pointer-events: none; }
+.filter.is-any .filter-readout { text-decoration: line-through; }
+
+.filter.is-choice .filter-readout { text-decoration: none; }
+.filter.is-choice.is-any .filter-readout {
+  color: var(--coral-1);
+  text-decoration: none;
+}
+
+.filter-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.filter-delta {
+  color: var(--mint);
+  white-space: nowrap;
+}
+.filter.is-any .filter-delta { color: var(--gold); }
+
+.more-filters {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.more-filters > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  list-style: none;
+  padding: 4px 0;
+}
+.more-filters > summary::-webkit-details-marker { display: none; }
+.more-filters > summary::before {
+  content: "+ ";
+  color: var(--coral-1);
+  font-weight: 700;
+}
+.more-filters[open] > summary::before { content: "\2212 "; }
+.more-filters > summary:hover { color: var(--white); }
+
+/* ── the Vision preset ───────────────────────────────────────────────
+   2026-09-10: "I want Vision also to be selected all as an option."
+   Sits above the pillars, deliberately looking like a shortcut rather
+   than a fifth pillar. */
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  margin-bottom: 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.preset-row:hover { border-color: var(--coral-1); }
+.preset-row input { accent-color: var(--coral-1); }
+.preset-body { display: flex; flex-direction: column; gap: 1px; }
+.preset-name { font-weight: 700; letter-spacing: -.01em; }
+.preset-blurb { font-size: 12.5px; color: var(--muted); }
+
+/* ── the error page ─────────────────────────────────────────────────── */
+.error-page { max-width: 56ch; }
+.error-ref { margin-top: 18px; }
+.error-code {
+  font-family: var(--mono, "IBM Plex Mono", monospace);
+  font-size: 22px;
+  letter-spacing: .08em;
+  color: var(--coral-1);
+  margin: 6px 0 8px;
+}
+.traceback {
+  font-family: var(--mono, "IBM Plex Mono", monospace);
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 10px;
+  border-radius: 8px;
 }
 
 /* ── error page ──────────────────────────────────────────────────────

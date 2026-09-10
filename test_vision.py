@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import ast
 import unittest
+
+import matching
+import onboarding
 from pathlib import Path
 
 from chemistry import INTIMACY_MANDATORY_KEYS as CHEMISTRY_INTIMACY_KEYS
@@ -142,3 +145,132 @@ class UnlockedSpecificTopicsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VisionCompatibilityTests(unittest.TestCase):
+    """2026-09-10, user's two rules, which are one rule:
+
+      "matches can be selected if their bare minimum matches. Like say
+       someone selects intimacy emotional and another one selects both.
+       Then it should be a match, as there is a point for later
+       correction."
+
+      "if someone selects kids Naturally and another one selects
+       Surrogacy or Adoption or both then it is excluded."
+
+    For a pillar they have BOTH chosen, their stances must overlap.
+    """
+
+    def u(self, **pillars):
+        return {"visions": [{"key": k, "stance": v} for k, v in pillars.items()]}
+
+    def test_a_narrower_intimacy_still_matches_a_wider_one(self):
+        self.assertTrue(matching.visions_compatible(
+            self.u(Intimacy=["Emotional"]),
+            self.u(Intimacy=["Emotional", "Physical"])))
+
+    def test_two_intimacies_that_do_not_meet_at_all_are_excluded(self):
+        self.assertFalse(matching.visions_compatible(
+            self.u(Intimacy=["Emotional"]), self.u(Intimacy=["Physical"])))
+
+    def test_naturally_against_surrogacy_is_excluded(self):
+        for other in (["Surrogacy"], ["Adoption"], ["Surrogacy", "Adoption"]):
+            with self.subTest(other=other):
+                self.assertFalse(matching.visions_compatible(
+                    self.u(Kids=["Naturally"]), self.u(Kids=other)))
+
+    def test_but_any_shared_route_is_a_match(self):
+        self.assertTrue(matching.visions_compatible(
+            self.u(Kids=["Naturally"]), self.u(Kids=["Naturally", "Adoption"])))
+
+    def test_a_pillar_only_one_of_them_chose_is_not_a_disagreement(self):
+        """Silence is not dissent — that is what the kids dealbreakers are
+        for, and they are switchable."""
+        self.assertTrue(matching.visions_compatible(
+            self.u(Intimacy=["Emotional"]),
+            self.u(Intimacy=["Emotional"], Kids=["Naturally"])))
+
+    def test_a_pillar_with_no_stance_yet_cannot_disagree(self):
+        self.assertTrue(matching.visions_compatible(
+            self.u(Kids=[]), self.u(Kids=["Surrogacy"])))
+
+    def test_the_rule_is_symmetric(self):
+        pairs = [(["Emotional"], ["Emotional", "Physical"]),
+                 (["Emotional"], ["Physical"]),
+                 (["Emotional", "Physical"], ["Physical"])]
+        for a, b in pairs:
+            with self.subTest(a=a, b=b):
+                self.assertEqual(
+                    matching.visions_compatible(self.u(Intimacy=a), self.u(Intimacy=b)),
+                    matching.visions_compatible(self.u(Intimacy=b), self.u(Intimacy=a)))
+
+    def test_fits_filters_refuses_an_incompatible_vision(self):
+        """And it is NOT ignorable — a vision that cannot meet is the
+        product saying no, not a preference set too narrow."""
+        base = {"user_id": "a", "gender": "female", "city": "Bangalore",
+                "stats": {"age": 30},
+                "preferences": {"fixed": {"dealbreakers": []},
+                                "adjustable": {"distance_km": [0, 100]},
+                                "ignored": sorted(matching.IGNORABLE)}}
+        a = {**base, "visions": [{"key": "Kids", "stance": ["Naturally"]}]}
+        b = {**base, "user_id": "b", "gender": "male",
+             "visions": [{"key": "Kids", "stance": ["Adoption"]}]}
+        self.assertFalse(matching.fits_filters(a, b))
+
+
+class MarriagePresetTests(unittest.TestCase):
+    """2026-09-10: "I want Vision also to be selected all as an option...
+    like 'Traditional' or 'marriage' which will select all by default."
+    """
+
+    def test_it_ticks_every_pillar(self):
+        picked = onboarding.preset_selection(onboarding.PRESET_MARRIAGE)
+        self.assertEqual(sorted(picked["other_keys"]), sorted(onboarding.DETAILED_GOALS))
+        self.assertEqual(sorted(picked["intimacy_kinds"]), sorted(onboarding.INTIMACY_KINDS))
+
+    def test_and_every_sub_option_under_them(self):
+        picked = onboarding.preset_selection(onboarding.PRESET_MARRIAGE)
+        for goal, options in onboarding.DETAILED_GOALS.items():
+            with self.subTest(goal=goal):
+                self.assertEqual(sorted(picked[onboarding.DETAIL_FIELD[goal]]), sorted(options))
+
+    def test_what_it_produces_passes_the_normal_validation(self):
+        """The preset takes no path of its own through validation — that
+        is what stops it drifting from what the form can express."""
+        picked = onboarding.preset_selection(onboarding.PRESET_MARRIAGE)
+        got = onboarding.validate_vision(
+            picked["intimacy_kinds"], picked["other_keys"],
+            picked["cohabit_focus"], picked["kids_route"], picked["travel_style"])
+        self.assertTrue(got["ok"], got.get("error"))
+
+    def test_an_unknown_preset_ticks_nothing(self):
+        self.assertEqual(onboarding.preset_selection("traditional"), {})
+        self.assertEqual(onboarding.preset_selection(""), {})
+
+
+class RecommendedRangeTests(unittest.TestCase):
+    """2026-09-10, user's report: "AI recommended part is not right. Even
+    for 65 year old it recommends age of 31-40... Make it a generic + or
+    - 10."
+    """
+
+    def test_it_is_anchored_on_the_person_not_the_population(self):
+        self.assertEqual(matching.recommend_range(65, "age"), (55, 75))
+        self.assertEqual(matching.recommend_range(24, "age"), (18, 34))
+
+    def test_a_sixty_five_year_old_is_never_told_thirty_one(self):
+        lo, hi = matching.recommend_range(65, "age")
+        self.assertGreater(lo, 40)
+
+    def test_it_never_recommends_below_the_floor(self):
+        self.assertEqual(matching.recommend_range(19, "age")[0], 18)
+
+    def test_no_own_value_means_no_recommendation(self):
+        for value in (None, "", [], True):
+            with self.subTest(value=value):
+                self.assertIsNone(matching.recommend_range(value, "age"))
+
+    def test_waist_keeps_a_tighter_spread(self):
+        """Ten inches either way would span the whole scale."""
+        lo, hi = matching.recommend_range(32, "waist_in")
+        self.assertEqual((lo, hi), (27, 37))

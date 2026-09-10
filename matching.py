@@ -166,14 +166,46 @@ def is_ignored(preferences: dict[str, Any] | None, name: str) -> bool:
     return name in ignored_set(preferences)
 
 
+# Two answers to the same question. Turning one on turns the other off,
+# because holding both means no candidate can ever satisfy you.
+_OPPOSITES = {"wants_kids": "no_kids_wanted", "no_kids_wanted": "wants_kids"}
+
+
 def set_ignored(user: dict[str, Any], name: str, ignore: bool) -> dict[str, Any]:
-    """Switch one filter off (or back on). Returns a new user dict."""
+    """Switch one filter to Any, or back on. Returns a new user dict.
+
+    2026-09-10: this used to only ever remove a name from the ignore
+    list, which meant a dealbreaker the person had never set could be
+    switched to Any and then never switched back — the control worked in
+    one direction. Someone who does not currently filter on smoking is
+    ALREADY on Any, and turning that off has to mean "start filtering",
+    so switching a dealbreaker on adds the tag.
+
+    The user's rule was "someone can not care and Say Any or choose a
+    specific one" — both halves, and the second half needs this.
+    """
     if name not in IGNORABLE:
         raise ValueError(f"{name!r} cannot be set to any")
-    current = ignored_set(user.get("preferences"))
+
+    prefs = user["preferences"]
+    current = ignored_set(prefs)
     current = current | {name} if ignore else current - {name}
-    return {**user, "preferences": {**user["preferences"],
-                                    "ignored": sorted(current)}}
+    tags = list(prefs["fixed"]["dealbreakers"])
+
+    if name in IGNORABLE_DEALBREAKERS and not ignore:
+        if name not in tags:
+            tags.append(name)
+        # Wanting kids and not wanting them are the same question.
+        opposite = _OPPOSITES.get(name)
+        if opposite and opposite in tags:
+            tags.remove(opposite)
+            current = current - {opposite}
+
+    return {**user, "preferences": {
+        **prefs,
+        "fixed": {**prefs["fixed"], "dealbreakers": tags},
+        "ignored": sorted(current),
+    }}
 
 
 def set_ignored_all(user: dict[str, Any], ignore: bool) -> dict[str, Any]:
@@ -251,6 +283,50 @@ def _religion_fits(tiers: list[str], own_religion: str, candidate_religion: str 
     return False
 
 
+def _stances(user: dict[str, Any]) -> dict[str, set[str]]:
+    return {v["key"]: set(v.get("stance") or []) for v in user["visions"]}
+
+
+def visions_compatible(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
+    """Whether two people's visions can meet.
+
+    2026-09-10, user's two rules, which turn out to be one rule:
+
+      "matches can be selected if their bare minimum matches. Like say
+       someone selects intimacy emotional and another one selects both.
+       Then it should be a match, as there is a point for later
+       correction."
+
+      "if someone selects kids Naturally and another one selects
+       Surrogacy or Adoption or both then it is excluded."
+
+    Both are: **for a pillar they have both chosen, their stances must
+    overlap.** Emotional against Emotional+Physical overlaps, so it is a
+    match and the difference is something to talk about later. Naturally
+    against Surrogacy+Adoption does not overlap at all, so there is
+    nothing to build on and it is not a match.
+
+    One rule, stated once, applied to every pillar — rather than a
+    special case per pillar, which is how Kids ended up with a rule
+    Intimacy did not have.
+
+    A pillar only ONE of them chose is not a disagreement about stance;
+    it is a difference in what they want at all, and that is what the
+    wants_kids / no_kids_wanted dealbreakers are for. Silence is not
+    dissent.
+
+    A pillar chosen with no stance recorded (VISION_STANCE_AT_SIGNUP)
+    likewise cannot disagree with anything, so it passes.
+    """
+    a, b = _stances(user_a), _stances(user_b)
+    for key in a.keys() & b.keys():
+        if not a[key] or not b[key]:
+            continue
+        if not (a[key] & b[key]):
+            return False
+    return True
+
+
 def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     """True if candidate user_b satisfies every filter user_a has stated —
     both preferences.fixed.dealbreakers and preferences.adjustable.
@@ -262,6 +338,12 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     Opening this up to other orientations later means adding that real
     field and reading it here, not deleting this check."""
     if user_a["gender"] == user_b["gender"]:
+        return False
+
+    # The visions come before the filters. Filters are preferences a
+    # person can set to any; a vision that cannot meet the other person's
+    # is the product saying no, and is not ignorable.
+    if not visions_compatible(user_a, user_b):
         return False
 
     prefs = user_a["preferences"]
@@ -535,6 +617,42 @@ def set_range(user: dict[str, Any], lever: str, lo: float, hi: float) -> dict[st
     }
 
 
+# 2026-09-10, user's report: "AI recommended part is not right. Even for
+# 65 year old it recommends age of 31-40. Can you check this? Make it a
+# generic + or - 10."
+#
+# It was right about what it computed and wrong about what it was for.
+# suggest_range() returns the pool's interquartile range, so it said
+# "31-40" to a 65-year-old and to a 24-year-old alike — a fact about the
+# population, printed under a slider that belongs to one person. A
+# recommendation that ignores who is reading it is not a recommendation.
+#
+# Anchored on the person's own value instead. One spread, ten, for every
+# lever, because a rule you can state in a sentence is one the person can
+# argue with — and arguing with it is what the slider is for.
+RECOMMEND_SPREAD = 10
+
+# Waist is the one place ±10 inches would span the whole scale, so it
+# keeps a tighter spread. Everything else is the generic ten.
+RECOMMEND_SPREAD_BY_LEVER = {"waist_in": 5}
+
+
+def recommend_range(own_value: Any, lever: str) -> tuple[int, int] | None:
+    """The recommended range for one person: their own value, plus and
+    minus ten. None when they have not given the stat — there is nothing
+    honest to anchor on, and REACH already tells them what to fill in.
+
+    Clamped at each lever's floor so age never recommends 8.
+    """
+    if lever not in RANGE_LEVERS:
+        return None
+    if not isinstance(own_value, (int, float)) or isinstance(own_value, bool):
+        return None
+    spread = RECOMMEND_SPREAD_BY_LEVER.get(lever, RECOMMEND_SPREAD)
+    floor = _LEVER_FLOOR.get(lever, 0)
+    return max(floor, int(own_value) - spread), int(own_value) + spread
+
+
 def suggest_range(pool: list[dict[str, Any]], lever: str, gender: str | None = None, lo_percentile: float = 25, hi_percentile: float = 75) -> tuple[float, float] | None:
     """A deterministic, explainable "recommended range" for one range lever
     — the interquartile range (25th-75th percentile by default) of that
@@ -546,7 +664,13 @@ def suggest_range(pool: list[dict[str, Any]], lever: str, gender: str | None = N
 
     Only meaningful for the body/age levers (RANGE_LEVERS); distance_km
     doesn't have a population "typical value" the same way, so it isn't
-    supported here."""
+    supported here.
+
+    2026-09-10: this is NO LONGER what the REACH slider prints as
+    "recommended" — see recommend_range(), which anchors on the person
+    rather than the population. Kept because a population range is still
+    the right answer to a population question (what does the pool look
+    like), and it is what admin and reporting want."""
     if lever not in RANGE_LEVERS:
         raise ValueError(f"suggest_range only supports {RANGE_LEVERS}, not {lever!r}")
 
@@ -616,10 +740,32 @@ def whatif_deltas(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict
 _FILTER_LABELS = {
     "age": "Age", "height_cm": "Height", "weight_kg": "Weight",
     "waist_in": "Waist", "distance_km": "Distance", "nationality": "Nationality",
-    "religion": "Religion", "veg_only": "Vegetarian only",
+    "religion": "Religion", "veg_only": "Diet",
+    # Two rows, two names. Both said "Kids" at first, which put two
+    # identical labels next to each other saying opposite things.
     "wants_kids": "Wants kids", "no_kids_wanted": "Does not want kids",
-    "non_smoker": "Non-smoker", "non_drinker": "Non-drinker",
+    "non_smoker": "Smoking", "non_drinker": "Drinking",
 }
+
+# What the filter says when it is ON. Paired with "Any" as the off state,
+# this is the whole control: two words, and the person picks one.
+#
+# 2026-09-10, user's rule: "Same should be for smoking and drinking.
+# Where in someone can not care and Say Any or choose a specific one."
+_FILTER_ON_LABELS = {
+    "veg_only": "Vegetarian",
+    "wants_kids": "Only people who do",
+    "no_kids_wanted": "Only people who don't",
+    "non_smoker": "Non-smoker",
+    "non_drinker": "Rarely or never",
+    "nationality": "As set",
+    "religion": "As set",
+}
+
+# The filters shown without asking. Everything else sits behind "More
+# filters" — 2026-09-10, user's rule: "Maybe keep basic stats here. And
+# provide option to add additional where needed."
+BASIC_FILTERS = {"age", "distance_km", "wants_kids", "no_kids_wanted", "veg_only"}
 
 
 def filter_states(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -641,17 +787,26 @@ def filter_states(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict
     off = ignored_set(prefs)
 
     names = [lever for lever in IGNORABLE_LEVERS if lever in prefs["adjustable"]]
-    names += [tag for tag in prefs["fixed"]["dealbreakers"] if tag in IGNORABLE_DEALBREAKERS]
+    # 2026-09-10: every dealbreaker is listed whether or not this person
+    # holds it. One they have not set is simply already on Any, and a row
+    # that only appears once you hold the filter can never be the row you
+    # use to start holding it.
+    held = set(prefs["fixed"]["dealbreakers"])
+    names += list(IGNORABLE_DEALBREAKERS)
 
     out = []
     for name in names:
-        ignored = name in off
+        ignored = (name in off) or (name in IGNORABLE_DEALBREAKERS and name not in held)
         flipped = set_ignored(user, name, not ignored)
         after = sum(1 for c in candidates if mutual_open(flipped, c))
         out.append({
             "name": name,
             "label": _FILTER_LABELS.get(name, name),
+            "on_label": _FILTER_ON_LABELS.get(name, "As set"),
             "kind": "lever" if name in IGNORABLE_LEVERS else "dealbreaker",
+            "basic": name in BASIC_FILTERS,
+            # A slider draws its own control; a choice is just Any or on.
+            "control": "range" if name in RANGE_LEVERS or name == "distance_km" else "choice",
             "ignored": ignored,
             "value": prefs["adjustable"].get(name),
             # Positive means "switching this to any brings in this many

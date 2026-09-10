@@ -1,83 +1,55 @@
-// REACH page: widening a lever calls the backend and updates the counts
-// live, without a full page reload. Uses event delegation so it keeps
-// working after #lever-list is re-rendered.
-
-function formatVal(v) {
-  return Array.isArray(v) ? v.join(", ") : v;
-}
+// REACH: every filter is one row — a name, an Any switch, and (for a
+// range) a slider. Switching Any, dragging a slider or pressing "Any for
+// everything" all post to the backend and get the SAME full state back,
+// so the counts on screen can never disagree with what is saved.
+//
+// 2026-09-10: the numbers are patched in place rather than the rows being
+// rebuilt. Re-rendering the list would destroy the slider you are holding
+// and reset a <details> you had opened.
 
 function renderReach(data) {
   const mutualEl = document.getElementById("mutual-open");
+  if (!mutualEl) return;
   const fitsEl = document.getElementById("fits-filters");
   const noMatchesEl = document.getElementById("no-matches-note");
-  if (!mutualEl) return;
 
   mutualEl.textContent = data.counts.mutual_open;
-  fitsEl.textContent = data.counts.fits_user_filters;
-  noMatchesEl.style.display = data.counts.no_realistic_matches ? "block" : "none";
+  if (fitsEl) fitsEl.textContent = data.counts.fits_user_filters;
+  if (noMatchesEl) noMatchesEl.hidden = !data.counts.no_realistic_matches;
 
-  const list = document.getElementById("lever-list");
-  list.innerHTML = "";
-  data.deltas.forEach((d) => {
-    const same = JSON.stringify(d.from) === JSON.stringify(d.to);
-    const card = document.createElement("div");
-    card.className = "lever-card" + (d.sensitive ? " sensitive" : "");
-    card.innerHTML = `
-      <div class="lever-row">
-        <div class="lever-name">${d.lever.replace(/_/g, " ")}</div>
-        ${d.sensitive ? '<div class="micro sensitive-tag">You control &middot; not suggested</div>' : ""}
-      </div>
-      <div class="lever-values">${formatVal(d.from)} &rarr; ${formatVal(d.to)}</div>
-      <div class="lever-delta">+${d.delta_mutual_open} open up</div>
-      <button class="btn-widen" data-lever="${d.lever}" ${same ? "disabled" : ""}>${same ? "Fully open" : "Widen"}</button>
-    `;
-    list.appendChild(card);
-  });
+  (data.filters || []).forEach((f) => {
+    const box = document.querySelector('.filter-any[data-filter="' + f.name + '"]');
+    if (!box) return;
+    const row = box.closest(".filter");
+    box.checked = f.ignored;
+    row.classList.toggle("is-any", f.ignored);
 
-  renderFilters(data);
-}
-
-// 2026-09-10: the ignore/show-all rows. Re-rendered from the same payload
-// every action returns, so the counts beside a switch can never disagree
-// with what is saved.
-function renderFilters(data) {
-  const rows = document.getElementById("filter-rows");
-  if (!rows || !data.filters) return;
-
-  rows.innerHTML = "";
-  data.filters.forEach((f) => {
-    let delta;
-    if (f.ignored) {
-      delta = f.delta_if_ignored > 0
-        ? `\u2212${f.delta_if_ignored} if switched back on` : "set to any";
-    } else {
-      delta = f.delta_if_ignored > 0
-        ? `+${f.delta_if_ignored} if set to any` : "costs you nobody";
+    const readout = row.querySelector(".filter-readout");
+    if (readout && row.classList.contains("is-choice")) {
+      readout.textContent = f.ignored ? "Any" : f.on_label;
     }
-    const label = document.createElement("label");
-    label.className = "filter-row" + (f.ignored ? " is-any" : "");
-    label.dataset.filter = f.name;
-    label.innerHTML = `
-      <input type="checkbox" class="filter-any" ${f.ignored ? "checked" : ""}>
-      <span class="filter-body">
-        <span class="filter-name">${f.label}${f.sensitive ? '<span class="sensitive-tag">yours to explore</span>' : ""}</span>
-        <span class="filter-blurb micro">${f.blurb || ""}</span>
-      </span>
-      <span class="filter-delta micro">${delta}</span>
-    `;
-    rows.appendChild(label);
+    const delta = row.querySelector(".filter-delta");
+    if (delta) {
+      if (f.delta_if_ignored <= 0) delta.textContent = "";
+      else if (f.ignored) {
+        delta.textContent = "\u2212" + f.delta_if_ignored +
+          (row.classList.contains("is-choice") ? " if switched back on" : " if you set a range");
+      } else {
+        delta.textContent = "+" + f.delta_if_ignored + " on Any";
+      }
+    }
   });
 
   const summary = document.getElementById("ignored-summary");
   if (summary) {
     summary.innerHTML = data.ignored_count
-      ? `${data.ignored_count} of ${data.filters.length} set to any. Nothing was deleted — switch one back on and your range returns exactly as you left it.`
-      : "Set any of these to <strong>any</strong> and it stops narrowing your pool. The count shows what each one is costing you right now.";
+      ? data.ignored_count + " set to Any. Nothing was deleted \u2014 switch one back and it returns as you left it."
+      : "Set anything to <strong>Any</strong> and it stops narrowing your pool.";
   }
   const showAll = document.getElementById("show-all");
   if (showAll) {
     showAll.dataset.ignore = data.all_ignored ? "false" : "true";
-    showAll.textContent = data.all_ignored ? "Put my filters back" : "Show everyone";
+    showAll.textContent = data.all_ignored ? "Put them back" : "Any for everything";
   }
 }
 
@@ -94,12 +66,12 @@ async function postReach(url, body) {
 document.addEventListener("change", (event) => {
   const box = event.target.closest(".filter-any");
   if (!box) return;
-  const row = box.closest(".filter-row");
+  const row = box.closest(".filter");
   row.classList.toggle("is-any", box.checked);
-  postReach("/reach/ignore", { filter: row.dataset.filter, ignore: box.checked })
+  postReach("/reach/ignore", { filter: box.dataset.filter, ignore: box.checked })
     .catch(() => {
-      // Put the switch back where it was rather than showing a state
-      // the server did not accept.
+      // Put the switch back rather than showing a state the server did
+      // not accept.
       box.checked = !box.checked;
       row.classList.toggle("is-any", box.checked);
     });
@@ -111,35 +83,10 @@ document.addEventListener("click", (event) => {
   const wanted = btn.dataset.ignore === "true";
   const original = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "Working…";
+  btn.textContent = "Working\u2026";
   postReach("/reach/show-all", { ignore: wanted })
     .catch(() => { btn.textContent = original; })
     .finally(() => { btn.disabled = false; });
-});
-
-async function widenLever(lever, btn) {
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Widening…";
-  try {
-    const res = await fetch("/reach/widen", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lever }),
-    });
-    if (!res.ok) throw new Error("widen request failed");
-    const data = await res.json();
-    renderReach(data);
-  } catch (err) {
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
-}
-
-document.addEventListener("click", (event) => {
-  const btn = event.target.closest(".btn-widen");
-  if (!btn || btn.disabled) return;
-  widenLever(btn.dataset.lever, btn);
 });
 
 // REACH range sliders: two overlaid <input type=range> per bar (one for
@@ -178,7 +125,7 @@ async function setRange(lever, lo, hi) {
 }
 
 function initReachSliders() {
-  document.querySelectorAll(".slider-card").forEach((card) => {
+  document.querySelectorAll(".filter[data-lever]").forEach((card) => {
     const minInput = card.querySelector(".range-min");
     const maxInput = card.querySelector(".range-max");
 
@@ -202,7 +149,13 @@ function initReachSliders() {
 
     minInput.addEventListener("input", () => clampAndDraw(minInput));
     maxInput.addEventListener("input", () => clampAndDraw(maxInput));
-    const commit = () => setRange(card.dataset.lever, parseFloat(minInput.value), parseFloat(maxInput.value));
+    // A row switched to Any is not filtering, so its handles are inert
+    // until it is switched back. Left visible rather than removed, so the
+    // person can see what the range will be.
+    const commit = () => {
+      if (card.classList.contains("is-any")) return;
+      setRange(card.dataset.lever, parseFloat(minInput.value), parseFloat(maxInput.value));
+    };
     minInput.addEventListener("change", commit);
     maxInput.addEventListener("change", commit);
 

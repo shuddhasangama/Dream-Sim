@@ -6,15 +6,26 @@
 {% include "_wizard.html" %}
 
 <div class="lede">
-  Your end goals are matched before anything else. Intimacy is on everyone's list — pick which kinds,
-  then at least one more goal alongside it.
+  Your end goals are matched before anything else. Pick Intimacy, and at least one more.
 </div>
 
 {% if error %}<div class="card form-error">{{ error }}</div>{% endif %}
 
 <form method="post" action="{{ url_for('onboard_vision') }}">
+  {# 2026-09-10, user's rule: "I want Vision also to be selected all as an
+     option... like 'Traditional' or 'marriage' which will select all by
+     default." A real checkbox, not a script-only button, so it works
+     with JavaScript off — see onboarding.preset_selection(). #}
+  <label class="preset-row">
+    <input type="checkbox" name="preset" value="marriage" id="preset-marriage">
+    <span class="preset-body">
+      <span class="preset-name">Marriage</span>
+      <span class="preset-blurb">Ticks all four. Change anything you like afterwards.</span>
+    </span>
+  </label>
+
   <div class="card">
-    <div class="section-label">Intimacy — mandatory, pick one or both</div>
+    <div class="section-label">Intimacy</div>
     <div class="chip-row">
       {% for kind in intimacy_kinds %}
       <label class="chip-check">
@@ -22,13 +33,6 @@
         <span>{{ kind }}</span>
       </label>
       {% endfor %}
-    </div>
-    {# 2026-09-09 (evening), user's rule: "Kids with Surrogacy or Adoption
-       doesn't require Physical Intimacy to be Mandatory." The old copy
-       said Kids needed Physical, full stop — which quietly assumed one
-       route to children. #}
-    <div class="hint" style="margin-top:9px;">
-      Physical is needed only if you want kids <strong>naturally</strong>. Surrogacy and adoption do not.
     </div>
   </div>
 
@@ -44,9 +48,11 @@
                {% if goal.key in chosen_others %}checked{% endif %}>
         <span>{{ goal.key }}</span>
       </label>
+      {# 2026-09-10, user's rule: "can you take out the wordings within the
+         4 pillars. The top one's are sufficient. Inside each is cumbersome,
+         looks tiresome." The hint line is gone; the options say it. #}
       <div class="goal-detail">
-        <div class="hint">{{ goal.hint }}</div>
-        <div class="chip-row" style="margin-top:8px;">
+        <div class="chip-row">
           {% for option in goal.options %}
           <label class="chip-check">
             <input type="checkbox" name="{{ goal.field }}" value="{{ option }}"
@@ -64,8 +70,7 @@
        Handled server-side in onboarding.selected_goals(), so it holds
        whether or not the browser runs the script below. #}
     <div class="hint" style="margin-top:14px;">
-      Ticking any detail picks its goal for you. Each of these is revisited together at the
-      Relationship stage, once it is a decision rather than a preference.
+      Ticking a detail picks its goal. All of this is revisited at the Relationship stage.
     </div>
   </div>
 
@@ -76,9 +81,26 @@
 </form>
 
 <script>
-  // Progressive enhancement only. The rule is enforced in
-  // onboarding.selected_goals(); this just makes the parent tick appear
-  // as you choose a detail, rather than after the round trip.
+  // Progressive enhancement only. Every rule below is enforced on the
+  // server too — onboarding.selected_goals() for the parent tick,
+  // onboarding.preset_selection() for the preset.
+  var preset = document.getElementById('preset-marriage');
+  if (preset) {
+    preset.addEventListener('change', function () {
+      document.querySelectorAll('form input[type="checkbox"]').forEach(function (box) {
+        if (box !== preset) { box.checked = preset.checked; }
+      });
+    });
+    // Untick the preset the moment the selection stops being everything,
+    // rather than leaving a switch on that no longer describes the form.
+    document.querySelectorAll('form input[type="checkbox"]').forEach(function (box) {
+      if (box === preset) { return; }
+      box.addEventListener('change', function () {
+        if (!box.checked) { preset.checked = false; }
+      });
+    });
+  }
+
   document.querySelectorAll('.goal-block').forEach(function (block) {
     var parent = block.querySelector('input[name="other_keys"]');
     var details = block.querySelectorAll('.goal-detail input[type="checkbox"]');

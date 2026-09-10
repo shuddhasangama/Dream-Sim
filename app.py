@@ -800,7 +800,6 @@ def build_sliders(user: dict, pool: list[dict]) -> list[dict]:
     drag the range for a partner. distance_km has neither a population
     "typical value" nor a personal one (it's derived from two people's
     cities, not a stat either one "has"), so both stay None for it."""
-    partner_gender = _PARTNER_GENDER[user["gender"]]
     adjustable = user["preferences"]["adjustable"]
     sliders = []
     for spec in SLIDER_LEVERS:
@@ -810,8 +809,11 @@ def build_sliders(user: dict, pool: list[dict]) -> list[dict]:
         # so reach.html lists these separately as "unlock by filling it in".
         if key not in adjustable:
             continue
-        suggested = matching.suggest_range(pool, key, gender=partner_gender) if key in matching.RANGE_LEVERS else None
         self_value = user["stats"].get(key) if key in matching.RANGE_LEVERS else None
+        # 2026-09-10: was matching.suggest_range(pool, ...) — the pool's
+        # interquartile spread, which told a 65-year-old that 31-40 was
+        # recommended for them. Anchored on their own value now.
+        suggested = matching.recommend_range(self_value, key)
         sliders.append({**spec, "current": adjustable[key], "suggested": suggested, "self_value": self_value})
     return sliders
 
@@ -845,37 +847,63 @@ def locked_lever_view(user: dict) -> list[dict]:
 
 
 _FILTER_BLURBS = {
-    "age": "Any age in the pool.",
-    "height_cm": "Any height.",
-    "weight_kg": "Any weight.",
-    "waist_in": "Any waist.",
-    "distance_km": "Anywhere, not just your city.",
-    "nationality": "Any nationality.",
-    "religion": "Any religion, or none.",
-    "veg_only": "People who eat anything, too.",
-    "wants_kids": "Whether or not they have Kids in their vision.",
-    "no_kids_wanted": "Whether or not they have Kids in their vision.",
-    "non_smoker": "Whatever they answered about smoking.",
-    "non_drinker": "Whatever they answered about drinking.",
+    "age": "", "height_cm": "", "weight_kg": "", "waist_in": "",
+    "distance_km": "", "nationality": "", "religion": "",
+    "veg_only": "", "wants_kids": "", "no_kids_wanted": "",
+    "non_smoker": "", "non_drinker": "",
 }
 
 
 def filter_view(user: dict, pool: list[dict]) -> list[dict]:
-    """The ignore/show-all row for each filter, with what it costs.
+    """Every filter, its state, and what switching it would cost.
 
-    2026-09-10, user's rule: "Can we have ignore/showall option in REACH -
-    so that some filters are ignored and the answer can be any."
+    2026-09-10, user's rules, in order:
 
-    The count beside each toggle is the point. Seven filters AND-ed
-    together in both directions is fourteen conditions, and no one can
-    tell by looking which of them is the one holding everybody out.
-    matching.filter_states() measures each one against the live pool, so
-    the screen answers that instead of asking the person to guess.
+      "wanted the Any filter to be right within the respective stats.
+       Having 2 separate makes it too cumbersome and exhaustive. Make it
+       simple/minimalistic please. Keep it in the same box."
+
+      "Maybe keep basic stats here. And provide option to add additional
+       where needed."
+
+    The first version put every switch in a panel of its own above the
+    sliders, so a person read Age twice — once as a range and once as a
+    switch — and had to hold the two in their head together. There is one
+    row per filter now, and the switch lives in it.
+
+    The count beside each is what makes the switch worth having: filters
+    AND-ed in both directions is a lot of conditions, and nobody can tell
+    by looking which one is holding everybody out.
     """
     return [
         {**entry, "blurb": _FILTER_BLURBS.get(entry["name"], "")}
         for entry in matching.filter_states(user, pool)
     ]
+
+
+def _ignored_summary(user: dict, filters: list[dict]) -> dict:
+    """How many filters the person has switched to Any, and whether that
+    is all of them."""
+    switched = matching.ignored_set(user["preferences"])
+    return {
+        "ignored_count": len(switched),
+        "all_ignored": bool(filters) and all(f["ignored"] for f in filters),
+    }
+
+
+def _merge_sliders(sliders: list[dict], filters: list[dict]) -> list[dict]:
+    """One object per range filter: its slider AND its Any switch, so the
+    template renders a single control rather than two that disagree."""
+    state = {f["name"]: f for f in filters}
+    out = []
+    for s in sliders:
+        f = state.get(s["key"], {})
+        out.append({**s,
+                    "ignored": f.get("ignored", False),
+                    "delta_if_ignored": f.get("delta_if_ignored", 0),
+                    "basic": f.get("basic", False),
+                    "sensitive": f.get("sensitive", False)})
+    return out
 
 
 @app.route("/reach")
@@ -887,13 +915,20 @@ def reach():
     pool = load_pool()
     counts = matching.reciprocity_counts(user, pool)
     deltas = [d for d in matching.whatif_deltas(user, pool) if d["lever"] not in _SLIDER_KEYS]
-    sliders = build_sliders(user, pool)
     filters = filter_view(user, pool)
-    return render_template("reach.html", counts=counts, deltas=deltas, sliders=sliders,
-                           locked_levers=locked_lever_view(user),
-                           filters=filters,
-                           ignored_count=sum(1 for f in filters if f["ignored"]),
-                           all_ignored=bool(filters) and all(f["ignored"] for f in filters))
+    sliders = _merge_sliders(build_sliders(user, pool), filters)
+    choices = [f for f in filters if f["control"] == "choice"]
+    return render_template(
+        "reach.html", counts=counts, deltas=deltas,
+        locked_levers=locked_lever_view(user),
+        basic_sliders=[s for s in sliders if s["basic"]],
+        more_sliders=[s for s in sliders if not s["basic"]],
+        basic_choices=[c for c in choices if c["basic"]],
+        more_choices=[c for c in choices if not c["basic"]],
+        # Counted from what they actually switched, not from what they
+        # happen not to hold. A brand-new user has never set a smoking
+        # dealbreaker; telling them "5 set to Any" would be news to them.
+        **_ignored_summary(user, filters))
 
 
 @app.route("/reach/ignore", methods=["POST"])
@@ -942,8 +977,8 @@ def _reach_state(user_id: str) -> dict:
         "deltas": [d for d in matching.whatif_deltas(fresh, pool)
                    if d["lever"] not in _SLIDER_KEYS],
         "filters": filters,
-        "ignored_count": sum(1 for f in filters if f["ignored"]),
-        "all_ignored": bool(filters) and all(f["ignored"] for f in filters),
+        "sliders": _merge_sliders(build_sliders(fresh, pool), filters),
+        **_ignored_summary(fresh, filters),
     }
 
 
@@ -3491,6 +3526,13 @@ def onboard_vision():
             **{field: request.form.getlist(field)
                for field in onboarding.DETAIL_FIELD.values()},
         }
+        # 2026-09-10: the Marriage preset. Applied on the SERVER as well
+        # as in the browser, so the one-tick shortcut works with the
+        # script disabled — and so it goes through exactly the same
+        # validate_vision() as a hand-made selection.
+        preset = onboarding.preset_selection(request.form.get("preset") or "")
+        if preset:
+            submitted = {**submitted, **preset}
         result = onboarding.validate_vision(
             submitted["intimacy_kinds"],
             submitted["other_keys"],

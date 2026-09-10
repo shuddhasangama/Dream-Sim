@@ -286,6 +286,39 @@ DETAIL_PROMPT = {
 NEEDS_PHYSICAL = {"Naturally"}
 
 
+# ── the one-tick preset ───────────────────────────────────────────────────
+# 2026-09-10, user's rule: "I want Vision also to be selected all as an
+# option. Also can you think of a simplistic wording for it like
+# 'Traditional' or 'marriage' which will select all by default."
+#
+# Named MARRIAGE rather than "Traditional". Traditional means a different
+# thing in every family this product will meet, and a label people read
+# differently is the wrong label for a one-tick shortcut. Marriage is
+# what the journey ends at — Dating, Relationship, Engaged, Married — so
+# it says what it selects without needing a sentence under it.
+#
+# Everything, including every sub-option: the person who taps this is
+# saying "all of it", and a preset that quietly left Surrogacy unticked
+# would be answering a question they did not answer.
+PRESET_MARRIAGE = "marriage"
+PRESET_LABEL = {PRESET_MARRIAGE: "Marriage"}
+PRESET_BLURB = {PRESET_MARRIAGE: "Ticks all four. Change anything you like afterwards."}
+
+
+def preset_selection(name: str) -> dict[str, list[str]]:
+    """What a preset ticks. Returns the same shape the form posts, so the
+    route can hand it straight to validate_vision() — the preset takes no
+    path of its own through validation, which is what stops it drifting
+    from what the form can express."""
+    if name != PRESET_MARRIAGE:
+        return {}
+    out = {"intimacy_kinds": list(INTIMACY_KINDS),
+           "other_keys": list(DETAILED_GOALS)}
+    for goal, options in DETAILED_GOALS.items():
+        out[DETAIL_FIELD[goal]] = list(options)
+    return out
+
+
 def _details(**submitted: list[str] | None) -> dict[str, list[str]]:
     """Each goal's sub-options, filtered to values we actually offer."""
     return {

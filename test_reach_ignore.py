@@ -181,12 +181,12 @@ class IgnoreRouteTests(RouteTestCase):
         with c.session_transaction() as sess:
             return sess["user_id"]
 
-    def test_the_panel_renders_on_reach(self):
+    def test_the_filters_render_on_reach(self):
         self.seed()
         self.register()
         body = self.client.get("/reach").get_data(as_text=True)
-        self.assertIn("What you are filtering on", body)
-        self.assertIn("Show everyone", body)
+        self.assertIn("Your filters", body)
+        self.assertIn("Any for everything", body)
 
     def test_setting_one_to_any_is_saved(self):
         self.seed()
@@ -246,3 +246,49 @@ class IgnoreRouteTests(RouteTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AnyIsSymmetricTests(unittest.TestCase):
+    """2026-09-10, user's rule: "Same should be for smoking and drinking.
+    Where in someone can not care and Say Any or choose a specific one."
+
+    Both halves. The first version could only switch a filter OFF, so a
+    person who had never set a smoking dealbreaker had no way to start.
+    """
+
+    BARE = {"preferences": {"fixed": {"dealbreakers": []},
+                            "adjustable": {"age": [25, 35]}, "ignored": []}}
+
+    def test_a_dealbreaker_you_never_had_can_be_switched_on(self):
+        got = matching.set_ignored(self.BARE, "non_smoker", False)
+        self.assertIn("non_smoker", got["preferences"]["fixed"]["dealbreakers"])
+        self.assertNotIn("non_smoker", got["preferences"]["ignored"])
+
+    def test_and_switched_back_to_any_without_losing_it(self):
+        on = matching.set_ignored(self.BARE, "non_drinker", False)
+        off = matching.set_ignored(on, "non_drinker", True)
+        self.assertIn("non_drinker", off["preferences"]["fixed"]["dealbreakers"])
+        self.assertIn("non_drinker", off["preferences"]["ignored"])
+
+    def test_wanting_kids_and_not_wanting_them_cannot_both_be_on(self):
+        both = matching.set_ignored(
+            matching.set_ignored(self.BARE, "wants_kids", False),
+            "no_kids_wanted", False)
+        tags = both["preferences"]["fixed"]["dealbreakers"]
+        self.assertIn("no_kids_wanted", tags)
+        self.assertNotIn("wants_kids", tags)
+
+    def test_a_dealbreaker_not_held_reads_as_any_on_the_screen(self):
+        states = {f["name"]: f for f in matching.filter_states(self.BARE | {
+            "user_id": "u1", "gender": "female", "city": "Bangalore",
+            "stats": {"age": 30}, "visions": []}, [])}
+        self.assertTrue(states["non_smoker"]["ignored"])
+        self.assertFalse(states["age"]["ignored"])
+
+    def test_every_dealbreaker_gets_a_row_even_when_unset(self):
+        names = {f["name"] for f in matching.filter_states(self.BARE | {
+            "user_id": "u1", "gender": "female", "city": "Bangalore",
+            "stats": {"age": 30}, "visions": []}, [])}
+        for tag in matching.IGNORABLE_DEALBREAKERS:
+            with self.subTest(tag=tag):
+                self.assertIn(tag, names)
