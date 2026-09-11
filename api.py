@@ -63,6 +63,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions)
             for key in fields & {"filter", "lever"}:
                 if not isinstance(payload[key], str):
                     return failure("validation_error", key + " must be a string.", 400)
+            if action in ("widen", "set-range") and payload["lever"] not in g.api_user["preferences"]["adjustable"]:
+                return failure("validation_error", "That filter is not available for your profile.", 400)
             if "ignore" in fields and type(payload["ignore"]) is not bool:
                 return failure("validation_error", "ignore must be a boolean.", 400)
             if action == "set-range":

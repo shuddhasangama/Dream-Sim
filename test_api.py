@@ -142,3 +142,18 @@ class ApiTests(RouteTestCase):
         with self.client.session_transaction() as session:
             session.clear()
         self.assertEqual(self.client.get("/reach").status_code, 302)
+
+    def test_unavailable_levers_rejected_without_unlocking_or_mutation(self):
+        row = db.fetch_one(self.conn, "User", id="owner")
+        preferences = json.loads(row["preferences_json"])
+        preferences["adjustable"].pop("height_cm", None)
+        self.conn.execute("UPDATE User SET preferences_json = ? WHERE id = ?",
+                          (json.dumps(preferences), "owner"))
+        self.conn.commit()
+        for action, payload in (("widen", {"lever": "height_cm"}),
+                                ("set-range", {"lever": "height_cm", "min": 160, "max": 190})):
+            with self.subTest(action=action):
+                response = self.client.post("/api/v1/reach/" + action, json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json["error"]["code"], "validation_error")
+                self.assertEqual(json.loads(db.fetch_one(self.conn, "User", id="owner")["preferences_json"]), preferences)
