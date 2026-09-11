@@ -4938,5 +4938,15 @@ def admin_reset_week():
     return render_template("admin.html", clock=clock, phase=clock_module.phase(clock), checkpoints=_ADMIN_CHECKPOINTS)
 
 
+from api import register_api
+
+register_api(
+    app, current_user=current_user, reach_locked=reach_locked,
+    reach_state=_reach_state,
+    reach_actions={"ignore": reach_ignore, "show-all": reach_show_all,
+                   "widen": reach_widen, "set-range": reach_set_range},
+)
+
+
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
