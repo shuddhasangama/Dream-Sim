@@ -112,7 +112,15 @@ SURFACES = [
     # REACH and the weekly rotation are the DATING machine. Once a couple
     # is exclusive they are not just unused, they are the wrong thing to
     # be offering, so both retire rather than lingering.
-    ("reach",        "REACH",         "reach",             VERIFIED,     RELATIONSHIP, True),
+    # 2026-09-10, user's rule: "When the signup is complete while the
+    # verification is still pending we still want to have REACH made
+    # available, just to give them the sense of available users."
+    #
+    # It already was, by route and by the Dashboard button — only this
+    # table still said VERIFIED, so the tab was missing while the screen
+    # worked. Three answers to one question; now one. The WEEK stays at
+    # VERIFIED, because an unverified user gets no matches at all.
+    ("reach",        "REACH",         "reach",             REGISTERED,   RELATIONSHIP, True),
     ("week",         "Week",          "week",              VERIFIED,     RELATIONSHIP, True),
     # Guru is the hub for everything contextual. Giving each of those a
     # tab of its own is what produced eleven links; they are cards in

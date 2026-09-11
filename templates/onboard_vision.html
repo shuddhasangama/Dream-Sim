@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Step 1 · Vision — Dare to Dream{% endblock %}
+{% block title %}Step 1 · Vision — DhaShu{% endblock %}
 {% block content %}
 <div class="eyebrow">Step 1 of 3 · Vision</div>
 <h1>What are you actually here for?</h1>
@@ -11,7 +11,7 @@
 
 {% if error %}<div class="card form-error">{{ error }}</div>{% endif %}
 
-<form method="post" action="{{ url_for('onboard_vision') }}">
+<form method="post" action="{{ url_for('onboard_vision') }}" class="vision-form">
   {# 2026-09-10, user's rule: "I want Vision also to be selected all as an
      option... like 'Traditional' or 'marriage' which will select all by
      default." A real checkbox, not a script-only button, so it works
@@ -25,14 +25,32 @@
   </label>
 
   <div class="card">
-    <div class="section-label">Intimacy</div>
-    <div class="chip-row">
-      {% for kind in intimacy_kinds %}
+    {# 2026-09-11, user's rule: "select Intimacy automatically when
+       Emotional/Physical or both are selected, keeping it consistent."
+
+       Intimacy was the odd pillar out: Kids, Cohabitate and Travel each
+       had a parent chip that a sub-option ticked for you, and Intimacy
+       had a heading instead. Same shape as the others now, so ONE rule
+       covers all four — the parent follows the detail, and clearing the
+       parent clears its details. Validation is untouched: at least one
+       kind is still required, so the parent chip cannot let anything
+       through on its own. #}
+    <div class="goal-block">
       <label class="chip-check">
-        <input type="checkbox" name="intimacy_kinds" value="{{ kind }}" {% if kind in chosen_kinds %}checked{% endif %}>
-        <span>{{ kind }}</span>
+        <input type="checkbox" class="goal-parent" name="pillars" value="Intimacy"
+               {% if chosen_kinds %}checked{% endif %}>
+        <span>Intimacy</span>
       </label>
-      {% endfor %}
+      <div class="goal-detail">
+        <div class="chip-row">
+          {% for kind in intimacy_kinds %}
+          <label class="chip-check">
+            <input type="checkbox" name="intimacy_kinds" value="{{ kind }}" {% if kind in chosen_kinds %}checked{% endif %}>
+            <span>{{ kind }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
     </div>
   </div>
 
@@ -44,7 +62,7 @@
     {% for goal in goals %}
     <div class="goal-block">
       <label class="chip-check">
-        <input type="checkbox" name="other_keys" value="{{ goal.key }}"
+        <input type="checkbox" class="goal-parent" name="other_keys" value="{{ goal.key }}"
                {% if goal.key in chosen_others %}checked{% endif %}>
         <span>{{ goal.key }}</span>
       </label>
@@ -102,7 +120,8 @@
   }
 
   document.querySelectorAll('.goal-block').forEach(function (block) {
-    var parent = block.querySelector('input[name="other_keys"]');
+    var parent = block.querySelector('input.goal-parent');
+    if (!parent) { return; }
     var details = block.querySelectorAll('.goal-detail input[type="checkbox"]');
     details.forEach(function (box) {
       box.addEventListener('change', function () {

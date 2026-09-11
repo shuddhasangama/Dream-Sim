@@ -5,6 +5,10 @@
 {% if mode == "post_dating" %}
 <div class="eyebrow">Dating · Week {{ week_number }}</div>
 <h1>You're past the searching phase.</h1>
+
+{# The rhythm does not stop applying because you are no longer searching —
+   the weekend slots, the signing and the debrief are all still on it. #}
+{% if the_week %}{% include "_the_week.html" %}{% endif %}
 {% if partner %}
 <div class="card">
   <div class="micro">Your match</div>
@@ -24,6 +28,8 @@
 {% elif mode == "locked_in" %}
 <div class="eyebrow">Dating · Locked in · Week {{ lockin.week }}</div>
 <h1>You and {{ partner.name }} are locked in.</h1>
+
+{% if the_week %}{% include "_the_week.html" %}{% endif %}
 
 <div class="card guru-card">
   <div class="guru-avatar">G</div>
@@ -120,6 +126,11 @@
 {% else %}
 <div class="eyebrow">Dating · Week {{ clock.week }} · {{ clock.day }} {{ "%02d"|format(clock.hour) }}:00</div>
 <h1>This week's matches</h1>
+
+{# 2026-09-10: THE WEEK, from the mock-up. Placed under the heading and
+   above the matches so the rhythm frames them, rather than being a
+   footnote after the thing it explains. #}
+{% if the_week %}{% include "_the_week.html" %}{% endif %}
 
 {% if not slots %}
 <div class="card"><div class="micro">No matches this week — an honest zero, not a filter problem you need to fix. Check REACH if you'd like to widen anything.</div></div>

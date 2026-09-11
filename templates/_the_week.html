@@ -1,0 +1,86 @@
+{# THE WEEK — the grid from the mock-up's Week screen.
+
+   2026-09-10, user's rule: show "the Calendar process which is available
+   in the mock-up to give the brief summary of the calendar days and
+   respective stages."
+
+   Included on every branch of week.html. Every cell comes from
+   week_map.py, which reads clock.py — so this template holds no times of
+   its own and cannot drift from the machine.
+
+   The grid is a real <table>: it is a timetable, days against bands, and
+   that is what a table is for. It also means a screen reader reads "Wed,
+   EVE, Slots" rather than a wall of divs. #}
+
+<div class="card the-week">
+  <div class="tw-head">
+    <div class="section-label" style="margin:0;">The week</div>
+    <div class="tw-now mono">{{ the_week.now }}</div>
+  </div>
+  <div class="hint tw-phase">{{ the_week.phase_copy }}</div>
+
+  <div class="tw-scroll">
+    <table class="tw-grid">
+      <caption class="visually-hidden">
+        What happens on each day of the dating week
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col"><span class="visually-hidden">Time of day</span></th>
+          {% for d in the_week.grid.days %}
+          <th scope="col" class="tw-day{% if d.is_today %} is-today{% endif %}">{{ d.day }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in the_week.grid.rows %}
+        <tr class="tw-band">
+          <th scope="row" class="tw-band-label">{{ row.label }}</th>
+          {% for cell in row.days %}
+          <td class="tw-cell{% if cell.is_today %} is-today{% endif %}">
+            {% for m in cell.moments %}
+            <span class="tw-chip tone-{{ m.tone }}{% if m.past %} is-past{% endif %}"
+                  title="{{ m.day }} {{ m.time }}{% if m.means %} — {{ m.means }}{% endif %}">
+              {{ m.label }}
+            </span>
+            {% endfor %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% if row.key == the_week.grid.midday_after %}
+        {# The midday line. Everything above it is a window closing,
+           everything below is the next one opening — which is the single
+           most useful thing to know about this grid. #}
+        <tr class="tw-midday" aria-hidden="true">
+          <td colspan="{{ the_week.grid.days|length + 1 }}">
+            <span>{{ the_week.grid.midday_label }}</span>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tw-legend">
+    {% for entry in the_week.legend %}
+    <span class="tw-legend-item"><span class="tw-swatch tone-{{ entry.tone }}"></span>{{ entry.kind }}</span>
+    {% endfor %}
+  </div>
+
+  {# The sentences, for anyone who would rather read it than decode a
+     timetable. Collapsed, because the grid is the point and this is the
+     footnote. #}
+  <details class="tw-explain">
+    <summary>What each one means</summary>
+    <dl>
+      {% for m in the_week.explained %}
+      <div class="tw-explain-row">
+        <dt><span class="tw-chip tone-{{ m.tone }}">{{ m.label }}</span>
+          <span class="mono tw-when">{{ m.at[0] }} {{ "%02d"|format(m.at[1]) }}:00</span></dt>
+        <dd>{{ m.means }}</dd>
+      </div>
+      {% endfor %}
+    </dl>
+  </details>
+</div>

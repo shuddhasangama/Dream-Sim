@@ -120,7 +120,7 @@ ACKS: dict[str, list[tuple[str, str, str]]] = {
          "This is one meeting to establish whether a second is warranted. It creates no "
          "relationship, no exclusivity and no expectation beyond the evening."),
         ("ack_liability", "Platform liability",
-         "Dare to Dream introduces people and records what they agree to. It does not "
+         "DhaShu introduces people and records what they agree to. It does not "
          "supervise the meeting and is not responsible for what happens at it."),
     ],
     CONTACT_SHARE: [
@@ -396,7 +396,7 @@ def date_clauses(ctx: dict[str, Any]) -> list[dict[str, str]]:
 
     return [
         {"n": "1", "title": "Who, and what this covers",
-         "body": f"{me} and {them}, for one meeting arranged through Dare to Dream. It sits "
+         "body": f"{me} and {them}, for one meeting arranged through DhaShu. It sits "
                  "under the dating-stage understanding between you and creates no relationship, "
                  "no exclusivity and no commitment beyond the evening itself."},
         {"n": "2", "title": "Time and place",
@@ -436,7 +436,7 @@ def date_clauses(ctx: dict[str, Any]) -> list[dict[str, str]]:
                  "leave. Anything that worries you \u2014 during or afterwards \u2014 is reported "
                  "through the app and read by a person."},
         {"n": "11", "title": "What the platform is",
-         "body": "Dare to Dream introduces people, arranges the slot, and records what you both "
+         "body": "DhaShu introduces people, arranges the slot, and records what you both "
                  "agree to. It is not at the meeting, does not supervise it, and is not "
                  "responsible for what either of you does there. You are two adults meeting a "
                  "stranger; take the ordinary care that deserves. Anything unresolved comes to "

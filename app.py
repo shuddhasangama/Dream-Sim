@@ -23,6 +23,7 @@ from pathlib import Path
 from flask import Flask, abort, g, jsonify, redirect, render_template, request, session, url_for
 
 import bgv
+import brand
 import cadence
 import calendar_dating
 import ceremony
@@ -55,6 +56,7 @@ import stats_edit
 import signup_verification
 import stage_gate
 import vision
+import week_map
 from generate_users import COHABIT_FOCUS, KIDS_STANCES, from_user_row, to_user_row
 
 APP_DIR = Path(__file__).parent
@@ -373,12 +375,36 @@ def unlocked_or_redirect(key: str):
     ), 403
 
 
+# ── the mock-up's bottom tabs ─────────────────────────────────────────────
+# 2026-09-11: Week · Matches · Guru · You. Destinations resolve through
+# disclosure, so a tab never points at a screen this person cannot open —
+# an unverified user gets REACH under "Matches" and no Week tab at all,
+# which is exactly the rule the nav already follows.
+BOTTOM_TABS = [
+    {"key": "week", "label": "Week", "glyph": "◴", "endpoint": "week"},
+    {"key": "reach", "label": "Matches", "glyph": "◈", "endpoint": "reach"},
+    {"key": "guru", "label": "Guru", "glyph": "●", "endpoint": "guru_view"},
+    {"key": "stats", "label": "You", "glyph": "■", "endpoint": "stats_view"},
+]
+
+
+def _bottom_tabs(milestones: set[str], active_endpoint: str | None) -> list[dict]:
+    tabs = []
+    for tab in BOTTOM_TABS:
+        if not disclosure.is_open(tab["key"], milestones):
+            continue
+        tabs.append({**tab, "active": tab["endpoint"] == active_endpoint})
+    return tabs
+
+
 @app.context_processor
 def inject_globals():
     user = current_user()
     reached = _milestones_for(user) if user else set()
     return {
         "session_user": user,
+        "brand_name": brand.NAME,
+        "bottom_tabs": _bottom_tabs(reached, request.endpoint) if user else [],
         "session_user_name": display_name(user["user_id"], user["gender"]) if user else None,
         "week_number": get_week_number(),
         "reach_locked": reach_locked(user) if user else False,
@@ -881,6 +907,34 @@ def filter_view(user: dict, pool: list[dict]) -> list[dict]:
     ]
 
 
+def reach_pool(user: dict) -> tuple[list[dict], bool]:
+    """Who REACH counts for this person, and whether unverified people
+    are in that number.
+
+    2026-09-10, user's rule: "When the signup is complete while the
+    verification is still pending we still want to have REACH made
+    available, just to give them the sense of available users. Here we
+    would want to show the verified + unverified users. Once BGV
+    completed we would want to show within REACH only the verified
+    users."
+
+    Before verification REACH is a sense of the place, so it counts
+    everybody. After verification it has to be a forecast of who you can
+    actually be matched with, and cadence.py will only ever match two
+    verified people — so counting the rest would be a promise the week
+    machine does not keep.
+
+    The scoping happens HERE rather than in matching.py: that module
+    stays free of journey state, and every REACH number on the screen —
+    the headline, the per-filter deltas, the whatif — is computed from
+    the one list this returns, so they cannot disagree with each other.
+    """
+    everyone = load_pool()
+    if user["bgv_status"] == "verified":
+        return [u for u in everyone if u["bgv_status"] == "verified"], False
+    return everyone, True
+
+
 def _ignored_summary(user: dict, filters: list[dict]) -> dict:
     """How many filters the person has switched to Any, and whether that
     is all of them."""
@@ -912,7 +966,7 @@ def reach():
     user = current_user()
     if reach_locked(user):
         return redirect(url_for("week"))
-    pool = load_pool()
+    pool, counting_unverified = reach_pool(user)
     counts = matching.reciprocity_counts(user, pool)
     deltas = [d for d in matching.whatif_deltas(user, pool) if d["lever"] not in _SLIDER_KEYS]
     filters = filter_view(user, pool)
@@ -925,6 +979,7 @@ def reach():
         more_sliders=[s for s in sliders if not s["basic"]],
         basic_choices=[c for c in choices if c["basic"]],
         more_choices=[c for c in choices if not c["basic"]],
+        counting_unverified=counting_unverified,
         # Counted from what they actually switched, not from what they
         # happen not to hold. A brand-new user has never set a smoking
         # dealbreaker; telling them "5 set to Any" would be news to them.
@@ -969,8 +1024,8 @@ def _reach_state(user_id: str) -> dict:
     """The whole screen's numbers, recomputed from storage. Every REACH
     action returns this rather than a partial patch, so the counts on the
     screen can never disagree with what is saved."""
-    pool = load_pool()
     fresh = load_user(user_id)
+    pool, counting_unverified = reach_pool(fresh)
     filters = filter_view(fresh, pool)
     return {
         "counts": matching.reciprocity_counts(fresh, pool),
@@ -978,6 +1033,7 @@ def _reach_state(user_id: str) -> dict:
                    if d["lever"] not in _SLIDER_KEYS],
         "filters": filters,
         "sliders": _merge_sliders(build_sliders(fresh, pool), filters),
+        "counting_unverified": counting_unverified,
         **_ignored_summary(fresh, filters),
     }
 
@@ -1287,11 +1343,28 @@ def week():
     clock = get_clock()
     week_number = clock.week
 
+    # 2026-09-10, user's rule: "Once the users are registered and bgv
+    # verification is completed I would want to show the Calendar process
+    # which is available in the mock-up to give the brief summary of the
+    # calendar days and respective stages."
+    #
+    # THE WEEK grid, on every branch of this screen — the rhythm does not
+    # stop applying because you happen to be locked in this week. Derived
+    # from clock.py, so it cannot drift from what the machine actually
+    # does. See week_map.py.
+    the_week = {
+        "grid": week_map.grid(clock),
+        "legend": week_map.legend(),
+        "explained": week_map.explained(),
+        "phase_copy": week_map.phase_copy(clock_module.phase(clock)),
+        "now": f"{clock.day} {clock.hour:02d}:00",
+    }
+
     if user["journey_state"] != "dating":
         couple = find_couple_for_user(user["user_id"])
         partner = load_user(partner_id_in(couple, user["user_id"])) if couple else None
         return render_template(
-            "week.html", mode="post_dating", couple=couple,
+            "week.html", mode="post_dating", couple=couple, the_week=the_week,
             partner=named_for(user["user_id"], partner) if partner else None
         )
 
@@ -1313,6 +1386,7 @@ def week():
         my_role = "a" if active["user_a"] == user["user_id"] else "b"
         return render_template(
             "week.html",
+            the_week=the_week,
             mode="locked_in",
             partner=partner,
             lockin=active,
@@ -1343,7 +1417,8 @@ def week():
             }
         )
 
-    return render_template("week.html", mode="dating", clock=clock, phase=clock_module.phase(clock), slots=slots)
+    return render_template("week.html", mode="dating", clock=clock, the_week=the_week,
+                           phase=clock_module.phase(clock), slots=slots)
 
 
 @app.route("/week/act", methods=["POST"])

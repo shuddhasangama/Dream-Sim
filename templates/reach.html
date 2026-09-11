@@ -9,6 +9,18 @@
     <span class="reach-number" id="mutual-open">{{ counts.mutual_open }}</span> people
   </div>
   <div class="micro">of <span id="fits-filters">{{ counts.fits_user_filters }}</span> who fit what you want are also open to you</div>
+  {# 2026-09-10, user's rule: verified + unverified before BGV clears,
+     verified only after. The number changes the day you are verified, so
+     the screen says which number it is currently showing rather than
+     letting the drop read as something going wrong. #}
+  <div class="micro reach-scope">
+    {% if counting_unverified %}
+      Counting everyone here — verified and not yet verified — so you can see the place.
+      Once you are verified this narrows to people you could actually be matched with.
+    {% else %}
+      Counting verified people only. These are the ones the weekly matcher can actually pair you with.
+    {% endif %}
+  </div>
   <div class="micro" id="no-matches-note" {% if not counts.no_realistic_matches %}hidden{% endif %}>
     No realistic matches yet at your current filters — the one for you may not have signed up yet.
   </div>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Dare to Dream — Sim{% endblock %}</title>
+  <title>{% block title %}DhaShu — Sim{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -11,6 +11,23 @@
 </head>
 <body>
   <div class="page">
+    {# ── brand bar ────────────────────────────────────────────────
+       2026-09-11, from the mock-up: the mark, the name, and the
+       verification badge, on every screen. The badge is the product's
+       whole proposition, so it belongs where it is always visible
+       rather than only on the Verify screen. #}
+    {% if session_user %}
+    <header class="brandbar">
+      <a class="brandmark" href="{{ url_for('dashboard') }}">
+        <span class="brand-glyph" aria-hidden="true">D</span>
+        <span class="brand-name">{{ brand_name }}</span>
+      </a>
+      <span class="verify-pill {% if needs_verification %}is-pending{% else %}is-verified{% endif %}">
+        <span class="verify-dot" aria-hidden="true"></span>
+        {% if needs_verification %}Not verified{% else %}Verified{% endif %}
+      </span>
+    </header>
+    {% endif %}
     {% include "_demo_bar.html" %}
     {% if session_user %}
     <nav class="topnav">
@@ -60,6 +77,22 @@
       {% endif %}
       {% block content %}{% endblock %}
     </main>
+
+    {# ── bottom tabs ──────────────────────────────────────────────
+       2026-09-11, from the mock-up: Week · Matches · Guru · You. The
+       destinations come from disclosure, so a tab is never shown for a
+       screen this person cannot open yet — an unverified user sees
+       REACH under Matches and no Week tab. #}
+    {% if session_user and bottom_tabs %}
+    <nav class="tabbar" aria-label="Main">
+      {% for tab in bottom_tabs %}
+      <a class="tab{% if tab.active %} is-active{% endif %}" href="{{ url_for(tab.endpoint) }}">
+        <span class="tab-glyph" aria-hidden="true">{{ tab.glyph }}</span>
+        <span class="tab-label">{{ tab.label }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    {% endif %}
   </div>
 </body>
 </html>

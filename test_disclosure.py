@@ -109,7 +109,19 @@ class NavTests(unittest.TestCase):
         labels = self._labels(JUST_REGISTERED)
         # 2026-09-09: Stats joins Vision and Chemistry — the three things
         # you declare at sign-up and can come back to.
-        self.assertEqual(labels, ["Dashboard", "Verify", "Vision", "Chemistry", "Stats"])
+        # 2026-09-10: REACH joins them, before verification. The route and
+        # the Dashboard button already let an unverified user in; only
+        # this table said otherwise, so the tab was the odd one out.
+        self.assertEqual(labels,
+                         ["Dashboard", "Verify", "Vision", "Chemistry", "Stats", "REACH"])
+
+    def test_reach_is_open_before_verification_but_the_week_is_not(self):
+        """2026-09-10, user's rule: REACH available while verification is
+        pending, "just to give them the sense of available users". The
+        weekly rotation is not — an unverified user gets no matches at
+        all, so offering the screen would be offering nothing."""
+        self.assertTrue(d.is_open("reach", JUST_REGISTERED))
+        self.assertFalse(d.is_open("week", JUST_REGISTERED))
 
     def test_the_three_declared_at_signup_are_all_reachable(self):
         """Vision and Chemistry had tabs from the start; Stats had no

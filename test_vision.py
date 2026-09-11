@@ -274,3 +274,49 @@ class RecommendedRangeTests(unittest.TestCase):
         """Ten inches either way would span the whole scale."""
         lo, hi = matching.recommend_range(32, "waist_in")
         self.assertEqual((lo, hi), (27, 37))
+
+
+class IntimacyParentChipTests(unittest.TestCase):
+    """2026-09-11, user's rule: "select Intimacy automatically when
+    Emotional/Physical or both are selected, keeping it consistent."
+
+    Consistency is the point: Kids, Cohabitate and Travel each had a
+    parent chip a sub-option ticked for you. Intimacy had a heading.
+    """
+
+    TEMPLATE = Path(__file__).parent / "templates" / "onboard_vision.html"
+
+    def markup(self):
+        return self.TEMPLATE.read_text(encoding="utf-8")
+
+    def test_intimacy_has_a_parent_chip_like_the_other_pillars(self):
+        markup = self.markup()
+        self.assertIn('value="Intimacy"', markup)
+        self.assertIn("goal-parent", markup)
+
+    def test_all_four_pillars_share_one_parent_class(self):
+        """One rule, not four — the script keys off the class, so a new
+        pillar inherits the behaviour by being a .goal-block."""
+        markup = self.markup()
+        self.assertEqual(markup.count("goal-parent"), 3)   # class, Intimacy, loop
+        self.assertIn("input.goal-parent", markup)
+
+    def test_intimacy_shows_ticked_when_a_kind_is_already_chosen(self):
+        self.assertIn("{% if chosen_kinds %}checked{% endif %}", self.markup())
+
+    def test_the_parent_chip_cannot_bypass_validation(self):
+        """It posts as `pillars`, which validate_vision never reads — at
+        least one kind is still required."""
+        got = onboarding.validate_vision([], ["Kids"], [], ["Naturally"], [])
+        self.assertFalse(got["ok"])
+
+    def test_the_selection_colour_is_no_longer_the_alarm_colour(self):
+        """2026-09-11: "the selection are highlighted in red, can you
+        change it to more pleasing color choice." Coral marks red flags,
+        cancellation charges and errors; on a screen where every tick is
+        something you want, it is the wrong signal."""
+        css = (Path(__file__).parent / "static" / "style.css").read_text(encoding="utf-8")
+        self.assertIn(".vision-form .chip-check input:checked + span", css)
+        block = css.split(".vision-form .chip-check input:checked + span")[1].split("}")[0]
+        self.assertIn("--mint", block)
+        self.assertNotIn("--coral", block)
