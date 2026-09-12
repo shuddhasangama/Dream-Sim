@@ -99,7 +99,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions)
         if response.status_code >= 400:
             codes = {400: "validation_error", 401: "authentication_required",
                      403: "forbidden", 404: "not_found", 405: "method_not_allowed",
-                     415: "unsupported_media_type"}
+                     415: "unsupported_media_type", 429: "rate_limited",
+                     503: "auth_unavailable"}
             body = {"data": None, "error": {
                 "code": payload.get("code", codes.get(response.status_code, "internal_error")),
                 "message": payload.get("error", "Request failed."),

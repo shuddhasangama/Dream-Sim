@@ -28,7 +28,7 @@
       </span>
     </header>
     {% endif %}
-    {% include "_demo_bar.html" %}
+    {% if not secure_auth_enabled %}{% include "_demo_bar.html" %}{% endif %}
     {% if session_user %}
     <nav class="topnav">
       {# Driven by disclosure.SURFACES, not by conditions scattered through
@@ -37,7 +37,7 @@
       <a class="navlink" href="{{ url_for(link.endpoint) }}">{{ link.label }}</a>
       {% endfor %}
       <form method="post" action="{{ url_for('logout') }}" style="margin:0;display:inline;">
-        <button type="submit" class="navlink" style="background:none;cursor:pointer;">Switch user</button>
+        <button type="submit" class="navlink" style="background:none;cursor:pointer;">{{ "Sign out" if secure_auth_enabled else "Switch user" }}</button>
       </form>
     </nav>
     {% endif %}

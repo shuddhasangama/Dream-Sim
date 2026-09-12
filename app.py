@@ -22,6 +22,8 @@ from pathlib import Path
 
 from flask import Flask, abort, g, jsonify, redirect, render_template, request, session, url_for
 
+import auth
+import auth_sessions
 import bgv
 import brand
 import cadence
@@ -329,6 +331,9 @@ def partner_id_in(couple: dict, user_id: str) -> str:
 
 
 def current_user() -> dict | None:
+    if auth.enabled():
+        active = auth.resolve(get_db)
+        return load_user(active["user_id"]) if active else None
     user_id = session.get("user_id")
     return load_user(user_id) if user_id else None
 
@@ -764,6 +769,12 @@ def login(user_id):
 
 @app.route("/logout", methods=["POST"])
 def logout():
+    if auth.enabled():
+        active = auth.resolve(get_db)
+        if active:
+            auth_sessions.revoke(get_db(), active["id"], active["user_id"])
+        session.clear()
+        return redirect("/signin")
     session.pop("user_id", None)
     return redirect(url_for("picker"))
 
@@ -4939,6 +4950,8 @@ def admin_reset_week():
 
 
 from api import register_api
+
+auth.register_auth(app, get_db)
 
 register_api(
     app, current_user=current_user, reach_locked=reach_locked,

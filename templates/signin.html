@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Sign in — {{ brand_name }}{% endblock %}
+{% block content %}
+<h1>Welcome back</h1>
+<p>Sign in with the email or phone number registered for your beta account.</p>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+{% if message %}<p role="status">{{ message }}</p>{% endif %}
+{% if challenge %}
+<form method="post" action="{{ url_for('signin') }}" class="card">
+  <input type="hidden" name="action" value="verify">
+  <label>Verification code <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,10}" minlength="4" maxlength="10" required></label>
+  <button type="submit" class="btn-primary">Sign in</button>
+</form>
+{% endif %}
+<form method="post" action="{{ url_for('signin') }}" class="card">
+  <input type="hidden" name="action" value="request">
+  <label>Send my code by
+    <select name="channel"><option value="email">Email</option><option value="phone">SMS</option></select>
+  </label>
+  <label>Email or phone <input name="destination" autocomplete="username" maxlength="254" required></label>
+  <p>For SMS, include your country code, for example +91 followed by your number.</p>
+  <button type="submit" class="btn-primary">Send code</button>
+</form>
+<p>Beta access is by invitation. Contact the beta organiser if your contact details need updating.</p>
+{% endblock %}

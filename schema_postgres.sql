@@ -631,6 +631,7 @@ CREATE TABLE IF NOT EXISTS "Account" (
     email           TEXT,
     phone           TEXT,
     password_hash   TEXT,
+    auth_enabled    INTEGER NOT NULL DEFAULT 0 CHECK (auth_enabled IN (0, 1)),
     verified_email  INTEGER NOT NULL DEFAULT 0 CHECK (verified_email IN (0, 1)),
     verified_phone  INTEGER NOT NULL DEFAULT 0 CHECK (verified_phone IN (0, 1)),
     -- 2026-09-10. 1 only for accounts created once sign-up verification
@@ -754,3 +755,42 @@ CREATE TABLE IF NOT EXISTS "SignupVerification" (
     consumed_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_signupverification_user ON "SignupVerification" (user_id, channel);
+
+
+-- Phase 3: revocable sessions; raw access and refresh credentials are never stored.
+CREATE TABLE IF NOT EXISTS "AuthSession" (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    access_hash TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL CHECK (kind IN ('web', 'mobile')),
+    created_at BIGINT NOT NULL,
+    access_expires_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    revoked_at BIGINT
+);
+CREATE INDEX IF NOT EXISTS idx_authsession_user ON "AuthSession" (user_id);
+CREATE TABLE IF NOT EXISTS "AuthRefresh" (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES "AuthSession"(id),
+    expires_at BIGINT NOT NULL,
+    consumed_at BIGINT
+);
+CREATE INDEX IF NOT EXISTS idx_authrefresh_session ON "AuthRefresh" (session_id);
+CREATE TABLE IF NOT EXISTS "AuthThrottle" (
+    id TEXT PRIMARY KEY,
+    attempts INTEGER NOT NULL,
+    expires_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "AuthChallenge" (
+    id TEXT PRIMARY KEY,
+    account_id TEXT REFERENCES "Account"(id),
+    channel TEXT NOT NULL CHECK (channel IN ('email', 'phone')),
+    destination TEXT NOT NULL,
+    provider_sid TEXT,
+    kind TEXT NOT NULL CHECK (kind IN ('web', 'mobile')),
+    expires_at BIGINT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    consumed_at BIGINT
+);
+CREATE INDEX IF NOT EXISTS idx_authchallenge_expiry ON "AuthChallenge" (expires_at);

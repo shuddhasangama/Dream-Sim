@@ -40,7 +40,7 @@ HTTP 400 `validation_error`. This also prevents set-range from adding a filter
 the profile has not unlocked. Existing web handlers and schema are unchanged.
 A regression test covers both actions and verifies no preferences are changed.
 
-Correction deployment and a targeted live recheck are still required.
+Correction deployed and verified live after commit `2bda060`: unavailable-filter widen and set-range both returned HTTP 400 validation_error. The complete preferences object remained unchanged. Health, authenticated REACH and dashboard returned HTTP 200; identity after logout returned HTTP 401.
 
 ## Remaining coverage
 
@@ -52,8 +52,7 @@ Correction deployment and a targeted live recheck are still required.
   not covered by this live run. Journey transitions are outside these
   non-destructive Phase 2 checks.
 
-Phase 2A remains pending final deployment verification of the correction and
-explicit disposition of the unavailable account-state checks.
+The correction deployment verification is complete. Pending-verification and locked-in/later-stage live coverage remains outstanding; local regression coverage passed.
 
 Local validation of the correction: 1,208 tests and 707 subtests passed.
 

@@ -30,6 +30,7 @@ DEFAULT_DB_PATH = Path(__file__).parent / "data" / "dream.db"
 # this so a bad table name fails fast with a clear error instead of a raw
 # database syntax error from string-interpolating an identifier.
 TABLES = {
+    "AuthSession", "AuthRefresh", "AuthThrottle", "AuthChallenge",
     "User",
     "Account",
     "Verification",
@@ -270,7 +271,7 @@ def init_db(
 # than attempted — see reconcile_columns()'s return value.
 
 _COLUMN_LINE = re.compile(
-    r'^\s*([a-z_][a-z0-9_]*)\s+(TEXT|INTEGER|REAL|BOOLEAN)\b(.*?),?\s*$',
+    r'^\s*([a-z_][a-z0-9_]*)\s+(TEXT|INTEGER|BIGINT|REAL|BOOLEAN)\b(.*?),?\s*$',
     re.IGNORECASE,
 )
 
@@ -304,7 +305,7 @@ def _existing_columns(conn: Any, table: str) -> set[str]:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT column_name FROM information_schema.columns "
-                "WHERE table_schema = 'public' AND table_name = %s",
+                "WHERE table_schema = current_schema() AND table_name = %s",
                 (table,),
             )
             rows = cur.fetchall()
