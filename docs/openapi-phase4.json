@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DhaShu Phase 4 API \u2014 blocks 1 and 2",
-    "version": "0.2.0",
+    "title": "DreamContract Phase 4 API — Blocks 1–3",
+    "version": "0.3.0",
     "description": "Incremental contract for implemented Phase 4 reads only. Existing Phase 2/3 endpoints retain their contracts. Secure mode (AUTH_ENABLED=1) is required for beta identity. Later journey endpoints are not advertised as callable until implemented."
   },
   "servers": [
@@ -748,6 +748,904 @@
             }
           }
         }
+      }
+    },
+    "/lock-ins/{lid}/calendar": {
+      "get": {
+        "operationId": "readDateCalendar",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningCalendarResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Missing alignment/overlap, frozen or closed date, out-of-order step or conflicting retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
+      }
+    },
+    "/lock-ins/{lid}/alignment": {
+      "put": {
+        "operationId": "replaceDateAlignment",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningCalendarResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Missing alignment/overlap, frozen or closed date, out-of-order step or conflicting retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanningAlignmentInput"
+              }
+            }
+          }
+        },
+        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
+      }
+    },
+    "/lock-ins/{lid}/availability": {
+      "put": {
+        "operationId": "replaceDateAvailability",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningCalendarResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Missing alignment/overlap, frozen or closed date, out-of-order step or conflicting retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanningAvailabilityInput"
+              }
+            }
+          }
+        },
+        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
+      }
+    },
+    "/lock-ins/{lid}/date-plan": {
+      "post": {
+        "operationId": "confirmDateOverlap",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningDateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Missing alignment/overlap, frozen or closed date, out-of-order step or conflicting retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanningSlot"
+              }
+            }
+          }
+        },
+        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
+      }
+    },
+    "/date-plans/{pid}": {
+      "get": {
+        "operationId": "readDatePlan",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningDateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Missing alignment/overlap, frozen or closed date, out-of-order step or conflicting retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
+      }
+    },
+    "/date-plans/{pid}/selections": {
+      "put": {
+        "operationId": "replaceDateSelections",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningDateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Missing alignment/overlap, frozen or closed date, out-of-order step or conflicting retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanningSelections"
+              }
+            }
+          }
+        },
+        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
+      }
+    },
+    "/date-plans/{pid}/agreement": {
+      "get": {
+        "operationId": "readDateAgreement",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningAgreementResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Missing alignment/overlap, frozen or closed date, out-of-order step or conflicting retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
+      }
+    },
+    "/date-plans/{pid}/agreement/steps": {
+      "post": {
+        "operationId": "advanceDateAgreement",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningAgreementResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Missing alignment/overlap, frozen or closed date, out-of-order step or conflicting retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanningStepInput"
+              }
+            }
+          }
+        },
+        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
       }
     }
   },
@@ -1757,6 +2655,576 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Decision"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningSlot": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "enum": [
+              "Fri",
+              "Sat",
+              "Sun"
+            ]
+          },
+          "meal_slot": {
+            "enum": [
+              "breakfast",
+              "lunch",
+              "coffee",
+              "dinner"
+            ]
+          }
+        },
+        "required": [
+          "day",
+          "meal_slot"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningEntitlement": {
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "enforced": {
+            "type": "boolean"
+          },
+          "amount_inr": {
+            "type": "integer"
+          },
+          "provider_mode": {
+            "const": "simulation"
+          },
+          "api_payment_available": {
+            "const": false
+          }
+        },
+        "required": [
+          "purpose",
+          "scope_id",
+          "satisfied",
+          "enforced",
+          "amount_inr",
+          "provider_mode",
+          "api_payment_available"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningCalendar": {
+        "type": "object",
+        "properties": {
+          "lock_in_id": {
+            "type": "string"
+          },
+          "clock_mode": {
+            "const": "simulation"
+          },
+          "valid_slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanningSlot"
+            }
+          },
+          "my_slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanningSlot"
+            }
+          },
+          "partner_submitted": {
+            "type": "boolean"
+          },
+          "overlap": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanningSlot"
+            }
+          },
+          "alignment": {
+            "type": "object",
+            "properties": {
+              "mine": {
+                "type": "object",
+                "properties": {
+                  "budget": {
+                    "type": [
+                      "array",
+                      "string",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "diet": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "cuisine": {
+                    "type": [
+                      "array",
+                      "string",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "budget",
+                  "diet",
+                  "cuisine"
+                ],
+                "additionalProperties": false
+              },
+              "my_missing": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "partner_missing": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "options": {
+                "type": "object",
+                "properties": {
+                  "budget": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "diet": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "cuisine": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "budget",
+                  "diet",
+                  "cuisine"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "mine",
+              "my_missing",
+              "partner_missing",
+              "options"
+            ],
+            "additionalProperties": false
+          },
+          "current_plan_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "editable": {
+            "type": "boolean"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PlanningEntitlement"
+          }
+        },
+        "required": [
+          "lock_in_id",
+          "clock_mode",
+          "valid_slots",
+          "my_slots",
+          "partner_submitted",
+          "overlap",
+          "alignment",
+          "current_plan_id",
+          "editable",
+          "payment"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningSelections": {
+        "type": "object",
+        "properties": {
+          "dietary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "dress": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "dietary",
+          "dress"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningDate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "lockin_id": {
+            "type": "string"
+          },
+          "datetime": {
+            "type": "string"
+          },
+          "meal": {
+            "type": "string"
+          },
+          "venue": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cuisine": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "budget_estimate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bill_split": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending_signatures",
+              "confirmed"
+            ]
+          },
+          "cancel_notice_hrs": {
+            "type": "integer"
+          },
+          "cancel_fee": {
+            "type": "number"
+          },
+          "my_selections": {
+            "type": "object",
+            "properties": {
+              "greeting": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "dietary": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "dress": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "my_signed": {
+            "type": "boolean"
+          },
+          "partner_signed": {
+            "type": "boolean"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PlanningEntitlement"
+          },
+          "face_mode": {
+            "const": "simulation"
+          },
+          "face_simulation_available": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "lockin_id",
+          "datetime",
+          "meal",
+          "venue",
+          "cuisine",
+          "budget_estimate",
+          "bill_split",
+          "status",
+          "cancel_notice_hrs",
+          "cancel_fee",
+          "my_selections",
+          "my_signed",
+          "partner_signed",
+          "payment",
+          "face_mode",
+          "face_simulation_available"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningAgreement": {
+        "type": "object",
+        "properties": {
+          "plan_id": {
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "playbook",
+              "sign",
+              "face",
+              "done"
+            ]
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "my_signed_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "my_signed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acknowledgements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "term": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "term"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "clauses": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "face_mode": {
+            "const": "simulation"
+          },
+          "face_simulation_available": {
+            "type": "boolean"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PlanningEntitlement"
+          }
+        },
+        "required": [
+          "plan_id",
+          "step",
+          "complete",
+          "my_signed_name",
+          "my_signed_at",
+          "acknowledgements",
+          "clauses",
+          "face_mode",
+          "face_simulation_available",
+          "payment"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningAlignmentInput": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "diet": {
+            "type": "string"
+          },
+          "cuisine": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "budget",
+          "diet",
+          "cuisine"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningAvailabilityInput": {
+        "type": "object",
+        "properties": {
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanningSlot"
+            },
+            "maxItems": 10,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "slots"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningStepInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "step": {
+                "enum": [
+                  "playbook",
+                  "face"
+                ]
+              }
+            },
+            "required": [
+              "step"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "step": {
+                "const": "sign"
+              },
+              "signed_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "acks": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "ack_conduct",
+                    "ack_cancellation",
+                    "ack_not_a_relationship",
+                    "ack_liability"
+                  ]
+                },
+                "minItems": 4,
+                "maxItems": 4,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "step",
+              "signed_name",
+              "acks"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "PlanningCalendarResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PlanningCalendar"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningDateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PlanningDate"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "PlanningAgreementResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PlanningAgreement"
           },
           "error": {
             "type": "null"

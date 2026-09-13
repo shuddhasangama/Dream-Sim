@@ -7,6 +7,7 @@ from journey eligibility so clients are never sent to an unimplemented endpoint.
 import disclosure
 import guru
 import progress
+from urllib.parse import quote
 from api_contract import allowlist
 
 
@@ -52,7 +53,7 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
         raise ValueError('Journey projection received an unrelated couple')
     if plan is not None and (active is None or plan['lockin_id'] != active['id']):
         raise ValueError('Journey projection received an unrelated plan')
-    return {
+    result = {
         'user': {**allowlist(user, ('user_id', 'journey_state', 'bgv_status')),
                  'display_name': display_name},
         'stage_indicator': progress.stage_view(user['journey_state'], reached),
@@ -68,3 +69,14 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
                      for key in disclosure.BY_KEY],
         'next_action': guidance(reached, facts, reach_is_locked),
     }
+    routes = {}
+    if active and active['status'] == 'active' and user['journey_state'] == 'dating' and user['bgv_status'] == 'verified':
+        calendar = '/api/v1/lock-ins/'+quote(active['id'], safe='')+'/calendar'
+        routes.update(calendar=calendar, align=calendar)
+        if plan and plan['status'] in ('pending_signatures', 'confirmed'):
+            routes['plan'] = '/api/v1/date-plans/'+quote(plan['id'], safe='')
+    for item in [*result['surfaces'], result['next_action'].get('destination')]:
+        if item and item['key'] in routes:
+            item['api_available'] = True
+            item['request'] = {'method': 'GET', 'path': routes[item['key']]} if item['eligible'] else None
+    return result

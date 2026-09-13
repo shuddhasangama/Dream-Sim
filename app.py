@@ -1467,86 +1467,41 @@ def calendar_view():
 @login_required
 def calendar_submit():
     user = current_user()
-    active = _my_active_lockin(user["user_id"])
+    active = _my_active_lockin(user['user_id'])
     if active is None:
-        return redirect(url_for("week"))
-
-    # Segment D: the availability fee is charged before the slots are
-    # submitted, which is where the mock-up puts it.
+        return redirect(url_for('week'))
     gate = _require_payment(user, payments.AVAILABILITY)
     if gate is not None:
         return gate
-
-    valid = set(calendar_dating.valid_slots())
-    chosen = set()
-    for raw in request.form.getlist("slot"):
-        day, _, meal = raw.partition("|")
-        if (day, meal) in valid:
-            chosen.add((day, meal))
-
-    for row in db.fetch_all(get_db(), "Availability", lockin_id=active["id"], user_id=user["user_id"]):
-        db.delete_row(get_db(), "Availability", row["id"])
-    for day, meal in chosen:
-        db.insert_row(
-            get_db(), "Availability",
-            {"id": uuid.uuid4().hex[:8], "lockin_id": active["id"], "user_id": user["user_id"], "day": day, "meal_slot": meal},
-        )
-    return redirect(url_for("calendar_view"))
-
+    chosen = []
+    for raw in request.form.getlist('slot'):
+        day, _, meal = raw.partition('|')
+        item = {'day': day, 'meal_slot': meal}
+        if item not in chosen:
+            chosen.append(item)
+    try:
+        planning_service.availability(get_db(), user['user_id'], active['id'], chosen)
+    except ApiError as exc:
+        abort(exc.status, description=exc.message)
+    return redirect(url_for('calendar_view'))
 
 @app.route("/calendar/confirm", methods=["POST"])
 @login_required
 def calendar_confirm():
     user = current_user()
-    active = _my_active_lockin(user["user_id"])
+    active = _my_active_lockin(user['user_id'])
     if active is None:
-        return redirect(url_for("week"))
-
-    day, meal = request.form.get("day"), request.form.get("meal_slot")
-    if (day, meal) not in set(calendar_dating.valid_slots()):
-        abort(400)
-
-    partner = load_user(_partner_id_in_lockin(active, user["user_id"]))
-
-    # 2026-09-04: budget, diet and cuisine are asked here rather than at
-    # sign-up, so a date cannot be confirmed until both have answered.
-    if not date_alignment.ready_for_pair(user["stats"], partner["stats"]):
-        return redirect(url_for("align_view"))
-
-    # Diet is optional too — same class of bug as suggest_range had.
-    venue = calendar_dating.suggest_venue(
-        day, meal, user["stats"].get("diet"), partner["stats"].get("diet"))
-
-    # The bill clause used to assert "both parties declared" a band that
-    # came from a hardcoded default and matched neither of them. It now
-    # states the lower of the two bands they actually chose, which is the
-    # only reading that does not commit the person with less money to the
-    # other's idea of an evening.
-    budget = date_alignment.lower_budget(user["stats"].get("budget"),
-                                         partner["stats"].get("budget"), user.get("city"))
-    shared = date_alignment.shared_cuisines(user["stats"].get("cuisine"),
-                                            partner["stats"].get("cuisine"))
-    plan = dateplan.generate_plan(
-        lockin_id=active["id"],
-        confirmed_slot={"day": day, "meal_slot": meal},
-        venue={**venue, "cuisine": shared[0] if shared else venue.get("cuisine")},
-        datetime_str=slot_datetime(active["week"], day, meal),
-        bill_split="pay-your-own",
-        selections_a={},
-        selections_b={},
-        config={"budget_estimate": budget} if budget else None,
-    )
-    db.insert_row(
-        get_db(), "DatePlan",
-        {
-            "id": f"plan:{active['id']}",
-            **{k: v for k, v in plan.items() if k not in ("selections_a_json", "selections_b_json")},
-            "selections_a_json": db.json_field(plan["selections_a_json"]),
-            "selections_b_json": db.json_field(plan["selections_b_json"]),
-        },
-    )
-    return redirect(url_for("plan_view"))
-
+        return redirect(url_for('week'))
+    try:
+        planning_service.confirm(get_db(), user['user_id'], active['id'],
+                                 request.form.get('day'), request.form.get('meal_slot'), slot_datetime)
+    except ApiError as exc:
+        if exc.code == 'alignment_required':
+            return redirect(url_for('align_view'))
+        if exc.code == 'payment_required':
+            return redirect(url_for('pay_view', purpose=payments.AVAILABILITY))
+        abort(exc.status, description=exc.message)
+    return redirect(url_for('plan_view'))
 
 @app.route("/calendar/no-overlap", methods=["POST"])
 @login_required
@@ -1556,19 +1511,12 @@ def calendar_no_overlap():
     if active is None:
         return redirect(url_for("week"))
 
-    if request.form.get("choice") == "return_to_pool":
-        released = lockin.release(active, "no calendar overlap")
-        db.insert_row(get_db(), "LockIn", {**active, **released})
-        return redirect(url_for("week"))
-
-    # "Offer next weekend": Fri/Sat/Sun are the only slot labels that
-    # exist (calendar_dating has no separate week axis), so both partners
-    # simply get a clean slate to try different picks — the LockIn itself
-    # stays active.
-    for owner_id in (active["user_a"], active["user_b"]):
-        for row in db.fetch_all(get_db(), "Availability", lockin_id=active["id"], user_id=owner_id):
-            db.delete_row(get_db(), "Availability", row["id"])
-    return redirect(url_for("calendar_view"))
+    choice = request.form.get('choice', 'next_weekend')
+    try:
+        planning_service.no_overlap(get_db(), user['user_id'], active['id'], choice)
+    except ApiError as exc:
+        abort(exc.status, description=exc.message)
+    return redirect(url_for('week' if choice == 'return_to_pool' else 'calendar_view'))
 
 
 # ── Date plan & signing (docs/dating-stage-spec.md §6-8) ───────────────────
@@ -1633,27 +1581,16 @@ def plan_view():
 @login_required
 def plan_selections():
     user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
-        return redirect(url_for("week"))
-    plan = _dateplan_for_lockin(active["id"])
+    active = _my_active_lockin(user['user_id'])
+    plan = _dateplan_for_lockin(active['id']) if active else None
     if plan is None:
-        return redirect(url_for("calendar_view"))
-
-    my_role = "a" if active["user_a"] == user["user_id"] else "b"
-    # No greeting here any more — /boundaries owns it (2026-09-04).
-    selections = {
-        "dietary": request.form.get("dietary"),
-        "dress": request.form.get("dress"),
-    }
-    updated = dict(plan)
-    updated[f"selections_{my_role}_json"] = db.json_field(selections)
-    # Bill split isn't a per-partner selection any more — it's part of the
-    # auto-filled "rules of engagement" (cuisine/budget/split), set once
-    # at calendar_confirm() time and never hand-edited here.
-    db.insert_row(get_db(), "DatePlan", updated)
-    return redirect(url_for("plan_view"))
-
+        return redirect(url_for('calendar_view'))
+    try:
+        planning_service.selections(get_db(), user['user_id'], plan['id'],
+                                    {k: request.form.get(k) for k in ('dietary', 'dress')})
+    except ApiError as exc:
+        abort(exc.status, description=exc.message)
+    return redirect(url_for('plan_view'))
 
 @app.route("/plan/sign", methods=["POST"])
 @login_required
@@ -1671,27 +1608,12 @@ def plan_sign():
     if gate is not None:
         return gate
 
-    ack_flags = {f: (f in request.form) for f in dateplan.ACK_FIELDS}
-    clock = get_clock()
-    # First attempt is deterministic (verify_face()'s own default seed);
-    # a retry — signaled by an existing Signature row for this plan/user,
-    # which a failed attempt already inserts with face_verified=0 — gets a
-    # fresh random seed each time. Previously this reused a hardcoded
-    # "attempt=2" from the retry form forever, so a user whose first TWO
-    # attempts both happened to land on the stub's failure branch could
-    # never get past it — every retry recomputed the exact same outcome.
-    already_tried = db.fetch_one(get_db(), "Signature", dateplan_id=plan["id"], user_id=user["user_id"])
-    seed = uuid.uuid4().hex if already_tried is not None else None
-    face_verified = dateplan.verify_face(user["user_id"], seed=seed)
-    sig = dateplan.sign(plan["id"], user["user_id"], ack_flags, signed_at=str(clock), face_verified=face_verified)
-    db.insert_row(
-        get_db(), "Signature",
-        {"id": f"{plan['id']}:{user['user_id']}", **{k: (int(v) if isinstance(v, bool) else v) for k, v in sig.items()}},
-    )
-
-    signatures = db.fetch_all(get_db(), "Signature", dateplan_id=plan["id"])
-    if dateplan.is_confirmed(signatures, active["user_a"], active["user_b"]) and plan["status"] != "confirmed":
-        db.insert_row(get_db(), "DatePlan", {**plan, "status": "confirmed"})
+    try:
+        planning_service.legacy_sign(get_db(), user['user_id'], plan['id'],
+            {f: f in request.form for f in dateplan.ACK_FIELDS}, str(get_clock()),
+            lambda who, retry: dateplan.verify_face(who, seed=uuid.uuid4().hex if retry else None))
+    except ApiError as exc:
+        abort(exc.status, description=exc.message)
 
     return redirect(url_for("plan_view"))
 
@@ -4285,6 +4207,26 @@ def ceremony_step(kind):
         if gate is not None:
             return gate
 
+    if kind == ceremony.DATE_AGREEMENT:
+        state = planning_service.agreement_state(get_db(), current_user()['user_id'], scope_id, str(get_clock()))
+        step = request.form.get('step') or ceremony.next_step(state)
+        if step == ceremony.DONE:
+            return redirect(url_for('ceremony_view', kind=kind))
+        body = {'step': step}
+        if step == ceremony.SIGN:
+            body.update(signed_name=request.form.get('signed_name', ''), acks=request.form.getlist('acks'))
+        try:
+            planning_service.agreement(get_db(), current_user()['user_id'], scope_id, body, str(get_clock()),
+                lambda who: dateplan.verify_face(who, seed=uuid.uuid4().hex))
+        except ApiError as exc:
+            if exc.code == 'validation_error':
+                _remember_form(endpoint='ceremony_view')
+                return redirect(url_for('ceremony_view', kind=kind, unsigned='1'))
+            if exc.code == 'face_simulation_failed':
+                return redirect(url_for('ceremony_view', kind=kind, face='failed'))
+            abort(exc.status, description=exc.message)
+        return redirect(url_for('ceremony_view', kind=kind))
+
     state = _ceremony_state(kind, scope_id)
     step = ceremony.next_step(state)
     face_failed = False
@@ -4494,11 +4436,10 @@ def align_view():
         submitted = form
         result = date_alignment.validate(form, user.get("city"))
         if result["ok"]:
-            row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
-            stats = json.loads(row["stats_json"])
-            stats.update(result["stats"])
-            row["stats_json"] = json.dumps(stats, ensure_ascii=False)
-            db.insert_row(get_db(), "User", row)
+            try:
+                planning_service.alignment(get_db(), user['user_id'], active['id'], form)
+            except ApiError as exc:
+                abort(exc.status, description=exc.message)
             return redirect(url_for("calendar_view"))
         error = result["error"]
 
@@ -4965,12 +4906,15 @@ def _api_journey_state(user):
 
 
 from api import register_api
+import planning_service
 
 auth.register_auth(app, get_db)
 
 register_api(
     app, current_user=current_user, reach_locked=reach_locked,
     reach_state=_reach_state,
+    planning={'get_db': get_db, 'get_clock': get_clock, 'slot_datetime': slot_datetime,
+              'agreement_context': _date_ceremony_context},
     journey_state=_api_journey_state,
     week_reads={'week': _api_week_state, 'match': _api_match_detail},
     week_prepare=lambda user: week_service.prepare(get_db(), user['user_id'], get_clock()),

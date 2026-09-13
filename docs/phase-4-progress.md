@@ -116,9 +116,123 @@ The clock remains the existing simulator clock: this block does not claim a
 wall-clock scheduler or resolve stale dates via GET. Date outcome reconciliation
 belongs with block 4's transactional date cycle.
 
+## Block 3 — calendar, alignment, plans and date agreements
+
+Implemented locally on 2026-09-13. Builds on `fc431f6` and `1b99582`.
+No schema migration is needed for this block.
+
+| Method | Route (under `/api/v1`) | Purpose |
+|---|---|---|
+| GET | `/lock-ins/{lid}/calendar` | Own availability, shared overlap, alignment answers/options/missing fields, current plan and payment prerequisite |
+| PUT | `/lock-ins/{lid}/alignment` | Replace own budget/diet/cuisine answers |
+| PUT | `/lock-ins/{lid}/availability` | Atomically replace own selected slots |
+| POST | `/lock-ins/{lid}/date-plan` | Confirm an actual shared slot and create one plan |
+| GET | `/date-plans/{pid}` | Allowlisted plan, own selections, signature completion flags and payment prerequisite |
+| PUT | `/date-plans/{pid}/selections` | Replace own dietary/dress selections before either partner signs |
+| GET | `/date-plans/{pid}/agreement` | Read clauses, required acknowledgements and own ceremony state without inserting rows |
+| POST | `/date-plans/{pid}/agreement/steps` | Explicit playbook/sign/face transition; complete ceremony and Signature mirror atomically |
+
+The calendar response advertises valid slots and alignment options. The client
+uses the authenticated user's current lock-in ID from journey status. `lid` and
+`pid` are resource identifiers, never actor IDs. Another user's resources return
+404. Unverified or non-Dating actors are rejected. Closed dates and released
+pairs reject mutations. Full partner availability, private profile fields,
+contact details and partner typed signatures are not serialized.
+
+Request examples:
+
+```json
+{"slots": [{"day": "Sat", "meal_slot": "dinner"}]}
+```
+
+The confirmation POST takes `{"day":"Sat","meal_slot":"dinner"}`. Both
+partners must have complete alignment and the slot must exist in both saved
+availability sets. Both availability entitlements are checked if fees are on.
+The same confirmation returns the existing plan; a different slot conflicts.
+Alignment and availability freeze once the plan exists. Selections freeze once
+either actor signs, including through the older HTML signing flow.
+
+Agreement step bodies are explicit, so retrying a previous step never silently
+executes the next one:
+
+```json
+{"step":"playbook"}
+```
+
+```json
+{"step":"sign","signed_name":"Your name","acks":["ack_conduct","ack_cancellation","ack_not_a_relationship","ack_liability"]}
+```
+
+```json
+{"step":"face"}
+```
+
+Identical completed-step retries do not duplicate signatures. Changing a recorded
+signature conflicts. A failed signature write rolls back ceremony completion.
+Each actor must complete their own agreement; one actor cannot sign for both.
+
+### Shared services and compatibility
+
+`planning_service.py` owns the transactions. The HTML calendar submit/confirm,
+alignment, selections and date-agreement ceremony now call it too. The older
+HTML `/plan/sign` retains its checkbox flow, sharing the atomic signature mirror
+and preventing a retry from downgrading a completed signature. Browser ceremony
+forms include the displayed step to make retries explicit.
+The existing HTML no-overlap reset/release is also serialized with confirmation:
+it cannot clear slots or release a pair after a plan exists, or claim no overlap
+when shared availability exists.
+
+Corrected HTML behaviour: selecting a merely valid slot is insufficient without
+mutual availability; editing inputs for an already created/signed date conflicts.
+Existing redirects for missing alignment and payment prerequisites remain.
+The PostgreSQL locking strategy deliberately serializes date-planning writes for
+the small beta; narrow its table locks before scaling. SQLite uses BEGIN IMMEDIATE.
+
+Journey status advertises calendar/alignment/plan read links when an eligible
+actor has the corresponding current resource. OpenAPI 0.3.0 documents all eight
+new operations, input shapes, responses and error outcomes.
+
+### Simulation and deployment boundaries
+
+- Payment responses say `provider_mode=simulation`. This block creates no payment
+  endpoint and grants no payment entitlement. When existing fees are enabled,
+  unpaid actors are blocked; the existing HTML simulation checkout remains the
+  prerequisite until a real payment provider is implemented. Tests disable fees
+  explicitly in isolated fixtures; that is not evidence of real payment delivery.
+- API face simulation defaults OFF. `BETA_DATE_SIMULATION_ENABLED=1` enables it
+  only for an approved Account (`auth_enabled=1`). It calls the existing random
+  simulator and takes no face image; it is not biometric identity verification.
+  Existing HTML simulation behaviour is retained. The stored legacy field
+  `face_verified` remains a simulation result, not proof of real identity.
+- No environment variables were changed in Railway. Real payment and face
+  providers are not implemented by this block. The existing simulation clock
+  and calendar epoch remain in use; no real-time scheduler was added.
+- Cancellation, no-overlap release/reset and repeat-cycle resolution are not
+  exposed by this block. A closed first-cycle plan cannot be overwritten to
+  start another date. Block 4 owns that lifecycle and its API coverage.
+
+### Validation
+
+- Initial full isolated PostgreSQL regression: **1,280 passed, 728 subtests**,
+  no skips, in 90.88 seconds.
+- Follow-up API/contract checks: **13 passed**, including added foreign-mutation,
+  media-type and mixed HTML/API signature tests.
+- Full regression after additional authorization/parity and concurrency tests:
+  **1,284 passed, 728 subtests**, no skips, in 92.60 seconds.
+- Follow-up checks after the HTML recovery guard: **24 passed, 8 subtests**.
+- Final full regression, including the recovery guard: **1,284 passed,
+  728 subtests passed**, no skips, in 101.91 seconds. The isolated PostgreSQL
+  instance stopped and its temporary data and credentials were removed.
+  Coverage includes
+  simultaneous plan confirmation, simultaneous partner agreement completion,
+  availability-versus-confirmation races, injected rollback failures, no overlap,
+  invalid fields, missing alignment, payment enforcement and opt-in simulation.
+- Local test runner starts a password-protected loopback PostgreSQL instance and
+  removes its temporary data and credentials after shutdown. No Railway data,
+  provider requests, pushes or deployments are involved.
+
 ## Remaining sequence
 
-3. Calendar/alignment/plan/agreement;
 4. Feedback and repeated dates; 5. After-date/gates/profile evolution;
 6. Relationship/ROAD/later stages; 7. Enrollment and API-only full-journey tests.
 

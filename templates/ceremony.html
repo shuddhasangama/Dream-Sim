@@ -105,6 +105,7 @@
 
 {% if step == 'playbook' %}
 <form method="post" action="{{ url_for('ceremony_step', kind=kind) }}">
+<input type="hidden" name="step" value="{{ step }}">
   <button type="submit" class="btn-primary">I have read it</button>
 </form>
 
@@ -116,6 +117,7 @@
     these are what you are actually agreeing to.
   </div>
   <form method="post" action="{{ url_for('ceremony_step', kind=kind) }}">
+<input type="hidden" name="step" value="{{ step }}">
     {% for ack in acks %}
     <label class="term">
       {# 2026-09-09: re-ticked from the rejected attempt. The signature
@@ -155,6 +157,7 @@
   <div class="interest-flag" style="margin-top:10px;">The check did not pass. Try again.</div>
   {% endif %}
   <form method="post" action="{{ url_for('ceremony_step', kind=kind) }}">
+<input type="hidden" name="step" value="{{ step }}">
     <button type="submit" class="btn-primary">{% if face_failed %}Try again{% else %}Run the check{% endif %}</button>
   </form>
 </div>
