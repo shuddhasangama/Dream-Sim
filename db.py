@@ -54,6 +54,9 @@ TABLES = {
     "DatePlan",
     "Signature",
     "DateOutcome",
+    "DateFeedback",
+    "DateResolution",
+    "DateCharge",
     "ComplianceEvent",
     # Progressive disclosure during Dating (docs/relationship-stage-spec.md Part A)
     "ContactRequest",

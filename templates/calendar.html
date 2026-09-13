@@ -10,6 +10,7 @@
 <div class="meal-grid">
   {% for day, meal in overlap %}
   <form method="post" action="{{ url_for('calendar_confirm') }}">
+<input type="hidden" name="cycle" value="{{ cycle }}">
     <input type="hidden" name="day" value="{{ day }}">
     <input type="hidden" name="meal_slot" value="{{ meal }}">
     <button type="submit" class="meal-slot-check overlap" style="width:100%;">{{ day }} · {{ meal|capitalize }}</button>

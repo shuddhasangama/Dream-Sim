@@ -1174,7 +1174,7 @@ def _create_lockin(user_a_id: str, user_b_id: str, week: int, clock: clock_modul
 
 
 def _dateplan_for_lockin(lockin_id: str) -> dict | None:
-    return db.fetch_one(get_db(), "DatePlan", lockin_id=lockin_id)
+    return planning_service.current_plan(get_db(), lockin_id)
 
 
 def _boundary_of(user_id: str) -> str | None:
@@ -1207,20 +1207,17 @@ def _debrief_is_open(plan: dict, clock: clock_module.SimulationClock) -> bool:
     A plan whose slot cannot be read opens the debrief rather than sealing
     it shut. Being unable to say when the date was is not a reason to stop
     someone reporting what happened at it."""
-    slot = _plan_slot(plan)
-    if slot is None:
-        return True
-    day_index, opens_hour = slot
-    return (clock.day_index, clock.hour) >= (day_index, opens_hour)
+    try:
+        return date_cycle_service.timing(plan, clock, WEEK_ONE_MONDAY)['open']
+    except ApiError:
+        return False
+
 
 
 def _cancellation_terms(plan: dict, clock: clock_module.SimulationClock) -> dict:
     """What cancelling this date right now would cost."""
-    slot = _plan_slot(plan)
-    start_hour = dateplan.slot_start(plan["meal"])[0]
-    day_index = slot[0] if slot else clock.day_index
-    notice = dateplan.hours_between((clock.day_index, clock.hour), (day_index, start_hour))
-    return dateplan.cancellation(notice, payments.fee(payments.CANCELLATION)["amount_inr"])
+    notice = date_cycle_service.timing(plan,clock,WEEK_ONE_MONDAY)['notice_hours']
+    return dateplan.cancellation(notice,payments.fee(payments.CANCELLATION)['amount_inr'])
 
 
 # DateOutcome stores each partner's green/red flags as *_flags_json text
@@ -1291,41 +1288,13 @@ _GATE_FLAG_DEFAULTS = {
 }
 
 
-def _auto_resolve_stale_outcome(lockin_row: dict, plan: dict, clock: clock_module.SimulationClock) -> dict:
-    """If we've rolled into a later week than the date's own and one side
-    never recorded a post-date decision, treat them as ghosted (§9: "no
-    response by close ... counts toward compliance") and resolve — a lazy
-    check run whenever the locked-in pair's week view loads, so nothing
-    needs a background job. Returns the (possibly updated) LockIn row."""
-    if plan["status"] != "confirmed" or lockin_row["week"] >= clock.week:
-        return lockin_row
-
-    existing = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
-    outcome = _outcome_from_row(existing) if existing else outcomes.record_outcome(plan["id"], True, None, None)
-    outcome.setdefault("id", f"outcome:{plan['id']}")
-
-    newly_ghosted = []
-    for role, uid in (("a", lockin_row["user_a"]), ("b", lockin_row["user_b"])):
-        if outcome.get(f"{role}_decision") is None:
-            outcome[f"{role}_decision"] = "ghosted"
-            newly_ghosted.append(uid)
-    if not newly_ghosted:
-        return lockin_row
-
-    db.insert_row(get_db(), "DateOutcome", _outcome_to_row(outcome))
-    for uid in newly_ghosted:
-        db.insert_row(
-            get_db(),
-            "ComplianceEvent",
-            {"id": uuid.uuid4().hex[:8], "user_id": uid, "type": "no_show", "week": lockin_row["week"], "notes": "no post-date response"},
-        )
-
-    result = outcomes.apply_resolution(outcome)
-    if result["release_lockin"]:
-        released = lockin.release(lockin_row, result["release_reason"])
-        db.insert_row(get_db(), "LockIn", {**lockin_row, **released})
-        return db.fetch_one(get_db(), "LockIn", id=lockin_row["id"])
-    return lockin_row
+def _auto_resolve_stale_outcome(lockin_row, plan, clock):
+    try:
+        date_cycle_service.reconcile(get_db(), current_user()['user_id'], plan['id'], clock, WEEK_ONE_MONDAY)
+    except ApiError as exc:
+        if exc.status not in (403,409):
+            raise
+    return db.fetch_one(get_db(), 'LockIn', id=lockin_row['id'])
 
 
 @app.route("/week")
@@ -1455,6 +1424,7 @@ def calendar_view():
 
     return render_template(
         "calendar.html",
+        cycle=len(db.fetch_all(get_db(), "DatePlan", lockin_id=active["id"]))+1,
         partner=partner,
         valid_slots=calendar_dating.valid_slots(),
         my_slots=my_slots,
@@ -1494,7 +1464,8 @@ def calendar_confirm():
         return redirect(url_for('week'))
     try:
         planning_service.confirm(get_db(), user['user_id'], active['id'],
-                                 request.form.get('day'), request.form.get('meal_slot'), slot_datetime)
+                                 request.form.get('day'), request.form.get('meal_slot'), slot_datetime,
+                                 int(request.form['cycle']) if request.form.get('cycle','').isdigit() else None)
     except ApiError as exc:
         if exc.code == 'alignment_required':
             return redirect(url_for('align_view'))
@@ -1618,6 +1589,21 @@ def plan_sign():
     return redirect(url_for("plan_view"))
 
 
+def _feedback_plan_id():
+    explicit = request.form.get('plan_id')
+    if explicit:
+        return explicit
+    active = _my_active_lockin(current_user()['user_id'])
+    if not active:
+        return None
+    rows = db.fetch_all(get_db(), 'DatePlan', lockin_id=active['id'])
+    # Legacy first-cycle forms remain supported; repeat cycles MUST name the date.
+    if len(rows)>1:
+        abort(409, description='Reload the date page before submitting.')
+    plan = _dateplan_for_lockin(active['id'])
+    return plan['id'] if plan else None
+
+
 def _feedback_back() -> str:
     """Where to land after recording flags or a decision. The debrief screen
     (Segment F) and the week screen post to these same two routes, so the
@@ -1628,122 +1614,36 @@ def _feedback_back() -> str:
 @app.route("/plan/feedback/flags", methods=["POST"])
 @login_required
 def plan_feedback_flags():
-    """Step 1 of feedback — mandatory, before either the accept/reject
-    decision or the other partner sees anything (2026-08-28, user's
-    explicit rule: "immaterial of a lock-in or pass... journey of
-    improvement"). Green flags (exactly guru_dating.MIN..MAX_GREEN_FLAGS,
-    currently 2) are required; red flags and the together/bill photo
-    consent toggles are optional. Not gated on clock phase beyond the
-    plan being confirmed — the date having actually happened is what
-    matters, not which exact hour it is."""
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
-        return redirect(url_for("week"))
-    plan = _dateplan_for_lockin(active["id"])
-    if plan is None or plan["status"] != "confirmed":
-        return redirect(url_for("week"))
-
-    captured = guru_dating.capture_flags(request.form.getlist("green_flags"), request.form.getlist("red_flags"))
-    if not captured["meets_minimum"]:
-        # Two bugs, not one: the flags were dropped silently, and the
-        # failure path hardcoded "week" while the success path honours
-        # the form's own back field — so a rejected submit also threw you
-        # off the debrief screen.
-        _remember_form(
-            f"Pick at least {guru_dating.MIN_GREEN_FLAGS} green flags before this can be filed.",
-            endpoint=_feedback_back())
+    pid = _feedback_plan_id()
+    if not pid:
         return redirect(url_for(_feedback_back()))
-
-    my_role = "a" if active["user_a"] == user["user_id"] else "b"
-    existing = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
-    outcome = _outcome_from_row(existing) if existing else outcomes.record_outcome(plan["id"], True, None, None)
-    outcome.setdefault("id", f"outcome:{plan['id']}")
-    outcome[f"{my_role}_green_flags"] = captured["green"]
-    outcome[f"{my_role}_red_flags"] = captured["red"]
-    # Together/bill photo are shared consent flags, not per-partner —
-    # either side marking it as taken counts, matches together_photo/
-    # bill_photo's schema (no a_/b_ prefix, unlike everything else here).
-    outcome["together_photo"] = outcome.get("together_photo", False) or ("together_photo" in request.form)
-    outcome["bill_photo"] = outcome.get("bill_photo", False) or ("bill_photo" in request.form)
-    db.insert_row(get_db(), "DateOutcome", _outcome_to_row(outcome))
-
+    body = {'green_flags':request.form.getlist('green_flags'),'red_flags':request.form.getlist('red_flags'),
+            'together_photo':'together_photo' in request.form,'bill_photo':'bill_photo' in request.form}
+    try:
+        date_cycle_service.flags(get_db(),current_user()['user_id'],pid,body,get_clock(),WEEK_ONE_MONDAY)
+    except ApiError as exc:
+        if exc.code == 'validation_error':
+            _remember_form(exc.message, endpoint=_feedback_back())
+            return redirect(url_for(_feedback_back()))
+        abort(exc.status, description=exc.message)
     return redirect(url_for(_feedback_back()))
 
 
 @app.route("/plan/feedback", methods=["POST"])
 @login_required
 def plan_feedback():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
+    pid = _feedback_plan_id()
+    if not pid:
         return redirect(url_for(_feedback_back()))
-    plan = _dateplan_for_lockin(active["id"])
-    if plan is None or plan["status"] != "confirmed":
-        return redirect(url_for(_feedback_back()))
-
-    decision = request.form.get("decision")
-    if decision not in ("continue", "relationship", "pass"):
-        abort(400)
-    reason = guru_dating.capture_pass_reason(request.form.get("reason"))["reason"] if decision == "pass" else None
-
-    my_role = "a" if active["user_a"] == user["user_id"] else "b"
-    existing = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
-    outcome = _outcome_from_row(existing) if existing else outcomes.record_outcome(plan["id"], True, None, None)
-    outcome.setdefault("id", f"outcome:{plan['id']}")
-    # Flag feedback is mandatory and comes first — refuse a decision
-    # recorded without it, not just hidden in the UI.
-    if len(outcome.get(f"{my_role}_green_flags", [])) < guru_dating.MIN_GREEN_FLAGS:
-        return redirect(url_for(_feedback_back()))
-    outcome[f"{my_role}_decision"] = decision
-    outcome[f"{my_role}_reason"] = reason
-    db.insert_row(get_db(), "DateOutcome", _outcome_to_row(outcome))
-
-    result = outcomes.apply_resolution(outcome)
-
-    # dates_completed only ever advances once both halves of a date-cycle
-    # are in (result["resolution"] != "pending" means exactly that) — it
-    # feeds escalations.unlocks_available() and stage_gate's own B1
-    # eligibility, so it has to be current before either of those get
-    # checked, regardless of which branch below fires.
-    if result["resolution"] != "pending":
-        active = dict(active)
-        active.update(lockin.increment_dates_completed(active))
-        db.insert_row(get_db(), "LockIn", active)
-
-    if result["advance_to_relationship"]:
-        # Both partners picking "relationship" no longer creates the
-        # Couple directly — it opens the Dating exit / Relationship entry
-        # gate (docs/relationship-stage-spec.md Part B); the LockIn stays
-        # 'active' (not completed) until journey.enter_relationship()
-        # actually succeeds at the end of that sequence. One open gate
-        # per LockIn — re-use it if one's already there (e.g. a re-raised
-        # StageGate from a prior "relationship" pick that got declined at
-        # step 4 and the couple later changed their minds).
-        existing_gate = db.fetch_one(get_db(), "StageGate", pair_id=active["id"])
-        if existing_gate is None:
-            gate = stage_gate.open_gate(active["id"], "exclusivity_raised", str(get_clock()))
-            db.insert_row(get_db(), "StageGate", {"id": f"gate:{active['id']}", **gate, **_GATE_FLAG_DEFAULTS})
-        return redirect(url_for("gate_view"))
-    elif result["release_lockin"]:
-        db.insert_row(get_db(), "LockIn", {**active, **lockin.release(active, result["release_reason"])})
-    elif result["continue_dating"]:
-        # Accept — keep dating: the LockIn stays exactly as it is (still
-        # 'active', REACH still sunset for both). This date instance is
-        # done, so its DatePlan/Signature/DateOutcome rows are cleared —
-        # DatePlan's id is deterministic per lockin_id (f"plan:{lockin_id}"),
-        # so leaving the old row behind would make the next
-        # calendar_confirm() collide with stale signatures that were never
-        # actually re-signed for the new date. Availability rows are
-        # cleared too, so /calendar starts clean for the next date.
-        db.delete_row(get_db(), "Signature", f"{plan['id']}:{active['user_a']}")
-        db.delete_row(get_db(), "Signature", f"{plan['id']}:{active['user_b']}")
-        db.delete_row(get_db(), "DateOutcome", outcome["id"])
-        db.delete_row(get_db(), "DatePlan", plan["id"])
-        for row in db.fetch_all(get_db(), "Availability", lockin_id=active["id"]):
-            db.delete_row(get_db(), "Availability", row["id"])
-
-    return redirect(url_for(_feedback_back()))
+    try:
+        date_cycle_service.decide(get_db(),current_user()['user_id'],pid,
+            {'decision':request.form.get('decision'),'reason':request.form.get('reason')},get_clock(),WEEK_ONE_MONDAY)
+    except ApiError as exc:
+        if exc.code == 'flags_required':
+            return redirect(url_for(_feedback_back()))
+        abort(exc.status,description=exc.message)
+    done=date_cycle_service.receipt(get_db(),pid)
+    return redirect(url_for('gate_view' if done and done['kind']=='both_relationship' else _feedback_back()))
 
 
 # ── Contact exchange / invite home (docs/relationship-stage-spec.md Part A,
@@ -3948,7 +3848,7 @@ def _payment_scope(user: dict, purpose: str) -> str | None:
     if active is None:
         return None
     if purpose == payments.AVAILABILITY:
-        return active["id"]
+        return planning_service.availability_scope(get_db(), active["id"])
     if purpose == payments.AGREEMENT:
         plan = _dateplan_for_lockin(active["id"])
         return plan["id"] if plan else None
@@ -4390,7 +4290,7 @@ def debrief_view():
         is_open=_debrief_is_open(plan, clock),
         opens_at=_debrief_opens_label(plan),
         happened=(outcome or {}).get("happened", 1),
-        no_show_reported=bool(outcome) and not outcome.get("happened", 1),
+        no_show_reported=(date_cycle_service.receipt(get_db(),plan['id']) or {}).get('kind') == 'no_show_reported',
         green_flags=guru_dating.GREEN_FLAGS,
         red_flags=guru_dating.RED_FLAGS,
         min_green=guru_dating.MIN_GREEN_FLAGS,
@@ -4467,97 +4367,27 @@ def align_view():
 @app.route("/plan/cancel", methods=["POST"])
 @login_required
 def plan_cancel():
-    """Cancel a confirmed date.
-
-    2026-09-09: NOT LINKED FROM ANY SCREEN, deliberately. The user's rule
-    was "We wouldn't like to suggest or have something for cancellation"
-    — availability and then payment-and-signature are already two
-    deliberate commitments, and offering a way out beside them undoes
-    both. So this is an ASSISTED action: someone who genuinely cannot
-    attend goes to Guru, and this is what gets triggered for them.
-
-    It is unreachable in the UI on purpose. Do not "fix" that by adding
-    a button.
-
-    2026-09-04, user's rule: dates are set on Thursday for the weekend, so
-    a free cancellation is an invitation to change your mind at everyone
-    else's expense. Inside 24 hours it costs a fee AND files a late_cancel
-    strike; outside it, nothing is charged and nothing is recorded —
-    punishing honest early notice teaches people to no-show instead, which
-    is the behaviour this is trying to prevent.
-    """
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    plan = _dateplan_for_lockin(active["id"]) if active else None
-    if plan is None or plan["status"] != "confirmed":
-        return redirect(url_for("week"))
-
-    clock = get_clock()
-    terms = _cancellation_terms(plan, clock)
-
-    db.insert_row(get_db(), "DatePlan", {**plan, "status": "cancelled",
-                                         "cancel_fee": terms["fee_inr"]})
-
-    if terms["late"]:
-        db.insert_row(get_db(), "ComplianceEvent", {
-            "id": uuid.uuid4().hex[:12],
-            **outcomes.record_compliance_event(
-                user["user_id"], "late_cancel", clock.week, value="late_cancel",
-                notes=terms["reason"],
-            ),
-        })
-        if payments.is_enabled():
-            row = payments.payment_row(user["user_id"], payments.CANCELLATION, plan["id"], str(clock))
-            db.insert_row(get_db(), "Payment", {**row, "status": payments.PENDING})
-
-    db.insert_row(get_db(), "LockIn", {**active, **lockin.release(active, "date cancelled")})
-    return redirect(url_for("week"))
+    pid=_feedback_plan_id()
+    if pid:
+        try:
+            date_cycle_service.cancel(get_db(),current_user()['user_id'],pid,get_clock(),WEEK_ONE_MONDAY)
+        except ApiError as exc:
+            abort(exc.status,description=exc.message)
+    return redirect(url_for('week'))
 
 
 @app.route("/debrief/no-show", methods=["POST"])
 @login_required
 def debrief_no_show():
-    """Report that the other person did not turn up.
-
-    Kept separate from the flag form on purpose: green flags are mandatory
-    before a decision, and demanding two nice things about someone who
-    left you sitting there is absurd. A no-show records the outcome as
-    not-happened, files a compliance strike against them, and releases the
-    lock-in without asking for flags at all.
-    """
-    guard = unlocked_or_redirect("debrief")
-    if guard is not None:
-        return guard
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    plan = _dateplan_for_lockin(active["id"]) if active else None
-    if plan is None:
-        return redirect(url_for("week"))
-
-    clock = get_clock()
-    if not _debrief_is_open(plan, clock):
-        return redirect(url_for("debrief_view"))
-
-    partner_id = _partner_id_in_lockin(active, user["user_id"])
-    row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
-    outcome = _outcome_from_row(row) if row else outcomes.record_outcome(plan["id"], True, None, None)
-    outcome.setdefault("id", f"outcome:{plan['id']}")
-    outcome["happened"] = False
-    role = _my_role_in_lockin(active, user["user_id"])
-    outcome[f"{role}_decision"] = "pass"
-    outcome[f"{role}_reason"] = "They did not turn up."
-    db.insert_row(get_db(), "DateOutcome", _outcome_to_row(outcome))
-
-    db.insert_row(get_db(), "ComplianceEvent", {
-        "id": uuid.uuid4().hex[:12],
-        **outcomes.record_compliance_event(
-            partner_id, "no_show", clock.week, value="no_show",
-            notes=f"Reported by their match for {plan['datetime']}",
-        ),
-    })
-
-    db.insert_row(get_db(), "LockIn", {**active, **lockin.release(active, "no-show reported")})
-    return redirect(url_for("week"))
+    pid=_feedback_plan_id()
+    if pid:
+        try:
+            date_cycle_service.no_show(get_db(),current_user()['user_id'],pid,get_clock(),WEEK_ONE_MONDAY)
+        except ApiError as exc:
+            if exc.code=='feedback_not_open':
+                return redirect(url_for('debrief_view'))
+            abort(exc.status,description=exc.message)
+    return redirect(url_for('week'))
 
 
 # ── Segment G: Guru's hub ──────────────────────────────────────────────
@@ -4907,12 +4737,14 @@ def _api_journey_state(user):
 
 from api import register_api
 import planning_service
+import date_cycle_service
 
 auth.register_auth(app, get_db)
 
 register_api(
     app, current_user=current_user, reach_locked=reach_locked,
     reach_state=_reach_state,
+    date_cycle={"get_db":get_db,"get_clock":get_clock,"epoch":WEEK_ONE_MONDAY},
     planning={'get_db': get_db, 'get_clock': get_clock, 'slot_datetime': slot_datetime,
               'agreement_context': _date_ceremony_context},
     journey_state=_api_journey_state,

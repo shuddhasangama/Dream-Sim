@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DreamContract Phase 4 API — Blocks 1–3",
-    "version": "0.3.0",
+    "title": "DreamContract Phase 4 API — Blocks 1–4",
+    "version": "0.4.0",
     "description": "Incremental contract for implemented Phase 4 reads only. Existing Phase 2/3 endpoints retain their contracts. Secure mode (AUTH_ENABLED=1) is required for beta identity. Later journey endpoints are not advertised as callable until implemented."
   },
   "servers": [
@@ -1196,12 +1196,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlanningSlot"
+                "$ref": "#/components/schemas/CycleConfirmInput"
               }
             }
           }
         },
-        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
+        "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs. Supply the calendar cycle number for every repeat date; omitted/stale cycle conflicts after the first date."
       }
     },
     "/date-plans/{pid}": {
@@ -1646,6 +1646,692 @@
           }
         },
         "description": "Actor comes from authentication. Calendar time and face checks remain simulations. GET is read-only. Payment prerequisites are reported, never granted. Cookie mutations require a matching Origin. Face simulation requires BETA_DATE_SIMULATION_ENABLED=1 and an approved account. Identical confirmation/step retries do not duplicate writes; changed signatures or slots conflict. Availability and alignment freeze after plan creation; selections freeze once either party signs."
+      }
+    },
+    "/date-plans/{pid}/debrief": {
+      "get": {
+        "operationId": "readDateDebrief",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateDebriefResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date closed/resolved, early or late feedback, missing flags, conflicting retry, started cancellation or historical resolution requiring review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Date-scoped operation. GET has no transitions. Feedback opens one hour after the stored date (rounded up to the simulator hour) and closes on the next simulation week. Only own private feedback is returned. Exact recorded retries are safe; changed/stale submissions conflict. No-show is an unverified report and releases the pair without a punitive strike. Cancellation may assess a pending fee but never collects money. Timeout reconciliation is explicit and idempotent."
+      }
+    },
+    "/date-plans/{pid}/feedback/flags": {
+      "put": {
+        "operationId": "saveDateFlags",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateDebriefResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date closed/resolved, early or late feedback, missing flags, conflicting retry, started cancellation or historical resolution requiring review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DateFlagsInput"
+              }
+            }
+          }
+        },
+        "description": "Date-scoped operation. GET has no transitions. Feedback opens one hour after the stored date (rounded up to the simulator hour) and closes on the next simulation week. Only own private feedback is returned. Exact recorded retries are safe; changed/stale submissions conflict. No-show is an unverified report and releases the pair without a punitive strike. Cancellation may assess a pending fee but never collects money. Timeout reconciliation is explicit and idempotent."
+      }
+    },
+    "/date-plans/{pid}/feedback/decision": {
+      "post": {
+        "operationId": "decideDateOutcome",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateDebriefResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date closed/resolved, early or late feedback, missing flags, conflicting retry, started cancellation or historical resolution requiring review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DateDecisionInput"
+              }
+            }
+          }
+        },
+        "description": "Date-scoped operation. GET has no transitions. Feedback opens one hour after the stored date (rounded up to the simulator hour) and closes on the next simulation week. Only own private feedback is returned. Exact recorded retries are safe; changed/stale submissions conflict. No-show is an unverified report and releases the pair without a punitive strike. Cancellation may assess a pending fee but never collects money. Timeout reconciliation is explicit and idempotent."
+      }
+    },
+    "/date-plans/{pid}/cancel": {
+      "post": {
+        "operationId": "cancelDate",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateDebriefResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date closed/resolved, early or late feedback, missing flags, conflicting retry, started cancellation or historical resolution requiring review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DateEmptyInput"
+              }
+            }
+          }
+        },
+        "description": "Date-scoped operation. GET has no transitions. Feedback opens one hour after the stored date (rounded up to the simulator hour) and closes on the next simulation week. Only own private feedback is returned. Exact recorded retries are safe; changed/stale submissions conflict. No-show is an unverified report and releases the pair without a punitive strike. Cancellation may assess a pending fee but never collects money. Timeout reconciliation is explicit and idempotent."
+      }
+    },
+    "/date-plans/{pid}/no-show": {
+      "post": {
+        "operationId": "reportDateNoShow",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateDebriefResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date closed/resolved, early or late feedback, missing flags, conflicting retry, started cancellation or historical resolution requiring review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DateEmptyInput"
+              }
+            }
+          }
+        },
+        "description": "Date-scoped operation. GET has no transitions. Feedback opens one hour after the stored date (rounded up to the simulator hour) and closes on the next simulation week. Only own private feedback is returned. Exact recorded retries are safe; changed/stale submissions conflict. No-show is an unverified report and releases the pair without a punitive strike. Cancellation may assess a pending fee but never collects money. Timeout reconciliation is explicit and idempotent."
+      }
+    },
+    "/date-plans/{pid}/feedback/reconcile": {
+      "post": {
+        "operationId": "reconcileDateTimeout",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateDebriefResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date closed/resolved, early or late feedback, missing flags, conflicting retry, started cancellation or historical resolution requiring review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DateEmptyInput"
+              }
+            }
+          }
+        },
+        "description": "Date-scoped operation. GET has no transitions. Feedback opens one hour after the stored date (rounded up to the simulator hour) and closes on the next simulation week. Only own private feedback is returned. Exact recorded retries are safe; changed/stale submissions conflict. No-show is an unverified report and releases the pair without a punitive strike. Cancellation may assess a pending fee but never collects money. Timeout reconciliation is explicit and idempotent."
       }
     }
   },
@@ -2858,6 +3544,10 @@
           },
           "payment": {
             "$ref": "#/components/schemas/PlanningEntitlement"
+          },
+          "cycle": {
+            "type": "integer",
+            "minimum": 1
           }
         },
         "required": [
@@ -2870,7 +3560,8 @@
           "alignment",
           "current_plan_id",
           "editable",
-          "payment"
+          "payment",
+          "cycle"
         ],
         "additionalProperties": false
       },
@@ -3234,6 +3925,283 @@
           "data",
           "error"
         ],
+        "additionalProperties": false
+      },
+      "CycleConfirmInput": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "enum": [
+              "Fri",
+              "Sat",
+              "Sun"
+            ]
+          },
+          "meal_slot": {
+            "enum": [
+              "breakfast",
+              "lunch",
+              "coffee",
+              "dinner"
+            ]
+          },
+          "cycle": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "day",
+          "meal_slot"
+        ],
+        "additionalProperties": false
+      },
+      "CycleConsent": {
+        "type": "object",
+        "properties": {
+          "together_photo": {
+            "type": "boolean"
+          },
+          "bill_photo": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "together_photo",
+          "bill_photo"
+        ],
+        "additionalProperties": false
+      },
+      "DateDebrief": {
+        "type": "object",
+        "properties": {
+          "plan_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "clock_mode": {
+            "const": "simulation"
+          },
+          "opens_at": {
+            "type": "string"
+          },
+          "feedback_open": {
+            "type": "boolean"
+          },
+          "cancellable": {
+            "type": "boolean"
+          },
+          "cancellation": {
+            "type": "object",
+            "properties": {
+              "late": {
+                "type": "boolean"
+              },
+              "hours_notice": {
+                "type": "number"
+              },
+              "fee_inr": {
+                "type": "number"
+              },
+              "compliance_event": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "late",
+              "hours_notice",
+              "fee_inr",
+              "compliance_event",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          "my_feedback": {
+            "type": "object",
+            "properties": {
+              "green_flags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "red_flags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "decision": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "photo_consent": {
+                "$ref": "#/components/schemas/CycleConsent"
+              },
+              "no_show_reported": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "green_flags",
+              "red_flags",
+              "decision",
+              "reason",
+              "photo_consent",
+              "no_show_reported"
+            ],
+            "additionalProperties": false
+          },
+          "partner_submitted": {
+            "type": "boolean"
+          },
+          "mutual_photo_consent": {
+            "$ref": "#/components/schemas/CycleConsent"
+          },
+          "resolution": {
+            "enum": [
+              "pending",
+              "keep_dating",
+              "both_relationship",
+              "rejected",
+              "ghosted",
+              "cancelled",
+              "no_show_reported"
+            ]
+          },
+          "no_show_is_confirmed": {
+            "const": false
+          },
+          "green_flag_options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "red_flag_options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "decision_options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "plan_id",
+          "status",
+          "clock_mode",
+          "opens_at",
+          "feedback_open",
+          "cancellable",
+          "cancellation",
+          "my_feedback",
+          "partner_submitted",
+          "mutual_photo_consent",
+          "resolution",
+          "no_show_is_confirmed",
+          "green_flag_options",
+          "red_flag_options",
+          "decision_options"
+        ],
+        "additionalProperties": false
+      },
+      "DateDebriefResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DateDebrief"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "DateFlagsInput": {
+        "type": "object",
+        "properties": {
+          "green_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "red_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "together_photo": {
+            "type": "boolean"
+          },
+          "bill_photo": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "green_flags",
+          "red_flags"
+        ],
+        "additionalProperties": false
+      },
+      "DateDecisionInput": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "enum": [
+              "continue",
+              "relationship",
+              "pass"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "additionalProperties": false
+      },
+      "DateEmptyInput": {
+        "type": "object",
+        "properties": {},
+        "required": [],
         "additionalProperties": false
       }
     }

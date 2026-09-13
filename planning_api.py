@@ -42,7 +42,8 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
                     'my_missing': date_alignment.missing(stats), 'partner_missing': date_alignment.missing(partner_stats),
                     'options': {k: date_alignment.options_for(k, stats.get('city')) for k in date_alignment.FIELDS}},
                 'current_plan_id': plan['id'] if plan else None, 'editable': plan is None,
-                'payment': entitlement(payments.AVAILABILITY, lid)}
+                'cycle': len(db.fetch_all(get_db(), 'DatePlan', lockin_id=lid))+(0 if plan else 1),
+                'payment': entitlement(payments.AVAILABILITY, service.availability_scope(get_db(),lid))}
 
     def plan_view(pid):
         active, plan = service.owned_plan(get_db(), uid(), pid)
@@ -89,8 +90,8 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
 
     @api.post('/lock-ins/<lid>/date-plan')
     def confirm(lid):
-        body = json_object(required={'day', 'meal_slot'})
-        plan = service.confirm(get_db(), uid(), lid, body['day'], body['meal_slot'], slot_datetime)
+        body = json_object(required={'day', 'meal_slot'}, optional={'cycle'})
+        plan = service.confirm(get_db(), uid(), lid, body['day'], body['meal_slot'], slot_datetime, body.get('cycle'))
         return jsonify(plan_view(plan['id']))
 
     @api.get('/date-plans/<pid>')

@@ -15,10 +15,10 @@
 
 {% if no_show_reported %}
 <div class="card">
-  <div class="section-label">Recorded as a no-show</div>
+  <div class="section-label">No-show report recorded</div>
   <div class="hint">
-    You are back in the pool. It is on their record, not yours, and you were not asked to find
-    two nice things to say about an empty chair.
+    You are back in the pool. Your report has been recorded for review;
+    it is not a confirmed finding against the other person.
   </div>
 </div>
 
@@ -38,6 +38,7 @@
   <div class="section-label">Pick exactly {{ min_green }} green flags</div>
   <div class="hint">Whatever you end up deciding, this part comes first.</div>
   <form method="post" action="{{ url_for('plan_feedback_flags') }}">
+<input type="hidden" name="plan_id" value="{{ plan.id }}">
     <input type="hidden" name="back" value="debrief_view">
     <div class="micro section-label" style="margin-top:12px;color:var(--mint);">Green — pick {{ min_green }}</div>
     <div class="day-picker">
@@ -70,6 +71,7 @@
     someone who was left sitting there is absurd — this path skips them entirely.
   </div>
   <form method="post" action="{{ url_for('debrief_no_show') }}">
+<input type="hidden" name="plan_id" value="{{ plan.id }}">
     <button type="submit" class="btn-secondary">Report a no-show</button>
   </form>
 </div>
@@ -100,6 +102,7 @@
 <div class="card">
   <div class="section-label">Now, what happens next?</div>
   <form method="post" action="{{ url_for('plan_feedback') }}">
+<input type="hidden" name="plan_id" value="{{ plan.id }}">
     <input type="hidden" name="back" value="debrief_view">
     <textarea name="reason" rows="2" placeholder="Optional — anything you'd want noted (only used if you reject)"
               style="width:100%;margin-top:8px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--white);font:inherit;">{{ remembered.fields.get('reason', '') }}</textarea>

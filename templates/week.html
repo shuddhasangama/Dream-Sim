@@ -72,6 +72,7 @@
 <div class="card">
   <div class="micro">How was the date? Pick exactly 2 green flags — this comes first, whatever you end up deciding.</div>
   <form method="post" action="{{ url_for('plan_feedback_flags') }}">
+<input type="hidden" name="plan_id" value="{{ plan.id }}">
     <div class="micro section-label" style="margin-top:10px;color:var(--mint);">Green flags — pick 2</div>
     <div class="day-picker">
       {% for f in green_flags %}
@@ -105,6 +106,7 @@
 <div class="card">
   <div class="micro">Feedback saved. Now, what's next?</div>
   <form method="post" action="{{ url_for('plan_feedback') }}">
+<input type="hidden" name="plan_id" value="{{ plan.id }}">
     <textarea name="reason" placeholder="Optional — anything you'd want noted (only used if you reject)" rows="2" style="width:100%;margin-top:8px;"></textarea>
     <div class="action-row" style="flex-wrap:wrap;">
       <button type="submit" name="decision" value="pass" class="btn-secondary">Reject — back to REACH</button>

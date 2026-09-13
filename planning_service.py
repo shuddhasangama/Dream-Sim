@@ -23,7 +23,7 @@ sql = auth_sessions.sql
 def transition(conn):
     with auth_sessions.transaction(conn):
         if db._is_postgres_connection(conn):
-            sql(conn, 'LOCK TABLE "User", "LockIn", "Availability", "DatePlan", "Ceremony", "Signature", "Payment" IN SHARE ROW EXCLUSIVE MODE')
+            sql(conn, 'LOCK TABLE "User", "LockIn", "Availability", "DatePlan", "Ceremony", "Signature", "Payment", "DateOutcome", "DateFeedback", "DateResolution", "ComplianceEvent", "StageGate", "DateCharge" IN SHARE ROW EXCLUSIVE MODE')
         yield
 
 
@@ -67,6 +67,12 @@ def paid(conn, uid, purpose, scope):
     return payments.has_paid(db.fetch_all(conn, 'Payment', user_id=uid), uid, purpose, scope)
 
 
+def availability_scope(conn, lid):
+    rows=db.fetch_all(conn,'DatePlan',lockin_id=lid)
+    cycle=len(rows)+(0 if current_plan(conn,lid) else 1)
+    return lid if cycle<=1 else lid+':cycle:'+str(cycle)
+
+
 def require_paid(conn, uid, purpose, scope):
     if not paid(conn, uid, purpose, scope):
         raise ApiError('payment_required', 'The '+purpose+' entitlement is required.', 403)
@@ -106,7 +112,7 @@ def availability(conn, uid, lid, chosen):
         pair(conn, uid, lid)
         if current_plan(conn, lid):
             raise ApiError('state_conflict', 'Availability is frozen for the current date.', 409)
-        require_paid(conn, uid, payments.AVAILABILITY, lid)
+        require_paid(conn, uid, payments.AVAILABILITY, availability_scope(conn,lid))
         if set(slots(conn, lid, uid)) == set(parsed):
             return
         sql(conn, 'DELETE FROM "Availability" WHERE lockin_id=? AND user_id=?', (lid, uid))
@@ -114,12 +120,16 @@ def availability(conn, uid, lid, chosen):
             save(conn, 'Availability', {'id': uuid.uuid4().hex, 'lockin_id': lid, 'user_id': uid, 'day': day, 'meal_slot': meal})
 
 
-def confirm(conn, uid, lid, day, meal, slot_datetime):
+def confirm(conn, uid, lid, day, meal, slot_datetime, cycle=None):
     if not isinstance(day, str) or not isinstance(meal, str) or (day, meal) not in calendar_dating.valid_slots():
         raise ApiError('validation_error', 'Select a valid weekend slot.')
     with transition(conn):
         active = pair(conn, uid, lid)
         existing = current_plan(conn, lid)
+        plans = db.fetch_all(conn, 'DatePlan', lockin_id=lid)
+        expected = len(plans) if existing else len(plans)+1
+        if (cycle is not None and (type(cycle) is not int or cycle != expected)) or (expected>1 and cycle is None):
+            raise ApiError('state_conflict', 'Use the current calendar cycle number.', 409)
         stamp = slot_datetime(active['week'], day, meal)
         if existing:
             if existing['datetime'] == stamp and existing['meal'] == meal:
@@ -132,16 +142,19 @@ def confirm(conn, uid, lid, day, meal, slot_datetime):
         if (day, meal) not in overlap:
             raise ApiError('overlap_required', 'Both partners must select this slot.', 409)
         for who in (active['user_a'], active['user_b']):
-            require_paid(conn, who, payments.AVAILABILITY, lid)
+            require_paid(conn, who, payments.AVAILABILITY, availability_scope(conn,lid))
         venue = calendar_dating.suggest_venue(day, meal, a.get('diet'), b.get('diet'))
         shared = date_alignment.shared_cuisines(a.get('cuisine'), b.get('cuisine'))
         plan = dateplan.generate_plan(lid, {'day': day, 'meal_slot': meal},
             {**venue, 'cuisine': shared[0] if shared else venue.get('cuisine')}, stamp,
             'pay-your-own', {}, {}, {'budget_estimate': date_alignment.lower_budget(a.get('budget'), b.get('budget'), a.get('city'))})
-        # Keep the existing first-cycle identifier; never overwrite a closed date.
+        # Every cycle has its own identifier; old signatures/history remain scoped.
         pid = 'plan:'+lid
         if db.fetch_one(conn, 'DatePlan', id=pid):
-            raise ApiError('state_conflict', 'The previous date cycle must be resolved first.', 409)
+            prior = db.fetch_one(conn, 'DateResolution', dateplan_id=pid)
+            if not prior:
+                raise ApiError('state_conflict', 'The previous date cycle must be resolved first.', 409)
+            pid += ':'+uuid.uuid4().hex
         plan = {'id': pid, **plan}
         for key in ('selections_a_json', 'selections_b_json'):
             plan[key] = json.dumps(plan[key])

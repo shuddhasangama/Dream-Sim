@@ -231,9 +231,90 @@ new operations, input shapes, responses and error outcomes.
   removes its temporary data and credentials after shutdown. No Railway data,
   provider requests, pushes or deployments are involved.
 
+## Block 4 — date feedback, cancellation, no-show and repeat cycles
+
+Implemented locally on 2026-09-13, building on Block 3 commit `2d1d2ad`.
+
+| Method | Route under `/api/v1/date-plans/{pid}` | Purpose |
+|---|---|---|
+| GET | `/debrief` | Timing, own feedback, options, mutual photo consent, resolution and cancellation terms |
+| PUT | `/feedback/flags` | Exactly two distinct green flags, up to two red flags, optional per-actor photo consents |
+| POST | `/feedback/decision` | continue / relationship / pass, with optional private pass reason |
+| POST | `/cancel` | Assisted cancellation before the date starts; assess applicable fee without collecting it |
+| POST | `/no-show` | Record an unverified report and release the pair; no green flags required |
+| POST | `/feedback/reconcile` | Explicit, idempotent timeout resolution after the date's simulation week closes |
+
+New additive tables: `DateFeedback` (one private submission per actor/date),
+`DateResolution` (one resolution receipt per date), and `DateCharge` (one pending
+assessed cancellation charge per date). Both database schemas, reset ordering
+and drift-check.sql include them. Take a fresh backup before any later deployment.
+
+`date_cycle_service.py` shares transactions with the Block 3 planning service.
+HTML feedback, cancellation, no-show and legacy Week timeout reconciliation call
+the same service. API GETs never resolve outcomes. The existing web Week still
+performs its lazy timeout check, now idempotently. No scheduled worker was added.
+
+DatePlan, Signature, Ceremony and DateOutcome history is retained. Continuing
+together marks that date completed, increments the pair count once, clears only
+availability and opens the next calendar cycle. The next plan gets a new ID and
+the next simulation week. Existing availability payment history is retained;
+repeat cycles have distinct payment scopes and cannot reuse the first fee.
+
+Calendar now returns `cycle`. Pass it with the plan-confirmation JSON, e.g.
+`{"day":"Sat","meal_slot":"dinner","cycle":2}`. It is mandatory after the
+first date. An old confirmation cannot create/overwrite a later date. New HTML
+forms carry cycle/date identifiers; legacy forms without a date ID are accepted
+only in the first cycle. API feedback paths always name the exact date.
+
+Same recorded submissions are safe retries. Changed decisions, updates after
+resolution and foreign dates are rejected. Private partner reasons and flags
+are never in the debrief response. Shared photo consent requires both actors'
+explicit opt-in; one person's report/checkbox cannot grant the other's consent.
+
+Feedback opens one hour after the stored date, rounded up to the existing
+simulation hour, and closes at the next simulation week. Invalid stored times
+require correction rather than allowing early feedback. Cancellation after the
+date starts is rejected. Late cancellation records one compliance event and,
+when fees are enabled, one pending DateCharge; early cancellation records neither.
+The existing Payment purpose CHECK excludes cancellation, so the assessment has
+its own table rather than silently altering deployed payment constraints. This
+does not implement a payment provider or collect money.
+
+One explicit pass releases the pair immediately, following the existing documented
+"one no is enough" rule (the old pure helper waited for both). A date is counted
+only when both actual decisions are present; no-show, cancellation, timeout and
+one-sided rejection do not assert a mutually completed date. Both relationship
+decisions open the existing gate once without changing either user's stage.
+
+No-show releases the pair as before, but is stored as an unverified report:
+it does not create a punitive no_show strike, claim mutual non-attendance or count
+a completed date. A user who already submitted affirmative date feedback cannot
+then submit a contradictory no-show report through this endpoint. Review and
+adjudication are not implemented here. The web copy now describes a report.
+
+Historical DateOutcome rows with both decisions but no resolution receipt are
+rejected for further mutation (`legacy_resolution_required`): local code cannot
+reliably infer whether production already incremented their count. No production
+records were examined or backfilled. Previously deleted history cannot be recovered
+by this change.
+
+### Validation
+
+- Focused web and two-user API flow checks: **81 passed, 5 subtests**.
+- Coverage includes two successive API-arranged/signed dates, both decision
+  orders, rejection, early/late cancellation, no-show, consent/privacy, timeout,
+  stale retries and rollback after an injected resolution failure.
+- PostgreSQL race tests cover simultaneous partner decisions, duplicate final
+  decisions, competing cancellations and competing no-show reports.
+- Full isolated PostgreSQL regression: **1,298 passed, 734 subtests passed**,
+  no skips, in 106.53 seconds. Temporary PostgreSQL data/credentials were removed
+  after the instance stopped.
+- All changes remain local. No provider messages, Railway access, pushes or
+  deployment were performed.
+
 ## Remaining sequence
 
-4. Feedback and repeated dates; 5. After-date/gates/profile evolution;
+5. After-date/gates/profile evolution;
 6. Relationship/ROAD/later stages; 7. Enrollment and API-only full-journey tests.
 
 Email sender-domain authentication and live mobile token validation remain

@@ -89,6 +89,9 @@ def clock_view(current: clock_module.SimulationClock) -> dict[str, Any]:
 RESET_TABLES_IN_ORDER = [
     "Signature",       # -> DatePlan
     "DateOutcome",     # -> DatePlan
+    "DateFeedback",    # -> DatePlan
+    "DateResolution",  # -> DatePlan
+    "DateCharge",      # -> DatePlan
     "DatePlan",        # -> LockIn
     "Availability",    # -> LockIn
     "GateResponse",    # -> LockIn

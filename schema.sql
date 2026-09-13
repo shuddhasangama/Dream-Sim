@@ -809,3 +809,34 @@ CREATE TABLE IF NOT EXISTS "AuthChallenge" (
     consumed_at BIGINT
 );
 CREATE INDEX IF NOT EXISTS idx_authchallenge_expiry ON "AuthChallenge" (expires_at);
+
+-- Per-actor submissions preserve consent and distinguish reports from findings.
+CREATE TABLE IF NOT EXISTS "DateFeedback" (
+    id           TEXT PRIMARY KEY,
+    dateplan_id  TEXT NOT NULL REFERENCES "DatePlan"(id),
+    user_id      TEXT NOT NULL REFERENCES "User"(id),
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    UNIQUE (dateplan_id, user_id)
+);
+
+-- Immutable resolution receipt: one lifecycle transition per date.
+CREATE TABLE IF NOT EXISTS "DateResolution" (
+    id           TEXT PRIMARY KEY,
+    dateplan_id  TEXT NOT NULL REFERENCES "DatePlan"(id),
+    kind         TEXT NOT NULL,
+    actor_id     TEXT REFERENCES "User"(id),
+    created_at   TEXT NOT NULL,
+    UNIQUE (dateplan_id)
+);
+
+
+-- Assessed cancellation fee, not a successful payment or provider charge.
+CREATE TABLE IF NOT EXISTS "DateCharge" (
+    id          TEXT PRIMARY KEY,
+    dateplan_id TEXT NOT NULL REFERENCES "DatePlan"(id),
+    user_id     TEXT NOT NULL REFERENCES "User"(id),
+    amount_inr  REAL NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    created_at  TEXT NOT NULL,
+    UNIQUE (dateplan_id)
+);

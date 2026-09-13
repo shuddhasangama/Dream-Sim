@@ -516,14 +516,13 @@ class DebriefRouteTests(RouteTestCase):
         self.set_clock(week=1, day="Sat", hour=21)
         self.assertIn("Save the flags", self.client.get("/debrief").get_data(as_text=True))
 
-    def test_a_plan_with_an_unreadable_slot_opens_rather_than_seals_shut(self):
-        """Not knowing when the date was is not a reason to stop someone
-        reporting what happened at it."""
+    def test_a_plan_with_an_unreadable_slot_does_not_allow_early_feedback(self):
+        """Unknown timing must be corrected before time-gated feedback is filed."""
         db.insert_row(self.conn, "DatePlan",
                       {**dict(db.fetch_one(self.conn, "DatePlan", id=self.plan)), "datetime": "unknown"})
         self.conn.commit()
         self.set_clock(week=1, day="Mon", hour=1)
-        self.assertIn("Save the flags", self.client.get("/debrief").get_data(as_text=True))
+        self.assertNotIn("Save the flags", self.client.get("/debrief").get_data(as_text=True))
 
     # ── the no-show path ────────────────────────────────────────────────
 
@@ -531,14 +530,12 @@ class DebriefRouteTests(RouteTestCase):
         body = self.client.get("/debrief").get_data(as_text=True)
         self.assertIn("Report a no-show", body)
 
-    def test_reporting_a_no_show_records_it_against_them_not_you(self):
-        self.client.post("/debrief/no-show")
-        outcome = self.outcome()
-        self.assertFalse(outcome["happened"])
-        self.assertEqual(outcome["a_decision"], "pass")
-        events = db.fetch_all(self.conn, "ComplianceEvent", user_id="u2")
-        self.assertEqual([e["type"] for e in events], ["no_show"])
-        self.assertEqual(db.fetch_all(self.conn, "ComplianceEvent", user_id="u1"), [])
+    def test_reporting_a_no_show_records_a_report_not_a_confirmed_strike(self):
+        self.client.post('/debrief/no-show')
+        row=db.fetch_one(self.conn,'DateFeedback',dateplan_id=self.plan,user_id='u1')
+        self.assertTrue(db.load_json_field(row['payload_json'],{})['no_show_reported'])
+        self.assertEqual(db.fetch_all(self.conn,'ComplianceEvent'),[])
+        self.assertEqual(db.fetch_one(self.conn,'DateResolution',dateplan_id=self.plan)['kind'],'no_show_reported')
 
     def test_a_no_show_releases_the_lock_in(self):
         self.client.post("/debrief/no-show")
