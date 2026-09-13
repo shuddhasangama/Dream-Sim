@@ -55,6 +55,15 @@ CREATE TABLE IF NOT EXISTS "User" (
     preferences_json  TEXT NOT NULL DEFAULT '{}'
 );
 
+-- Persist empty weekly batches as well as non-empty ones; generation is once per week.
+CREATE TABLE IF NOT EXISTS "MatchBatch" (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    week INTEGER NOT NULL,
+    generated_at TEXT NOT NULL,
+    UNIQUE (user_id, week)
+);
+
 --  Couple 
 -- { id, partnerA_id, partnerB_id, stage, enteredVia, startDate, stageWeekIndex,
 --   exclusivityAckA/B, consentBlock, road/playbook/calendar refs }

@@ -48,6 +48,7 @@ TABLES = {
     "Invite",
     # Dating stage (docs/dating-stage-spec.md §10)
     "Match",
+    "MatchBatch",
     "LockIn",
     "Availability",
     "DatePlan",

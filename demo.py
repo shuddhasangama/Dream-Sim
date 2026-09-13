@@ -98,6 +98,7 @@ RESET_TABLES_IN_ORDER = [
     "HomeInvite",      # -> LockIn
     "NextLevelThread", # -> LockIn
     "Match",           # -> User
+    "MatchBatch",      # -> User, reset weekly generation including empty results
     "Ceremony",        # -> User (scope_id is plain text, no constraint)
     "ComplianceEvent",
     "Payment",

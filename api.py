@@ -10,7 +10,7 @@ from api_contract import ApiError, json_object
 
 
 def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
-                 journey_state=None):
+                 journey_state=None, week_reads=None, week_prepare=None, match_action=None):
     api = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 
     def failure(code, message, status):
@@ -63,6 +63,30 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
             if 'verified' not in state['milestones']:
                 return failure('verification_required', 'Background verification must clear first.', 403)
             return jsonify(state['next_action'])
+
+    if week_reads is not None:
+        @api.get('/week')
+        def week():
+            return jsonify(week_reads['week'](g.api_user))
+
+        @api.get('/matches/<match_id>')
+        def match_detail(match_id):
+            return jsonify(week_reads['match'](g.api_user, match_id))
+
+        @api.get('/lock-ins/current')
+        def current_lock_in():
+            return jsonify({'lock_in': journey_state(g.api_user)['current_lock_in']})
+
+        @api.post('/week/prepare')
+        def prepare_week():
+            json_object()
+            week_prepare(g.api_user)
+            return jsonify(week_reads['week'](g.api_user))
+
+        @api.post('/matches/<match_id>/actions')
+        def decide_match(match_id):
+            body = json_object(required={'action'}, optional={'pass_reason'})
+            return jsonify(match_action(g.api_user, match_id, body))
 
     def action_view(action):
         def view():

@@ -60,6 +60,8 @@ import signup_verification
 import stage_gate
 import vision
 import week_map
+import week_service
+from api_contract import ApiError, allowlist
 from generate_users import COHABIT_FOCUS, KIDS_STANCES, from_user_row, to_user_row
 
 APP_DIR = Path(__file__).parent
@@ -1126,35 +1128,13 @@ def _recent_match_ids(user_id: str, week: int, weeks_back: int = 8) -> set[str]:
 
 
 def _get_or_generate_matches(user: dict, pool: list[dict], week: int, clock: clock_module.SimulationClock) -> list[dict]:
-    """This user's Match rows for `week` — generated ONCE (the first time
-    this is called after the week has actually started) and persisted;
-    every later call just reads them back, so the set stays fixed for the
-    week regardless of later pool changes (cadence.generate_week_matches's
-    generate-once model)."""
-    existing = db.fetch_all(get_db(), "Match", user_id=user["user_id"], week=week)
-    if not existing:
-        if clock_module.phase(clock) == "before_week_start":
+    """HTML adapter for the same atomic weekly preparation used by JSON."""
+    try:
+        return week_service.prepare(get_db(), user['user_id'], clock)
+    except ApiError as exc:
+        if exc.code in ('matching_unavailable', 'week_not_started', 'reach_locked'):
             return []
-        active = _active_lockins()
-        generated = cadence.generate_week_matches(
-            user, pool, week, _active_lockin_ids(active), _recent_match_ids(user["user_id"], week)
-        )
-        for m in generated:
-            db.insert_row(
-                get_db(),
-                "Match",
-                {
-                    "id": f"{user['user_id']}:{week}:{m['slot']}",
-                    "user_id": user["user_id"],
-                    "candidate_id": m["candidate_id"],
-                    "week": week,
-                    "slot": m["slot"],
-                    "revealed_at": str(m["revealed_at"]),
-                    "window_closes_at": str(m["window_closes_at"]),
-                },
-            )
-        existing = db.fetch_all(get_db(), "Match", user_id=user["user_id"], week=week)
-    return sorted(existing, key=lambda r: r["slot"])
+        raise
 
 
 def _match_status(row: dict, clock: clock_module.SimulationClock) -> str:
@@ -1437,45 +1417,17 @@ def week():
 @login_required
 def week_act():
     user = current_user()
-    clock = get_clock()
-    action = request.form.get("action")
-    if action not in ("interest", "pass"):
-        abort(400)
-
-    # 2026-09-10: the one place contact verification actually gates.
-    # Passing is always allowed — nobody should be trapped with a
-    # candidate because they have not confirmed an email. Expressing
-    # interest is what can lead to a lock-in, and a lock-in is two people
-    # committing to meet, with money and a signature behind it. An
-    # unreachable contact matters exactly there and nowhere earlier.
-    #
-    # For everyone already in the database this is False, so nothing that
-    # works today stops working — see signup_verification.is_required().
-    if action == "interest" and not contact_verified(user["user_id"]):
-        _remember_form("Confirm your email or phone before you say yes to someone — "
-                       "it is how we reach you once a date is set.",
-                       endpoint="week")
-        return redirect(url_for("verify_contact"))
-
-    match_id = request.form.get("match_id")
-    row = db.fetch_one(get_db(), "Match", id=match_id) if match_id else None
-    if row is None or row["user_id"] != user["user_id"] or _match_status(row, clock) != "open":
-        return redirect(url_for("week"))
-
-    updated = dict(row)
-    updated["action"] = action
-    updated["pass_reason"] = (request.form.get("pass_reason") or "").strip() or None if action == "pass" else None
-    db.insert_row(get_db(), "Match", updated)
-
-    if action == "interest":
-        candidate_id = row["candidate_id"]
-        their_row = db.fetch_one(get_db(), "Match", user_id=candidate_id, candidate_id=user["user_id"], week=row["week"])
-        if their_row is not None and their_row["action"] == "interest":
-            # mutual — §4's pivotal event: short-circuits the week for
-            # both, clears every other candidate, opens the calendar.
-            _create_lockin(user["user_id"], candidate_id, row["week"], clock)
-
-    return redirect(url_for("week"))
+    try:
+        week_service.decide(get_db(), user['user_id'], request.form.get('match_id'),
+                            request.form.get('action'), request.form.get('pass_reason'), get_clock())
+    except ApiError as exc:
+        if exc.code == 'contact_verification_required':
+            _remember_form("Confirm your email or phone before you say yes to someone.", endpoint='week')
+            return redirect(url_for('verify_contact'))
+        if exc.status == 400:
+            abort(400)
+        # Preserve existing web stale-action behaviour; APIs return precise errors.
+    return redirect(url_for('week'))
 
 
 # ── Dating calendar (docs/dating-stage-spec.md §5) ─────────────────────────
@@ -4950,6 +4902,56 @@ def admin_reset_week():
     return render_template("admin.html", clock=clock, phase=clock_module.phase(clock), checkpoints=_ADMIN_CHECKPOINTS)
 
 
+def _api_match_view(user, row):
+    state = week_service.status(row, get_clock())
+    result = {**allowlist(row, ('id', 'week', 'slot', 'revealed_at', 'window_closes_at', 'action')),
+              'status': state, 'candidate': None, 'their_interest': False, 'allowed_actions': []}
+    if state == 'not_yet_revealed':
+        return result
+    candidate = load_user(row['candidate_id'])
+    if candidate is None or candidate['bgv_status'] != 'verified':
+        return result
+    shown = named_for(user['user_id'], candidate)
+    result['candidate'] = {
+        'display_name': shown['name'], 'city': shown['city'], 'visions': shown['visions'],
+        'bgv_status': shown['bgv_status'],
+        'stats': {k: shown['stats'][k] for k in ('age', 'height_cm', 'profession', 'income_band',
+                   'education', 'diet', 'nationality') if k in shown['stats']}}
+    result['their_interest'] = candidate['user_id'] in _interested_in_me(user['user_id'], row['week'])
+    if row['week'] == get_clock().week and state == 'open' and not reach_locked(user):
+        result['allowed_actions'] = ['pass']
+        if contact_verified(user['user_id']) and candidate['journey_state'] == 'dating' and not reach_locked(candidate):
+            result['allowed_actions'].append('interest')
+    return result
+
+
+def _api_match_detail(user, match_id):
+    week_service.eligible_user(get_db(), user['user_id'])
+    row = db.fetch_one(get_db(), 'Match', id=match_id)
+    if row is None or row['user_id'] != user['user_id']:
+        raise ApiError('not_found', 'Match not found.', 404)
+    if week_service.status(row, get_clock()) == 'not_yet_revealed':
+        raise ApiError('not_found', 'Match not found.', 404)
+    return _api_match_view(user, row)
+
+
+def _api_week_state(user):
+    state = _api_journey_state(user)
+    if 'verified' not in state['milestones']:
+        raise ApiError('verification_required', 'Background verification must clear first.', 403)
+    clock = get_clock()
+    mode = 'post_dating' if user['journey_state'] != 'dating' else ('locked_in' if state['current_lock_in'] else 'dating')
+    rows = db.fetch_all(get_db(), 'Match', user_id=user['user_id'], week=clock.week) if mode == 'dating' else []
+    prepared = bool(rows or db.fetch_one(get_db(), 'MatchBatch', user_id=user['user_id'], week=clock.week))
+    return {'clock': state['clock'], 'phase': clock_module.phase(clock), 'mode': mode,
+            'prepared': prepared,
+            'prepare_request': {'method': 'POST', 'path': '/api/v1/week/prepare', 'body': {}}
+                if mode == 'dating' and not prepared and clock_module.phase(clock) != 'before_week_start' else None,
+            'schedule': {'grid': week_map.grid(clock), 'legend': week_map.legend()},
+            'lock_in': state['current_lock_in'], 'date_plan': state['current_date_plan'],
+            'matches': [_api_match_view(user, row) for row in sorted(rows, key=lambda r: r['slot'])]}
+
+
 def _api_journey_state(user):
     """Snapshot persisted state without Week's lazy generation/resolution."""
     active = _my_active_lockin(user['user_id'])
@@ -4970,6 +4972,10 @@ register_api(
     app, current_user=current_user, reach_locked=reach_locked,
     reach_state=_reach_state,
     journey_state=_api_journey_state,
+    week_reads={'week': _api_week_state, 'match': _api_match_detail},
+    week_prepare=lambda user: week_service.prepare(get_db(), user['user_id'], get_clock()),
+    match_action=lambda user, match_id, body: week_service.decide(
+        get_db(), user['user_id'], match_id, body['action'], body.get('pass_reason'), get_clock()),
     reach_actions={"ignore": reach_ignore, "show-all": reach_show_all,
                    "widen": reach_widen, "set-range": reach_set_range},
 )

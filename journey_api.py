@@ -15,6 +15,7 @@ READ_APIS = {
     'dashboard': '/api/v1/dashboard',
     'reach': '/api/v1/reach',
     'guru': '/api/v1/guidance',
+    'week': '/api/v1/week',
 }
 
 

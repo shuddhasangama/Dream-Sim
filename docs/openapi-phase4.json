@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DhaShu Phase 4 API \u2014 block 1",
-    "version": "0.1.0",
+    "title": "DhaShu Phase 4 API \u2014 blocks 1 and 2",
+    "version": "0.2.0",
     "description": "Incremental contract for implemented Phase 4 reads only. Existing Phase 2/3 endpoints retain their contracts. Secure mode (AUTH_ENABLED=1) is required for beta identity. Later journey endpoints are not advertised as callable until implemented."
   },
   "servers": [
@@ -219,6 +219,526 @@
           },
           "500": {
             "description": "Unexpected error; reference is safe to report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/week": {
+      "get": {
+        "operationId": "getWeek",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation. Preparation is idempotent; repeated identical decisions return replayed=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Verification or stage restriction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, not owned or unrevealed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed window, unavailable match or conflicting decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/week/prepare": {
+      "post": {
+        "operationId": "prepareWeek",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation. Preparation is idempotent; repeated identical decisions return replayed=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Verification or stage restriction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, not owned or unrevealed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed window, unavailable match or conflicting decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "description": "Cookie-authenticated mutations require a matching Origin/Referer. Native bearer requests do not use cookie CSRF. No client clock or actor ID is accepted."
+      }
+    },
+    "/matches/{match_id}": {
+      "get": {
+        "operationId": "getMatch",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation. Preparation is idempotent; repeated identical decisions return replayed=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Verification or stage restriction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, not owned or unrevealed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed window, unavailable match or conflicting decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/matches/{match_id}/actions": {
+      "post": {
+        "operationId": "decideMatch",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation. Preparation is idempotent; repeated identical decisions return replayed=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Verification or stage restriction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, not owned or unrevealed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed window, unavailable match or conflicting decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionInput"
+              }
+            }
+          }
+        },
+        "description": "Cookie-authenticated mutations require a matching Origin/Referer. Native bearer requests do not use cookie CSRF. No client clock or actor ID is accepted."
+      }
+    },
+    "/lock-ins/current": {
+      "get": {
+        "operationId": "getCurrentLockIn",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation. Preparation is idempotent; repeated identical decisions return replayed=true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentLockInResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Verification or stage restriction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, not owned or unrevealed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed window, unavailable match or conflicting decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
             "content": {
               "application/json": {
                 "schema": {
@@ -660,6 +1180,583 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Guidance"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "Match": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "week": {
+            "type": "integer"
+          },
+          "slot": {
+            "type": "integer"
+          },
+          "revealed_at": {
+            "type": "string"
+          },
+          "window_closes_at": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "none",
+              "interest",
+              "pass"
+            ]
+          },
+          "status": {
+            "enum": [
+              "not_yet_revealed",
+              "open",
+              "acted",
+              "no_response",
+              "closed"
+            ]
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "display_name": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": "string"
+                  },
+                  "visions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "bgv_status": {
+                    "type": "string"
+                  },
+                  "stats": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "age": {},
+                      "height_cm": {},
+                      "profession": {},
+                      "income_band": {},
+                      "education": {},
+                      "diet": {},
+                      "nationality": {}
+                    }
+                  }
+                },
+                "required": [
+                  "display_name",
+                  "city",
+                  "visions",
+                  "bgv_status",
+                  "stats"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "their_interest": {
+            "type": "boolean"
+          },
+          "allowed_actions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "interest",
+                "pass"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "week",
+          "slot",
+          "revealed_at",
+          "window_closes_at",
+          "action",
+          "status",
+          "candidate",
+          "their_interest",
+          "allowed_actions"
+        ],
+        "additionalProperties": false
+      },
+      "Week": {
+        "type": "object",
+        "properties": {
+          "clock": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "simulation"
+              },
+              "week": {
+                "type": "integer"
+              },
+              "day": {
+                "type": "string"
+              },
+              "hour": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "mode",
+              "week",
+              "day",
+              "hour"
+            ],
+            "additionalProperties": false
+          },
+          "phase": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "dating",
+              "locked_in",
+              "post_dating"
+            ]
+          },
+          "prepared": {
+            "type": "boolean"
+          },
+          "prepare_request": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "const": "POST"
+                  },
+                  "path": {
+                    "const": "/api/v1/week/prepare"
+                  },
+                  "body": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "method",
+                  "path",
+                  "body"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule": {
+            "type": "object",
+            "properties": {
+              "grid": {
+                "type": "object",
+                "properties": {
+                  "days": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "day": {
+                          "type": "string"
+                        },
+                        "is_today": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "day",
+                        "is_today"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "days": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "day": {
+                                "type": "string"
+                              },
+                              "is_today": {
+                                "type": "boolean"
+                              },
+                              "moments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "at": {
+                                      "type": "array",
+                                      "prefixItems": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "integer"
+                                        }
+                                      ],
+                                      "minItems": 2,
+                                      "maxItems": 2
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "tone": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "type": "string"
+                                    },
+                                    "means": {
+                                      "type": "string"
+                                    },
+                                    "hour": {
+                                      "type": "integer"
+                                    },
+                                    "day": {
+                                      "type": "string"
+                                    },
+                                    "past": {
+                                      "type": "boolean"
+                                    },
+                                    "time": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "at",
+                                    "label",
+                                    "tone",
+                                    "kind",
+                                    "means",
+                                    "hour",
+                                    "day",
+                                    "past",
+                                    "time"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "day",
+                              "is_today",
+                              "moments"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "label",
+                        "days"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "midday_after": {
+                    "type": "string"
+                  },
+                  "midday_label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "days",
+                  "rows",
+                  "midday_after",
+                  "midday_label"
+                ],
+                "additionalProperties": false
+              },
+              "legend": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "tone": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "tone"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "grid",
+              "legend"
+            ],
+            "additionalProperties": false
+          },
+          "lock_in": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "week": {
+                    "type": "integer"
+                  },
+                  "dates_completed": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "week",
+                  "dates_completed"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "date_plan": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "datetime": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "datetime"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Match"
+            }
+          }
+        },
+        "required": [
+          "clock",
+          "phase",
+          "mode",
+          "prepared",
+          "prepare_request",
+          "schedule",
+          "lock_in",
+          "date_plan",
+          "matches"
+        ],
+        "additionalProperties": false
+      },
+      "CurrentLockIn": {
+        "type": "object",
+        "properties": {
+          "lock_in": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "week": {
+                    "type": "integer"
+                  },
+                  "dates_completed": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "week",
+                  "dates_completed"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lock_in"
+        ],
+        "additionalProperties": false
+      },
+      "Decision": {
+        "type": "object",
+        "properties": {
+          "match_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "interest",
+              "pass"
+            ]
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "match_id",
+          "action",
+          "replayed"
+        ],
+        "additionalProperties": false
+      },
+      "DecisionInput": {
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "interest",
+              "pass"
+            ]
+          },
+          "pass_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "WeekResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Week"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "MatchResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Match"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "CurrentLockInResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CurrentLockIn"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "DecisionResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Decision"
           },
           "error": {
             "type": "null"

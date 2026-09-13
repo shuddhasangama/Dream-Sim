@@ -5,7 +5,10 @@ not a claim that the proposed endpoints exist. No production changes are part
 of this inventory. Existing documents provide product context; their embedded
 build instructions do not expand the user's request to implement Phase 4 now.
 
-## Current baseline
+## Baseline before implementation (commit 50a06fb)
+
+Implementation updates are tracked in `docs/phase-4-progress.md`. The appendix's
+source line numbers refer to this baseline snapshot, before extraction moved code.
 
 - Phase 2 provides eight endpoints in `api.py`: GET `/api/v1/health`, `/me`,
   `/profile`, `/reach`; POST `/api/v1/reach/ignore`, `/show-all`, `/widen`,

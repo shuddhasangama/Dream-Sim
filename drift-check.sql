@@ -16,6 +16,10 @@
 -- ═══════════════════════════════════════════════════════════════════════
 
 WITH expected(table_name, column_name) AS (VALUES
+  ('MatchBatch','id'),
+  ('MatchBatch','user_id'),
+  ('MatchBatch','week'),
+  ('MatchBatch','generated_at'),
   ('User','id'),
   ('User','journey_state'),
   ('User','bgv_status'),
