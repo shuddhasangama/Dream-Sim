@@ -6,13 +6,19 @@ or creates a second Flask application (including under Gunicorn).
 import math
 
 from flask import Blueprint, g, jsonify, request
+from api_contract import ApiError, json_object
 
 
-def register_api(app, *, current_user, reach_locked, reach_state, reach_actions):
+def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
+                 journey_state=None):
     api = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 
     def failure(code, message, status):
         return jsonify(error=message, code=code), status
+
+    @api.errorhandler(ApiError)
+    def contract_error(exc):
+        return failure(exc.code, exc.message, exc.status)
 
     @api.before_request
     def authenticate():
@@ -45,21 +51,28 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions)
     def reach():
         return jsonify(reach_state(g.api_user["user_id"]))
 
+    if journey_state is not None:
+        @api.get('/dashboard')
+        @api.get('/journey/status')
+        def journey_status():
+            return jsonify(journey_state(g.api_user))
+
+        @api.get('/guidance')
+        def guidance():
+            state = journey_state(g.api_user)
+            if 'verified' not in state['milestones']:
+                return failure('verification_required', 'Background verification must clear first.', 403)
+            return jsonify(state['next_action'])
+
     def action_view(action):
         def view():
-            if not request.is_json:
-                return failure("unsupported_media_type", "Use application/json.", 415)
-            payload = request.get_json(silent=True)
-            if not isinstance(payload, dict):
-                return failure("validation_error", "Body must be a JSON object.", 400)
             fields = {
                 "ignore": {"filter", "ignore"},
                 "show-all": {"ignore"},
                 "widen": {"lever"},
                 "set-range": {"lever", "min", "max"},
             }[action]
-            if set(payload) != fields:
-                return failure("validation_error", "Expected fields: " + ", ".join(sorted(fields)), 400)
+            payload = json_object(required=fields)
             for key in fields & {"filter", "lever"}:
                 if not isinstance(payload[key], str):
                     return failure("validation_error", key + " must be a string.", 400)
@@ -100,7 +113,7 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions)
             codes = {400: "validation_error", 401: "authentication_required",
                      403: "forbidden", 404: "not_found", 405: "method_not_allowed",
                      415: "unsupported_media_type", 429: "rate_limited",
-                     503: "auth_unavailable"}
+                     503: "auth_unavailable", 409: "state_conflict"}
             body = {"data": None, "error": {
                 "code": payload.get("code", codes.get(response.status_code, "internal_error")),
                 "message": payload.get("error", "Request failed."),

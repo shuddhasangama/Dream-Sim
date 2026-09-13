@@ -1,0 +1,676 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DhaShu Phase 4 API \u2014 block 1",
+    "version": "0.1.0",
+    "description": "Incremental contract for implemented Phase 4 reads only. Existing Phase 2/3 endpoints retain their contracts. Secure mode (AUTH_ENABLED=1) is required for beta identity. Later journey endpoints are not advertised as callable until implemented."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "paths": {
+    "/dashboard": {
+      "get": {
+        "operationId": "getDashboard",
+        "summary": "getDashboard",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only projection of current persisted state.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JourneyStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Journey eligibility requirement not met.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not supported.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error; reference is safe to report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journey/status": {
+      "get": {
+        "operationId": "getJourneyStatus",
+        "summary": "getJourneyStatus",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only projection of current persisted state.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JourneyStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Journey eligibility requirement not met.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not supported.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error; reference is safe to report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/guidance": {
+      "get": {
+        "operationId": "getGuidance",
+        "summary": "getGuidance",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only projection of current persisted state.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuidanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Journey eligibility requirement not met.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not supported.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error; reference is safe to report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque"
+      },
+      "webSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "dhashu_auth"
+      }
+    },
+    "schemas": {
+      "Request": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "const": "GET"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^/api/v1/"
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "Surface": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "blocked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "api_available": {
+            "type": "boolean"
+          },
+          "request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Request"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "eligible",
+          "blocked_reason",
+          "api_available",
+          "request"
+        ],
+        "additionalProperties": false
+      },
+      "Guidance": {
+        "type": "object",
+        "properties": {
+          "headline": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "cta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Surface"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "headline",
+          "body",
+          "cta",
+          "destination"
+        ],
+        "additionalProperties": false
+      },
+      "JourneyStatus": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "user_id": {
+                "type": "string"
+              },
+              "journey_state": {
+                "enum": [
+                  "onboarding",
+                  "dating",
+                  "relationship",
+                  "engaged",
+                  "married",
+                  "exiting",
+                  "cooloff",
+                  "re-entry"
+                ]
+              },
+              "bgv_status": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id",
+              "journey_state",
+              "bgv_status",
+              "display_name"
+            ],
+            "additionalProperties": false
+          },
+          "stage_indicator": {
+            "type": "object",
+            "properties": {
+              "show": {
+                "type": "boolean"
+              },
+              "current": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "stages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "enum": [
+                        "done",
+                        "current",
+                        "todo"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "state"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "show",
+              "current",
+              "label",
+              "stages"
+            ],
+            "additionalProperties": false
+          },
+          "milestones": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "registered",
+                "verified",
+                "matched",
+                "date_set",
+                "first_date",
+                "relationship"
+              ]
+            }
+          },
+          "contact_verification": {
+            "type": "object",
+            "properties": {
+              "required": {
+                "type": "boolean"
+              },
+              "satisfied": {
+                "type": "boolean"
+              },
+              "verified_email": {
+                "type": "boolean"
+              },
+              "verified_phone": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "required",
+              "satisfied",
+              "verified_email",
+              "verified_phone"
+            ],
+            "additionalProperties": false
+          },
+          "clock": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "simulation"
+              },
+              "week": {
+                "type": "integer"
+              },
+              "day": {
+                "type": "string"
+              },
+              "hour": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "mode",
+              "week",
+              "day",
+              "hour"
+            ],
+            "additionalProperties": false
+          },
+          "current_lock_in": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "week": {
+                    "type": "integer"
+                  },
+                  "dates_completed": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "week",
+                  "dates_completed"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_date_plan": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "datetime": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "datetime"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_couple": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "type": "string"
+                  },
+                  "stage_week_index": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "stage",
+                  "stage_week_index"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "surfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Surface"
+            }
+          },
+          "next_action": {
+            "$ref": "#/components/schemas/Guidance"
+          }
+        },
+        "required": [
+          "user",
+          "stage_indicator",
+          "milestones",
+          "contact_verification",
+          "clock",
+          "current_lock_in",
+          "current_date_plan",
+          "current_couple",
+          "surfaces",
+          "next_action"
+        ],
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "null"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "detail": {},
+              "reference": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "detail",
+              "reference"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "JourneyStatusResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JourneyStatus"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "GuidanceResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Guidance"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

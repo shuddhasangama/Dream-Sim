@@ -46,6 +46,7 @@ import guru_dating
 import guru_relationship
 import invite_home
 import journey
+import journey_api
 import locale_defaults
 import lockin
 import matching
@@ -4949,6 +4950,18 @@ def admin_reset_week():
     return render_template("admin.html", clock=clock, phase=clock_module.phase(clock), checkpoints=_ADMIN_CHECKPOINTS)
 
 
+def _api_journey_state(user):
+    """Snapshot persisted state without Week's lazy generation/resolution."""
+    active = _my_active_lockin(user['user_id'])
+    plan = _dateplan_for_lockin(active['id']) if active else None
+    couple = find_couple_for_user(user['user_id']) if user['journey_state'] in disclosure.RELATIONSHIP_STATES else None
+    return journey_api.snapshot(
+        user, active=active, plan=plan, couple=couple,
+        reached=_milestones_for(user), contact=verification_status(user['user_id']),
+        clock=get_clock(), reach_is_locked=reach_locked(user), facts=_guru_facts(user),
+        display_name=display_name(user['user_id'], user['gender']))
+
+
 from api import register_api
 
 auth.register_auth(app, get_db)
@@ -4956,6 +4969,7 @@ auth.register_auth(app, get_db)
 register_api(
     app, current_user=current_user, reach_locked=reach_locked,
     reach_state=_reach_state,
+    journey_state=_api_journey_state,
     reach_actions={"ignore": reach_ignore, "show-all": reach_show_all,
                    "widen": reach_widen, "set-range": reach_set_range},
 )
