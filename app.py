@@ -4439,6 +4439,7 @@ auth.register_auth(app, get_db)
 
 register_api(
     app, current_user=current_user, reach_locked=reach_locked,
+    enrollment={'get_db':get_db},
     relationship={'get_db':get_db,'get_clock':get_clock,'week_to_date':week_to_date,'derive':derive_availability,'vision_options':VISION_STANCE_OPTIONS},
     after_date={'get_db':get_db,'get_clock':get_clock,'week_to_date':week_to_date},
     evolution={'get_db':get_db,'get_clock':get_clock,'stats_situation':_stats_situation,'milestones':_milestones_for},

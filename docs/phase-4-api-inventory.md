@@ -9,9 +9,14 @@ build instructions do not expand the user's request to implement Phase 4 now.
 
 Implementation updates are tracked in `docs/phase-4-progress.md`. The appendix's
 source line numbers refer to this baseline snapshot, before extraction moved code.
-Blocks 1–6 are now implemented locally; `openapi-phase4.json` is authoritative
+Blocks 1–7 are now implemented locally; `openapi-phase4.json` is authoritative
 for their actual paths and payloads. The proposal/appendix below remains the
 baseline inventory, not a current list of missing routes.
+
+Block 7 adds operator-invited enrollment and a continuous API-only journey on
+SQLite and isolated PostgreSQL. New profiles stop at pending manual BGV;
+public signup and automated verification are explicitly excluded. See
+`phase-4-api-only-validation.md` for the executable sequence and boundaries.
 
 - Phase 2 provides eight endpoints in `api.py`: GET `/api/v1/health`, `/me`,
   `/profile`, `/reach`; POST `/api/v1/reach/ignore`, `/show-all`, `/widen`,

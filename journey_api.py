@@ -17,6 +17,11 @@ READ_APIS = {
     'reach': '/api/v1/reach',
     'guru': '/api/v1/guidance',
     'week': '/api/v1/week',
+    'vision': '/api/v1/profile/vision',
+    'stats': '/api/v1/profile/stats',
+    'chemistry': '/api/v1/profile/chemistry',
+    'expectations': '/api/v1/profile/chemistry',
+    'vibes': '/api/v1/profile/chemistry',
 }
 
 
@@ -75,6 +80,17 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
         routes.update(calendar=calendar, align=calendar)
         if plan and plan['status'] in ('pending_signatures', 'confirmed'):
             routes['plan'] = '/api/v1/date-plans/'+quote(plan['id'], safe='')
+            routes['boundaries'] = routes['plan']
+            routes['debrief'] = routes['plan']+'/debrief'
+        if 'first_date' in reached:
+            base = '/api/v1/lock-ins/'+quote(active['id'], safe='')
+            routes.update(after_date=base+'/after-date', escalations=base+'/after-date',
+                          next_level=base+'/after-date', gate=base+'/gate')
+    if couple and user['journey_state'] in disclosure.RELATIONSHIP_STATES and user['bgv_status'] == 'verified':
+        base = '/api/v1/couples/'+quote(couple['id'], safe='')
+        routes.update(relationship=base, journey=base)
+        if user['journey_state'] == 'married':
+            routes['married'] = base
     for item in [*result['surfaces'], result['next_action'].get('destination')]:
         if item and item['key'] in routes:
             item['api_available'] = True

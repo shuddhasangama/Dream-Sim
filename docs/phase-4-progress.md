@@ -1,5 +1,10 @@
 # Phase 4 implementation record
 
+Current local scope: Blocks 1–7 implemented. OpenAPI 0.7.0 covers all 90 JSON
+operations across 89 paths, including the Phase 2/3 entry points. Block 7's
+runbook is `phase-4-api-only-validation.md`. This is not a deployment or a claim
+that real providers, public enrollment or mobile packaging are complete.
+
 ## Block 1 — contracts and journey/dashboard status
 
 Implemented locally on 2026-09-13; no Railway deployment or provider calls.
@@ -410,3 +415,46 @@ run (111.05 seconds, no skips). Races cover simultaneous stage advance, parallel
 partner ideas and duplicate ROAD creation. Tests also cover two later stages,
 private concerns, invalid/foreign ROAD writes, explicit sharing, failed-transition
 rollback, exit privacy, cool-off and independent re-entry.
+
+## Block 7 — secure enrollment and complete API-only validation
+
+Implemented locally 2026-09-14. Operator-only `enrollment_admin.py` reserves
+new beta profiles, with dry-run default and normalized contact collision checks.
+Existing approved accounts retain their existing identity and profile editors.
+New accounts must complete the normal OTP sign-in before writing their own
+resumable `EnrollmentDraft`. The JSON boundary accepts canonical Vision, Stats
+and activity sections with strict types, choices and optimistic revisions.
+Identical retries are harmless; changed stale submissions return 409.
+
+Completion atomically builds the profile and records one final draft revision.
+It removes exact salary from the draft and stores the derived profile band.
+The user remains in onboarding with pending BGV. No enrollment endpoint or CLI
+can grant verification, payment, partner consent or Dating access. Simulation
+sign-in is explicitly rejected. Automatic BGV, anonymous signup, account merging,
+contact recovery and invitation expiry are not implemented. Pending access can
+be disabled through existing operator account administration.
+
+OpenAPI 0.7.0 now includes every registered JSON operation, including existing
+Phase 2/3 routes. Tests check both missing and unimplemented documented routes.
+Dashboard guidance links now point to implemented profile, debrief, after-date,
+gate and relationship APIs when eligible. The enrollment table is additive in
+both database schemas and included in table/reset/drift inventories.
+
+`test_api_only_journey.py` runs a continuous two-partner bearer journey with an
+unrelated third actor: mocked OTP, actual Week preparation and mutual interest,
+two independently agreed date cycles, feedback/history/retries, profile answers,
+reflection and mutual relationship entry, ROAD sharing, Engaged, Married, refresh
+and logout revocation. It performs no HTML actions or inter-step DB mutations;
+approved synthetic starting profiles and controlled simulation time are fixtures.
+The same journey runs on isolated PostgreSQL. Separate enrollment tests stop at
+pending review rather than inventing a BGV success API. PostgreSQL races cover
+contact collision, competing draft revisions and duplicate completion.
+
+See `phase-4-api-only-validation.md` for prerequisites, operator commands, JSON
+examples, executable validation and remaining limitations. No live service/data
+was accessed, no messages were sent, and no code was pushed or deployed.
+
+Final validation: **1,331 passed, 738 subtests passed**, no skips, in the full
+isolated PostgreSQL run (148.39 seconds). This includes the full API-only journey
+on both SQLite and PostgreSQL, enrollment races, and all existing regressions.
+The temporary PostgreSQL cluster and credentials were removed after the run.

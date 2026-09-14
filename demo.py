@@ -91,6 +91,7 @@ RESET_TABLES_IN_ORDER = [
     "DateOutcome",     # -> DatePlan
     "DateFeedback",    # -> DatePlan
     "DateResolution",  # -> DatePlan
+    "EnrollmentDraft", # -> User
     "JourneyAction",   # -> Couple, User
     "DateCharge",      # -> DatePlan
     "DatePlan",        # -> LockIn
