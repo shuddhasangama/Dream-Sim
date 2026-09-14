@@ -364,7 +364,7 @@ def _milestones_for(user: dict) -> set:
         journey_state=user["journey_state"],
         has_active_lockin=active is not None,
         has_dateplan=plan is not None,
-        has_date_outcome=outcome is not None,
+        has_date_outcome=bool(active and active.get('dates_completed',0)>0) or outcome is not None,
     )
 
 
@@ -1705,120 +1705,77 @@ def escalations_view():
 @app.route("/escalations/contact/request", methods=["POST"])
 @login_required
 def escalations_contact_request():
-    """Requesting is free; REVEALING is what the ceremony gates. The
-    request is how you ask, and asking is not the thing that hands your
-    number over."""
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None or not escalations.unlocks_available(active["dates_completed"]):
-        return redirect(url_for("escalations_view"))
-    channel = request.form.get("channel")
-    existing = db.fetch_all(get_db(), "ContactRequest", pair_id=active["id"], channel=channel) if channel in escalations.CONTACT_CHANNELS else []
-    try:
-        row = escalations.request_contact(active["id"], user["user_id"], channel, active["week"], str(get_clock()), existing)
-    except ValueError:
-        return redirect(url_for("escalations_view"))
-    db.insert_row(get_db(), "ContactRequest", {"id": uuid.uuid4().hex[:12], **row})
-    return redirect(url_for("escalations_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active:
+        try: after_date_service.contact_request(get_db(),user['user_id'],active['id'],request.form.get('channel'),get_clock())
+        except ApiError: pass
+    return redirect(url_for('escalations_view'))
 
 
 @app.route("/escalations/contact/respond", methods=["POST"])
 @login_required
 def escalations_contact_respond():
-    user = current_user()
-    row = db.fetch_one(get_db(), "ContactRequest", id=request.form.get("request_id"))
-    if row is None or row["requester_id"] == user["user_id"]:
-        return redirect(url_for("escalations_view"))
-    # Ceremony #2. Accepting is what makes a number visible, so that is
-    # what the agreement gates — not the asking. Declining never needs a
-    # signature: nobody should have to sign something to say no.
-    active = _my_active_lockin(user["user_id"])
-    if request.form.get("response") == "accepted" and active is not None:
-        share = _ceremony_pair_state(ceremony.CONTACT_SHARE, active["id"], active)
-        if not share["mine_complete"]:
-            return redirect(url_for("ceremony_view", kind=ceremony.CONTACT_SHARE))
-
-    try:
-        updated = escalations.respond_to_contact_request(row, request.form.get("response"), str(get_clock()))
-    except ValueError:
-        return redirect(url_for("escalations_view"))
-    db.insert_row(get_db(), "ContactRequest", updated)
-    return redirect(url_for("escalations_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active:
+        try: after_date_service.contact_respond(get_db(),user['user_id'],active['id'],request.form.get('request_id'),request.form.get('response'),get_clock())
+        except ApiError as exc:
+            if exc.code=='agreement_required': return redirect(url_for('ceremony_view',kind=ceremony.CONTACT_SHARE))
+            if exc.status in (403,404): abort(exc.status)
+    return redirect(url_for('escalations_view'))
 
 
 @app.route("/escalations/invite/propose", methods=["POST"])
 @login_required
 def escalations_invite_propose():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None or not escalations.unlocks_available(active["dates_completed"]):
-        return redirect(url_for("escalations_view"))
-    proposed_datetime = request.form.get("proposed_datetime")
-    if not proposed_datetime:
-        return redirect(url_for("escalations_view"))
-
-    # Ceremony #3, and the ordering that goes with it: contact details are
-    # shared before an address is. Both gates are checked here rather than
-    # only hidden in the template, because a posted form is not a click.
-    share = _ceremony_pair_state(ceremony.CONTACT_SHARE, active["id"], active)
-    if not share["both_complete"]:
-        return redirect(url_for("escalations_view"))
-    home = _ceremony_pair_state(ceremony.HOME_INVITE, active["id"], active)
-    if not home["mine_complete"]:
-        return redirect(url_for("ceremony_view", kind=ceremony.HOME_INVITE))
-    existing = db.fetch_all(get_db(), "HomeInvite", pair_id=active["id"])
-    try:
-        row = invite_home.propose_invite(active["id"], user["user_id"], proposed_datetime, request.form.get("expectation_flag"), existing)
-    except ValueError:
-        return redirect(url_for("escalations_view"))
-    db.insert_row(get_db(), "HomeInvite", {"id": uuid.uuid4().hex[:12], **_bool_ints(row)})
-    return redirect(url_for("escalations_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active:
+        try:
+            after_date_service.invite_propose(get_db(),user['user_id'],active['id'],{'request_id':request.form.get('request_id') or uuid.uuid4().hex,'proposed_datetime':request.form.get('proposed_datetime'),'expectation_flag':request.form.get('expectation_flag')},get_clock())
+        except ApiError as exc:
+            if exc.code=='agreement_required':return redirect(url_for('ceremony_view',kind=ceremony.HOME_INVITE))
+    return redirect(url_for('escalations_view'))
 
 
 @app.route("/escalations/invite/see-flag", methods=["POST"])
 @login_required
 def escalations_invite_see_flag():
-    invite = db.fetch_one(get_db(), "HomeInvite", id=request.form.get("invite_id"))
-    if invite is None:
-        return redirect(url_for("escalations_view"))
-    updated = invite_home.mark_flag_seen(invite, str(get_clock()))
-    db.insert_row(get_db(), "HomeInvite", updated)
-    return redirect(url_for("escalations_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active:
+        try: after_date_service.invite_action(get_db(),user['user_id'],active['id'],request.form.get('invite_id'),'see-flag',{'response':request.form.get('response')},get_clock())
+        except ApiError as exc:
+            if exc.status in (403,404): abort(exc.status)
+    return redirect(url_for('escalations_view'))
 
 
 @app.route("/escalations/invite/respond", methods=["POST"])
 @login_required
 def escalations_invite_respond():
-    invite = db.fetch_one(get_db(), "HomeInvite", id=request.form.get("invite_id"))
-    if invite is None:
-        return redirect(url_for("escalations_view"))
-    try:
-        updated = invite_home.respond_to_invite(invite, request.form.get("response"))
-    except ValueError:
-        return redirect(url_for("escalations_view"))
-    db.insert_row(get_db(), "HomeInvite", updated)
-    return redirect(url_for("escalations_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active:
+        try: after_date_service.invite_action(get_db(),user['user_id'],active['id'],request.form.get('invite_id'),'respond',{'response':request.form.get('response')},get_clock())
+        except ApiError as exc:
+            if exc.status in (403,404): abort(exc.status)
+    return redirect(url_for('escalations_view'))
 
 
 @app.route("/escalations/invite/guidance", methods=["POST"])
 @login_required
 def escalations_invite_guidance():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    invite = db.fetch_one(get_db(), "HomeInvite", id=request.form.get("invite_id"))
-    if invite is None or active is None:
-        return redirect(url_for("escalations_view"))
-    try:
-        updated = invite_home.show_guidance(invite, _my_role_in_lockin(active, user["user_id"]))
-    except ValueError:
-        return redirect(url_for("escalations_view"))
-    db.insert_row(get_db(), "HomeInvite", updated)
-    return redirect(url_for("escalations_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active:
+        try: after_date_service.invite_action(get_db(),user['user_id'],active['id'],request.form.get('invite_id'),'guidance',{'response':request.form.get('response')},get_clock())
+        except ApiError as exc:
+            if exc.status in (403,404): abort(exc.status)
+    return redirect(url_for('escalations_view'))
 
 
 @app.route("/escalations/invite/acknowledge", methods=["POST"])
 @login_required
 def escalations_invite_acknowledge():
+    actor=current_user(); active_pair=_my_active_lockin(actor['user_id'])
+    if active_pair is None: abort(404)
+    try: after_date_service.owned(get_db(),actor['user_id'],active_pair['id'],'HomeInvite',request.form.get('invite_id'))
+    except ApiError as exc: abort(exc.status)
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     invite = db.fetch_one(get_db(), "HomeInvite", id=request.form.get("invite_id"))
@@ -1837,6 +1794,10 @@ def escalations_invite_acknowledge():
 @app.route("/escalations/invite/trusted-contact", methods=["POST"])
 @login_required
 def escalations_invite_trusted_contact():
+    actor=current_user(); active_pair=_my_active_lockin(actor['user_id'])
+    if active_pair is None: abort(404)
+    try: after_date_service.owned(get_db(),actor['user_id'],active_pair['id'],'HomeInvite',request.form.get('invite_id'))
+    except ApiError as exc: abort(exc.status)
     user = current_user()
     active = _my_active_lockin(user["user_id"])
     invite = db.fetch_one(get_db(), "HomeInvite", id=request.form.get("invite_id"))
@@ -1850,13 +1811,12 @@ def escalations_invite_trusted_contact():
 @app.route("/escalations/invite/revoke", methods=["POST"])
 @login_required
 def escalations_invite_revoke():
-    user = current_user()
-    invite = db.fetch_one(get_db(), "HomeInvite", id=request.form.get("invite_id"))
-    if invite is None:
-        return redirect(url_for("escalations_view"))
-    updated = invite_home.revoke(invite, user["user_id"], str(get_clock()))
-    db.insert_row(get_db(), "HomeInvite", updated)
-    return redirect(url_for("escalations_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active:
+        try: after_date_service.invite_action(get_db(),user['user_id'],active['id'],request.form.get('invite_id'),'revoke',{'response':request.form.get('response')},get_clock())
+        except ApiError as exc:
+            if exc.status in (403,404): abort(exc.status)
+    return redirect(url_for('escalations_view'))
 
 
 # ── Dating exit / Relationship entry gate (docs/relationship-stage-spec.md
@@ -2003,172 +1963,94 @@ def _gate_conversation_state(gate: dict, active: dict) -> dict:
 @app.route("/gate/ask", methods=["POST"])
 @login_required
 def gate_ask():
-    """Choose what you want to know. Both of you then answer it."""
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    gate = _gate_for_lockin(active["id"]) if active else None
-    if gate is None:
-        return redirect(url_for("guru_view"))
-
-    asks = db.fetch_all(get_db(), "GateAsk", pair_id=active["id"])
-    result = gate_conversation.validate_asks(
-        request.form.getlist("question_key"), [a["question_key"] for a in asks])
-    if not result["ok"]:
-        # `asked=invalid` was read by nothing — gate_view never looked at
-        # request.args — so exceeding the cap cleared the chips and said
-        # nothing at all.
-        _remember_form(result.get("error")
-                       or f"Pick between {gate_conversation.MIN_ASKS_PER_ROUND} and "
-                          f"{gate_conversation.MAX_ASKS_PER_ROUND} questions.",
-                       endpoint="gate_view")
-        return redirect(url_for("gate_view"))
-
-    round_no = gate.get("round_no") or 1
-    clock = get_clock()
-    for key in result["keys"]:
-        db.insert_row(get_db(), "GateAsk", {
-            "id": f"{active['id']}:{round_no}:{key}", "pair_id": active["id"],
-            "round_no": round_no, "asked_by": user["user_id"],
-            "question_key": key, "asked_at": str(clock),
-        })
-    # A new question reopens the round: the pause restarts, because there
-    # is something new to sit with.
-    db.insert_row(get_db(), "StageGate", {**dict(gate), "answers_closed_at": None})
-    return redirect(url_for("gate_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active is None:return redirect(url_for('week'))
+    gate=_gate_for_lockin(active['id'])
+    body={'question_keys':request.form.getlist('question_key')}
+    body['round']=(gate or {}).get('round_no') or 1
+    try: gate_service.action(get_db(),user['user_id'],active['id'],'ask',body,get_clock(),week_to_date(get_clock().week))
+    except ApiError as exc: _remember_form(exc.message,endpoint='gate_view')
+    return redirect(url_for('gate_view'))
 
 
 @app.route("/gate/respond", methods=["POST"])
 @login_required
 def gate_respond():
-    """Answer one of the questions on the table.
-
-    Scale answers are compared; free text is stored and never shown to the
-    other person. It is collected because writing it is what makes someone
-    think, not because anyone else will read it.
-    """
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    gate = _gate_for_lockin(active["id"]) if active else None
-    if gate is None:
-        return redirect(url_for("guru_view"))
-
-    key = request.form.get("question_key")
-    asks = {a["question_key"] for a in db.fetch_all(get_db(), "GateAsk", pair_id=active["id"])}
-    if key not in asks:
-        return redirect(url_for("gate_view"))
-
-    db.insert_row(get_db(), "GateResponse", {
-        "id": f"{active['id']}:{user['user_id']}:{key}",
-        "pair_id": active["id"], "user_id": user["user_id"], "question_key": key,
-        "readiness_scale": request.form.get("readiness_scale") or None,
-        "answer_text": (request.form.get("answer_text") or "").strip() or None,
-    })
-
-    # Once BOTH have answered everything asked, the pause starts. Started
-    # once and not restarted by a re-answer — otherwise editing a reply
-    # would reset everyone's clock.
-    state = _gate_conversation_state(dict(gate), active)
-    if state["report"]["complete"] and gate.get("answers_closed_at") is None:
-        db.insert_row(get_db(), "StageGate",
-                      {**dict(gate), "answers_closed_at": _clock_hours(get_clock())})
-    return redirect(url_for("gate_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active is None:return redirect(url_for('week'))
+    gate=_gate_for_lockin(active['id'])
+    body={'question_key':request.form.get('question_key'),'value':request.form.get('readiness_scale') or request.form.get('answer_text') or None}
+    body['round']=(gate or {}).get('round_no') or 1
+    try: gate_service.action(get_db(),user['user_id'],active['id'],'answer',body,get_clock(),week_to_date(get_clock().week))
+    except ApiError as exc: _remember_form(exc.message,endpoint='gate_view')
+    return redirect(url_for('gate_view'))
 
 
 @app.route("/gate/raise", methods=["POST"])
 @login_required
 def gate_raise():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
-        return redirect(url_for("week"))
-    if _gate_for_lockin(active["id"]) is None:
-        gate = stage_gate.open_gate(active["id"], "exclusivity_raised",
-                                    str(get_clock()), raised_by=user["user_id"])
-        db.insert_row(get_db(), "StageGate", {"id": f"gate:{active['id']}", **gate, **_GATE_FLAG_DEFAULTS})
-    return redirect(url_for("gate_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active is None:return redirect(url_for('week'))
+    gate=_gate_for_lockin(active['id'])
+    body={}
+    body['round']=(gate or {}).get('round_no') or 1
+    try: gate_service.action(get_db(),user['user_id'],active['id'],'raise',body,get_clock(),week_to_date(get_clock().week))
+    except ApiError as exc: _remember_form(exc.message,endpoint='gate_view')
+    return redirect(url_for('gate_view'))
 
 
 @app.route("/gate/answer", methods=["POST"])
 @login_required
 def gate_answer():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
-        return redirect(url_for("week"))
-    gate = _gate_for_lockin(active["id"])
-    if gate is None or gate["status"] != "open":
-        return redirect(url_for("gate_view"))
-
-    question_key = request.form.get("question_key")
-    question = next((q for q in stage_gate.STAGE_GATE_QUESTIONS if q["key"] == question_key), None)
-    if question is None:
-        abort(400)
-    kwargs: dict = {}
-    if question["kind"] == "scale":
-        kwargs["readiness_scale"] = request.form.get("readiness_scale") or None
-    else:
-        kwargs["answer_text"] = (request.form.get("answer_text") or "").strip() or None
-    try:
-        response = stage_gate.submit_gate_response(gate["pair_id"], user["user_id"], question_key, **kwargs)
-    except ValueError:
-        return redirect(url_for("gate_view"))
-    db.insert_row(get_db(), "GateResponse", {"id": f"{gate['pair_id']}:{user['user_id']}:{question_key}", **response})
-    return redirect(url_for("gate_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active is None:return redirect(url_for('week'))
+    gate=_gate_for_lockin(active['id'])
+    body={'question_key':request.form.get('question_key'),'value':request.form.get('readiness_scale') or request.form.get('answer_text') or None}
+    body['round']=(gate or {}).get('round_no') or 1
+    try: gate_service.action(get_db(),user['user_id'],active['id'],'answer',body,get_clock(),week_to_date(get_clock().week))
+    except ApiError as exc: _remember_form(exc.message,endpoint='gate_view')
+    return redirect(url_for('gate_view'))
 
 
 @app.route("/gate/confirm", methods=["POST"])
 @login_required
 def gate_confirm():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
-        return redirect(url_for("week"))
-    gate = _gate_for_lockin(active["id"])
-    if gate is None:
-        return redirect(url_for("week"))
-
-    # 2026-09-04: the pause is enforced here, not merely hidden in the
-    # template. Someone who has just read that they see three things
-    # differently must not be able to commit in the same minute — that is
-    # the behaviour this whole feature exists to prevent, and a disabled
-    # button is not a rule.
-    if not _gate_conversation_state(dict(gate), active)["may_commit"]:
-        return redirect(url_for("gate_view", early="1"))
-
-    updated = dict(gate)
-    updated[f"confirm_{_my_role_in_lockin(active, user['user_id'])}"] = 1
-    db.insert_row(get_db(), "StageGate", updated)
-    return redirect(url_for("gate_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active is None:return redirect(url_for('week'))
+    gate=_gate_for_lockin(active['id'])
+    body={}
+    body['round']=(gate or {}).get('round_no') or 1
+    try: gate_service.action(get_db(),user['user_id'],active['id'],'confirm',body,get_clock(),week_to_date(get_clock().week))
+    except ApiError as exc:
+        _remember_form(exc.message,endpoint='gate_view')
+        if exc.code=='reflection_required':return redirect(url_for('gate_view',early='1'))
+    return redirect(url_for('gate_view'))
 
 
 @app.route("/gate/decline", methods=["POST"])
 @login_required
 def gate_decline():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
-        return redirect(url_for("week"))
-    gate = _gate_for_lockin(active["id"])
-    if gate is None:
-        return redirect(url_for("week"))
-    db.insert_row(get_db(), "StageGate", stage_gate.resolve_gate(gate, "declined", str(get_clock())))
-    return redirect(url_for("week"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active is None:return redirect(url_for('week'))
+    gate=_gate_for_lockin(active['id'])
+    body={}
+    body['round']=(gate or {}).get('round_no') or 1
+    try: gate_service.action(get_db(),user['user_id'],active['id'],'decline',body,get_clock(),week_to_date(get_clock().week))
+    except ApiError as exc: _remember_form(exc.message,endpoint='gate_view')
+    return redirect(url_for('gate_view'))
 
 
 @app.route("/gate/exclusivity-ack", methods=["POST"])
 @login_required
 def gate_exclusivity_ack():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
-        return redirect(url_for("week"))
-    gate = _gate_for_lockin(active["id"])
-    if gate is None:
-        return redirect(url_for("week"))
-    updated = dict(gate)
-    updated[f"exclusivity_ack_{_my_role_in_lockin(active, user['user_id'])}"] = 1
-    db.insert_row(get_db(), "StageGate", updated)
-    return redirect(url_for("gate_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active is None:return redirect(url_for('week'))
+    gate=_gate_for_lockin(active['id'])
+    body={'acknowledged':True}
+    body['round']=(gate or {}).get('round_no') or 1
+    try: gate_service.action(get_db(),user['user_id'],active['id'],'exclusivity-ack',body,get_clock(),week_to_date(get_clock().week))
+    except ApiError as exc: _remember_form(exc.message,endpoint='gate_view')
+    return redirect(url_for('gate_view'))
 
 
 @app.route("/gate/consent", methods=["POST"])
@@ -2212,45 +2094,15 @@ def _mirror_gate_consent() -> None:
 @app.route("/gate/enter-relationship", methods=["POST"])
 @login_required
 def gate_enter_relationship():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
-        return redirect(url_for("week"))
-    gate = _gate_for_lockin(active["id"])
-    if gate is None:
-        return redirect(url_for("gate_view"))
-    analysis = _gate_analysis_for(gate["pair_id"])
-    if analysis is None:
-        return redirect(url_for("gate_view"))
-
-    prerequisites = _prerequisites_for_couple(active["user_a"], active["user_b"])
-    vision_entries_for_couple = db.fetch_all(get_db(), "VisionEntry", user_id=active["user_a"]) + db.fetch_all(
-        get_db(), "VisionEntry", user_id=active["user_b"]
-    )
-    couple_id = deterministic_couple_id(active["user_a"], active["user_b"])
-    result = journey.enter_relationship(
-        get_db(),
-        couple_id,
-        active["user_a"],
-        active["user_b"],
-        lockin_id=active["id"],
-        gate=gate,
-        gate_analysis=analysis,
-        prerequisites=prerequisites,
-        exclusivity_ack_a=bool(gate["exclusivity_ack_a"]),
-        exclusivity_ack_b=bool(gate["exclusivity_ack_b"]),
-        consent_a=bool(gate["consent_a"]),
-        consent_b=bool(gate["consent_b"]),
-        biometric_a=bool(gate["biometric_a"]),
-        biometric_b=bool(gate["biometric_b"]),
-        vision_entries_for_couple=vision_entries_for_couple,
-        today=week_to_date(active["week"]),
-    )
-    if result["advanced"]:
-        gate = db.fetch_one(get_db(), "StageGate", pair_id=active["id"])  # re-fetch: enter_relationship didn't touch it
-        db.insert_row(get_db(), "StageGate", stage_gate.resolve_gate(gate, "progressed", str(get_clock())))
-        return redirect(url_for("journey_view"))
-    return redirect(url_for("gate_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active is None:return redirect(url_for('week'))
+    gate=_gate_for_lockin(active['id'])
+    if gate is None:return redirect(url_for('gate_view'))
+    try:
+        gate_service.action(get_db(),user['user_id'],active['id'],'enter-relationship',{'round':gate.get('round_no') or 1},get_clock(),week_to_date(get_clock().week))
+    except ApiError:
+        return redirect(url_for('gate_view'))
+    return redirect(url_for('journey_view'))
 
 
 # ── Vision / Chemistry at Relationship entry (docs/relationship-stage-spec.md
@@ -2331,91 +2183,15 @@ def stats_view():
 @app.route("/stats/save", methods=["POST"])
 @login_required
 def stats_save():
-    """Save everything that changed, in one submit.
-
-    2026-09-09 (evening), user's rule: "Save across each tab makes it too
-    many clicks. Whatever has been changed should be saved. Non one at a
-    time." One button per field meant a click per field and a page
-    reload between each.
-
-    Every field is still re-checked here rather than trusted from the
-    form — a field the screen showed as held is refused even if the
-    request says otherwise, because a disabled input is a suggestion.
-    """
-    user = current_user()
-    state = _stats_situation(user)
-
-    row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
-    stored = json.loads(row["stats_json"])
-    # Repair on write as well as on read. Without this the comparison
-    # below sees a stored "58" and a submitted 58 as unchanged — true as
-    # text, and it would leave the corrupt value on disk forever.
-    stats = onboarding.normalise_stats(stored)
-    needs_repair = stats != stored
-
-    saved, refused, errors = [], [], []
-    changes = []
-
-    for field in stats_edit.ALL_FIELDS:
-        if field not in request.form:
-            continue
-        verdict = stats_edit.editable(field, state)
-        # A multi-value field arrives as several values under one name.
-        submitted = (request.form.getlist(field)
-                     if field in onboarding.MULTI_VALUE_STATS
-                     else request.form.get(field))
-        got = stats_edit.coerce(field, submitted, onboarding.STAT_RANGES,
-                                onboarding.MULTI_VALUE_LIMIT)
-        if not got["ok"]:
-            errors.append(got["error"])
-            continue
-
-        before, after = stats.get(field), got["value"]
-        if _same_stat(before, after):
-            continue
-        if not verdict["editable"]:
-            # Only counts as refused if they actually tried to change it.
-            refused.append(onboarding.STAT_LABELS.get(field, field))
-            continue
-
-        if after is None:
-            stats.pop(field, None)
-        else:
-            stats[field] = after
-        saved.append(onboarding.STAT_LABELS.get(field, field))
-        changes.append((field, before, after))
-
-    if saved or needs_repair:
-        row["stats_json"] = json.dumps(stats, ensure_ascii=False)
-        # 2026-09-09 (evening), user's rule: "Filters/Stats you have just
-        # keyedin/unlocked is not getting updated. even after Stats -
-        # height, weight, waist have been updated."
-        #
-        # They were not. A REACH lever exists only where the backing
-        # preference range does (matching.available_levers), and saving a
-        # STAT never touched preferences — so filling in your weight left
-        # the weight filter locked, and REACH looked identical.
-        row["preferences_json"] = json.dumps(
-            matching.unlock_levers_for(json.loads(row["preferences_json"]), stats),
-            ensure_ascii=False)
-        db.insert_row(get_db(), "User", row)
-
-        # In a relationship the change is disclosed rather than blocked.
-        if stats_edit.discloses_to_partner(state):
-            for field, before, after in changes:
-                record = stats_edit.change_record(
-                    user["user_id"], field, before, after, str(get_clock()))
-                db.insert_row(get_db(), "StatChange", {"id": uuid.uuid4().hex[:12], **record})
-
-    if errors or refused:
-        parts = list(errors)
-        if refused:
-            parts.append("Held right now, so not changed: " + ", ".join(refused) + ".")
-        _remember_form(" ".join(parts), endpoint="stats_view")
-    elif saved:
-        session["stats_saved"] = saved
-
-    return redirect(url_for("stats_view"))
+    user=current_user()
+    submitted={k:request.form.getlist(k) if k in onboarding.MULTI_VALUE_STATS else request.form.get(k)
+               for k in stats_edit.ALL_FIELDS if k in request.form}
+    result=evolution_service.save_stats(get_db(),user['user_id'],submitted,lambda:_stats_situation(user),get_clock())
+    if result['errors'] or result['refused']:
+        _remember_form(' '.join(result['errors'])+(' Held right now, so not changed: '+', '.join(result['refused']) if result['refused'] else ''),endpoint='stats_view')
+    elif result['saved']:
+        session['stats_saved']=result['saved']
+    return redirect(url_for('stats_view'))
 
 
 def _same_stat(before, after) -> bool:
@@ -2586,19 +2362,10 @@ def chemistry_view():
 @app.route("/chemistry/activities", methods=["POST"])
 @login_required
 def chemistry_set_activities():
-    user = current_user()
-    submitted = {a: request.form.get(f"act__{a}") for a in onboarding.ACTIVITIES}
-    submitted = {a: b for a, b in submitted.items() if b}
-    result = onboarding.validate_activities(submitted)
-    if not result["ok"]:
-        # Sorting twelve activities and losing all of it to a silent
-        # redirect was the worst instance of this in the app.
-        _remember_form(result["error"], endpoint="chemistry_view")
-        return redirect(url_for("chemistry_view"))
-    row = dict(db.fetch_one(get_db(), "User", id=user["user_id"]))
-    row["skills_json"] = json.dumps(onboarding.build_skills(result["activities"]), ensure_ascii=False)
-    db.insert_row(get_db(), "User", row)
-    return redirect(url_for("chemistry_view"))
+    submitted={a:request.form.get('act__'+a) for a in onboarding.ACTIVITIES if request.form.get('act__'+a)}
+    try: evolution_service.save_activities(get_db(),current_user()['user_id'],submitted)
+    except ApiError as exc: _remember_form(exc.message,endpoint='chemistry_view')
+    return redirect(url_for('chemistry_view'))
 
 
 # ── the intimacy layer, split by when it should be asked ────────────────
@@ -2752,39 +2519,21 @@ def next_level_view():
 @app.route("/next-level/open", methods=["POST"])
 @login_required
 def next_level_open():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None or not escalations.unlocks_available(active["dates_completed"]):
-        return redirect(url_for("week"))
-    if db.fetch_all(get_db(), "NextLevelThread", pair_id=active["id"]):
-        return redirect(url_for("next_level_view"))
-    opened_by = request.form.get("opened_by", "user")
-    try:
-        threads = next_level.open_conversation(active["id"], opened_by, str(get_clock()))
-    except ValueError:
-        return redirect(url_for("next_level_view"))
-    for t in threads:
-        db.insert_row(get_db(), "NextLevelThread", {"id": f"{active['id']}:{t['question_key']}", **_bool_ints(t)})
-    return redirect(url_for("next_level_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active:
+        try: after_date_service.next_level_action(get_db(),user['user_id'],active['id'],{},get_clock(),True)
+        except ApiError: return redirect(url_for('week'))
+    return redirect(url_for('next_level_view'))
 
 
 @app.route("/next-level/answer", methods=["POST"])
 @login_required
 def next_level_answer():
-    user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    if active is None:
-        return redirect(url_for("week"))
-    thread = db.fetch_one(get_db(), "NextLevelThread", pair_id=active["id"], question_key=request.form.get("question_key"))
-    if thread is None:
-        abort(400)
-    declined = "declined" in request.form
-    answer_text = (request.form.get("answer_text") or "").strip() or None
-    updated = next_level.submit_answer(
-        thread, _my_role_in_lockin(active, user["user_id"]), answered_at=str(get_clock()), answer_text=answer_text, declined=declined
-    )
-    db.insert_row(get_db(), "NextLevelThread", _bool_ints(updated))
-    return redirect(url_for("next_level_view"))
+    user=current_user(); active=_my_active_lockin(user['user_id'])
+    if active:
+        try: after_date_service.next_level_action(get_db(),user['user_id'],active['id'],{'question_key':request.form.get('question_key'),'declined':'declined' in request.form,'answer_text':(request.form.get('answer_text') or '').strip() or None},get_clock())
+        except ApiError as exc: abort(exc.status)
+    return redirect(url_for('next_level_view'))
 
 
 # ── Relationship stage mechanics (docs/relationship-stage-spec.md Part D) ──
@@ -4738,11 +4487,16 @@ def _api_journey_state(user):
 from api import register_api
 import planning_service
 import date_cycle_service
+import evolution_service
+import after_date_service
+import gate_service
 
 auth.register_auth(app, get_db)
 
 register_api(
     app, current_user=current_user, reach_locked=reach_locked,
+    after_date={'get_db':get_db,'get_clock':get_clock,'week_to_date':week_to_date},
+    evolution={'get_db':get_db,'get_clock':get_clock,'stats_situation':_stats_situation,'milestones':_milestones_for},
     reach_state=_reach_state,
     date_cycle={"get_db":get_db,"get_clock":get_clock,"epoch":WEEK_ONE_MONDAY},
     planning={'get_db': get_db, 'get_clock': get_clock, 'slot_datetime': slot_datetime,

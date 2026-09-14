@@ -312,9 +312,53 @@ by this change.
 - All changes remain local. No provider messages, Railway access, pushes or
   deployment were performed.
 
+## Block 5 — after-date, relationship gate and own-profile editing
+
+Implemented locally, 2026-09-14. OpenAPI 0.5.0 lists the callable resources.
+Profile stats support atomic strict patches with existing edit holds, re-review
+requests, activities, chemistry questions with pacing, and append-only vision
+details/disclosed reversals with actor-scoped request IDs. Re-review only records
+a request; it neither contacts a provider nor clears BGV.
+
+After-date JSON resources cover neutral contact requests, recipient responses,
+home invitation/flag/guidance/acknowledgement/revocation, reciprocal Next Level
+questions, and contact/home/entry ceremonies. Foreign IDs and requester self-
+acceptance are rejected. Contact values require recipient acceptance and both
+ceremonies. Phone/WhatsApp use the approved account phone; social handles have
+no existing storage and remain null. Trusted-contact delivery is explicitly
+unavailable; no notification endpoint or fake delivery receipt was added.
+
+Gate questions, private answers, reflection, confirmations, exclusivity and
+entry share a transactional service with HTML actions. Current-round input and
+separate authenticated actions prevent one partner confirming for the other.
+Both confirmations, prerequisites and entry agreements are checked again before
+atomically creating Couple/ROAD/playbook/topics and completing the LockIn.
+Retries cannot advance that couple twice. Text answers and partner-directed
+Guru prompts remain private. Selected questions drive the gate analysis, avoiding
+the old dead end where the selected-question UI could never satisfy an obsolete
+all-fifteen-questions entry check.
+
+Profile edits, contact responses, invitation actions, Next Level and gate writes
+reuse shared services from web routes. Existing non-date HTML ceremony/face
+simulation remains a legacy harness flow; mobile face simulation is default-off
+and requires an approved account plus BETA_DATE_SIMULATION_ENABLED=1. Real
+biometrics, payment processing and Guru narration remain unimplemented.
+
+The database helper can defer per-row commits to an explicit connection-scoped
+transaction, safely isolated between concurrent requests. PostgreSQL flag values
+are normalized to the integer representation required by both schemas.
+Historical happened=true encounters remain eligible; completing a new date also
+preserves the after-date milestone when its plan becomes historical.
+
+Validation covers three-user ownership/privacy, exact retries, question pacing,
+home acknowledgements/revocation, reciprocal answers, mutual gate entry and an
+injected rollback after partial legacy helper writes. PostgreSQL races cover
+duplicate contact requests, simultaneous conversation creation and vision appends.
+Final full isolated PostgreSQL run: **1,309 passed, 734 subtests passed**, no
+skips, in 110.18 seconds. Temporary database and credentials removed afterward.
+
 ## Remaining sequence
 
-5. After-date/gates/profile evolution;
 6. Relationship/ROAD/later stages; 7. Enrollment and API-only full-journey tests.
 
 Email sender-domain authentication and live mobile token validation remain

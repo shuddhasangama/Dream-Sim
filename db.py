@@ -19,6 +19,8 @@ import json
 import os
 import re
 import sqlite3
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -127,9 +129,27 @@ def _execute(conn: Any, sql: str, values: tuple[Any, ...] = ()) -> Any:
     return conn.execute(sql, values)
 
 
+_deferred_connections = ContextVar('deferred_database_commits', default=())
+
+
+@contextmanager
+def defer_commits(conn):
+    """Let an explicit outer transaction own legacy helper writes.
+
+    Connection-specific and context-local: concurrent requests never suppress
+    each other's commits. This does not start or commit a transaction itself.
+    """
+    token = _deferred_connections.set((*_deferred_connections.get(), conn))
+    try:
+        yield
+    finally:
+        _deferred_connections.reset(token)
+
+
 def _commit(conn: Any) -> None:
     """Commit the current transaction."""
-    conn.commit()
+    if not any(item is conn for item in _deferred_connections.get()):
+        conn.commit()
 
 
 def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> Any:
@@ -377,7 +397,8 @@ def insert_row(conn: Any, table: str, row: dict[str, Any]) -> Any:
 
     columns_list = list(row.keys())
     columns = ", ".join(columns_list)
-    values = tuple(row.values())
+    # Both schemas store flags as checked integer columns, including PostgreSQL.
+    values = tuple(int(value) if isinstance(value, bool) else value for value in row.values())
     placeholder = _placeholder(conn)
 
     if _is_postgres_connection(conn):
