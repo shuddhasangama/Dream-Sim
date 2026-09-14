@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<a class="backlink" href="{{ url_for('journey_view') }}">‹ Journey</a>
+<h1>Moving to {{ info.to_stage }}</h1>
+<p>Each partner reviews and signs separately. Either can wait.</p>
+{% for clause in info.clauses %}<div class="card"><h2>{{ clause.title }}</h2><p>{{ clause.body }}</p></div>{% endfor %}
+{% if not info.payment.satisfied %}
+<p>The checkpoint payment prerequisite is outstanding. Payment processing is not connected.</p>
+{% elif not info.my_complete %}
+<form method="post">
+  <input type="hidden" name="source_stage" value="{{ info.from_stage }}">
+  <input type="hidden" name="step" value="{{ info.step }}">
+  {% if info.step == 'sign' %}
+    {% for ack in info.acks %}<label class="checkbox-row"><input type="checkbox" name="acks" value="{{ ack.key }}">{{ ack.label }} — {{ ack.term }}</label>{% endfor %}
+    <label>Your typed signature <input name="signed_name" required maxlength="160"></label>
+  {% endif %}
+  {% if info.step == 'face' %}<p>This beta step is a simulation; it does not verify your face.</p>{% endif %}
+  <button class="btn-primary" {% if info.step == 'face' and not info.face_simulation_available %}disabled{% endif %}>{{ 'Read and acknowledge' if info.step == 'playbook' else 'Sign these terms' if info.step == 'sign' else 'Complete beta simulation' }}</button>
+</form>
+{% else %}<p>Your agreement is complete.</p>{% endif %}
+{% if info.my_complete and info.partner_complete %}
+<form method="post" action="{{ url_for('journey_advance') }}"><input type="hidden" name="source_stage" value="{{ info.from_stage }}"><button class="btn-primary">Continue to {{ info.to_stage }}</button></form>
+{% else %}<p>Both agreements must be complete before continuing.</p>{% endif %}
+{% endblock %}

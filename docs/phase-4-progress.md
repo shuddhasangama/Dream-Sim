@@ -359,8 +359,54 @@ skips, in 110.18 seconds. Temporary database and credentials removed afterward.
 
 ## Remaining sequence
 
-6. Relationship/ROAD/later stages; 7. Enrollment and API-only full-journey tests.
+7. Enrollment and API-only full-journey tests.
 
 Email sender-domain authentication and live mobile token validation remain
 separate Phase 3 items. The user reported successful SMS login and browser
 REACH/logout/re-entry for the designated testers; no new live tests were run here.
+
+## Block 6 — relationship tools, ROAD and later stages
+
+Implemented locally 2026-09-14; OpenAPI 0.6.0 records the exact routes.
+Couple-owned APIs expose current playbooks/topics/checkpoint status and own
+weekly-report views; add custom/romance ideas, private concerns with author-only
+sharing/closure, and actor-scoped expense self-reports. A private concern does
+not appear in the partner's HTML or JSON. Expense reports never assert that the
+other partner complied. Existing generated report fields are read when present;
+automated weekly narration/report generation remains an unimplemented stub.
+
+ROAD supports validated work/fitness/free blocks, dated obligations/travel,
+removal, live explicit availability sharing, overlap, and selected vision stances.
+Neither private routines nor unshared obligations cross to the partner. Inclusive
+obligation dates remove that day's slots; invalidated shares disappear on reads.
+Vision changes keep an audit receipt and require explicit partner disclosure.
+Append requests use actor-scoped request IDs, so retries neither duplicate data
+nor resurrect a deleted block. Existing HTML helpers use the same services.
+
+Engaged and Married transitions require separate authenticated typed agreements
+for the exact source/target stage, plus both payment prerequisites if enforced.
+No client-supplied partner opt-in exists. The former two-checkbox HTML bypass is
+replaced by a checkpoint screen. Stage advancement is atomic, replay-safe and
+carries ROAD/playbook history forward; old stage agreements cannot authorize a
+later transition. Face confirmation remains explicit approved-beta simulation,
+not biometric verification. Payments are prerequisites, not a new checkout.
+
+Either partner may initiate exit. Each separately acknowledges the interview and
+submits or declines private feedback. Both feedback actions start the existing
+generic Guru-synthesis stub and 14-day server-simulation-clock cool-off. After
+expiry each verified partner returns to Dating independently. Raw feedback is
+never sent to the other partner. There is no background overdue-exit adjudicator;
+incomplete interview/feedback steps remain pending. Reuniting the same historical
+Couple is not implemented; the Dating relationship-entry gate fails closed for
+that existing couple rather than overwriting its history.
+
+`JourneyAction` is an additive table in both schemas, registered in reset/drift
+checks. It stores retry/audit receipts and actor expense/exit acknowledgements.
+No production schema or data was accessed. The current production simulation
+clock and absence of a real weekly runner remain unchanged.
+
+Validation: **1,319 passed, 736 subtests passed** in the full isolated PostgreSQL
+run (111.05 seconds, no skips). Races cover simultaneous stage advance, parallel
+partner ideas and duplicate ROAD creation. Tests also cover two later stages,
+private concerns, invalid/foreign ROAD writes, explicit sharing, failed-transition
+rollback, exit privacy, cool-off and independent re-entry.

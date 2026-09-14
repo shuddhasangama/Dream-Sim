@@ -40,11 +40,7 @@
   <div>Ready for {{ next_stage }}? This is a soft checkpoint — both of you opt in, nothing is forced.</div>
 </div>
 <div class="card">
-  <form method="post" action="{{ url_for('journey_advance') }}">
-    <label class="checkbox-row"><input type="checkbox" name="opt_in_me" checked> I opt in</label>
-    <label class="checkbox-row"><input type="checkbox" name="opt_in_partner" checked> Partner opts in (simulated)</label>
-    <button type="submit" class="btn-primary">Advance to {{ next_stage }}</button>
-  </form>
+  <a class="btn-primary" href="{{ url_for('journey_checkpoint') }}">Review {{ next_stage }} checkpoint</a>
 </div>
 {% else %}
 <div class="card"><div class="micro">You've reached the final stage: married.</div></div>

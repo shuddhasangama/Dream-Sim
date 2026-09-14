@@ -212,6 +212,16 @@ CREATE TABLE IF NOT EXISTS "WeeklyReport" (
 --   feedbackA_raw, feedbackB_raw, guruSynthesisForA, guruSynthesisForB, cooloffEnds }
 -- Raw feedback is private per-partner input; only the Guru-synthesized columns
 -- are ever meant to be shown to the other partner (docs/CLAUDE.md, brief 5/8).
+CREATE TABLE IF NOT EXISTS "JourneyAction" (
+    id TEXT PRIMARY KEY,
+    couple_id TEXT NOT NULL REFERENCES "Couple"(id),
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    scope TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "Exit" (
     id                   TEXT PRIMARY KEY,
     couple_id            TEXT NOT NULL REFERENCES "Couple"(id),

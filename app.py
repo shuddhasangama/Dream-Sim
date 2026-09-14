@@ -326,7 +326,9 @@ def load_user(user_id: str) -> dict | None:
 
 def find_couple_for_user(user_id: str) -> dict | None:
     conn = get_db()
-    return db.fetch_one(conn, "Couple", partner_a_id=user_id) or db.fetch_one(conn, "Couple", partner_b_id=user_id)
+    rows=db.fetch_all(conn,'Couple',partner_a_id=user_id)+db.fetch_all(conn,'Couple',partner_b_id=user_id)
+    # Historical exited couples must not hide a subsequent active partnership.
+    return next((row for row in rows if not db.fetch_all(conn,'Exit',couple_id=row['id'])),None)
 
 
 def partner_id_in(couple: dict, user_id: str) -> str:
@@ -572,22 +574,11 @@ def get_road(user_id: str, couple_id: str) -> dict:
 
 
 def add_routine_block(user_id: str, couple_id: str, category: str, days: list[str], label: str, start: str, end: str) -> None:
-    """category is 'work' or 'fitness' — appends one recurring weekly block
-    to the single merged routine list, e.g. {"category": "work",
-    "days": ["Mon","Wed"], "label": "Office", "start": "09:00", "end": "18:00"}."""
-    row = dict(get_road(user_id, couple_id))
-    blocks = db.load_json_field(row["routine_json"], [])
-    blocks.append({"id": uuid.uuid4().hex[:8], "category": category, "days": days, "label": label, "start": start, "end": end})
-    row["routine_json"] = db.json_field(blocks)
-    db.insert_row(get_db(), "RoadProfile", row)
+    road_service.block(get_db(),user_id,couple_id,{'request_id':uuid.uuid4().hex,'category':category,'days':days,'label':label,'start':start,'end':end},get_clock())
 
 
 def remove_routine_block(user_id: str, couple_id: str, block_id: str) -> None:
-    row = dict(get_road(user_id, couple_id))
-    blocks = db.load_json_field(row["routine_json"], [])
-    blocks = [b for b in blocks if b["id"] != block_id]
-    row["routine_json"] = db.json_field(blocks)
-    db.insert_row(get_db(), "RoadProfile", row)
+    road_service.remove_block(get_db(),user_id,couple_id,block_id)
 
 
 def weekly_grid(blocks: list[dict]) -> dict[str, list[dict]]:
@@ -668,36 +659,17 @@ def _slot_key(slot: dict) -> str:
 
 
 def shared_availability_keys(user_id: str, couple_id: str) -> set[str]:
-    """Which of this user's currently-derived free-time slots they've
-    already chosen to share — validated against the LIVE derivation, so a
-    slot that no longer exists (routine changed since it was shared) is
-    silently dropped rather than shown as still-shared."""
-    road = get_road(user_id, couple_id)
-    shared = db.load_json_field(road["availability_json"], [])
-    shared_keys = {_slot_key(s) for s in shared}
-    live_keys = {_slot_key(s) for day_slots in derive_availability(db.load_json_field(road["routine_json"], [])).values() for s in day_slots}
-    return shared_keys & live_keys
+    return {_slot_key(slot) for slot in live_shared_slots(user_id,couple_id)}
 
 
 def set_shared_availability(user_id: str, couple_id: str, slot_keys: set[str]) -> None:
-    """Overwrite the shared subset with exactly the given (day, start, end)
-    keys, filtered to slots that actually exist right now — never trusts
-    the client for anything beyond which of the live slots to expose."""
-    road = dict(get_road(user_id, couple_id))
-    live = derive_availability(db.load_json_field(road["routine_json"], []))
-    chosen = [slot for day_slots in live.values() for slot in day_slots if _slot_key(slot) in slot_keys]
-    road["availability_json"] = db.json_field([{"id": uuid.uuid4().hex[:8], **s} for s in chosen])
-    db.insert_row(get_db(), "RoadProfile", road)
+    live=road_service.availability(get_db(),user_id,couple_id,week_to_date(get_clock().week),derive_availability)
+    chosen=[slot for daily in live.values() for slot in daily if _slot_key(slot) in slot_keys]
+    road_service.share(get_db(),user_id,couple_id,chosen,week_to_date(get_clock().week),derive_availability)
 
 
 def live_shared_slots(user_id: str, couple_id: str) -> list[dict]:
-    """This user's currently-shared slots as actual {day,start,end} dicts
-    (not just the keys shared_availability_keys() returns), validated
-    against the live derivation the same way."""
-    road = get_road(user_id, couple_id)
-    shared = db.load_json_field(road["availability_json"], [])
-    live_keys = {_slot_key(s) for day_slots in derive_availability(db.load_json_field(road["routine_json"], [])).values() for s in day_slots}
-    return [s for s in shared if _slot_key(s) in live_keys]
+    return road_service.live_shared(get_db(),user_id,couple_id,week_to_date(get_clock().week),derive_availability)
 
 
 def couple_availability_overlap(couple: dict, user_id: str) -> dict[str, list[dict]]:
@@ -732,21 +704,7 @@ def couple_availability_overlap(couple: dict, user_id: str) -> dict[str, list[di
 
 
 def add_exception(couple_id: str, owner_id: str, exc_type: str, title: str, start_date: str, end_date: str, travel_mode: str | None, shared: bool) -> None:
-    db.insert_row(
-        get_db(),
-        "CalendarEntry",
-        {
-            "id": uuid.uuid4().hex,
-            "couple_id": couple_id,
-            "owner_id": owner_id,
-            "type": exc_type,
-            "travel_mode": travel_mode if exc_type == "travel" else None,
-            "starts_at": start_date,
-            "ends_at": end_date,
-            "title": title,
-            "shared": int(shared),
-        },
-    )
+    road_service.obligation(get_db(),owner_id,couple_id,{'request_id':uuid.uuid4().hex,'type':exc_type,'title':title,'start_date':start_date,'end_date':end_date,'travel_mode':travel_mode if exc_type=='travel' else None,'shared':bool(shared)},get_clock())
 
 
 # ── / — user picker ─────────────────────────────────────────────────────
@@ -2555,7 +2513,7 @@ def relationship_view():
     specific = db.load_json_field(playbook["tier_vision_json"], []) if playbook else []
     custom = db.load_json_field(playbook["tier_custom_json"], []) if playbook else []
 
-    differences = db.fetch_all(get_db(), "Difference", couple_id=couple["id"])
+    differences = [d for d in db.fetch_all(get_db(), "Difference", couple_id=couple["id"]) if d["raised_by"] == user["user_id"] or d["consent_to_share"]]
     open_differences = [d for d in differences if d["status"] == "open"]
     sorted_differences = [d for d in differences if d["status"] == "sorted"]
 
@@ -2580,82 +2538,61 @@ def relationship_view():
 @app.route("/relationship/playbook/add-custom", methods=["POST"])
 @login_required
 def relationship_playbook_add_custom():
-    user = current_user()
-    couple = find_couple_for_user(user["user_id"])
-    idea = (request.form.get("idea") or "").strip()
-    if couple is not None and idea:
-        playbook = dict(db.fetch_one(get_db(), "Playbook", couple_id=couple["id"], stage=couple["stage"]))
-        custom = db.load_json_field(playbook["tier_custom_json"], [])
-        custom.append(idea)
-        playbook["tier_custom_json"] = db.json_field(custom)
-        db.insert_row(get_db(), "Playbook", playbook)
-    return redirect(url_for("relationship_view"))
+    user=current_user(); pair=find_couple_for_user(user['user_id'])
+    if pair:
+        try: relationship_service.idea(get_db(),user['user_id'],pair['id'],{'request_id':request.form.get('request_id') or uuid.uuid4().hex,'stage':pair['stage'],'idea':request.form.get('idea')},get_clock(),False)
+        except ApiError as exc: _remember_form(exc.message,endpoint='relationship_view')
+    return redirect(url_for('relationship_view'))
 
 
 @app.route("/relationship/romance/idea", methods=["POST"])
 @login_required
 def relationship_romance_idea():
-    user = current_user()
-    couple = find_couple_for_user(user["user_id"])
-    idea = (request.form.get("idea") or "").strip()
-    if couple is not None and idea:
-        playbook = dict(db.fetch_one(get_db(), "Playbook", couple_id=couple["id"], stage=couple["stage"]))
-        custom = db.load_json_field(playbook["tier_custom_json"], [])
-        playbook["tier_custom_json"] = db.json_field(guru_relationship.add_romance_idea(custom, f"Romance idea: {idea}"))
-        db.insert_row(get_db(), "Playbook", playbook)
-    return redirect(url_for("relationship_view"))
+    user=current_user(); pair=find_couple_for_user(user['user_id'])
+    if pair:
+        try: relationship_service.idea(get_db(),user['user_id'],pair['id'],{'request_id':request.form.get('request_id') or uuid.uuid4().hex,'stage':pair['stage'],'idea':request.form.get('idea')},get_clock(),True)
+        except ApiError as exc: _remember_form(exc.message,endpoint='relationship_view')
+    return redirect(url_for('relationship_view'))
 
 
 @app.route("/relationship/difference/raise", methods=["POST"])
 @login_required
 def relationship_difference_raise():
-    user = current_user()
-    couple = find_couple_for_user(user["user_id"])
-    text = (request.form.get("text") or "").strip()
-    if couple is None or not text:
-        return redirect(url_for("relationship_view"))
-    existing = db.fetch_all(get_db(), "Difference", couple_id=couple["id"])
-    row = guru_relationship.air_step1_raise_difference(couple["id"], user["user_id"], text, couple["stage_week_index"], existing)
-    db.insert_row(get_db(), "Difference", {"id": uuid.uuid4().hex[:12], **_bool_ints(row)})
-    return redirect(url_for("relationship_view"))
+    user=current_user(); pair=find_couple_for_user(user['user_id'])
+    if pair:
+        try: relationship_service.difference(get_db(),user['user_id'],pair['id'],{'request_id':request.form.get('request_id') or uuid.uuid4().hex,'stage':pair['stage'],'text':request.form.get('text')},get_clock())
+        except ApiError as exc: _remember_form(exc.message,endpoint='relationship_view')
+    return redirect(url_for('relationship_view'))
 
 
 @app.route("/relationship/difference/consent", methods=["POST"])
 @login_required
 def relationship_difference_consent():
-    row = db.fetch_one(get_db(), "Difference", id=request.form.get("difference_id"))
-    if row is None:
-        return redirect(url_for("relationship_view"))
-    updated = guru_relationship.air_step2_consent_to_share(row, "consent" in request.form)
-    db.insert_row(get_db(), "Difference", _bool_ints(updated))
-    return redirect(url_for("relationship_view"))
+    user=current_user(); pair=find_couple_for_user(user['user_id'])
+    if pair:
+        try: relationship_service.difference_action(get_db(),user['user_id'],pair['id'],request.form.get('difference_id'),{'consent':'consent' in request.form},False)
+        except ApiError as exc: abort(exc.status)
+    return redirect(url_for('relationship_view'))
 
 
 @app.route("/relationship/difference/resolve", methods=["POST"])
 @login_required
 def relationship_difference_resolve():
-    row = db.fetch_one(get_db(), "Difference", id=request.form.get("difference_id"))
-    if row is None:
-        return redirect(url_for("relationship_view"))
-    db.insert_row(get_db(), "Difference", guru_relationship.resolve_difference(row))
-    return redirect(url_for("relationship_view"))
+    user=current_user(); pair=find_couple_for_user(user['user_id'])
+    if pair:
+        try: relationship_service.difference_action(get_db(),user['user_id'],pair['id'],request.form.get('difference_id'),{'consent':'consent' in request.form},True)
+        except ApiError as exc: abort(exc.status)
+    return redirect(url_for('relationship_view'))
 
 
 @app.route("/relationship/expense/check", methods=["POST"])
 @login_required
 def relationship_expense_check():
-    user = current_user()
-    couple = find_couple_for_user(user["user_id"])
-    if couple is None:
-        return redirect(url_for("relationship_view"))
-    result = guru_relationship.expense_check(request.form.get("expense_strategy"), "compliant" in request.form)
-    report = db.fetch_one(get_db(), "WeeklyReport", couple_id=couple["id"], week_index=couple["stage_week_index"])
-    if report is None:
-        report = journey.schedule_weekly_report(get_db(), couple["id"], couple["stage"], couple["stage_week_index"])
-    updated = dict(report)
-    updated["expense_compliant"] = int(result["compliant"])
-    db.insert_row(get_db(), "WeeklyReport", updated)
-    return redirect(url_for("relationship_view"))
+    user=current_user(); pair=find_couple_for_user(user['user_id'])
+    if pair:
+        try: relationship_service.expense(get_db(),user['user_id'],pair['id'],{'request_id':uuid.uuid4().hex,'stage':pair['stage'],'week':pair['stage_week_index'],'strategy':request.form.get('expense_strategy'),'compliant':'compliant' in request.form},get_clock())
+        except ApiError as exc: _remember_form(exc.message,endpoint='relationship_view')
+    return redirect(url_for('relationship_view'))
 
 
 # ── /journey ────────────────────────────────────────────────────────────
@@ -2719,7 +2656,7 @@ def married_view():
     # asserted: every ceremony either of them completed along the way.
     signed = [
         dict(row) for row in db.fetch_all(get_db(), "Ceremony")
-        if row["user_id"] in (couple["user_a"], couple["user_b"]) and row["completed_at"]
+        if row["user_id"] in (couple["partner_a_id"], couple["partner_b_id"]) and row["completed_at"]
     ]
     by_kind: dict[str, int] = {}
     for row in signed:
@@ -2738,19 +2675,38 @@ def married_view():
     )
 
 
+@app.route('/journey/checkpoint', methods=['GET','POST'])
+@login_required
+def journey_checkpoint():
+    user=current_user(); pair=find_couple_for_user(user['user_id'])
+    if not pair:return redirect(url_for('journey_view'))
+    source=pair['stage'] if request.method=='GET' else request.form.get('source_stage')
+    try:
+        if request.method=='POST':
+            body={'step':request.form.get('step')}
+            if body['step']=='sign':body.update(signed_name=request.form.get('signed_name'),acks=request.form.getlist('acks'))
+            relationship_service.checkpoint_step(get_db(),user['user_id'],pair['id'],source,body,get_clock())
+        info=relationship_service.checkpoint_state(get_db(),user['user_id'],pair['id'],source)
+    except ApiError as exc:
+        if request.method=='POST':
+            _remember_form(exc.message,endpoint='journey_checkpoint')
+            return redirect(url_for('journey_checkpoint'))
+        abort(exc.status,description=exc.message)
+    return render_template('checkpoint.html',info=info)
+
+
 @app.route("/journey/advance", methods=["POST"])
 @login_required
 def journey_advance():
-    user = current_user()
-    if user["journey_state"] == "dating":
-        return redirect(url_for("journey_view"))
-    couple = find_couple_for_user(user["user_id"])
-    if couple is None:
-        return redirect(url_for("journey_view"))
-    opt_in_me = "opt_in_me" in request.form
-    opt_in_partner = "opt_in_partner" in request.form
-    journey.advance_stage(get_db(), couple["id"], opt_in_me, opt_in_partner, today=week_to_date(get_week_number()))
-    return redirect(url_for("journey_view"))
+    user=current_user(); pair=find_couple_for_user(user['user_id'])
+    if pair is None:return redirect(url_for('journey_view'))
+    source=request.form.get('source_stage')
+    if not source:return redirect(url_for('journey_checkpoint'))
+    try: relationship_service.advance(get_db(),user['user_id'],pair['id'],source,get_clock(),week_to_date(get_clock().week))
+    except ApiError as exc:
+        _remember_form(exc.message,endpoint='journey_checkpoint')
+        return redirect(url_for('journey_checkpoint'))
+    return redirect(url_for('journey_view'))
 
 
 # ── /road — the ROAD pathway: Routine -> Obligations -> Availability ──────
@@ -2876,10 +2832,11 @@ def road_obligations_add():
 @app.route("/road/obligations/remove", methods=["POST"])
 @login_required
 def road_obligations_remove():
-    entry_id = request.form.get("entry_id")
-    if entry_id:
-        db.delete_row(get_db(), "CalendarEntry", entry_id)
-    return redirect(url_for("road_obligations"))
+    user,pair=_couple_or_redirect()
+    if pair:
+        try: road_service.remove_obligation(get_db(),user['user_id'],pair['id'],request.form.get('entry_id'))
+        except ApiError as exc:abort(exc.status)
+    return redirect(url_for('road_obligations'))
 
 
 @app.route("/road/availability")
@@ -2892,7 +2849,7 @@ def road_availability():
     road = get_road(user["user_id"], couple["id"])
     blocks = db.load_json_field(road["routine_json"], [])
     free_blocks = [b for b in blocks if b["category"] == "free"]
-    derived = derive_availability(blocks)
+    derived = road_service.availability(get_db(),user["user_id"],couple["id"],week_to_date(get_clock().week),derive_availability)
     shared_keys = shared_availability_keys(user["user_id"], couple["id"])
     partner = named_for(user["user_id"], load_user(partner_id_in(couple, user["user_id"])))
     overlap = couple_availability_overlap(couple, user["user_id"])
@@ -2979,28 +2936,13 @@ def road_vision():
 @app.route("/road/vision/set", methods=["POST"])
 @login_required
 def road_vision_set():
-    user, couple = _couple_or_redirect()
-    if couple is None:
-        return redirect(url_for("journey_view"))
-
-    key = request.form.get("key")
-    options = VISION_STANCE_OPTIONS.get(key)
-    if options is None or not any(v["key"] == key for v in user["visions"]):
-        abort(400)  # only settable for a vision this user actually selected
-
-    if key == "Cohabitate":
-        chosen = sorted(v for v in request.form.getlist("stance") if v in options)
-        stance = chosen or None
-    else:
-        raw = request.form.get("stance")
-        stance = raw if raw in options else None
-
-    visions = [dict(v) for v in user["visions"]]
-    for v in visions:
-        if v["key"] == key:
-            v["stance"] = stance
-    save_visions(user["user_id"], visions)
-    return redirect(url_for("road_vision"))
+    user,pair=_couple_or_redirect()
+    if pair is None:return redirect(url_for('journey_view'))
+    key=request.form.get('key')
+    stance=request.form.getlist('stance') if key=='Cohabitate' else request.form.get('stance')
+    try:road_service.vision_set(get_db(),user['user_id'],pair['id'],{'request_id':uuid.uuid4().hex,'key':key,'stance':stance,'disclosed_to_partner':'disclosed_to_partner' in request.form},get_clock(),VISION_STANCE_OPTIONS)
+    except ApiError as exc:_remember_form(exc.message,endpoint='road_vision')
+    return redirect(url_for('road_vision'))
 
 
 # ── /admin — simulation clock control ──────────────────────────────────
@@ -4490,11 +4432,14 @@ import date_cycle_service
 import evolution_service
 import after_date_service
 import gate_service
+import relationship_service
+import road_service
 
 auth.register_auth(app, get_db)
 
 register_api(
     app, current_user=current_user, reach_locked=reach_locked,
+    relationship={'get_db':get_db,'get_clock':get_clock,'week_to_date':week_to_date,'derive':derive_availability,'vision_options':VISION_STANCE_OPTIONS},
     after_date={'get_db':get_db,'get_clock':get_clock,'week_to_date':week_to_date},
     evolution={'get_db':get_db,'get_clock':get_clock,'stats_situation':_stats_situation,'milestones':_milestones_for},
     reach_state=_reach_state,

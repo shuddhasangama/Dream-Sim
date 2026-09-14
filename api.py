@@ -10,8 +10,11 @@ from api_contract import ApiError, json_object
 
 
 def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
-                 journey_state=None, week_reads=None, week_prepare=None, match_action=None, planning=None, date_cycle=None, evolution=None, after_date=None):
+                 journey_state=None, week_reads=None, week_prepare=None, match_action=None, planning=None, date_cycle=None, evolution=None, after_date=None, relationship=None):
     api = Blueprint("api_v1", __name__, url_prefix="/api/v1")
+    if relationship is not None:
+        import relationship_api
+        relationship_api.register(api, **relationship)
     if after_date is not None:
         import after_date_api
         after_date_api.register(api, **after_date)

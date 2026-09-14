@@ -9,7 +9,7 @@ build instructions do not expand the user's request to implement Phase 4 now.
 
 Implementation updates are tracked in `docs/phase-4-progress.md`. The appendix's
 source line numbers refer to this baseline snapshot, before extraction moved code.
-Blocks 1–5 are now implemented locally; `openapi-phase4.json` is authoritative
+Blocks 1–6 are now implemented locally; `openapi-phase4.json` is authoritative
 for their actual paths and payloads. The proposal/appendix below remains the
 baseline inventory, not a current list of missing routes.
 
