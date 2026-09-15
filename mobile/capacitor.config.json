@@ -1,0 +1,7 @@
+{
+  "appId": "com.dhashu.app",
+  "appName": "DhaShu",
+  "webDir": "dist",
+  "android": {"allowMixedContent": false},
+  "loggingBehavior": "none"
+}

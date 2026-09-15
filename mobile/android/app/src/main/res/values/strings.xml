@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DhaShu</string>
+    <string name="title_activity_main">DhaShu</string>
+    <string name="package_name">com.dhashu.app</string>
+    <string name="custom_url_scheme">com.dhashu.app</string>
+</resources>
