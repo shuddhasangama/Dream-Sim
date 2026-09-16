@@ -1,0 +1,67 @@
+workflows:
+  ios-testflight:
+    name: DhaShu iOS TestFlight
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: Codemagic
+    environment:
+      node: 20
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.dhashu.app
+      vars:
+        BUNDLE_ID: "com.dhashu.app"
+    scripts:
+      - name: Show working directory
+        script: pwd && ls -la
+
+      - name: Install npm dependencies
+        script: cd $CM_BUILD_DIR/mobile && npm ci
+
+      - name: Run mobile tests
+        script: cd $CM_BUILD_DIR/mobile && npm test
+
+      - name: Build web bundle
+        script: cd $CM_BUILD_DIR/mobile && npm run build
+
+      - name: Add iOS platform
+        script: |
+          cd $CM_BUILD_DIR/mobile
+          npx cap add ios || echo "iOS platform already present"
+          npx cap sync ios
+
+      - name: Install SessionVault native plugin
+        script: |
+          cd $CM_BUILD_DIR
+          cp mobile/native/ios/SessionVaultPlugin.swift mobile/ios/App/App/
+          cp mobile/native/ios/SessionVaultPlugin.m mobile/ios/App/App/
+
+      - name: Generate iOS assets
+        script: cd $CM_BUILD_DIR/mobile && npx capacitor-assets generate --ios
+
+      - name: Install CocoaPods
+        script: cd $CM_BUILD_DIR/mobile/ios/App && pod install
+
+      - name: Set build number
+        script: |
+          cd $CM_BUILD_DIR/mobile/ios/App
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" 2>/dev/null || echo "0")
+          agvtool new-version -all $(($LATEST + 1))
+
+      - name: Build IPA
+        script: |
+          cd $CM_BUILD_DIR/mobile
+          xcode-project use-profiles
+          xcode-project build-ipa --workspace "ios/App/App.xcworkspace" --scheme "App"
+
+    artifacts:
+      - mobile/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
