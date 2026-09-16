@@ -30,7 +30,8 @@ workflows:
       - name: Add iOS platform
         script: |
           cd $CM_BUILD_DIR/mobile
-          npx cap add ios || echo "iOS platform already present"
+	  rm -rf ios
+          npx cap add ios
           npx cap sync ios
 
       - name: Install SessionVault native plugin
@@ -43,7 +44,10 @@ workflows:
         script: cd $CM_BUILD_DIR/mobile && npx capacitor-assets generate --ios
 
       - name: Install CocoaPods
-        script: cd $CM_BUILD_DIR/mobile/ios/App && pod install
+	script: |
+          cd $CM_BUILD_DIR/mobile/ios/App
+	  ls -la
+          pod install
 
       - name: Set build number
         script: |
