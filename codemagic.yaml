@@ -42,6 +42,18 @@ workflows:
           LATEST=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" 2>/dev/null || echo "0")
           agvtool new-version -all $(($LATEST + 1))
 
+      - name: Diagnose Xcode project
+        script: |
+          cd $CM_BUILD_DIR/mobile
+          echo "=== plugin present? ==="
+          ls -la node_modules/session-vault || echo "MISSING"
+          echo "=== capacitor sees plugins? ==="
+          npx cap ls ios || true
+          echo "=== raw xcodebuild error ==="
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -showBuildSettings 2>&1 | tail -40
+          echo "=== SPM resolution ==="
+          xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj 2>&1 | tail -40
+
       - name: Build IPA
         script: |
           cd $CM_BUILD_DIR/mobile
