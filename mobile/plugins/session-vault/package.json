@@ -1,0 +1,29 @@
+{
+  "name": "session-vault",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local Capacitor plugin: secure-storage vault for the rotating refresh credential (iOS Keychain / Android Keystore).",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "ios/Sources",
+    "Package.swift"
+  ],
+  "author": "DhaShu",
+  "license": "UNLICENSED",
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "session-vault"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}

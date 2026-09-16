@@ -33,12 +33,6 @@ workflows:
           npx cap add ios
           npx cap sync ios
 
-      - name: Install SessionVault native plugin
-        script: |
-          cd $CM_BUILD_DIR
-          cp mobile/native/ios/SessionVaultPlugin.swift mobile/ios/App/App/
-          cp mobile/native/ios/SessionVaultPlugin.m mobile/ios/App/App/
-
       - name: Generate iOS assets
         script: cd $CM_BUILD_DIR/mobile && npx capacitor-assets generate --ios
 

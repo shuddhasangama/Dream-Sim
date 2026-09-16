@@ -2,6 +2,11 @@
   "appId": "com.dhashu.app",
   "appName": "DhaShu",
   "webDir": "dist",
+  "ios": {
+    "infoPlist": {
+      "ITSAppUsesNonExemptEncryption": false
+    }
+  },
   "android": {"allowMixedContent": false},
   "loggingBehavior": "none"
 }
