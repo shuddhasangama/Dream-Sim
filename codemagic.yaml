@@ -10,8 +10,10 @@ workflows:
       xcode: latest
       cocoapods: default
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.dhashu.app
+        provisioning_profiles:
+          - DhaShu App Store Profile
+        certificates:
+          - DhaShu Distribution
       vars:
         BUNDLE_ID: "com.dhashu.app"
     scripts:
