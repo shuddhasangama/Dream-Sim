@@ -30,7 +30,7 @@ workflows:
       - name: Add iOS platform
         script: |
           cd $CM_BUILD_DIR/mobile
-	  rm -rf ios
+          rm -rf ios
           npx cap add ios
           npx cap sync ios
 
@@ -44,9 +44,9 @@ workflows:
         script: cd $CM_BUILD_DIR/mobile && npx capacitor-assets generate --ios
 
       - name: Install CocoaPods
-	script: |
+        script: |
           cd $CM_BUILD_DIR/mobile/ios/App
-	  ls -la
+          ls -la
           pod install
 
       - name: Set build number
