@@ -8,6 +8,8 @@ import * as calendarScreen from './screens/calendar.js';
 import * as planScreen from './screens/plan.js';
 import * as ceremonyScreen from './screens/ceremony.js';
 import * as debriefScreen from './screens/debrief.js';
+import * as guruScreen from './screens/guru.js';
+import * as visionScreen from './screens/vision.js';
 import './style.css';
 
 const native = Capacitor.isNativePlatform();
@@ -49,6 +51,8 @@ const screens = {
   plan: planScreen,
   ceremony: ceremonyScreen,
   debrief: debriefScreen,
+  guru: guruScreen,
+  vision: visionScreen,
 };
 
 // What every screen module receives. `data` is this screen's own GET result

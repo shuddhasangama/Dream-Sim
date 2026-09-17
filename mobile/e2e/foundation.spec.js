@@ -141,3 +141,40 @@ test('full date pipeline: calendar overlap, plan, order-enforced ceremony, and t
   await expect(page.getByRole('heading',{name:'Saved'})).toBeVisible();
   await expect(page.getByText('You said: Go steady.')).toBeVisible();
 });
+
+test('Guru entry reflects the same next-action as the dashboard, and Vision records an additive detail plus a disclosed change',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  const tabbar = page.locator('.tabbar');
+  await tabbar.getByRole('button',{name:'Guru'}).click();
+  // Guru never nudges escalation — it's the same read-only next-action
+  // projection the dashboard's own "NEXT FOR YOU" card already shows.
+  await expect(page.getByRole('heading',{name:'Your next chapter starts here'})).toBeVisible();
+  await page.getByRole('button',{name:'See this week'}).click();
+  await expect(page.getByRole('heading',{name:"This week's matches"})).toBeVisible();
+
+  await tabbar.getByRole('button',{name:'Vision'}).click();
+  await expect(page.getByRole('heading',{name:"Where you're headed"})).toBeVisible();
+  await expect(page.getByText('Intimacy · Emotional')).toBeVisible();
+
+  // Adding detail is always allowed — no disclosure gate.
+  await page.getByLabel('Detail').fill('Would like at least one child, open to timing');
+  await page.getByRole('button',{name:'Add',exact:true}).click();
+  await expect(page.getByText('Would like at least one child, open to timing')).toBeVisible();
+
+  // Declaring a change is disclosure-gated client-side (required checkbox) —
+  // §2.6/evolution_service.add_vision: an undisclosed reversal is refused.
+  await page.getByLabel('From').fill('Wanted kids');
+  await page.getByLabel('To',{exact:true}).fill('Not sure about kids anymore');
+  await page.getByRole('button',{name:'Declare change'}).click();
+  await expect(page.getByRole('heading',{name:'History'})).toHaveCount(0);
+
+  await page.getByLabel("I've disclosed this to my match").check();
+  await page.getByRole('button',{name:'Declare change'}).click();
+  await expect(page.getByRole('heading',{name:'History'})).toBeVisible();
+  await expect(page.getByText('Children: Wanted kids → Not sure about kids anymore')).toBeVisible();
+});

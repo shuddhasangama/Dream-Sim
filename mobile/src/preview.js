@@ -39,6 +39,11 @@ export function previewTransport() {
   let agreement = null;
   let debrief = null;
 
+  const visionGoals = [{ key: 'Intimacy', stance: ['Emotional'] }, { key: 'Cohabitate', stance: ['Chores split'] }];
+  const visionElementKeys = ['children', 'cohabitation', 'relocation', 'career', 'intimacy', 'travel'];
+  let visionEntries = [];
+  let visionChanges = [];
+
   function ensureLockedInState() {
     if (calendar) return;
     calendar = {
@@ -94,6 +99,23 @@ export function previewTransport() {
         destination:{key:'week',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/week'}}},
     });
     if (path.endsWith('/profile')) return ok({stats:{age:30,city:'Bangalore',profession:'Engineering',diet:'Vegetarian'},visions:[{key:'Intimacy',stance:['Emotional']},{key:'Cohabitate',stance:['Chores split']} ]});
+
+    if (path.endsWith('/guidance')) return ok({headline:'Your next chapter starts here',body:'Take a moment to review your profile before meeting someone new.',cta:'See this week',
+      destination:{key:'week',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/week'}}});
+
+    if (path.endsWith('/profile/vision') && method === 'GET') return ok({goals:visionGoals,element_keys:visionElementKeys,entries:visionEntries,changes:visionChanges});
+    if (path.endsWith('/profile/vision/details')) {
+      const existing = visionEntries.filter((e) => e.element_key === body.element_key);
+      const row = { id: 'vision-entry-'+(visionEntries.length+1), user_id: 'preview-user', element_key: body.element_key, detail_text: body.detail_text, added_at: 'Mon:12', parent_id: existing.length ? existing[existing.length-1].id : null };
+      visionEntries = [...visionEntries, row];
+      return ok({goals:visionGoals,element_keys:visionElementKeys,entries:visionEntries,changes:visionChanges});
+    }
+    if (path.endsWith('/profile/vision/changes')) {
+      if (body.disclosed_to_partner !== true) return err('A reversal must be disclosed to the partner.', 409);
+      const row = { id: 'vision-change-'+(visionChanges.length+1), user_id: 'preview-user', element_key: body.element_key, from_value: body.from_value, to_value: body.to_value, declared_at: 'Mon:12', disclosed_to_partner: true, guru_conversation_id: 'guru-preview' };
+      visionChanges = [...visionChanges, row];
+      return ok({goals:visionGoals,element_keys:visionElementKeys,entries:visionEntries,changes:visionChanges});
+    }
 
     if (path.endsWith('/reach') && method === 'GET') return ok(reach);
     if (path.endsWith('/reach/widen')) {
