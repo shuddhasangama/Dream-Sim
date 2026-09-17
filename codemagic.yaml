@@ -39,8 +39,7 @@ workflows:
       - name: Set build number
         script: |
           cd $CM_BUILD_DIR/mobile/ios/App
-          LATEST=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" 2>/dev/null || echo "0")
-          agvtool new-version -all $(($LATEST + 1))
+          agvtool new-version -all $PROJECT_BUILD_NUMBER
 
       - name: Diagnose Xcode project
         script: |
