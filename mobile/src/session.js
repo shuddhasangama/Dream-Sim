@@ -2,6 +2,27 @@ export class ApiError extends Error {
   constructor(message, status = 0) { super(message); this.status = status; }
 }
 
+// Maps a thrown error to how the UI should react — the §3 status-code table
+// (mobile-journey-build-spec.md) as pure data, independent of rendering, so
+// it's testable without a DOM. raw() below always throws an ApiError (network
+// failures included, as status 0), so status alone is enough to classify.
+//   auth       — 401: refresh already happened (or just failed) inside
+//                authed(); tell the user plainly and drop them back to sign-in.
+//   conflict   — 409: already processed, or this client is stale. Never
+//                retry the mutation — re-fetch state and say so plainly.
+//   validation — 400: the server's own message, verbatim. Never invented copy.
+//   network    — connection/timeout (status 0): offer a retry, change nothing.
+//   error      — anything else: the server's message as-is.
+export function classify(e) {
+  const message = e?.message || 'Something went wrong. Please try again.';
+  const status = e?.status ?? 0;
+  if (status === 401) return { kind: 'auth', message, retry: false };
+  if (status === 409) return { kind: 'conflict', message: 'This has already been handled.', retry: false };
+  if (status === 400) return { kind: 'validation', message, retry: false };
+  if (status === 0) return { kind: 'network', message, retry: true };
+  return { kind: 'error', message, retry: false };
+}
+
 // No automatic mutation retries. Refresh is serialized; a lost response requires
 // OTP again because replaying a consumed refresh credential revokes its family.
 export class Session {
@@ -61,16 +82,26 @@ export class Session {
     })();
     return this.flight;
   }
-  async get(path) {
+  // Shared by get/post/put/patch below — same proactive-refresh-before-expiry
+  // and reactive-401-clears-session behaviour for every verb, so none of them
+  // has to re-derive it. No retry here on any verb: a 401 means the session
+  // is dead (refresh already happened above, or just failed), not something
+  // worth replaying, and a mutation must never be silently replayed either
+  // (see the class docstring — a lost response needs OTP again).
+  async authed(path, method, body) {
     if (this.flight) await this.flight;
     if (!this.tokens) throw new ApiError('Please sign in.', 401);
     if (this.tokens.expiresAt < this.now() + 30000) await this.refresh();
-    try { return await this.raw(path, 'GET', undefined, this.tokens.access_token); }
+    try { return await this.raw(path, method, body, this.tokens.access_token); }
     catch (e) {
       if (e.status === 401) { this.tokens = null; await this.vault.clear(); }
       throw e;
     }
   }
+  async get(path) { return this.authed(path, 'GET'); }
+  async post(path, body) { return this.authed(path, 'POST', body); }
+  async put(path, body) { return this.authed(path, 'PUT', body); }
+  async patch(path, body) { return this.authed(path, 'PATCH', body); }
   async logout() {
     // Do not race logout against a pending rotation or permit it to resurrect UI.
     if (this.flight) { try { await this.flight; } catch {} }
