@@ -11,8 +11,25 @@ import Security
 /// rolls AES/GCM against an AndroidKeyStore key over SharedPreferences, while
 /// here the iOS Keychain already provides equivalent at-rest, non-exportable
 /// encryption, so there's no separate cipher step on this side.
+///
+/// Registered via CAPBridgedPlugin instead of a separate .m + CAP_PLUGIN macro
+/// — an SPM target can only be one language, and this target already needs to
+/// be Swift for the implementation below, so registration has to be Swift too.
+/// @objc(SessionVaultPlugin)/@objc on the class and methods below are still
+/// required: that's what makes this instance callable across the Obj-C bridge
+/// the Capacitor runtime dispatches through.
 @objc(SessionVaultPlugin)
-public class SessionVaultPlugin: CAPPlugin {
+public class SessionVaultPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "SessionVaultPlugin"
+    // Must be exactly "SessionVault" — matches registerPlugin('SessionVault')
+    // in src/main.js and the Android side's @CapacitorPlugin(name = "SessionVault").
+    public let jsName = "SessionVault"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "read", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "write", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
+    ]
+
     private let service = "dhashu.session.v1"
     private let account = "dhashu.session.v1"
 

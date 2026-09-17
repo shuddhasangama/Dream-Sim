@@ -19,10 +19,11 @@ dependency of the app target. No manual copy step needed.
 
 - `package.json` — declares this as a Capacitor plugin (`capacitor.ios.src`).
 - `Package.swift` — the SPM manifest `cap sync ios` resolves.
-- `ios/Sources/SessionVaultPlugin/` — the actual implementation:
-  `SessionVaultPlugin.swift` (Keychain-backed logic) and `SessionVaultPlugin.m`
-  (`CAP_PLUGIN` registration — the plugin name string must stay exactly
-  `"SessionVault"`).
+- `ios/Sources/SessionVaultPlugin/SessionVaultPlugin.swift` — the entire
+  plugin: Keychain-backed logic plus registration. There's no separate `.m`
+  file — an SPM target can only be one language, so registration is done via
+  `CAPBridgedPlugin` conformance (`identifier`, `jsName`, `pluginMethods`)
+  instead of the `CAP_PLUGIN` macro. `jsName` must stay exactly `"SessionVault"`.
 - `index.js` / `index.d.ts` — a thin JS/TS shim so this behaves like a normal
   plugin package if something ever imports it directly. Not currently used:
   `src/main.js` already calls `registerPlugin('SessionVault')` straight from
