@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-test('phone layout, wrong code, dashboard, refresh and sign out without external calls',async({page})=>{
+test('phone layout, wrong code, dashboard, and sign out without external calls',async({page})=>{
   const errors=[],external=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:5173'))external.push(r.url());});
@@ -15,7 +15,11 @@ test('phone layout, wrong code, dashboard, refresh and sign out without external
   await expect(page.getByRole('heading',{name:'Preview profile'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
   await page.screenshot({path:'test-results/dashboard.png',fullPage:true});
-  await page.getByRole('button',{name:'Refresh dashboard'}).click();
+  // Refresh Dashboard button was removed (§1) — screens reload on
+  // navigation instead. Round-trip through Week and back to prove it.
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+  await page.getByRole('button',{name:'← Back'}).click();
+  await expect(page.getByRole('heading',{name:'Preview profile'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Sign out'})).toBeEnabled();
   await page.getByRole('button',{name:'Sign out'}).click();
   await expect(page.getByLabel('Phone number')).toBeVisible();
@@ -36,7 +40,7 @@ test('navigation: tabs, the in-app back button, and journey/status-driven eligib
   // Tabs reflect exactly what journey/status marked eligible — Verify,
   // Relationship and Journey are ineligible in the preview fixture and must
   // never appear (mobile-journey-build-spec.md §1: derive nav from the API).
-  const tabbar = page.locator('.tabbar');
+  const tabbar = page.locator('.topnav');
   await expect(tabbar.getByRole('button',{name:'REACH'})).toBeVisible();
   await expect(tabbar.getByRole('button',{name:'Week'})).toBeVisible();
   await expect(tabbar.getByRole('button',{name:'Verify'})).toHaveCount(0);
@@ -63,7 +67,7 @@ test('mutual interest locks in and REACH disappears from the tab bar live, not j
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
 
-  const tabbar = page.locator('.tabbar');
+  const tabbar = page.locator('.topnav');
   await expect(tabbar.getByRole('button',{name:'REACH'})).toBeVisible();
   await tabbar.getByRole('button',{name:'Week'}).click();
   await expect(page.locator('.candidate-name')).toHaveText('Priya Sharma');
@@ -88,7 +92,7 @@ test('full date pipeline: calendar overlap, plan, order-enforced ceremony, and t
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
 
-  await page.locator('.tabbar').getByRole('button',{name:'Week'}).click();
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
   await page.getByRole('button',{name:'Express interest'}).click();
   await page.getByRole('button',{name:'Open calendar'}).click();
 
@@ -149,11 +153,14 @@ test('Guru entry reflects the same next-action as the dashboard, and Vision reco
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
 
-  const tabbar = page.locator('.tabbar');
+  const tabbar = page.locator('.topnav');
   await tabbar.getByRole('button',{name:'Guru'}).click();
   // Guru never nudges escalation — it's the same read-only next-action
-  // projection the dashboard's own "NEXT FOR YOU" card already shows.
-  await expect(page.getByRole('heading',{name:'Your next chapter starts here'})).toBeVisible();
+  // projection the dashboard's own "NEXT FOR YOU" card already shows, in
+  // its own coral-avatar voice component (§5).
+  await expect(page.getByRole('heading',{name:'What now?'})).toBeVisible();
+  await expect(page.locator('.guru-avatar')).toHaveText('G');
+  await expect(page.getByText('Your next chapter starts here')).toBeVisible();
   await page.getByRole('button',{name:'See this week'}).click();
   await expect(page.getByRole('heading',{name:"This week's matches"})).toBeVisible();
 

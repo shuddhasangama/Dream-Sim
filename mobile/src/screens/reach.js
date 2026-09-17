@@ -1,66 +1,143 @@
-// REACH (mobile-journey-build-spec.md §2.1). Every field rendered here comes
-// straight from GET /api/v1/reach's own _reach_state() shape — counts,
-// deltas, filters, sliders — nothing is a client-side guess at what REACH
-// considers a match. Two rules enforced structurally, not just by care:
-//   - nationality/religion never appear as a "widen this" suggestion (they
-//     only ever show up in `filters`, which is the person's own deliberate
-//     choice, never something this screen nudges) — see filterRows(), which
-//     is the only thing that ever renders a sensitive lever at all.
-//   - every mutation (widen/set-range/ignore) returns the FULL fresh state
-//     already (app.py's _reach_state()), so a successful call patches ctx
-//     directly instead of triggering a second round-trip GET.
+// REACH (mobile-journey-build-spec.md §2.1), ported from templates/reach.html
+// and static/app.js — one row per filter, name + Any switch + (for a range)
+// a real draggable slider, never a name shown twice in two different
+// controls. Every field comes straight from GET /api/v1/reach's own
+// _reach_state() shape — counts, filters, sliders — nothing here is a
+// client-side guess at what REACH considers a match.
+//
+// Two rules enforced structurally, not just by care:
+//   - nationality/religion never appear as a "widen this" suggestion —
+//     `deltas` (the auto-suggested widen list) is never rendered at all;
+//     they only ever show up in `filters`, the person's own deliberate
+//     choice, marked "yours" (sensitive) rather than nudged.
+//   - every mutation (widen/set-range/ignore/show-all) returns the FULL
+//     fresh state already (the server's own _reach_state()), so a
+//     successful call patches ctx directly instead of a second round-trip.
 
 export function render(ctx) {
   const { data, safe } = ctx;
-  if (!data) return '<section class="intro"><h1>REACH</h1></section><section class="card"><p>Loading…</p></section>';
-  const { counts, filters = [], sliders = [] } = data;
-  return `<section class="intro"><span class="eyebrow">REACH</span><h1>Who's out there</h1></section>
-    <section class="card">
-      <div class="stat-row"><span>Open to you</span><strong>${safe(counts?.mutual_open ?? 0)}</strong></div>
-      <div class="stat-row"><span>Fit your filters</span><strong>${safe(counts?.fits_user_filters ?? 0)}</strong></div>
-      ${counts?.no_realistic_matches ? '<p class="warn">Nobody currently fits — try widening a filter below.</p>' : ''}
-      ${data.counting_unverified ? '<p class="hint">Verification is still pending, so this count includes unverified profiles too.</p>' : ''}
+  if (!data) return '<section class="intro"><h1>REACH · Reality Check</h1></section><section class="card"><p>Loading…</p></section>';
+  const { counts, filters = [], sliders = [], ignored_count = 0, all_ignored } = data;
+  const choices = filters.filter((f) => f.control === 'choice');
+  const basicSliders = sliders.filter((s) => s.basic);
+  const moreSliders = sliders.filter((s) => !s.basic);
+  const basicChoices = choices.filter((f) => f.basic);
+  const moreChoices = choices.filter((f) => !f.basic);
+  const mutual = counts?.mutual_open ?? 0;
+
+  return `<section class="intro"><span class="eyebrow">REACH · Reciprocity this week</span><h1>See who opens up.</h1></section>
+    <section class="card reach-summary">
+      <div><span class="reach-number">${safe(mutual)}</span> ${mutual === 1 ? 'person' : 'people'}</div>
+      <div class="micro">of ${safe(counts?.fits_user_filters ?? 0)} who fit what you want are also open to you</div>
+      <div class="micro">${data.counting_unverified
+        ? 'Counting everyone here — verified and not yet verified — so you can see the place. Once you are verified this narrows to people you could actually be matched with.'
+        : 'Counting verified people only. These are the ones the weekly matcher can actually pair you with.'}</div>
+      ${counts?.no_realistic_matches ? '<div class="micro" style="color:var(--coral-1);margin-top:8px;">No realistic matches yet at your current filters — the one for you may not have signed up yet.</div>' : ''}
     </section>
-    <h2>Your ranges</h2>
-    ${sliders.map(sliderRow).join('') || '<p class="hint">No range filters unlocked yet.</p>'}
-    <h2>Your filters</h2>
-    ${filters.map(filterRow).join('') || '<p class="hint">No filters set.</p>'}`;
+
+    <section class="card">
+      <div class="filter-bar">
+        <div class="section-label" style="margin:0;">Your filters</div>
+        <button class="secondary btn-showall" id="show-all" data-ignore="${all_ignored ? 'false' : 'true'}" type="button">${all_ignored ? 'Put them back' : 'Any for everything'}</button>
+      </div>
+      <div class="hint">${ignored_count
+        ? `${safe(ignored_count)} set to Any. Nothing was deleted — switch one back and it returns as you left it.`
+        : 'Set anything to <strong>Any</strong> and it stops narrowing your pool.'}</div>
+
+      <div>${basicSliders.map(sliderRow).join('')}${basicChoices.map(choiceRow(safe)).join('')}</div>
+
+      ${moreSliders.length || moreChoices.length ? `<details class="more-filters"><summary>More filters</summary>
+        <div>${moreSliders.map(sliderRow).join('')}${moreChoices.map(choiceRow(safe)).join('')}</div>
+      </details>` : ''}
+
+      <div class="hint" style="margin-top:12px;">Widening yours only helps where theirs already lets you in — both of you have to be open.</div>
+    </section>
+
+    <section class="card guru-card"><div class="guru-avatar">G</div><div>Nationality and religion are yours to explore — I'll never suggest widening them.</div></section>`;
 }
 
 function sliderRow(s) {
-  const [lo, hi] = s.current || [];
-  const suggested = s.suggested ? `Suggested ${s.suggested[0]}–${s.suggested[1]} ${s.unit}` : '';
-  return `<div class="slot" data-slider="${s.key}">
-    <div>
-      <strong>${s.label}</strong>
-      <div class="muted">${lo}–${hi} ${s.unit}${s.self_value != null ? ` · you: ${s.self_value} ${s.unit}` : ''}</div>
-      ${suggested ? `<div class="muted">${suggested}</div>` : ''}
+  const span = s.max - s.min;
+  const pct = (v) => ((v - s.min) / span) * 100;
+  const [lo, hi] = s.current || [s.min, s.max];
+  return `<div class="filter${s.ignored ? ' is-any' : ''}" data-lever="${s.key}" data-min="${s.min}" data-max="${s.max}" data-step="${s.step}">
+    <div class="filter-head">
+      <span class="filter-name">${s.label}</span>
+      <span class="filter-readout"><span class="sv-min">${lo}</span>–<span class="sv-max">${hi}</span> ${s.unit}</span>
+      <label class="any-switch"><input type="checkbox" class="filter-any" data-filter="${s.key}" ${s.ignored ? 'checked' : ''}><span>Any</span></label>
     </div>
-    <button class="secondary widen" data-lever="${s.key}" type="button" style="width:auto;margin:0;">Widen</button>
+    <div class="slider-track-wrap">
+      <div class="slider-track"></div>
+      ${s.suggested ? `<div class="slider-suggested" style="left:${pct(s.suggested[0])}%;width:${pct(s.suggested[1]) - pct(s.suggested[0])}%"></div>` : ''}
+      <div class="slider-selected" style="left:${pct(lo)}%;width:${Math.max(0, pct(hi) - pct(lo))}%"></div>
+      ${s.self_value != null ? `<div class="slider-self" style="left:${pct(s.self_value)}%" title="You: ${s.self_value} ${s.unit}"></div>` : ''}
+      <input type="range" class="range-min" min="${s.min}" max="${s.max}" step="${s.step}" value="${lo}">
+      <input type="range" class="range-max" min="${s.min}" max="${s.max}" step="${s.step}" value="${hi}">
+    </div>
+    <div class="filter-foot">
+      <span>${s.self_value != null ? `You: ${s.self_value} ${s.unit}` : ''}${s.suggested ? ` · suggested ${s.suggested[0]}–${s.suggested[1]}` : ''}</span>
+      <span class="filter-delta">${s.ignored ? (s.delta_if_ignored > 0 ? `−${s.delta_if_ignored} if you set a range` : '') : (s.delta_if_ignored > 0 ? `+${s.delta_if_ignored} on Any` : '')}</span>
+    </div>
   </div>`;
 }
 
-function filterRow(f) {
-  const delta = f.delta_if_ignored;
-  const deltaText = f.ignored
-    ? (delta > 0 ? `Restoring this loses ${delta} ${delta === 1 ? 'person' : 'people'}` : '')
-    : (delta > 0 ? `Setting to Any opens ${delta} more ${delta === 1 ? 'person' : 'people'}` : '');
-  return `<div class="slot" data-filter="${f.name}">
-    <div>
-      <strong>${f.label}</strong>
-      <div class="muted">${f.ignored ? 'Any' : f.on_label}${f.sensitive ? ' · you control this' : ''}</div>
-      ${deltaText ? `<div class="muted">${deltaText}</div>` : ''}
+function choiceRow(safe) {
+  return (f) => `<div class="filter is-choice${f.ignored ? ' is-any' : ''}" data-filter="${f.name}">
+    <div class="filter-head">
+      <span class="filter-name">${safe(f.label)}${f.sensitive ? ' <span class="sensitive-tag">yours</span>' : ''}</span>
+      <span class="filter-readout">${f.ignored ? 'Any' : safe(f.on_label)}</span>
+      <label class="any-switch"><input type="checkbox" class="filter-any" data-filter="${safe(f.name)}" ${f.ignored ? 'checked' : ''}><span>Any</span></label>
     </div>
-    <button class="secondary toggle-ignore" data-filter="${f.name}" data-ignore="${!f.ignored}" type="button" style="width:auto;margin:0;">${f.ignored ? 'Restore' : 'Set to Any'}</button>
+    <div class="filter-foot">
+      <span></span>
+      <span class="filter-delta">${f.ignored ? (f.delta_if_ignored > 0 ? `−${f.delta_if_ignored} if switched back on` : '') : (f.delta_if_ignored > 0 ? `+${f.delta_if_ignored} on Any` : '')}</span>
+    </div>
   </div>`;
 }
 
 export function bind(root, ctx) {
   const { session, run, patch } = ctx;
-  root.querySelectorAll('.widen').forEach((btn) => btn.addEventListener('click', () => run(async () => {
-    patch(await session.post('/api/v1/reach/widen', { lever: btn.dataset.lever }));
+
+  root.querySelectorAll('.filter-any').forEach((box) => box.addEventListener('change', () => run(async () => {
+    patch(await session.post('/api/v1/reach/ignore', { filter: box.dataset.filter, ignore: box.checked }));
   })));
-  root.querySelectorAll('.toggle-ignore').forEach((btn) => btn.addEventListener('click', () => run(async () => {
-    patch(await session.post('/api/v1/reach/ignore', { filter: btn.dataset.filter, ignore: btn.dataset.ignore === 'true' }));
-  })));
+
+  root.querySelector('#show-all')?.addEventListener('click', (e) => run(async () => {
+    patch(await session.post('/api/v1/reach/show-all', { ignore: e.target.dataset.ignore === 'true' }));
+  }));
+
+  // Dual overlaid range inputs: dragging redraws the bar locally (no
+  // request per pixel); releasing (the "change" event) commits the range.
+  root.querySelectorAll('.filter[data-lever]').forEach((card) => {
+    const minInput = card.querySelector('.range-min');
+    const maxInput = card.querySelector('.range-max');
+    const min = parseFloat(card.dataset.min), max = parseFloat(card.dataset.max);
+    const redraw = () => {
+      const lo = parseFloat(minInput.value), hi = parseFloat(maxInput.value);
+      const loPct = ((lo - min) / (max - min)) * 100, hiPct = ((hi - min) / (max - min)) * 100;
+      const selected = card.querySelector('.slider-selected');
+      selected.style.left = loPct + '%';
+      selected.style.width = Math.max(0, hiPct - loPct) + '%';
+      card.querySelector('.sv-min').textContent = lo;
+      card.querySelector('.sv-max').textContent = hi;
+    };
+    const clampAndDraw = (active) => {
+      if (parseFloat(minInput.value) > parseFloat(maxInput.value)) {
+        if (active === minInput) maxInput.value = minInput.value; else minInput.value = maxInput.value;
+      }
+      redraw();
+    };
+    minInput.addEventListener('pointerdown', () => { minInput.style.zIndex = 3; maxInput.style.zIndex = 2; });
+    maxInput.addEventListener('pointerdown', () => { maxInput.style.zIndex = 3; minInput.style.zIndex = 2; });
+    minInput.addEventListener('input', () => clampAndDraw(minInput));
+    maxInput.addEventListener('input', () => clampAndDraw(maxInput));
+    const commit = () => {
+      if (card.classList.contains('is-any')) return;
+      run(async () => {
+        patch(await session.post('/api/v1/reach/set-range', { lever: card.dataset.lever, min: parseFloat(minInput.value), max: parseFloat(maxInput.value) }));
+      });
+    };
+    minInput.addEventListener('change', commit);
+    maxInput.addEventListener('change', commit);
+  });
 }

@@ -19,8 +19,9 @@ export function render(ctx) {
   return dating(ctx);
 }
 
-function postDating(data) {
+function postDating(data, safe) {
   return `<section class="intro"><span class="eyebrow">WEEK</span><h1>Past the searching phase</h1></section>
+    ${theWeek(data, safe)}
     <section class="card guidance"><p>REACH and the weekly matches have sunset for you — Guru and Journey are where things continue from here.</p></section>`;
 }
 
@@ -28,6 +29,7 @@ function lockedIn(ctx) {
   const { data, safe } = ctx;
   const li = data.lock_in;
   return `<section class="intro"><span class="eyebrow">WEEK · LOCKED IN</span><h1>You're locked in</h1></section>
+    ${theWeek(data, safe)}
     <section class="card">
       <div class="stat-row"><span>Status</span><strong>${safe(li?.status)}</strong></div>
       <div class="stat-row"><span>Since week</span><strong>${safe(li?.week)}</strong></div>
@@ -46,8 +48,8 @@ function dating(ctx) {
   }
   const slots = data.matches || [];
   return `<section class="intro"><span class="eyebrow">WEEK ${safe(data.clock?.week)} · ${safe(data.clock?.day)} ${String(data.clock?.hour ?? 0).padStart(2, '0')}:00</span><h1>This week's matches</h1></section>
-    ${slots.length ? slots.map((m) => matchSlot(m, safe)).join('') : '<section class="card"><p>No matches this week — an honest zero, not a filter problem to fix.</p></section>'}
-    ${scheduleGrid(data.schedule, safe)}`;
+    ${theWeek(data, safe)}
+    ${slots.length ? slots.map((m) => matchSlot(m, safe)).join('') : '<section class="card"><p>No matches this week — an honest zero, not a filter problem to fix.</p></section>'}`;
 }
 
 function matchSlot(m, safe) {
@@ -79,12 +81,65 @@ function matchSlot(m, safe) {
   </div>`;
 }
 
-function scheduleGrid(schedule, safe) {
-  if (!schedule?.grid?.rows?.length) return '';
-  return `<h2>This week</h2><div class="week-grid">${schedule.grid.rows.map((row) => `
-    <div class="week-day">${safe(row.label)}</div>
-    <div>${row.days.flatMap((d) => d.moments || []).map((mo) => `<span class="moment tone-${safe(mo.tone)}">${safe(mo.day)} ${safe(mo.time || mo.hour)} · ${safe(mo.label)}</span>`).join('')}</div>
-  `).join('')}</div>`;
+// "The week" (§3, spec item 8): the calendar grid from templates/
+// _the_week.html, ported class-for-class (.tw-*) so it reads the same way
+// on a phone as it does on the web. grid/legend come straight from the
+// server's own week_map.py output (data.schedule); `explained` and
+// `phase_copy` are pure derivations of data already on the wire —
+// week_map.explained() is just "every moment with a `means`, day-sorted"
+// (every moment in `grid` already carries its own `means`), and
+// WEEK_PHASE_COPY below is week_map.py's own PHASE_COPY table, mirrored
+// client-side the same way nav.js mirrors disclosure.py's labels — display
+// text keyed by a server enum, not business logic of its own.
+const WEEK_PHASE_COPY = {
+  before_week_start: 'The week has not opened yet. Match 1 is revealed Monday midday.',
+  match_1_open: 'Match 1 is live. You have until Tuesday midday.',
+  match_2_open: 'Match 2 is live. You have until Wednesday midday.',
+  match_3_open: "Match 3 is live — the last of this week. It closes Wednesday evening.",
+  calendar_open: 'The calendar is open. Offer your weekend slots before Thursday midday.',
+  calendar_closed: 'Slots are in. The overlap publishes Thursday evening, with the agreement to sign.',
+  dates_live: 'Dates are live this weekend.',
+  feedback_open: 'Feedback is open. It closes the week and shapes the next one.',
+};
+
+function explainedMoments(grid) {
+  const dayIndex = (d) => grid.days.findIndex((x) => x.day === d);
+  const out = [];
+  grid.rows.forEach((row) => row.days.forEach((d) => (d.moments || []).forEach((m) => { if (m.means) out.push(m); })));
+  return out.sort((a, b) => (dayIndex(a.day) - dayIndex(b.day)) || (a.hour - b.hour));
+}
+
+function theWeek(data, safe) {
+  const schedule = data.schedule;
+  if (!schedule?.grid) return '';
+  const { grid, legend = [] } = schedule;
+  const nowText = data.clock ? `${safe(data.clock.day)} ${String(data.clock.hour ?? 0).padStart(2, '0')}:00` : '';
+  const phaseCopy = WEEK_PHASE_COPY[data.phase] || '';
+  const explained = explainedMoments(grid);
+  return `<section class="card the-week">
+    <div class="tw-head"><div class="section-label" style="margin:0;">The week</div><div class="tw-now">${nowText}</div></div>
+    ${phaseCopy ? `<div class="hint tw-phase">${safe(phaseCopy)}</div>` : ''}
+    <div class="tw-scroll">
+      <table class="tw-grid">
+        <caption class="visually-hidden">What happens on each day of the dating week</caption>
+        <thead><tr><th scope="col"><span class="visually-hidden">Time of day</span></th>
+          ${grid.days.map((d) => `<th scope="col" class="tw-day${d.is_today ? ' is-today' : ''}" title="${safe(d.day)}">${safe(d.day[0])}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${grid.rows.map((row) => `<tr class="tw-band">
+            <th scope="row" class="tw-band-label">${safe(row.label)}</th>
+            ${row.days.map((cell) => `<td class="tw-cell${cell.is_today ? ' is-today' : ''}">
+              ${(cell.moments || []).map((m) => `<span class="tw-chip tone-${safe(m.tone)}${m.past ? ' is-past' : ''}" title="${safe(m.day)} ${safe(m.time || '')}${m.means ? ' — ' + safe(m.means) : ''}">${safe(m.label)}</span>`).join('')}
+            </td>`).join('')}
+          </tr>${row.key === grid.midday_after ? `<tr class="tw-midday" aria-hidden="true"><td colspan="${grid.days.length + 1}"><span>${safe(grid.midday_label)}</span></td></tr>` : ''}`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="tw-legend">${legend.map((e) => `<span class="tw-legend-item"><span class="tw-swatch tone-${safe(e.tone)}"></span>${safe(e.kind)}</span>`).join('')}</div>
+    ${explained.length ? `<details class="tw-explain"><summary>What each one means</summary><dl>
+      ${explained.map((m) => `<div class="tw-explain-row"><dt><span class="tw-chip tone-${safe(m.tone)}">${safe(m.label)}</span> <span class="tw-when">${safe(m.day)} ${String(m.hour).padStart(2, '0')}:00</span></dt><dd>${safe(m.means)}</dd></div>`).join('')}
+    </dl></details>` : ''}
+  </section>`;
 }
 
 export function bind(root, ctx) {

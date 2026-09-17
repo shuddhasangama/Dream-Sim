@@ -10,6 +10,8 @@ import * as ceremonyScreen from './screens/ceremony.js';
 import * as debriefScreen from './screens/debrief.js';
 import * as guruScreen from './screens/guru.js';
 import * as visionScreen from './screens/vision.js';
+import * as chemistryScreen from './screens/chemistry.js';
+import * as statsScreen from './screens/stats.js';
 import './style.css';
 
 const native = Capacitor.isNativePlatform();
@@ -53,6 +55,8 @@ const screens = {
   debrief: debriefScreen,
   guru: guruScreen,
   vision: visionScreen,
+  chemistry: chemistryScreen,
+  stats: statsScreen,
 };
 
 // What every screen module receives. `data` is this screen's own GET result
@@ -77,9 +81,12 @@ function render() {
   const signedIn = !!journey;
   const current = nav.current;
   const tabs = signedIn ? visibleTabs(journey.surfaces) : [];
-  root.innerHTML = `<header><span class="mark">D</span><strong>DHASHU</strong><span class="beta">BETA</span></header>
+  root.innerHTML = `<header class="brandbar">
+      <span class="brandmark"><span class="brand-glyph" aria-hidden="true">D</span><span class="brand-name">DhaShu</span></span>
+      ${signedIn ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
+    </header>
     ${preview?'<aside class="preview">Local preview · no messages sent · code 123456</aside>':''}
-    ${signedIn ? renderChrome(current, tabs) : signin()}
+    ${signedIn ? renderChrome(current, tabs) : `<main class="container">${signin()}</main>`}
     <p id="notice" role="status" class="notice">${safe(message)}</p>
     ${busy?'<div class="loading" role="status">Please wait…</div>':''}
     <footer>Connection. Clarity. Together.</footer>`;
@@ -106,12 +113,17 @@ function renderChrome(current, tabs) {
     : screenUnavailable ? unavailableScreen(current.key)
     : screen ? screen.render(ctx)
     : genericScreen(current.key);
-  return `<div class="toolbar">
-      ${nav.depth>1?'<button id="back" class="text-button">← Back</button>':'<span></span>'}
-      <button id="logout" class="text-button" ${busy?'disabled':''}>Sign out</button>
+  const indicator = journey.stage_indicator;
+  return `<div class="chrome-sticky">
+      ${tabs.length?`<nav class="topnav" aria-label="Sections">${tabs.map(t=>`<button class="navlink ${t.key===current.key?'is-active':''}" data-nav="${safe(t.key)}">${safe(t.label)}</button>`).join('')}<button id="logout" class="navlink" ${busy?'disabled':''}>Sign out</button></nav>`:''}
+      ${indicator?.show?`<div class="stage-bar" role="list" aria-label="${safe(indicator.label)}">${(indicator.stages||[]).map(s=>`<span role="listitem" class="stage-pip ${safe(s.state)}">${safe(s.label)}</span>`).join('')}</div>`:''}
     </div>
-    ${body}
-    ${tabs.length?`<nav class="tabbar" aria-label="Sections">${tabs.map(t=>`<button class="tab ${t.key===current.key?'active':''}" data-nav="${safe(t.key)}">${safe(t.label)}</button>`).join('')}</nav>`:''}`;
+    <main class="container">
+      <div class="toolbar">
+        ${nav.depth>1?'<button id="back" class="text-button">← Back</button>':'<span></span>'}
+      </div>
+      ${body}
+    </main>`;
 }
 
 function bindChrome(current) {
@@ -142,23 +154,25 @@ function signin() {
     ${challenge?`<button type="button" id="change" class="secondary" ${busy?'disabled':''}>Change number / request a new code</button>`:'<p class="hint">Include your country code. Beta access is by invitation.</p>'}</form>`;
 }
 
-// ── dashboard (unchanged content, now driven by journey/status) ──────────
+// ── dashboard, matching templates/dashboard.html's own field list ────────
+// Every stat row the web dashboard shows, in its exact order — an
+// editorial choice already made there, not one this client invents.
+const DASHBOARD_STAT_ROWS = [
+  ['age', 'Age', ''], ['height_cm', 'Height', ' cm'], ['weight_kg', 'Weight', ' kg'],
+  ['waist_in', 'Waist', ' in'], ['income_band', 'Income band', ''], ['diet', 'Diet', ''],
+  ['education', 'Education', ''], ['nationality', 'Nationality', ''], ['religion', 'Religion', ''],
+];
 function renderDashboard() {
   const user=journey.user, stats=profile?.stats||{};
   const stage=String(user.journey_state||'').replaceAll('_',' ');
-  const indicator = journey.stage_indicator;
   const next = journey.next_action;
-  return `<section class="intro"><span class="eyebrow">YOUR CHAPTER · ${safe(stage)}</span><h1>${safe(user.display_name||'Your profile')}</h1><p>A little clarity for what comes next.</p></section>
-    <span class="badge">${user.bgv_status==='verified'?'● Verified profile':'Verification pending'}</span>
-    ${indicator?.show?`<div class="stage-track" role="list" aria-label="${safe(indicator.label)}">${(indicator.stages||[]).map(s=>`<span role="listitem" class="stage-node ${safe(s.state)}">${safe(s.label)}</span>`).join('')}</div>`:''}
+  return `<section class="intro"><span class="eyebrow">Your file</span><h1>${safe(user.display_name||'Your profile')}</h1><div class="micro">Stage: ${safe(stage)}${journey.clock?.week!=null?` · Week ${safe(journey.clock.week)}`:''}</div></section>
     <section class="card guidance"><span class="eyebrow">NEXT FOR YOU</span><h2>${safe(next?.headline||'Welcome back')}</h2><p>${safe(next?.body||'Review your profile and take your next step when ready.')}</p>
       ${next?.destination && next.destination.eligible && next.destination.request ? `<button id="next-action" class="primary" ${busy?'disabled':''}>${safe(next.cta||'Continue')} <span aria-hidden="true">→</span></button>` : ''}</section>
-    <section class="card"><h2>Your vision</h2><div class="chips">${(profile?.visions||[]).map(v=>`<span>${safe(v.key)} · ${safe(Array.isArray(v.stance)?v.stance.join(', '):v.stance)}</span>`).join('')||'<p>Your vision is still taking shape.</p>'}</div></section>
-    <section class="card"><h2>Your details</h2><dl>${['age','city','profession','diet'].filter(k=>stats[k]!=null).map(k=>`<div><dt>${safe(k)}</dt><dd>${safe(stats[k])}</dd></div>`).join('')}</dl></section>
-    <button id="reload" class="secondary" ${busy?'disabled':''}>Refresh dashboard</button>`;
+    <section class="card"><div class="micro">Vision</div><div class="chip-row">${(profile?.visions||[]).map(v=>`<span class="chip">${safe(v.key)}${v.stance?' — '+safe(Array.isArray(v.stance)?v.stance.join(', '):v.stance):''}</span>`).join('')||'<p class="hint">Your vision is still taking shape.</p>'}</div></section>
+    <section class="card"><div class="micro">Stats</div><div class="stat-rows">${DASHBOARD_STAT_ROWS.filter(([k])=>stats[k]!=null).map(([k,label,unit])=>`<div class="stat-row"><span>${safe(label)}</span><span>${safe(stats[k])}${unit}</span></div>`).join('')||'<p class="hint">Nothing on file yet.</p>'}</div></section>`;
 }
 function bindDashboard() {
-  root.querySelector('#reload')?.addEventListener('click',()=>run(load));
   root.querySelector('#next-action')?.addEventListener('click',()=>navigateTo(journey.next_action.destination.key));
 }
 

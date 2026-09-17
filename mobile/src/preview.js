@@ -6,24 +6,75 @@ export function previewTransport() {
   let active = false;
 
   let reach = {
-    counts: { mutual_open: 3, fits_user_filters: 12, no_realistic_matches: false },
+    counts: { mutual_open: 1, fits_user_filters: 6, no_realistic_matches: false },
     counting_unverified: false,
     deltas: [],
     sliders: [
-      { key: 'age', label: 'Age', unit: 'yrs', min: 18, max: 70, step: 1, current: [27, 36], suggested: [26, 38], self_value: 30, ignored: false, delta_if_ignored: 2 },
-      { key: 'distance_km', label: 'Distance', unit: 'km', min: 0, max: 1600, step: 10, current: [0, 40], suggested: null, self_value: null, ignored: false, delta_if_ignored: 4 },
+      { key: 'age', label: 'Age', unit: 'yrs', min: 18, max: 70, step: 1, current: [27, 36], suggested: [26, 38], self_value: 30, ignored: false, delta_if_ignored: 2, basic: true, sensitive: false },
+      { key: 'distance_km', label: 'Distance', unit: 'km', min: 0, max: 1600, step: 10, current: [0, 40], suggested: null, self_value: null, ignored: false, delta_if_ignored: 4, basic: true, sensitive: false },
+      { key: 'height_cm', label: 'Height', unit: 'cm', min: 140, max: 210, step: 1, current: [160, 185], suggested: [158, 182], self_value: 169, ignored: false, delta_if_ignored: 1, basic: false, sensitive: false },
     ],
     filters: [
-      { name: 'nationality', label: 'Nationality', on_label: 'IN, NRI', kind: 'lever', basic: true, control: 'choice', ignored: false, value: ['IN', 'NRI'], delta_if_ignored: 1, sensitive: true, blurb: '' },
       { name: 'veg_only', label: 'Diet', on_label: 'Vegetarian only', kind: 'dealbreaker', basic: true, control: 'choice', ignored: false, value: true, delta_if_ignored: 3, sensitive: false, blurb: '' },
+      { name: 'wants_kids', label: 'Wants kids', on_label: 'Required', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: true, delta_if_ignored: 1, sensitive: false, blurb: '' },
+      { name: 'no_kids_wanted', label: 'Does not want kids', on_label: 'Required', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '' },
+      { name: 'nationality', label: 'Nationality', on_label: 'IN, NRI', kind: 'lever', basic: false, control: 'choice', ignored: false, value: ['IN', 'NRI'], delta_if_ignored: 1, sensitive: true, blurb: '' },
     ],
   };
+  function reachIgnoredSummary() {
+    const switched = [...reach.sliders.filter((s) => s.ignored), ...reach.filters.filter((f) => f.ignored)];
+    const all = [...reach.sliders, ...reach.filters];
+    return { ignored_count: switched.length, all_ignored: all.length > 0 && all.every((f) => f.ignored) };
+  }
+  function reachState() { return { ...reach, ...reachIgnoredSummary() }; }
+
+  // "The week" grid, mirroring week_map.py's own algorithm (BANDS/MOMENTS)
+  // against a fixed clock — a faithful preview fixture, not a second copy
+  // of production logic (the real grid always comes from the server).
+  const WM_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const WM_BANDS = [['morn', 'MORN', 0, 12], ['aft', 'AFT', 12, 17], ['eve', 'EVE', 17, 21], ['night', 'NIGHT', 21, 24]];
+  const WM_MOMENTS = [
+    { key: 'match_1', at: ['Mon', 12], label: 'Match 1', tone: 'match', kind: 'Matches', means: 'Match 1 is revealed. You have until Tuesday midday.' },
+    { key: 'rc_ends', at: ['Mon', 11], label: 'RC ends', tone: 'reality', kind: 'Reality Check', means: "Last week's Reality Check closes, just before the new week opens." },
+    { key: 'rank', at: ['Tue', 11], label: 'Rank', tone: 'muted', kind: 'Matches', means: 'Keenness from Match 1 is counted before Match 2 is drawn.' },
+    { key: 'match_2', at: ['Tue', 12], label: 'Match 2', tone: 'match', kind: 'Matches', means: "Match 1's window closes and Match 2 is revealed." },
+    { key: 'match_3', at: ['Wed', 12], label: 'Match 3', tone: 'match', kind: 'Matches', means: "Match 2's window closes and Match 3 is revealed — the last of the week." },
+    { key: 'slots', at: ['Wed', 18], label: 'Slots', tone: 'calendar', kind: 'Calendar', means: 'Match 3 closes and the calendar opens. Offer the weekend slots that suit you.' },
+    { key: 'calendar_closes', at: ['Thu', 12], label: 'Publish', tone: 'publish', kind: 'Calendar', means: 'The calendar closes and the overlap is published to you both.' },
+    { key: 'sign', at: ['Thu', 18], label: 'Sign', tone: 'publish', kind: 'Agreement', means: 'The date agreement opens. It needs both signatures; one on its own confirms nothing.' },
+    { key: 'date_fri', at: ['Fri', 21], label: 'Dinner', tone: 'date', kind: 'Dates' },
+    { key: 'date_sat_e', at: ['Sat', 19], label: 'Dinner', tone: 'date', kind: 'Dates' },
+    { key: 'date_sun_a', at: ['Sun', 13], label: 'Lunch', tone: 'date', kind: 'Dates' },
+    { key: 'debrief', at: ['Sat', 21], label: 'Debrief', tone: 'debrief', kind: 'After', means: 'The debrief opens an hour after a date, not before it.' },
+    { key: 'feedback', at: ['Sun', 21], label: 'Reality', tone: 'reality', kind: 'After', means: 'Feedback closes the week, and next week’s Reality Check is drawn from it.' },
+  ];
+  function weekMapGrid(now) {
+    const today = now?.day ?? null;
+    const bandFor = (hour) => (WM_BANDS.find(([, , s, e]) => hour >= s && hour < e) || WM_BANDS[WM_BANDS.length - 1])[0];
+    const cells = {};
+    for (const m of WM_MOMENTS) {
+      const [day, hour] = m.at;
+      const band = bandFor(hour);
+      const past = now ? (WM_DAYS.indexOf(day) < WM_DAYS.indexOf(now.day) || (day === now.day && hour < now.hour)) : false;
+      (cells[band + '|' + day] ??= []).push({ ...m, hour, day, past, time: String(hour).padStart(2, '0') + ':00' });
+    }
+    return {
+      days: WM_DAYS.map((d) => ({ day: d, is_today: d === today })),
+      rows: WM_BANDS.map(([key, label]) => ({ key, label, days: WM_DAYS.map((d) => ({ day: d, is_today: d === today, moments: cells[key + '|' + d] || [] })) })),
+      midday_after: 'morn', midday_label: 'MIDDAY (12:00)',
+    };
+  }
+  function weekMapLegend() {
+    const seen = new Map();
+    for (const m of WM_MOMENTS) if (!seen.has(m.kind)) seen.set(m.kind, { kind: m.kind, tone: m.tone });
+    return [...seen.values()];
+  }
 
   let week = {
     clock: { mode: 'simulation', week: 1, day: 'Mon', hour: 12 },
-    phase: 'match_1', mode: 'dating', prepared: true,
+    phase: 'match_1_open', mode: 'dating', prepared: true,
     prepare_request: { method: 'POST', path: '/api/v1/week/prepare', body: {} },
-    schedule: { grid: { days: [], rows: [{ key: 'reveal', label: 'Reveals', days: [{ day: 'Mon', is_today: true, moments: [{ key: 'm1', at: ['Mon', 12], label: 'Match 1 reveals', tone: 'neutral', kind: 'reveal', means: 'reveal', hour: 12, day: 'Mon', past: false, time: '12:00' }] }] }], midday_after: 'Wed', midday_label: 'Midweek' }, legend: [] },
+    schedule: { grid: weekMapGrid({ day: 'Mon', hour: 12 }), legend: weekMapLegend() },
     lock_in: null, date_plan: null,
     matches: [
       { id: 'match-1', week: 1, slot: 1, revealed_at: 'Mon:12', window_closes_at: 'Tue:12', action: 'none', status: 'open',
@@ -43,6 +94,24 @@ export function previewTransport() {
   const visionElementKeys = ['children', 'cohabitation', 'relocation', 'career', 'intimacy', 'travel'];
   let visionEntries = [];
   let visionChanges = [];
+
+  const chemistryBuckets = [['good', '★', 'Already good at it'], ['improve', '↑', 'Want to improve'], ['maybe', '?', 'Never considered, so maybe'], ['no', '✕', 'Not my cup of tea']];
+  const chemistryActivities = ['Cooking', 'Hiking', 'Salsa', 'Tennis', 'Yoga', 'Photography', 'Board games', 'Live gigs', 'Cycling', 'Pottery', 'Stand-up', 'Scuba diving'];
+  let chemistryPicks = { Cooking: 'good', Hiking: 'good', Salsa: 'improve', Tennis: 'improve', Yoga: 'no', Photography: 'maybe' };
+
+  let statsData = { age: 30, height_cm: 169, weight_kg: 66, waist_in: 31, income_band: '₹₹₹ · 25L–50L', education: "Master's", nationality: 'IN', profession: 'Engineering',
+    diet: 'Everything', religion: 'Hindu', smoking: 'Never', drinking: 'Socially', fitness_routine: 'Gym 3x/week', marital_history: 'Never married', ethnicity: ['South Asian'], languages: ['English', 'Hindi'], cuisine: ['North Indian', 'Italian'], budget: ['₹2,500–4,000'] };
+  const statChanges = [];
+  const STAT_OPTIONS = { education: ["Bachelor's", "Master's", 'PhD'], nationality: ['IN', 'NRI'], profession: ['Engineering', 'Design', 'Medicine', 'Law'], diet: ['Vegetarian', 'Vegan', 'Everything'], smoking: ['Never', 'Occasionally', 'Regularly'], drinking: ['Never', 'Socially', 'Regularly'], fitness_routine: ['Sedentary', 'Occasional', 'Gym 3x/week', 'Athlete'], marital_history: ['Never married', 'Divorced', 'Widowed'], ethnicity: ['South Asian', 'East Asian', 'Mixed', 'Other'], religion: ['Hindu', 'Muslim', 'Christian', 'Other'], languages: ['English', 'Hindi', 'Tamil', 'Bengali'], cuisine: ['North Indian', 'South Indian', 'Italian', 'Cafe'], income_band: ['₹₹ · 10L–25L', '₹₹₹ · 25L–50L', '₹₹₹₹ · 50L+'], budget: ['₹1,500–2,500', '₹2,500–4,000', '₹4,000+'] };
+  const STAT_RANGES = { age: [21, 75], height_cm: [140, 210], weight_kg: [40, 150], waist_in: [20, 55] };
+  function statsRows() {
+    const editable = ['height_cm', 'weight_kg', 'waist_in', 'diet', 'religion', 'smoking', 'drinking', 'fitness_routine', 'marital_history', 'ethnicity', 'languages', 'cuisine', 'budget'];
+    const verified = ['age', 'education', 'nationality', 'profession', 'income_band'];
+    return [
+      ...editable.map((key) => ({ key, value: statsData[key] ?? null, editable: true, why: 'open', reason: null })),
+      ...verified.map((key) => ({ key, value: statsData[key] ?? null, editable: false, why: 'verified', reason: 'Vouched for by a background check, so it is not typed over. If one has genuinely changed, send it back to be re-checked — the value moves when the check clears, not when you say so.' })),
+    ];
+  }
 
   function ensureLockedInState() {
     if (calendar) return;
@@ -98,7 +167,7 @@ export function previewTransport() {
       next_action:{headline:'Your next chapter starts here',body:'Take a moment to review your profile before meeting someone new.',cta:'See this week',
         destination:{key:'week',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/week'}}},
     });
-    if (path.endsWith('/profile')) return ok({stats:{age:30,city:'Bangalore',profession:'Engineering',diet:'Vegetarian'},visions:[{key:'Intimacy',stance:['Emotional']},{key:'Cohabitate',stance:['Chores split']} ]});
+    if (path.endsWith('/profile')) return ok({stats:{age:30,height_cm:169,weight_kg:66,waist_in:31,income_band:'₹₹₹ · 25L–50L',diet:'Everything',education:"Master's",nationality:'IN',religion:'Hindu',city:'Bangalore',profession:'Engineering'},visions:[{key:'Intimacy',stance:['Emotional']},{key:'Cohabitate',stance:['Chores split']} ]});
 
     if (path.endsWith('/guidance')) return ok({headline:'Your next chapter starts here',body:'Take a moment to review your profile before meeting someone new.',cta:'See this week',
       destination:{key:'week',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/week'}}});
@@ -117,16 +186,38 @@ export function previewTransport() {
       return ok({goals:visionGoals,element_keys:visionElementKeys,entries:visionEntries,changes:visionChanges});
     }
 
-    if (path.endsWith('/reach') && method === 'GET') return ok(reach);
+    if (path.endsWith('/profile/chemistry') && method === 'GET') return ok({ activities: chemistryPicks, activity_options: chemistryActivities, buckets: chemistryBuckets });
+    if (path.endsWith('/profile/chemistry/activities')) {
+      chemistryPicks = { ...body.activities };
+      return ok({ activities: chemistryPicks, activity_options: chemistryActivities, buckets: chemistryBuckets });
+    }
+
+    if (path.endsWith('/profile/stats') && method === 'GET') return ok({ rows: statsRows(), options: STAT_OPTIONS, ranges: STAT_RANGES, changes: statChanges });
+    if (path.endsWith('/profile/stats') && method === 'PATCH') {
+      Object.assign(statsData, body.fields);
+      return ok({ saved: Object.keys(body.fields || {}) });
+    }
+    if (path.endsWith('/profile/stats/reverification')) return ok({ status: 'in_review', provider_mode: 'manual_review_required', verification_granted: false });
+
+    if (path.endsWith('/reach') && method === 'GET') return ok(reachState());
     if (path.endsWith('/reach/widen')) {
       const slider = reach.sliders.find((s) => s.key === body.lever);
       if (slider) slider.current = [Math.max(slider.min, slider.current[0] - 2), Math.min(slider.max, slider.current[1] + 2)];
-      return ok(reach);
+      return ok(reachState());
+    }
+    if (path.endsWith('/reach/set-range')) {
+      const slider = reach.sliders.find((s) => s.key === body.lever);
+      if (slider) slider.current = [body.min, body.max];
+      return ok(reachState());
     }
     if (path.endsWith('/reach/ignore')) {
-      const filter = reach.filters.find((f) => f.name === body.filter);
-      if (filter) filter.ignored = !!body.ignore;
-      return ok(reach);
+      const target = reach.sliders.find((s) => s.key === body.filter) || reach.filters.find((f) => f.name === body.filter);
+      if (target) target.ignored = !!body.ignore;
+      return ok(reachState());
+    }
+    if (path.endsWith('/reach/show-all')) {
+      [...reach.sliders, ...reach.filters].forEach((f) => { f.ignored = !!body.ignore; });
+      return ok(reachState());
     }
 
     if (path.endsWith('/week/prepare')) { week.prepared = true; return ok(week); }
