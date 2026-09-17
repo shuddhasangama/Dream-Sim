@@ -13,10 +13,21 @@
 //   - every mutation (widen/set-range/ignore/show-all) returns the FULL
 //     fresh state already (the server's own _reach_state()), so a
 //     successful call patches ctx directly instead of a second round-trip.
+//
+// road-fixes-clock-spec.md §6: a missing stat is what keeps a filter out
+// of this screen in the first place (matching.unlock_levers_for runs on
+// every stats save, so filling one in is what actually adds the row) —
+// but /api/v1/reach has no "here's what's locked and why" field to key an
+// inline prompt off, so this offers stats editing unconditionally rather
+// than pretending to know which filter a person is missing. `_stats` is a
+// transient slice of GET /api/v1/profile/stats folded into this screen's
+// own data, fetched lazily so opening REACH never pays for a request it
+// might not need.
+import { editableFieldsForm, collectFields } from './stats.js';
 
 export function render(ctx) {
   const { data, safe } = ctx;
-  if (!data) return '<section class="intro"><h1>REACH · Reality Check</h1></section><section class="card"><p>Loading…</p></section>';
+  if (!data) return '<section class="intro"><h1>REACH</h1></section><section class="card"><p>Loading…</p></section>';
   const { counts, filters = [], sliders = [], ignored_count = 0, all_ignored } = data;
   const choices = filters.filter((f) => f.control === 'choice');
   const basicSliders = sliders.filter((s) => s.basic);
@@ -51,6 +62,12 @@ export function render(ctx) {
       </details>` : ''}
 
       <div class="hint" style="margin-top:12px;">Widening yours only helps where theirs already lets you in — both of you have to be open.</div>
+    </section>
+
+    <section class="card">
+      <div class="section-label" style="margin:0;">Missing a filter you expected?</div>
+      <div class="hint">A filter only appears once you've told us the matching stat — add it here without leaving REACH.</div>
+      ${data._stats ? editableFieldsForm(data._stats, safe, 'inline-stats-form') : '<button id="edit-stats-toggle" class="secondary" type="button">Edit your stats</button>'}
     </section>
 
     <section class="card guru-card"><div class="guru-avatar">G</div><div>Nationality and religion are yours to explore — I'll never suggest widening them.</div></section>`;
@@ -96,7 +113,7 @@ function choiceRow(safe) {
 }
 
 export function bind(root, ctx) {
-  const { session, run, patch } = ctx;
+  const { session, run, patch, data } = ctx;
 
   root.querySelectorAll('.filter-any').forEach((box) => box.addEventListener('change', () => run(async () => {
     patch(await session.post('/api/v1/reach/ignore', { filter: box.dataset.filter, ignore: box.checked }));
@@ -105,6 +122,23 @@ export function bind(root, ctx) {
   root.querySelector('#show-all')?.addEventListener('click', (e) => run(async () => {
     patch(await session.post('/api/v1/reach/show-all', { ignore: e.target.dataset.ignore === 'true' }));
   }));
+
+  root.querySelector('#edit-stats-toggle')?.addEventListener('click', () => run(async () => {
+    patch({ ...data, _stats: await session.get('/api/v1/profile/stats') });
+  }));
+
+  root.querySelector('#inline-stats-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    run(async () => {
+      await session.patch('/api/v1/profile/stats', { fields: collectFields(e.target) });
+      // A saved stat can unlock a new REACH lever (matching.py's
+      // unlock_levers_for runs on every stats save) — reload the reach
+      // state itself, not just the stats sub-form, so a newly-unlocked
+      // filter shows up without a manual refresh. The inline editor
+      // collapses back to its toggle; reopening it re-fetches fresh rows.
+      patch({ ...(await session.get('/api/v1/reach')), _stats: null });
+    });
+  });
 
   // Dual overlaid range inputs: dragging redraws the bar locally (no
   // request per pixel); releasing (the "change" event) commits the range.

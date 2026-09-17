@@ -6,6 +6,17 @@
 // (they're web-route-only additions) — the "what moved out of here" note
 // below is kept as-is rather than inventing overlap data this build can't
 // see.
+//
+// road-fixes-clock-spec.md §2: selections looked like they weren't
+// persisting. The actual bug was server-side (evolution_api.chemistry_read
+// forwarded the raw skills_json blob instead of its own `activities` key,
+// so a save's own re-read never showed anything checked) — fixed there.
+// The gap on THIS side was that a rejected save (e.g. the server's own
+// "sort at least N activities" minimum) only ever surfaced in the
+// page-level notice bar, far from the button that failed. `_saved`/
+// `_error` are transient flags folded into the patched data so success
+// and failure both show right next to the Save button, not just at the
+// top of the screen.
 
 export function render(ctx) {
   const { data, safe } = ctx;
@@ -22,8 +33,10 @@ export function render(ctx) {
           <span class="activity-name">${safe(a)}</span>
           <span class="activity-buckets">${buckets.map((b) => `<label class="bucket-pick" title="${safe(b[2])}"><input type="radio" name="act__${safe(a)}" value="${safe(b[0])}" ${activities[a] === b[0] ? 'checked' : ''}><span class="bucket-glyph b-${safe(b[0])}">${safe(b[1])}</span></label>`).join('')}</span>
         </div>`).join('')}</div>
+        <button class="primary" type="submit">Save chemistry</button>
+        ${data._saved ? '<p class="save-note">Saved.</p>' : ''}
+        ${data._error ? `<p class="warn">${safe(data._error)}</p>` : ''}
       </section>
-      <button class="primary" type="submit">Save chemistry</button>
     </form>
 
     <section class="card"><div class="section-label">What moved out of here</div>
@@ -32,14 +45,23 @@ export function render(ctx) {
 }
 
 export function bind(root, ctx) {
-  const { session, run, patch } = ctx;
+  const { session, run, patch, data } = ctx;
   root.querySelector('#activities-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     run(async () => {
       const form = new FormData(e.target);
       const picked = {};
       for (const [key, value] of form.entries()) picked[key.slice('act__'.length)] = value;
-      patch(await session.put('/api/v1/profile/chemistry/activities', { activities: picked }));
+      try {
+        const result = await session.put('/api/v1/profile/chemistry/activities', { activities: picked });
+        patch({ ...result, _saved: true, _error: null });
+      } catch (err) {
+        // A validation_error (e.g. below the server's sort-at-least-N
+        // minimum) carries the server's own explanation — shown here,
+        // right by the button, instead of only in the page-level notice.
+        patch({ ...data, _saved: false, _error: err.message || 'Could not save — try again.' });
+        throw err;
+      }
     });
   });
 }

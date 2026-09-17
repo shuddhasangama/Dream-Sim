@@ -56,6 +56,23 @@ class EvolutionApiTests(RouteTestCase):
         self.assertEqual(self.request(path+'health_openness',method='PUT',body={'value':'yes'}).status_code,200)
         self.assertEqual(self.request(path+'intimacy_pace',uid='stranger',method='PUT',body={'value':'slow'}).status_code,403)
 
+    def test_chemistry_activities_round_trip(self):
+        # Regression: chemistry_read() used to forward the raw skills_json
+        # blob ({"activities": {...}, "by_bucket": {...}}) as `activities`
+        # instead of drilling into it, so a save's own re-read never came
+        # back looking saved — every activity key was absent from the
+        # (wrongly nested) response.
+        picks={'Cooking':'good','Hiking':'good','Salsa':'improve','Tennis':'maybe'}
+        r=self.request('/profile/chemistry/activities',method='PUT',body={'activities':picks})
+        self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(r.json['data']['activities'],picks)
+        r=self.request('/profile/chemistry')
+        self.assertEqual(r.json['data']['activities'],picks)
+
+    def test_chemistry_activities_below_minimum_rejected(self):
+        r=self.request('/profile/chemistry/activities',method='PUT',body={'activities':{'Cooking':'good'}})
+        self.assertEqual(r.status_code,400,r.json)
+
     def test_contact_neutrality_ownership_and_mutual_agreement(self):
         self.assertEqual(self.post(self.base+'/contact-requests',{'channel':'phone'},'stranger').status_code,404)
         r=self.post(self.base+'/contact-requests',{'channel':'phone'})

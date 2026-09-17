@@ -9,16 +9,25 @@ export function previewTransport() {
     counts: { mutual_open: 1, fits_user_filters: 6, no_realistic_matches: false },
     counting_unverified: false,
     deltas: [],
+    // Every lever/dealbreaker matching.py's IGNORABLE covers, so "More
+    // filters" (road-fixes-clock-spec.md §5) has the full set to prove out
+    // against — reach.js discovers this list from the response, it never
+    // hardcodes it, so what's here is what shows up.
     sliders: [
       { key: 'age', label: 'Age', unit: 'yrs', min: 18, max: 70, step: 1, current: [27, 36], suggested: [26, 38], self_value: 30, ignored: false, delta_if_ignored: 2, basic: true, sensitive: false },
       { key: 'distance_km', label: 'Distance', unit: 'km', min: 0, max: 1600, step: 10, current: [0, 40], suggested: null, self_value: null, ignored: false, delta_if_ignored: 4, basic: true, sensitive: false },
       { key: 'height_cm', label: 'Height', unit: 'cm', min: 140, max: 210, step: 1, current: [160, 185], suggested: [158, 182], self_value: 169, ignored: false, delta_if_ignored: 1, basic: false, sensitive: false },
+      { key: 'weight_kg', label: 'Weight', unit: 'kg', min: 40, max: 150, step: 1, current: [55, 80], suggested: [58, 78], self_value: 66, ignored: false, delta_if_ignored: 1, basic: false, sensitive: false },
+      { key: 'waist_in', label: 'Waist', unit: 'in', min: 20, max: 55, step: 1, current: [26, 36], suggested: [27, 34], self_value: 31, ignored: false, delta_if_ignored: 0, basic: false, sensitive: false },
     ],
     filters: [
       { name: 'veg_only', label: 'Diet', on_label: 'Vegetarian only', kind: 'dealbreaker', basic: true, control: 'choice', ignored: false, value: true, delta_if_ignored: 3, sensitive: false, blurb: '' },
       { name: 'wants_kids', label: 'Wants kids', on_label: 'Required', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: true, delta_if_ignored: 1, sensitive: false, blurb: '' },
       { name: 'no_kids_wanted', label: 'Does not want kids', on_label: 'Required', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '' },
       { name: 'nationality', label: 'Nationality', on_label: 'IN, NRI', kind: 'lever', basic: false, control: 'choice', ignored: false, value: ['IN', 'NRI'], delta_if_ignored: 1, sensitive: true, blurb: '' },
+      { name: 'religion', label: 'Religion', on_label: 'As set', kind: 'lever', basic: false, control: 'choice', ignored: false, value: 'Hindu', delta_if_ignored: 1, sensitive: true, blurb: '' },
+      { name: 'non_smoker', label: 'Non-smoker', on_label: 'Never or quitting', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '' },
+      { name: 'non_drinker', label: 'Non-drinker', on_label: 'Rarely or never', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '' },
     ],
   };
   function reachIgnoredSummary() {
@@ -188,6 +197,10 @@ export function previewTransport() {
 
     if (path.endsWith('/profile/chemistry') && method === 'GET') return ok({ activities: chemistryPicks, activity_options: chemistryActivities, buckets: chemistryBuckets });
     if (path.endsWith('/profile/chemistry/activities')) {
+      // Mirrors onboarding.MIN_SORTED=4 (validate_activities) so the
+      // below-minimum path is actually reachable in preview.
+      const count = Object.keys(body.activities || {}).length;
+      if (count < 4) return err(`Sort at least 4 activities (${count}/4 so far).`, 400);
       chemistryPicks = { ...body.activities };
       return ok({ activities: chemistryPicks, activity_options: chemistryActivities, buckets: chemistryBuckets });
     }

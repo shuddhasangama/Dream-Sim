@@ -170,10 +170,12 @@ function renderDashboard() {
     <section class="card guidance"><span class="eyebrow">NEXT FOR YOU</span><h2>${safe(next?.headline||'Welcome back')}</h2><p>${safe(next?.body||'Review your profile and take your next step when ready.')}</p>
       ${next?.destination && next.destination.eligible && next.destination.request ? `<button id="next-action" class="primary" ${busy?'disabled':''}>${safe(next.cta||'Continue')} <span aria-hidden="true">→</span></button>` : ''}</section>
     <section class="card"><div class="micro">Vision</div><div class="chip-row">${(profile?.visions||[]).map(v=>`<span class="chip">${safe(v.key)}${v.stance?' — '+safe(Array.isArray(v.stance)?v.stance.join(', '):v.stance):''}</span>`).join('')||'<p class="hint">Your vision is still taking shape.</p>'}</div></section>
-    <section class="card"><div class="micro">Stats</div><div class="stat-rows">${DASHBOARD_STAT_ROWS.filter(([k])=>stats[k]!=null).map(([k,label,unit])=>`<div class="stat-row"><span>${safe(label)}</span><span>${safe(stats[k])}${unit}</span></div>`).join('')||'<p class="hint">Nothing on file yet.</p>'}</div></section>`;
+    <section class="card"><div class="micro">Stats</div><div class="stat-rows">${DASHBOARD_STAT_ROWS.filter(([k])=>stats[k]!=null).map(([k,label,unit])=>`<div class="stat-row"><span>${safe(label)}</span><span>${safe(stats[k])}${unit}</span></div>`).join('')||'<p class="hint">Nothing on file yet.</p>'}</div>
+      <button id="edit-stats" class="secondary" type="button" style="margin-top:14px;">Edit stats</button></section>`;
 }
 function bindDashboard() {
   root.querySelector('#next-action')?.addEventListener('click',()=>navigateTo(journey.next_action.destination.key));
+  root.querySelector('#edit-stats')?.addEventListener('click',()=>navigateTo('stats'));
 }
 
 // ── generic fallback (§1: never a blank screen) ───────────────────────────

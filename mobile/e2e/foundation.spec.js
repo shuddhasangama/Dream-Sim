@@ -185,3 +185,88 @@ test('Guru entry reflects the same next-action as the dashboard, and Vision reco
   await expect(page.getByRole('heading',{name:'History'})).toBeVisible();
   await expect(page.getByText('Children: Wanted kids → Not sure about kids anymore')).toBeVisible();
 });
+
+test('Chemistry actually saves and shows an explicit saved indicator (road-fixes-clock-spec.md §2)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  await page.locator('.topnav').getByRole('button',{name:'Chemistry'}).click();
+  await expect(page.getByRole('heading',{name:"What you'd actually do together"})).toBeVisible();
+
+  // Pick a bucket for an activity that had nothing set, save, and confirm
+  // it comes back checked AND an explicit "Saved" indicator appears right
+  // by the button — the regression was the save looking like it silently
+  // did nothing (evolution_api.chemistry_read forwarded the wrong shape).
+  // The radio itself is visually hidden (opacity:0) behind its styled
+  // glyph, same pattern as the web app's own bucket-pick — click the
+  // label, which is what a real tap on the glyph actually hits.
+  await page.locator('label:has(input[name="act__Yoga"][value="improve"])').click();
+  await page.getByRole('button',{name:'Save chemistry'}).click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+  await expect(page.locator('input[name="act__Yoga"][value="improve"]')).toBeChecked();
+
+  // A round-trip through another screen and back proves it actually
+  // persisted server-side, not just an optimistic local render.
+  await page.locator('.topnav').getByRole('button',{name:'Dashboard'}).click();
+  await page.locator('.topnav').getByRole('button',{name:'Chemistry'}).click();
+  await expect(page.locator('input[name="act__Yoga"][value="improve"]')).toBeChecked();
+});
+
+test('REACH heading is plain, and "More filters" exposes every filter the API returns (road-fixes-clock-spec.md §3, §5)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  await page.locator('.topnav').getByRole('button',{name:'REACH',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'See who opens up.'})).toBeVisible();
+  await expect(page.locator('.topnav').getByRole('button',{name:'Reality Check'})).toHaveCount(0);
+  await expect(page.getByText('Reality Check')).toHaveCount(0);
+
+  // Basic filters are visible without expanding anything.
+  for (const name of ['Age','Distance','Diet','Wants kids','Does not want kids']) {
+    await expect(page.locator('.filter-name',{hasText:name})).toBeVisible();
+  }
+
+  // Discovered from the API, not hardcoded — every non-basic filter the
+  // fixture returns (sliders and choices alike) must show up once
+  // expanded, in the same one-row-per-filter pattern as the basic ones.
+  await page.getByText('More filters').click();
+  for (const name of ['Height','Weight','Waist','Nationality','Religion','Non-smoker','Non-drinker']) {
+    await expect(page.locator('.filter-name',{hasText:name})).toBeVisible();
+  }
+});
+
+test('Stats are editable from Dashboard and inline from REACH (road-fixes-clock-spec.md §6)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  // Entry point 1: Dashboard.
+  await page.getByRole('button',{name:'Edit stats'}).click();
+  await expect(page.getByRole('heading',{name:'Your stats'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Save changes'})).toBeVisible();
+  // Verified fields are held, never directly editable — re-checking is
+  // clearly flagged as dropping them out of "verified" in the meantime.
+  await expect(page.getByText('Verified — held')).toBeVisible();
+  await expect(page.getByText('drops it out of "verified"')).toBeVisible();
+
+  // Entry point 2: inline from REACH, without navigating away.
+  await page.locator('.topnav').getByRole('button',{name:'REACH',exact:true}).click();
+  await expect(page.getByText('Missing a filter you expected?')).toBeVisible();
+  await page.getByRole('button',{name:'Edit your stats'}).click();
+  const waistInput = page.locator('input[name="waist_in"]');
+  await expect(waistInput).toBeVisible();
+  await waistInput.fill('30');
+  await page.locator('#inline-stats-form').getByRole('button',{name:'Save changes'}).click();
+  // Saving collapses the inline editor back to its toggle and reloads
+  // the REACH screen itself (a saved stat can unlock a new lever).
+  await expect(page.getByRole('button',{name:'Edit your stats'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'See who opens up.'})).toBeVisible();
+});

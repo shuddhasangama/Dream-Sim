@@ -73,7 +73,15 @@ def register(api,get_db,get_clock,stats_situation,milestones):
         rows=db.fetch_all(get_db(),'ChemistryEntry',user_id=uid())
         answers={r['key']:r['value'] for r in rows}
         pace=next((r for r in rows if r['key']==expectations.PACE),{})
-        return jsonify(activities=db.load_json_field(db.fetch_one(get_db(),'User',id=uid())['skills_json'],{}),
+        # skills_json is {"activities": {...flat map...}, "by_bucket": {...}}
+        # (onboarding.build_skills's own shape) — the flat map is what a
+        # client actually renders per-activity, same as chemistry_view()'s
+        # own chosen = skills.get('activities', {}). Forwarding the raw
+        # blob here made every save look like it hadn't persisted: the
+        # response's `activities` never matched an ACTIVITIES key, so no
+        # radio ever came back checked.
+        skills=db.load_json_field(db.fetch_one(get_db(),'User',id=uid())['skills_json'],{})
+        return jsonify(activities=skills.get('activities',{}),
             activity_options=onboarding.ACTIVITIES,buckets=onboarding.BUCKETS,
             answers=answers,entry_keys=(*chemistry.MANDATORY_KEYS,*chemistry.INTIMACY_MANDATORY_KEYS),
             options={'physical_boundary':chemistry.PHYSICAL_BOUNDARY_OPTIONS,'intimacy_pace':chemistry.INTIMACY_PACE_OPTIONS,'health_openness':chemistry.HEALTH_OPENNESS_OPTIONS},
