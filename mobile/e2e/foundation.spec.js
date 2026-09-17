@@ -43,7 +43,7 @@ test('navigation: tabs, the in-app back button, and journey/status-driven eligib
   await expect(tabbar.getByRole('button',{name:'Relationship'})).toHaveCount(0);
 
   await tabbar.getByRole('button',{name:'Week'}).click();
-  await expect(page.getByRole('heading',{name:'Week',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:"This week's matches"})).toBeVisible();
   await expect(page.getByRole('button',{name:'← Back'})).toBeVisible();
 
   await page.getByRole('button',{name:'← Back'}).click();
@@ -53,5 +53,31 @@ test('navigation: tabs, the in-app back button, and journey/status-driven eligib
   // The dashboard's own next-action CTA is a second way into the same
   // navigation, not a separate mechanism — it should land on the same screen.
   await page.getByRole('button',{name:'See this week'}).click();
-  await expect(page.getByRole('heading',{name:'Week',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:"This week's matches"})).toBeVisible();
+});
+
+test('mutual interest locks in and REACH disappears from the tab bar live, not just on the next full load',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  const tabbar = page.locator('.tabbar');
+  await expect(tabbar.getByRole('button',{name:'REACH'})).toBeVisible();
+  await tabbar.getByRole('button',{name:'Week'}).click();
+  await expect(page.locator('.candidate-name')).toHaveText('Priya Sharma');
+
+  await page.getByRole('button',{name:'Express interest'}).click();
+  await expect(page.getByRole('heading',{name:"You're locked in"})).toBeVisible();
+  await expect(page.getByText('Status')).toBeVisible();
+  // The tab bar re-renders from the freshly refetched journey/status —
+  // REACH is gone without needing a manual reload (mobile-journey-build-
+  // spec.md §2.1: "REACH sunsets at lock-in").
+  await expect(tabbar.getByRole('button',{name:'REACH'})).toHaveCount(0);
+
+  await page.getByRole('button',{name:'Open calendar'}).click();
+  // Calendar has no bespoke screen yet (Stage 3) — the generic read-model
+  // fallback must still show something real, never a blank screen.
+  await expect(page.locator('.raw')).toBeVisible();
 });

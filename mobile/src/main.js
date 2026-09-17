@@ -2,6 +2,8 @@ import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { Session, classify } from './session.js';
 import { previewTransport } from './preview.js';
 import { createNav, visibleTabs, labelFor, wireHardwareBack, wireKeyboardScroll } from './nav.js';
+import * as reachScreen from './screens/reach.js';
+import * as weekScreen from './screens/week.js';
 import './style.css';
 
 const native = Capacitor.isNativePlatform();
@@ -33,8 +35,30 @@ const nav = createNav(render);
 // ── screen registry (§1) ───────────────────────────────────────────────
 // Every surface key not listed here still works via the generic fallback —
 // it shows exactly what the server's read model returned, so nothing is
-// ever a blank screen even before its bespoke UI exists.
-const screens = { dashboard: { render: renderDashboard, bind: bindDashboard } };
+// ever a blank screen even before its bespoke UI exists. Bespoke screens are
+// pure functions of ctx (below) — no import of main.js, so no import cycle.
+const screens = {
+  dashboard: { render: renderDashboard, bind: bindDashboard },
+  reach: reachScreen,
+  week: weekScreen,
+};
+
+// What every screen module receives. `data` is this screen's own GET result
+// (or null for dashboard, which uses journey/profile directly); `patch`
+// lets a screen update its own local copy of `data` after a mutation
+// without a full reload (e.g. optimistic-ish but still server-confirmed —
+// every screen actually assigns the server's own response, never a guess).
+function buildCtx() {
+  return {
+    session, journey, profile, data: screenData, busy, safe,
+    run, navigateTo, goBack,
+    patch(next) { screenData = next; },
+    // For a mutation that can change eligibility/tabs (e.g. mutual interest
+    // creating a lock-in, which closes REACH) — refetches journey/status
+    // without touching this screen's own already-patched data.
+    async refreshJourney() { journey = await session.get('/api/v1/journey/status'); },
+  };
+}
 
 function render() {
   const signedIn = !!journey;
@@ -64,9 +88,10 @@ function render() {
 
 function renderChrome(current, tabs) {
   const screen = screens[current.key];
+  const ctx = buildCtx();
   const body = screenBlocked ? blockedScreen(current.key)
     : screenUnavailable ? unavailableScreen(current.key)
-    : screen ? screen.render()
+    : screen ? screen.render(ctx)
     : genericScreen(current.key);
   return `<div class="toolbar">
       ${nav.depth>1?'<button id="back" class="text-button">← Back</button>':'<span></span>'}
@@ -84,7 +109,7 @@ function bindChrome(current) {
     message=revoked?'You have signed out.':'Signed out on this device. The server could not be reached to revoke the session; it will expire automatically.';
   }));
   root.querySelectorAll('[data-nav]').forEach(btn=>btn.addEventListener('click',()=>navigateTo(btn.dataset.nav)));
-  screens[current.key]?.bind?.();
+  if (!screenBlocked && !screenUnavailable) screens[current.key]?.bind?.(root, buildCtx());
 }
 
 function signin() {
