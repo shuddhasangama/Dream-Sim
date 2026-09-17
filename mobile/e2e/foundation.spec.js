@@ -77,7 +77,67 @@ test('mutual interest locks in and REACH disappears from the tab bar live, not j
   await expect(tabbar.getByRole('button',{name:'REACH'})).toHaveCount(0);
 
   await page.getByRole('button',{name:'Open calendar'}).click();
-  // Calendar has no bespoke screen yet (Stage 3) — the generic read-model
-  // fallback must still show something real, never a blank screen.
-  await expect(page.locator('.raw')).toBeVisible();
+  // Calendar now has its own bespoke screen (Stage 3).
+  await expect(page.getByRole('heading',{name:'When to meet'})).toBeVisible();
+});
+
+test('full date pipeline: calendar overlap, plan, order-enforced ceremony, and two-green-flag debrief',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  await page.locator('.tabbar').getByRole('button',{name:'Week'}).click();
+  await page.getByRole('button',{name:'Express interest'}).click();
+  await page.getByRole('button',{name:'Open calendar'}).click();
+
+  // Submit availability that overlaps the fixture's own match availability,
+  // then confirm a slot — this generates the date plan (§2.4).
+  await page.getByLabel('Fri · Dinner').check();
+  await page.getByLabel('Sat · Dinner').check();
+  await page.getByRole('button',{name:'Save availability'}).click();
+  await expect(page.getByRole('heading',{name:'You\'re both free'})).toBeVisible();
+  await page.getByRole('button',{name:'Confirm'}).first().click();
+  await expect(page.getByRole('button',{name:'View date plan'})).toBeVisible();
+
+  await page.getByRole('button',{name:'View date plan'}).click();
+  await expect(page.getByRole('heading',{name:'Pending signatures'})).toBeVisible();
+  await page.getByRole('button',{name:'Review & sign'}).click();
+
+  // Ceremony is order-enforced: playbook → sign → face (§2.4). The client
+  // only ever offers the one action matching the server's current step.
+  await expect(page.getByRole('heading',{name:'Rules of engagement'})).toBeVisible();
+  await page.getByRole('button',{name:"I've read this"}).click();
+
+  await expect(page.getByRole('heading',{name:'Sign'})).toBeVisible();
+  await page.getByLabel('Your name').fill('Rohan Verma');
+  await page.getByLabel('I will treat my match with respect.').check();
+  await page.getByLabel('I understand the cancellation terms.').check();
+  await page.getByLabel('I understand this is not a relationship yet.').check();
+  await page.getByLabel('I accept the platform is not liable for what happens on the date.').check();
+  await page.getByRole('button',{name:'Sign',exact:true}).click();
+
+  await expect(page.getByRole('heading',{name:"Verify it's you"})).toBeVisible();
+  await page.getByRole('button',{name:'Verify',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'All set'})).toBeVisible();
+
+  await page.getByRole('button',{name:'After the date'}).click();
+  await expect(page.getByRole('heading',{name:'How did it go?'})).toBeVisible();
+
+  // flagsValid requires exactly two green flags (§2.5) — the submit button
+  // must stay disabled until exactly two are picked.
+  const submit = page.getByRole('button',{name:'Save feedback'});
+  await expect(submit).toBeDisabled();
+  await page.getByRole('button',{name:'Actually listened'}).click();
+  await expect(submit).toBeDisabled();
+  await page.getByRole('button',{name:'On time'}).click();
+  await expect(submit).toBeEnabled();
+  await submit.click();
+
+  await expect(page.getByRole('heading',{name:"What's next?"})).toBeVisible();
+  await expect(page.getByText('One No is Enough')).toBeVisible();
+  await page.getByRole('button',{name:'Go steady'}).click();
+  await expect(page.getByRole('heading',{name:'Saved'})).toBeVisible();
+  await expect(page.getByText('You said: Go steady.')).toBeVisible();
 });

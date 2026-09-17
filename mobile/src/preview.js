@@ -34,6 +34,25 @@ export function previewTransport() {
     ],
   };
 
+  let calendar = null; // built once locked in, see ensureLockedInState()
+  let plan = null;
+  let agreement = null;
+  let debrief = null;
+
+  function ensureLockedInState() {
+    if (calendar) return;
+    calendar = {
+      lock_in_id: week.lock_in.id, clock_mode: 'simulation',
+      valid_slots: ['Fri', 'Sat', 'Sun'].flatMap((day) => ['breakfast', 'lunch', 'coffee', 'dinner'].filter((m) => !(day === 'Fri' && ['breakfast', 'lunch'].includes(m))).map((meal_slot) => ({ day, meal_slot }))),
+      my_slots: [], partner_submitted: false, overlap: [],
+      alignment: { mine: { budget: null, diet: null, cuisine: null }, my_missing: ['budget', 'diet', 'cuisine'], partner_missing: ['budget', 'diet', 'cuisine'],
+        options: { budget: ['₹1,500–2,500', '₹2,500–4,000', '₹4,000+'], diet: ['No preference', 'Vegetarian', 'Vegan'], cuisine: ['North Indian', 'Italian', 'Cafe'] } },
+      current_plan_id: null, editable: true,
+      payment: { purpose: 'date_plan', scope_id: week.lock_in.id, satisfied: true, enforced: false, amount_inr: 0, provider_mode: 'simulation', api_payment_available: false },
+      cycle: 1,
+    };
+  }
+
   const ok = (data, status=200) => ({status, data:{data,error:null}});
   const err = (message, status) => ({status, data:{error:{message},data:null}});
 
@@ -65,6 +84,8 @@ export function previewTransport() {
         {key:'chemistry',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/profile/chemistry'}},
         {key:'stats',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/profile/stats'}},
         {key:'calendar',eligible:!!week.lock_in,blocked_reason:week.lock_in?null:'This opens once you and someone have locked each other in.',api_available:!!week.lock_in,request:week.lock_in?{method:'GET',path:'/api/v1/lock-ins/'+week.lock_in.id+'/calendar'}:null},
+        {key:'plan',eligible:!!week.date_plan,blocked_reason:week.date_plan?null:'This opens once a date is actually set.',api_available:!!week.date_plan,request:week.date_plan?{method:'GET',path:'/api/v1/date-plans/'+week.date_plan.id}:null},
+        {key:'debrief',eligible:!!week.date_plan,blocked_reason:week.date_plan?null:'This opens once a date is actually set.',api_available:!!week.date_plan,request:week.date_plan?{method:'GET',path:'/api/v1/date-plans/'+week.date_plan.id+'/debrief'}:null},
         {key:'verify',eligible:false,blocked_reason:'You are already verified.',api_available:false,request:null},
         {key:'relationship',eligible:false,blocked_reason:'This opens once you have both agreed to be exclusive.',api_available:false,request:null},
         {key:'journey',eligible:false,blocked_reason:'This opens once you have both agreed to be exclusive.',api_available:false,request:null},
@@ -99,8 +120,77 @@ export function previewTransport() {
         // Mutual interest with the preview's one open candidate locks you in.
         week.lock_in = { id: 'lockin-preview', status: 'active', week: week.clock.week, dates_completed: 0 };
         week.mode = 'locked_in';
+        ensureLockedInState();
       }
       return ok({ match_id: id, action: body.action, replayed: false });
+    }
+
+    if (path.endsWith('/calendar') && method === 'GET') return ok(calendar);
+    if (path.endsWith('/alignment')) {
+      calendar.alignment.mine = { budget: body.budget, diet: body.diet, cuisine: body.cuisine };
+      calendar.alignment.my_missing = [];
+      return ok(calendar);
+    }
+    if (path.endsWith('/availability')) {
+      calendar.my_slots = body.slots;
+      // Preview partner mirrors your first two picks, so overlap has something to confirm.
+      calendar.partner_submitted = true;
+      calendar.overlap = body.slots.slice(0, 2);
+      return ok(calendar);
+    }
+    if (path.endsWith('/date-plan') && method === 'POST') {
+      const id = 'plan-preview';
+      calendar.current_plan_id = id;
+      week.date_plan = { id, status: 'pending_signatures', datetime: `2026-01-0${['Fri','Sat','Sun'].indexOf(body.day)+9}T19:00` };
+      plan = {
+        id, lockin_id: week.lock_in.id, datetime: week.date_plan.datetime, meal: body.meal_slot, venue: 'Cafe Noir', cuisine: (calendar.alignment.mine.cuisine || [])[0] || null,
+        budget_estimate: (calendar.alignment.mine.budget || [])[0] || null, bill_split: 'pay-your-own', status: 'pending_signatures',
+        cancel_notice_hrs: 24, cancel_fee: 0, my_selections: { greeting: null, dietary: null, dress: null }, my_signed: false, partner_signed: false,
+        payment: calendar.payment, face_mode: 'simulation', face_simulation_available: true,
+      };
+      agreement = {
+        plan_id: id, step: 'playbook', complete: false, my_signed_name: null, my_signed_at: null,
+        acknowledgements: [
+          { key: 'ack_conduct', label: 'I will treat my match with respect.', term: 'Standard conduct expectations apply throughout the date.' },
+          { key: 'ack_cancellation', label: 'I understand the cancellation terms.', term: '24 hours notice avoids the cancellation fee.' },
+          { key: 'ack_not_a_relationship', label: 'I understand this is not a relationship yet.', term: 'Exclusivity is a separate, later step.' },
+          { key: 'ack_liability', label: 'I accept the platform is not liable for what happens on the date.', term: 'DhaShu facilitates introductions only.' },
+        ],
+        clauses: [{ text: 'Meet in a public place for the first date.' }, { text: 'Either of you may leave at any time.' }],
+        face_mode: 'simulation', face_simulation_available: true, payment: calendar.payment,
+      };
+      debrief = {
+        plan_id: id, status: 'pending_signatures', clock_mode: 'simulation', opens_at: 'Sun:21', feedback_open: true, cancellable: true,
+        cancellation: { late: false, hours_notice: 48, fee_inr: 0, compliance_event: null, reason: '' },
+        my_feedback: { green_flags: [], red_flags: [], decision: null, reason: null, photo_consent: { together_photo: false, bill_photo: false }, no_show_reported: false },
+        partner_submitted: false, mutual_photo_consent: { together_photo: false, bill_photo: false }, resolution: 'pending', no_show_is_confirmed: false,
+        green_flag_options: ['Actually listened', 'On time', 'Asked good questions', 'Kind to staff', 'Made me laugh'],
+        red_flag_options: ['Talked over me', 'Showed up late', 'Phone face-up the whole time'],
+        decision_options: ['continue', 'relationship', 'pass'],
+      };
+      return ok({ match_id: id, action: 'confirmed', replayed: false });
+    }
+
+    if (path.endsWith('/selections')) { plan.my_selections = { ...plan.my_selections, dietary: body.dietary, dress: body.dress }; return ok(plan); }
+    if (plan && path.endsWith('/date-plans/' + encodeURIComponent(plan.id)) && method === 'GET') return ok(plan);
+    if (path.includes('/date-plans/') && path.endsWith('/agreement') && method === 'GET') return ok(agreement);
+    if (path.endsWith('/agreement/steps')) {
+      if (body.step === 'playbook' && agreement.step === 'playbook') agreement.step = 'sign';
+      else if (body.step === 'sign' && agreement.step === 'sign') {
+        agreement.my_signed_name = body.signed_name; agreement.my_signed_at = 'Fri:19'; agreement.step = 'face'; plan.my_signed = true;
+      } else if (body.step === 'face' && agreement.step === 'face') { agreement.step = 'done'; agreement.complete = true; plan.status = 'confirmed'; }
+      return ok(agreement);
+    }
+    if (path.endsWith('/debrief')) return ok(debrief);
+    if (path.endsWith('/feedback/flags')) {
+      debrief.my_feedback.green_flags = body.green_flags; debrief.my_feedback.red_flags = body.red_flags;
+      debrief.my_feedback.photo_consent = { together_photo: !!body.together_photo, bill_photo: !!body.bill_photo };
+      return ok(debrief);
+    }
+    if (path.endsWith('/feedback/decision')) {
+      debrief.my_feedback.decision = body.decision; debrief.my_feedback.reason = body.reason;
+      debrief.resolution = body.decision === 'pass' ? 'rejected' : body.decision === 'relationship' ? 'both_relationship' : 'keep_dating';
+      return ok(debrief);
     }
 
     throw new Error('Unsupported preview request: '+method+' '+path);

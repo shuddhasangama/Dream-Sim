@@ -4,6 +4,10 @@ import { previewTransport } from './preview.js';
 import { createNav, visibleTabs, labelFor, wireHardwareBack, wireKeyboardScroll } from './nav.js';
 import * as reachScreen from './screens/reach.js';
 import * as weekScreen from './screens/week.js';
+import * as calendarScreen from './screens/calendar.js';
+import * as planScreen from './screens/plan.js';
+import * as ceremonyScreen from './screens/ceremony.js';
+import * as debriefScreen from './screens/debrief.js';
 import './style.css';
 
 const native = Capacitor.isNativePlatform();
@@ -41,6 +45,10 @@ const screens = {
   dashboard: { render: renderDashboard, bind: bindDashboard },
   reach: reachScreen,
   week: weekScreen,
+  calendar: calendarScreen,
+  plan: planScreen,
+  ceremony: ceremonyScreen,
+  debrief: debriefScreen,
 };
 
 // What every screen module receives. `data` is this screen's own GET result
@@ -51,6 +59,7 @@ const screens = {
 function buildCtx() {
   return {
     session, journey, profile, data: screenData, busy, safe,
+    params: nav.current.params,
     run, navigateTo, goBack,
     patch(next) { screenData = next; },
     // For a mutation that can change eligibility/tabs (e.g. mutual interest
@@ -109,7 +118,16 @@ function bindChrome(current) {
     message=revoked?'You have signed out.':'Signed out on this device. The server could not be reached to revoke the session; it will expire automatically.';
   }));
   root.querySelectorAll('[data-nav]').forEach(btn=>btn.addEventListener('click',()=>navigateTo(btn.dataset.nav)));
-  if (!screenBlocked && !screenUnavailable) screens[current.key]?.bind?.(root, buildCtx());
+  // Dashboard binds off journey/profile, not screenData, so it's always
+  // ready. Screens with no journey/status surface of their own (e.g.
+  // ceremony) load via screen.load and still need binding even though
+  // screenData tracks the generic-surface path only. Every other screen's
+  // bind() assumes real data (its own render() shows "Loading…" and offers
+  // no interactive elements otherwise), so it must wait for screenData to
+  // actually be populated.
+  const screen = screens[current.key];
+  const ready = current.key === 'dashboard' || screenData || screen?.load;
+  if (!screenBlocked && !screenUnavailable && ready) screen?.bind?.(root, buildCtx());
 }
 
 function signin() {
@@ -154,16 +172,24 @@ function genericScreen(key) {
 // ── navigation + loading ───────────────────────────────────────────────
 function navigateTo(key, params) {
   if (busy) return;
+  screenData=null; screenBlocked=null; screenUnavailable=false;
   nav.push(key, params);
   run(() => loadScreen(key, params));
 }
 function goBack() {
   if (busy) return;
+  screenData=null; screenBlocked=null; screenUnavailable=false;
   if (nav.pop()) run(() => loadScreen(nav.current.key, nav.current.params));
 }
-async function loadScreen(key) {
+async function loadScreen(key, params) {
   screenBlocked=null; screenUnavailable=false; screenData=null;
   if (key === 'dashboard') { await load(); return; }
+  // A screen reached with its own params (e.g. ceremony, which has no
+  // journey/status surface entry of its own — its real path always needs a
+  // specific plan id) supplies its own loader instead of the generic
+  // surface lookup below.
+  const screen = screens[key];
+  if (screen?.load) { screenData = await screen.load(session, params); return; }
   const surface = journey?.surfaces?.find(s=>s.key===key);
   if (!surface || !surface.eligible) { screenBlocked = surface?.blocked_reason || "This isn't available right now."; return; }
   if (!surface.request) { screenUnavailable = true; return; }
