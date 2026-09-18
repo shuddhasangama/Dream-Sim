@@ -71,7 +71,10 @@ SIM_STATE_PATH = APP_DIR / "data" / "sim_state.json"
 # number, never from the wall clock — journey.py requires an explicit
 # `today` and this keeps that reproducible across runs, matching
 # docs/CLAUDE.md's "seeded randomness so runs are reproducible" convention.
-WEEK_ONE_MONDAY = date(2026, 1, 5)
+# Canonical value lives in clock.py (road-fixes-clock-spec.md §7: one
+# clock module) — real_time_clock() needs the same epoch this uses, so
+# there's exactly one place either could drift from the other.
+WEEK_ONE_MONDAY = clock_module.WEEK_ONE_MONDAY
 
 # ROAD's weekly routine grid — the full 7-day week, distinct from Dating's
 # own Fri/Sat/Sun date-slot days (calendar_dating.DAY_SLOTS).
@@ -126,6 +129,13 @@ _DEFAULT_CLOCK = {"week": 1, "day": "Mon", "hour": 12}
 
 
 def get_clock() -> clock_module.SimulationClock:
+    """The one place DHASHU_SIMULATED_CLOCK is actually branched on
+    (road-fixes-clock-spec.md §7). Production (the env var off) always
+    reads real wall-clock time — the file-backed override below is never
+    consulted, so nothing a client sent earlier can leak into a build
+    that has since turned simulation off."""
+    if not clock_module.simulated():
+        return clock_module.real_time_clock()
     if not SIM_STATE_PATH.exists():
         raw = _DEFAULT_CLOCK
     else:
@@ -134,6 +144,13 @@ def get_clock() -> clock_module.SimulationClock:
 
 
 def set_clock(c: clock_module.SimulationClock) -> None:
+    # Deliberately NOT gated on clock_module.simulated() here: this writes
+    # the override file, but get_clock() above is the only thing that
+    # reads it, and get_clock() ignores that file entirely whenever
+    # SIMULATED is off. That's what actually makes a client-supplied
+    # override inert in production (§7.2) — server-side/operator tooling
+    # (the web admin routes, enrollment_admin.py, this project's own test
+    # suite) can still call this directly without needing the env var on.
     SIM_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     SIM_STATE_PATH.write_text(json.dumps({"week": c.week, "day": c.day, "hour": c.hour}), encoding="utf-8")
 
@@ -4423,7 +4440,7 @@ def _api_journey_state(user):
         user, active=active, plan=plan, couple=couple,
         reached=_milestones_for(user), contact=verification_status(user['user_id']),
         clock=get_clock(), reach_is_locked=reach_locked(user), facts=_guru_facts(user),
-        display_name=display_name(user['user_id'], user['gender']))
+        display_name=display_name(user['user_id'], user['gender']), simulated=clock_module.simulated())
 
 
 from api import register_api
@@ -4454,6 +4471,7 @@ register_api(
         get_db(), user['user_id'], match_id, body['action'], body.get('pass_reason'), get_clock()),
     reach_actions={"ignore": reach_ignore, "show-all": reach_show_all,
                    "widen": reach_widen, "set-range": reach_set_range},
+    get_clock=get_clock, set_clock=set_clock,
 )
 
 

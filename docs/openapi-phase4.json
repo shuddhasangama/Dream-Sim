@@ -230,6 +230,113 @@
         }
       }
     },
+    "/simulated-clock": {
+      "post": {
+        "operationId": "stepSimulatedClock",
+        "summary": "stepSimulatedClock",
+        "description": "Testing only (road-fixes-clock-spec.md §7). Advances or sets the shared simulated clock, gated entirely on the server's own DHASHU_SIMULATED_CLOCK setting — never on anything the client sends. Disabled and inert whenever that setting is off; production always derives the clock from real time. Provide exactly one of advance_hours or the week/day/hour trio.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "advance_hours": {
+                    "type": "integer",
+                    "description": "Move the shared clock forward (or back, if negative) this many hours."
+                  },
+                  "week": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "day": {
+                    "type": "string",
+                    "enum": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                  },
+                  "hour": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 23
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Clock updated; returns the same projection as GET /journey/status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JourneyStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or ambiguous body — neither shape, both shapes, or an out-of-range value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or session revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The simulated clock is off in this build.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error; reference is safe to report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/week": {
       "get": {
         "operationId": "getWeek",
@@ -9796,7 +9903,7 @@
             "type": "object",
             "properties": {
               "mode": {
-                "const": "simulation"
+                "enum": ["simulation", "real_time"]
               },
               "week": {
                 "type": "integer"
@@ -9815,6 +9922,10 @@
               "hour"
             ],
             "additionalProperties": false
+          },
+          "simulated_clock": {
+            "type": "boolean",
+            "description": "road-fixes-clock-spec.md §7: true only when this build's DHASHU_SIMULATED_CLOCK is on. The client must gate day/hour stepping controls on this field alone — never infer it from a build variable."
           },
           "current_lock_in": {
             "anyOf": [
@@ -9917,6 +10028,7 @@
           "milestones",
           "contact_verification",
           "clock",
+          "simulated_clock",
           "current_lock_in",
           "current_date_plan",
           "current_couple",
@@ -10115,7 +10227,7 @@
             "type": "object",
             "properties": {
               "mode": {
-                "const": "simulation"
+                "enum": ["simulation", "real_time"]
               },
               "week": {
                 "type": "integer"

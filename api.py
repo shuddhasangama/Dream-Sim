@@ -6,11 +6,13 @@ or creates a second Flask application (including under Gunicorn).
 import math
 
 from flask import Blueprint, g, jsonify, request
+import clock as clock_module
 from api_contract import ApiError, json_object
 
 
 def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
-                 journey_state=None, week_reads=None, week_prepare=None, match_action=None, planning=None, date_cycle=None, evolution=None, after_date=None, relationship=None, enrollment=None):
+                 journey_state=None, week_reads=None, week_prepare=None, match_action=None, planning=None, date_cycle=None, evolution=None, after_date=None, relationship=None, enrollment=None,
+                 get_clock=None, set_clock=None):
     api = Blueprint("api_v1", __name__, url_prefix="/api/v1")
     if enrollment is not None:
         import enrollment_api
@@ -81,6 +83,37 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
             if 'verified' not in state['milestones']:
                 return failure('verification_required', 'Background verification must clear first.', 403)
             return jsonify(state['next_action'])
+
+        if get_clock is not None and set_clock is not None:
+            # road-fixes-clock-spec.md §7: testing-only, and the *server's*
+            # own clock.simulated() decides that — never a client-supplied
+            # value, and never inferred from anything else a client sends.
+            # get_clock() already ignores this file's contents whenever
+            # simulated() is false (app.py), but refusing here too means a
+            # testing UI gets an honest 403 instead of a 200 that silently
+            # changed nothing observable.
+            @api.post('/simulated-clock')
+            def simulated_clock_step():
+                if not clock_module.simulated():
+                    return failure('simulated_clock_disabled', 'The simulated clock is off in this build.', 403)
+                body = json_object(optional={'advance_hours', 'week', 'day', 'hour'})
+                explicit = {'week', 'day', 'hour'} & body.keys()
+                if ('advance_hours' in body) == bool(explicit):
+                    return failure('validation_error', 'Provide either advance_hours or week+day+hour, not both.', 400)
+                current = get_clock()
+                if 'advance_hours' in body:
+                    if type(body['advance_hours']) is not int:
+                        return failure('validation_error', 'advance_hours must be an integer.', 400)
+                    next_clock = current.advance_hours(body['advance_hours'])
+                else:
+                    if explicit != {'week', 'day', 'hour'}:
+                        return failure('validation_error', 'week, day and hour are all required together.', 400)
+                    try:
+                        next_clock = clock_module.SimulationClock.at(body['week'], body['day'], body['hour'])
+                    except (ValueError, TypeError) as exc:
+                        return failure('validation_error', str(exc), 400)
+                set_clock(next_clock)
+                return jsonify(journey_state(g.api_user))
 
     if week_reads is not None:
         @api.get('/week')

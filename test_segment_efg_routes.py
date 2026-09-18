@@ -51,7 +51,11 @@ class RouteTestCase(unittest.TestCase):
             mock.patch.object(db, "get_connection",
                               lambda *a, **k: real_get_connection(self.db_path)),
             mock.patch.object(app_module, "SIM_STATE_PATH", tmp / "sim_state.json"),
-            mock.patch.dict(os.environ, {"PAYMENTS_ENABLED": "0", "DEMO_MODE": "1"}),
+            # This whole suite drives the clock directly (set_clock() below,
+            # per-test set_clock() calls) — it's the "testing" side of
+            # road-fixes-clock-spec.md §7, so it opts into the simulated
+            # clock explicitly rather than relying on a default.
+            mock.patch.dict(os.environ, {"PAYMENTS_ENABLED": "0", "DEMO_MODE": "1", "DHASHU_SIMULATED_CLOCK": "true"}),
         ]
         for p in self._patches:
             p.start()

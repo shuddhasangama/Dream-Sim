@@ -14,14 +14,15 @@
 export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Week</h1></section><section class="card"><p>Loading…</p></section>';
-  if (data.mode === 'post_dating') return postDating(data, safe);
+  if (data.mode === 'post_dating') return postDating(ctx);
   if (data.mode === 'locked_in') return lockedIn(ctx);
   return dating(ctx);
 }
 
-function postDating(data, safe) {
+function postDating(ctx) {
+  const { data, safe } = ctx;
   return `<section class="intro"><span class="eyebrow">WEEK</span><h1>Past the searching phase</h1></section>
-    ${theWeek(data, safe)}
+    ${theWeek(ctx)}
     <section class="card guidance"><p>REACH and the weekly matches have sunset for you — Guru and Journey are where things continue from here.</p></section>`;
 }
 
@@ -29,7 +30,7 @@ function lockedIn(ctx) {
   const { data, safe } = ctx;
   const li = data.lock_in;
   return `<section class="intro"><span class="eyebrow">WEEK · LOCKED IN</span><h1>You're locked in</h1></section>
-    ${theWeek(data, safe)}
+    ${theWeek(ctx)}
     <section class="card">
       <div class="stat-row"><span>Status</span><strong>${safe(li?.status)}</strong></div>
       <div class="stat-row"><span>Since week</span><strong>${safe(li?.week)}</strong></div>
@@ -43,12 +44,13 @@ function dating(ctx) {
   const { data, safe } = ctx;
   if (!data.prepared) {
     return `<section class="intro"><span class="eyebrow">WEEK ${safe(data.clock?.week)}</span><h1>This week hasn't started yet</h1></section>
+      ${theWeek(ctx)}
       <section class="card"><p>Set up this week's matches to see who's revealed.</p>
       <button id="prepare" class="primary" type="button">Prepare this week <span aria-hidden="true">→</span></button></section>`;
   }
   const slots = data.matches || [];
   return `<section class="intro"><span class="eyebrow">WEEK ${safe(data.clock?.week)} · ${safe(data.clock?.day)} ${String(data.clock?.hour ?? 0).padStart(2, '0')}:00</span><h1>This week's matches</h1></section>
-    ${theWeek(data, safe)}
+    ${theWeek(ctx)}
     ${slots.length ? slots.map((m) => matchSlot(m, safe)).join('') : '<section class="card"><p>No matches this week — an honest zero, not a filter problem to fix.</p></section>'}`;
 }
 
@@ -109,14 +111,27 @@ function explainedMoments(grid) {
   return out.sort((a, b) => (dayIndex(a.day) - dayIndex(b.day)) || (a.hour - b.hour));
 }
 
-function theWeek(data, safe) {
+function theWeek(ctx) {
+  const { data, safe, journey, simulatedClockBuild } = ctx;
   const schedule = data.schedule;
   if (!schedule?.grid) return '';
   const { grid, legend = [] } = schedule;
   const nowText = data.clock ? `${safe(data.clock.day)} ${String(data.clock.hour ?? 0).padStart(2, '0')}:00` : '';
   const phaseCopy = WEEK_PHASE_COPY[data.phase] || '';
   const explained = explainedMoments(grid);
-  return `<section class="card the-week">
+  // §7.6/§7.8: the server's own simulated_clock is the primary gate —
+  // never inferred from the build flag alone. The build flag is only ever
+  // an ADDITIONAL restriction (both must be true), never a replacement.
+  const simClock = journey?.simulated_clock && simulatedClockBuild ? `<div class="demo-bar">
+      <span class="demo-tag">SIMULATION</span>
+      <span class="demo-clock">${safe(data.clock?.day)} ${String(data.clock?.hour ?? 0).padStart(2, '0')}:00 · Week ${safe(data.clock?.week)}</span>
+      <div class="demo-steps">
+        <button class="demo-step" type="button" data-advance="1">+1 hour</button>
+        <button class="demo-step" type="button" data-advance="24">+1 day</button>
+        <button class="demo-step" type="button" data-advance="168">+1 week</button>
+      </div>
+    </div>` : '';
+  return `${simClock}<section class="card the-week">
     <div class="tw-head"><div class="section-label" style="margin:0;">The week</div><div class="tw-now">${nowText}</div></div>
     ${phaseCopy ? `<div class="hint tw-phase">${safe(phaseCopy)}</div>` : ''}
     <div class="tw-scroll">
@@ -148,6 +163,14 @@ export function bind(root, ctx) {
     patch(await session.post('/api/v1/week/prepare', {}));
   }));
   root.querySelector('#to-calendar')?.addEventListener('click', () => navigateTo('calendar'));
+  root.querySelectorAll('.demo-step').forEach((btn) => btn.addEventListener('click', () => run(async () => {
+    await session.post('/api/v1/simulated-clock', { advance_hours: Number(btn.dataset.advance) });
+    // The clock moving can change everything about this screen — reveal
+    // timing, phase, prepared state — so reload both the week and the
+    // shared journey/status rather than patching a field by hand.
+    patch(await session.get('/api/v1/week'));
+    await refreshJourney();
+  })));
   root.querySelectorAll('.act').forEach((btn) => btn.addEventListener('click', () => run(async () => {
     const matchId = btn.dataset.match;
     const action = btn.dataset.action;

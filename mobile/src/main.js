@@ -18,6 +18,11 @@ import './style.css';
 
 const native = Capacitor.isNativePlatform();
 const preview = import.meta.env.DEV && !Capacitor.isNativePlatform();
+// road-fixes-clock-spec.md §7.8: a build-time convenience switch, never
+// the sole gate (screens still require journey.simulated_clock from the
+// server too — see week.js). Preview always allows it through: it never
+// talks to a real backend, so there's nothing this would protect there.
+const simulatedClockBuild = preview || String(import.meta.env.DHASHU_SIMULATED_CLOCK).toLowerCase() === 'true';
 const Vault = registerPlugin('SessionVault');
 const API = 'https://dream-sim-production.up.railway.app';
 let temporary = null;
@@ -72,7 +77,7 @@ const screens = {
 function buildCtx() {
   return {
     session, journey, profile, data: screenData, busy, safe,
-    params: nav.current.params,
+    params: nav.current.params, simulatedClockBuild,
     run, navigateTo, goBack,
     patch(next) { screenData = next; },
     // For a mutation that can change eligibility/tabs (e.g. mutual interest

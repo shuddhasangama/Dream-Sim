@@ -13,6 +13,12 @@ workflows:
         bundle_identifier: com.dhashu.app
       vars:
         BUNDLE_ID: "com.dhashu.app"
+        # road-fixes-clock-spec.md §7.8: a convenience switch for this
+        # build only — it does NOT replace the server-side gate. The
+        # server's own journey/status simulated_clock flag still has to
+        # be true too before the app will show any clock-stepping
+        # controls at all (mobile/src/main.js and week.js).
+        DHASHU_SIMULATED_CLOCK: "false"
     scripts:
       - name: Show working directory
         script: pwd && ls -la
@@ -66,4 +72,4 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
+        submit_to_testflight: false

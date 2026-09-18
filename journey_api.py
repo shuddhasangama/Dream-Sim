@@ -48,7 +48,7 @@ def guidance(reached, facts, reach_is_locked):
 
 
 def snapshot(user, *, active, plan, couple, reached, contact, clock,
-             reach_is_locked, facts, display_name):
+             reach_is_locked, facts, display_name, simulated):
     """Only pair summaries; never partner identity, private responses or contacts."""
     # Defence in depth if a future adapter supplies a row from another pair.
     uid = user['user_id']
@@ -65,8 +65,12 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
         'milestones': [key for key in disclosure.ORDER if key in reached],
         'contact_verification': allowlist(contact, ('required', 'satisfied',
                                                    'verified_email', 'verified_phone')),
-        'clock': {'mode': 'simulation', 'week': clock.week, 'day': clock.day,
-                  'hour': clock.hour},
+        # road-fixes-clock-spec.md §7: the client reads day/hour from here,
+        # never computes it — and only shows stepping controls when
+        # simulated_clock is true, never inferred from a build flag alone.
+        'clock': {'mode': 'simulation' if simulated else 'real_time', 'week': clock.week,
+                  'day': clock.day, 'hour': clock.hour},
+        'simulated_clock': simulated,
         'current_lock_in': allowlist(active, ('id', 'status', 'week', 'dates_completed')),
         'current_date_plan': allowlist(plan, ('id', 'status', 'datetime')),
         'current_couple': allowlist(couple, ('id', 'stage', 'stage_week_index')),

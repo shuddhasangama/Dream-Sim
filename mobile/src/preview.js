@@ -79,6 +79,33 @@ export function previewTransport() {
     return [...seen.values()];
   }
 
+  // Mirrors clock.py's own checkpoint-based phase() against the same
+  // §1 timeline WM_MOMENTS already encodes, so stepping the preview clock
+  // moves the phase the same way the real server would.
+  function weekPhase(c) {
+    const key = (day, hour) => WM_DAYS.indexOf(day) * 24 + hour;
+    const k = key(c.day, c.hour);
+    if (k < key('Mon', 12)) return 'before_week_start';
+    if (k < key('Tue', 12)) return 'match_1_open';
+    if (k < key('Wed', 12)) return 'match_2_open';
+    if (k < key('Wed', 18)) return 'match_3_open';
+    if (k < key('Thu', 12)) return 'calendar_open';
+    if (k < key('Thu', 18)) return 'calendar_closed';
+    if (k < key('Sun', 21)) return 'dates_live';
+    return 'feedback_open';
+  }
+
+  function advanceClock(hours) {
+    const c = week.clock;
+    const weekLen = 24 * 7;
+    let total = WM_DAYS.indexOf(c.day) * 24 + c.hour + hours;
+    const weekDelta = Math.floor(total / weekLen);
+    total = ((total % weekLen) + weekLen) % weekLen;
+    week.clock = { mode: 'simulation', week: c.week + weekDelta, day: WM_DAYS[Math.floor(total / 24)], hour: total % 24 };
+    week.phase = weekPhase(week.clock);
+    week.schedule = { grid: weekMapGrid(week.clock), legend: weekMapLegend() };
+  }
+
   let week = {
     clock: { mode: 'simulation', week: 1, day: 'Mon', hour: 12 },
     phase: 'match_1_open', mode: 'dating', prepared: true,
@@ -191,6 +218,9 @@ export function previewTransport() {
       milestones:['registered','verified'],
       contact_verification:{required:true,satisfied:true,verified_email:false,verified_phone:true},
       clock:week.clock,
+      // Preview is a dev/testing build — the stepping controls it proves
+      // out (§7.6) are exactly what a real testing build would report.
+      simulated_clock:true,
       current_lock_in:week.lock_in,current_date_plan:week.date_plan,current_couple:couple,
       surfaces:[
         {key:'dashboard',eligible:true,blocked_reason:null,api_available:true,request:null},
@@ -295,6 +325,12 @@ export function previewTransport() {
       return ok(reachState());
     }
 
+    if (path.endsWith('/simulated-clock')) {
+      if (typeof body.advance_hours === 'number') advanceClock(body.advance_hours);
+      else if (body.week && body.day && body.hour != null) { week.clock = { mode: 'simulation', week: body.week, day: body.day, hour: body.hour }; week.phase = weekPhase(week.clock); week.schedule = { grid: weekMapGrid(week.clock), legend: weekMapLegend() }; }
+      else return err('Provide either advance_hours or week+day+hour, not both.', 400);
+      return ok({}); // caller reloads journey/status + week itself
+    }
     if (path.endsWith('/week/prepare')) { week.prepared = true; return ok(week); }
     if (path.endsWith('/week')) return ok(week);
     if (path.includes('/matches/') && path.endsWith('/actions')) {

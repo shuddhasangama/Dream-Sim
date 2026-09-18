@@ -65,7 +65,7 @@ class PostgresApiOnlyJourneyTests(unittest.TestCase):
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
         for p in (mock.patch.object(db,'get_connection',lambda *a,**k:self.connect()),
                 mock.patch.object(app_module,'SIM_STATE_PATH',Path(tmp.name)/'clock.json'),
-                mock.patch.dict(os.environ,{'PAYMENTS_ENABLED':'0','DEMO_MODE':'1'})):
+                mock.patch.dict(os.environ,{'PAYMENTS_ENABLED':'0','DEMO_MODE':'1','DHASHU_SIMULATED_CLOCK':'true'})):
             p.start();self.addCleanup(p.stop)
         self.client=app_module.app.test_client()
         self.setup_profiles()

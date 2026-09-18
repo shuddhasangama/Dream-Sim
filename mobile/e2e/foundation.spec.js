@@ -349,3 +349,28 @@ test('ROAD: reachable at Relationship entry, routine/obligations/sharing, shared
   await expect(page.getByText('When you could both go out')).toBeVisible();
   await expect(page.locator('.chip',{hasText:'Sat 10:00–22:00'})).toBeVisible();
 });
+
+test('simulated clock: labelled stepping controls on Week, gated on the server-reported flag (road-fixes-clock-spec.md §7)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+  // Always shown, read from the API — never computed on the device (§7.5).
+  await expect(page.locator('.tw-now')).toHaveText('Mon 12:00');
+  // Clearly labelled as simulation, same voice as the app's other beta
+  // simulations (§7.7) — and only present because the fixture reports
+  // simulated_clock:true, never inferred from a build flag alone (§7.6).
+  await expect(page.getByText('SIMULATION')).toBeVisible();
+
+  await page.locator('.demo-step',{hasText:'+1 hour'}).click();
+  await expect(page.locator('.demo-clock')).toContainText('Mon 13:00');
+
+  await page.locator('.demo-step',{hasText:'+1 day'}).click();
+  await expect(page.locator('.demo-clock')).toContainText('Tue 13:00');
+
+  await page.locator('.demo-step',{hasText:'+1 week'}).click();
+  await expect(page.locator('.demo-clock')).toContainText('Week 2');
+});

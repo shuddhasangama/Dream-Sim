@@ -16,10 +16,30 @@ SimulationClock.parse(week, stamp).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from datetime import date, datetime
 
 DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _DAY_INDEX = {day: i for i, day in enumerate(DAYS_OF_WEEK)}
+
+# ── production vs. testing (road-fixes-clock-spec.md §7) ──────────────────
+# The single gate for every "what time is it" question in this codebase.
+# A function, not a constant read once at import: this module loads long
+# before a test's setUp() gets a chance to mock.patch.dict(os.environ,...)
+# (the pattern the rest of this test suite already uses for BETA_DATE_
+# SIMULATION_ENABLED and friends), and a constant frozen at import would
+# never see that patch. Reading fresh is not a safety loosening — this is
+# still never something a client's own request can influence, only the
+# deployment's own environment.
+def simulated() -> bool:
+    return os.environ.get("DHASHU_SIMULATED_CLOCK", "").strip().lower() in ("1", "true", "on")
+
+# Epoch mapping a week number onto a real calendar date. Shared by
+# real_time_clock() below and by app.py's week_to_date()/slot_datetime()
+# (DatePlan dates, CalendarEntry dates) — one epoch, one place, so a
+# production clock and a "what date is week 6" lookup can never disagree.
+WEEK_ONE_MONDAY = date(2026, 1, 5)
 
 
 @dataclass(frozen=True, order=True)
@@ -62,6 +82,21 @@ class SimulationClock:
         created_at/signed_at column."""
         day, hour = stamp.split(":")
         return cls.at(week, day, int(hour))
+
+
+def real_time_clock(now: datetime | None = None) -> SimulationClock:
+    """The clock as real wall-clock time places it — the production
+    reading, used only when SIMULATED is off. Elapsed days since
+    WEEK_ONE_MONDAY give the week and day-of-week; the hour comes straight
+    from `now`. Callers needing "the current clock" at all should go
+    through app.py's get_clock(), which is the one place SIMULATED is
+    actually branched on — this function exists so that branch has a real
+    reading to fall back to, not so callers pick between the two."""
+    now = now or datetime.now()
+    elapsed = (now.date() - WEEK_ONE_MONDAY).days
+    if elapsed < 0:
+        return SimulationClock(1, 0, 0)
+    return SimulationClock(elapsed // 7 + 1, elapsed % 7, now.hour)
 
 
 # ── §1's exact weekly timeline, as (day, hour) checkpoints ────────────────
