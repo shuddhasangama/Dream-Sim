@@ -270,3 +270,82 @@ test('Stats are editable from Dashboard and inline from REACH (road-fixes-clock-
   await expect(page.getByRole('button',{name:'Edit your stats'})).toBeVisible();
   await expect(page.getByRole('heading',{name:'See who opens up.'})).toBeVisible();
 });
+
+test('ROAD: reachable at Relationship entry, routine/obligations/sharing, shared flag never defaulted (road-fixes-clock-spec.md §1)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  // Walk the same dating pipeline as the full-pipeline test, ending on a
+  // mutual "relationship" decision — the trigger road.js needs to become
+  // reachable at all (§1.1: "First, make it reachable").
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+  await page.getByRole('button',{name:'Express interest'}).click();
+  await page.getByRole('button',{name:'Open calendar'}).click();
+  await page.getByLabel('Fri · Dinner').check();
+  await page.getByLabel('Sat · Dinner').check();
+  await page.getByRole('button',{name:'Save availability'}).click();
+  await page.getByRole('button',{name:'Confirm'}).first().click();
+  await page.getByRole('button',{name:'View date plan'}).click();
+  await page.getByRole('button',{name:'Review & sign'}).click();
+  await page.getByRole('button',{name:"I've read this"}).click();
+  await page.getByLabel('Your name').fill('Rohan Verma');
+  await page.getByLabel('I will treat my match with respect.').check();
+  await page.getByLabel('I understand the cancellation terms.').check();
+  await page.getByLabel('I understand this is not a relationship yet.').check();
+  await page.getByLabel('I accept the platform is not liable for what happens on the date.').check();
+  await page.getByRole('button',{name:'Sign',exact:true}).click();
+  await page.getByRole('button',{name:'Verify',exact:true}).click();
+  await page.getByRole('button',{name:'After the date'}).click();
+  await page.getByRole('button',{name:'Actually listened'}).click();
+  await page.getByRole('button',{name:'On time'}).click();
+  await page.getByRole('button',{name:'Save feedback'}).click();
+  await page.getByRole('button',{name:'Go steady'}).click();
+
+  // The Relationship tab appears immediately — no extra manual reload —
+  // because the decision handler refreshes journey/status itself.
+  const topnav = page.locator('.topnav');
+  await expect(topnav.getByRole('button',{name:'Relationship',exact:true})).toBeVisible();
+  await topnav.getByRole('button',{name:'Relationship',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Stage: relationship'})).toBeVisible();
+
+  await page.getByRole('button',{name:'Open ROAD'}).click();
+  await expect(page.getByRole('heading',{name:'Routine, obligations, availability, dates'})).toBeVisible();
+
+  // R — Routine.
+  await page.locator('#routine-form').getByLabel('Fri',{exact:true}).check();
+  await page.getByPlaceholder('e.g. Office, Gym, Salsa').fill('Gym');
+  const [startTime, endTime] = await page.locator('#routine-form input[type="time"]').all();
+  await startTime.fill('18:00');
+  await endTime.fill('19:30');
+  await page.getByRole('button',{name:'Add routine block'}).click();
+  await expect(page.getByText('Fri · 18:00–19:30')).toBeVisible();
+
+  // O — Obligations, travel mode. The "Visible to your partner" checkbox
+  // must start unchecked — the client never sets `shared` on the user's
+  // behalf (§1.5) — and travel_mode only appears once type=travel.
+  await expect(page.getByLabel('Visible to your partner')).not.toBeChecked();
+  await expect(page.locator('#travel-mode-field')).toBeHidden();
+  await page.locator('#obligation-type').selectOption('travel');
+  await expect(page.locator('#travel-mode-field')).toBeVisible();
+  await page.locator('#obligation-form input[name="title"]').fill('Goa trip');
+  const [obStart, obEnd] = await page.locator('#obligation-form input[type="date"]').all();
+  await obStart.fill('2026-02-01');
+  await obEnd.fill('2026-02-03');
+  await page.getByRole('button',{name:'Add obligation'}).click();
+  const goaRow = page.locator('[data-obligation]',{hasText:'Goa trip'});
+  await expect(goaRow).toBeVisible();
+  await expect(goaRow).not.toContainText('shared'); // not ticked, so never reported as shared
+
+  // Partner's already-shared obligation is shown read-only.
+  await expect(page.getByText("Sister's wedding")).toBeVisible();
+
+  // A — Availability, D — share windows and see the overlap.
+  await expect(page.getByLabel('Sat 10:00–22:00')).toBeVisible();
+  await page.getByLabel('Sat 10:00–22:00').check();
+  await page.getByRole('button',{name:'Share checked windows'}).click();
+  await expect(page.getByText('When you could both go out')).toBeVisible();
+  await expect(page.locator('.chip',{hasText:'Sat 10:00–22:00'})).toBeVisible();
+});

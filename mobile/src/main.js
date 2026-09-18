@@ -12,6 +12,8 @@ import * as guruScreen from './screens/guru.js';
 import * as visionScreen from './screens/vision.js';
 import * as chemistryScreen from './screens/chemistry.js';
 import * as statsScreen from './screens/stats.js';
+import * as relationshipScreen from './screens/relationship.js';
+import * as roadScreen from './screens/road.js';
 import './style.css';
 
 const native = Capacitor.isNativePlatform();
@@ -57,6 +59,9 @@ const screens = {
   vision: visionScreen,
   chemistry: chemistryScreen,
   stats: statsScreen,
+  relationship: relationshipScreen,
+  journey: relationshipScreen,
+  road: roadScreen,
 };
 
 // What every screen module receives. `data` is this screen's own GET result

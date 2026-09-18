@@ -102,6 +102,7 @@ export class Session {
   async post(path, body) { return this.authed(path, 'POST', body); }
   async put(path, body) { return this.authed(path, 'PUT', body); }
   async patch(path, body) { return this.authed(path, 'PATCH', body); }
+  async delete(path) { return this.authed(path, 'DELETE'); }
   async logout() {
     // Do not race logout against a pending rotation or permit it to resurrect UI.
     if (this.flight) { try { await this.flight; } catch {} }

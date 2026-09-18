@@ -49,7 +49,7 @@ export function render(ctx) {
 }
 
 export function bind(root, ctx) {
-  const { session, run, patch } = ctx;
+  const { session, run, patch, refreshJourney } = ctx;
   const planId = encodeURIComponent(ctx.data.plan_id);
 
   const picked = { green: new Set(), red: new Set() };
@@ -82,6 +82,11 @@ export function bind(root, ctx) {
     run(async () => {
       const reason = new FormData(e.target).get('reason')?.trim() || null;
       patch(await session.post(`/api/v1/date-plans/${planId}/feedback/decision`, { decision, reason: decision === 'pass' ? reason : null }));
+      // A mutual "relationship" decision moves journey_state and creates a
+      // couple (road-fixes-clock-spec.md §1) — refresh so the new
+      // Relationship tab appears immediately, not just after the next
+      // unrelated navigation.
+      await refreshJourney();
     });
   });
 }

@@ -99,6 +99,40 @@ export function previewTransport() {
   let agreement = null;
   let debrief = null;
 
+  // road-fixes-clock-spec.md §1: advance into Relationship stage once both
+  // partners' post-date decision is 'relationship' — mirrors how a real
+  // mutual gate resolves, simplified to fire on this one preview user's
+  // own decision (there's no second simulated party in this fixture).
+  let userJourneyState = 'dating';
+  let couple = null;
+  let road = null;
+  function ensureCouple() {
+    if (couple) return;
+    couple = { id: 'couple-preview', stage: 'relationship', stage_week_index: 0, start_date: '2026-01-12' };
+    road = {
+      couple_id: couple.id, week_start: '2026-01-12',
+      my_routine: [],
+      my_obligations: [],
+      partner_shared_obligations: [
+        { type: 'travel', travel_mode: 'partner_solo', starts_at: '2026-01-20', ends_at: '2026-01-22', title: "Sister's wedding" },
+      ],
+      // Simplified derived availability (the real algorithm is routine
+      // minus dated obligations, computed server-side) — a fixed evenings-
+      // free baseline is enough to prove out sharing/overlap in preview.
+      my_availability: { Mon: [], Tue: [], Wed: [], Thu: [], Fri: [{ day: 'Fri', start: '19:00', end: '22:00' }], Sat: [{ day: 'Sat', start: '10:00', end: '22:00' }], Sun: [{ day: 'Sun', start: '10:00', end: '20:00' }] },
+      my_shared_slots: [],
+      partner_shared_slots: [{ day: 'Sat', start: '10:00', end: '22:00' }],
+      overlap: [],
+      availability_mode: 'simulation_week',
+      obligation_rule: 'Dated obligations remove the entire inclusive day from availability.',
+    };
+  }
+  function recomputeOverlap() {
+    const key = (s) => s.day + '|' + s.start + '|' + s.end;
+    const partnerKeys = new Set(road.partner_shared_slots.map(key));
+    road.overlap = road.my_shared_slots.filter((s) => partnerKeys.has(key(s)));
+  }
+
   const visionGoals = [{ key: 'Intimacy', stance: ['Emotional'] }, { key: 'Cohabitate', stance: ['Chores split'] }];
   const visionElementKeys = ['children', 'cohabitation', 'relocation', 'career', 'intimacy', 'travel'];
   let visionEntries = [];
@@ -150,14 +184,14 @@ export function previewTransport() {
     if (!active) return {status:401,data:{error:{message:'Sign in again.'},data:null}};
 
     if (path.endsWith('/journey/status')) return ok({
-      user:{user_id:'preview-user',display_name:'Preview profile',journey_state:'dating',bgv_status:'verified'},
-      stage_indicator:{show:true,current:'dating',label:'Dating',stages:[
-        {key:'dating',label:'Dating',state:'current'},{key:'relationship',label:'Relationship',state:'todo'},
+      user:{user_id:'preview-user',display_name:'Preview profile',journey_state:userJourneyState,bgv_status:'verified'},
+      stage_indicator:{show:true,current:userJourneyState,label:userJourneyState==='dating'?'Dating':'Relationship',stages:[
+        {key:'dating',label:'Dating',state:userJourneyState==='dating'?'current':'done'},{key:'relationship',label:'Relationship',state:userJourneyState==='relationship'?'current':'todo'},
         {key:'engaged',label:'Engaged',state:'todo'},{key:'married',label:'Married',state:'todo'}]},
       milestones:['registered','verified'],
       contact_verification:{required:true,satisfied:true,verified_email:false,verified_phone:true},
       clock:week.clock,
-      current_lock_in:week.lock_in,current_date_plan:week.date_plan,current_couple:null,
+      current_lock_in:week.lock_in,current_date_plan:week.date_plan,current_couple:couple,
       surfaces:[
         {key:'dashboard',eligible:true,blocked_reason:null,api_available:true,request:null},
         {key:'reach',eligible:!week.lock_in,blocked_reason:week.lock_in?'REACH is closed while you are locked in or past Dating.':null,api_available:true,request:week.lock_in?null:{method:'GET',path:'/api/v1/reach'}},
@@ -170,12 +204,40 @@ export function previewTransport() {
         {key:'plan',eligible:!!week.date_plan,blocked_reason:week.date_plan?null:'This opens once a date is actually set.',api_available:!!week.date_plan,request:week.date_plan?{method:'GET',path:'/api/v1/date-plans/'+week.date_plan.id}:null},
         {key:'debrief',eligible:!!week.date_plan,blocked_reason:week.date_plan?null:'This opens once a date is actually set.',api_available:!!week.date_plan,request:week.date_plan?{method:'GET',path:'/api/v1/date-plans/'+week.date_plan.id+'/debrief'}:null},
         {key:'verify',eligible:false,blocked_reason:'You are already verified.',api_available:false,request:null},
-        {key:'relationship',eligible:false,blocked_reason:'This opens once you have both agreed to be exclusive.',api_available:false,request:null},
-        {key:'journey',eligible:false,blocked_reason:'This opens once you have both agreed to be exclusive.',api_available:false,request:null},
+        {key:'relationship',eligible:!!couple,blocked_reason:couple?null:'This opens once you have both agreed to be exclusive.',api_available:!!couple,request:couple?{method:'GET',path:'/api/v1/couples/'+couple.id}:null},
+        {key:'journey',eligible:!!couple,blocked_reason:couple?null:'This opens once you have both agreed to be exclusive.',api_available:!!couple,request:couple?{method:'GET',path:'/api/v1/couples/'+couple.id}:null},
       ],
       next_action:{headline:'Your next chapter starts here',body:'Take a moment to review your profile before meeting someone new.',cta:'See this week',
         destination:{key:'week',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/week'}}},
     });
+
+    if (path.endsWith('/couples/'+encodeURIComponent(couple?.id||'')) && method === 'GET') {
+      return ok({ couple: { id: couple.id, stage: couple.stage, stage_week_index: couple.stage_week_index, start_date: couple.start_date } });
+    }
+    if (path.endsWith('/couples/'+encodeURIComponent(couple?.id||'')+'/road') && method === 'GET') return ok(road);
+    if (path.endsWith('/road/routine') && method === 'POST') {
+      road.my_routine.push({ id: 'routine-'+(road.my_routine.length+1), category: body.category, days: body.days, label: body.label, start: body.start, end: body.end });
+      return ok(road);
+    }
+    if (path.includes('/road/routine/') && method === 'DELETE') {
+      const rid = path.split('/road/routine/')[1];
+      road.my_routine = road.my_routine.filter((b) => b.id !== rid);
+      return ok(road);
+    }
+    if (path.endsWith('/road/obligations') && method === 'POST') {
+      road.my_obligations.push({ id: 'obligation-'+(road.my_obligations.length+1), type: body.type, travel_mode: body.travel_mode ?? null, starts_at: body.start_date, ends_at: body.end_date, title: body.title, shared: !!body.shared });
+      return ok(road);
+    }
+    if (path.includes('/road/obligations/') && method === 'DELETE') {
+      const rid = path.split('/road/obligations/')[1];
+      road.my_obligations = road.my_obligations.filter((b) => b.id !== rid);
+      return ok(road);
+    }
+    if (path.endsWith('/road/sharing') && method === 'PUT') {
+      road.my_shared_slots = body.slots;
+      recomputeOverlap();
+      return ok(road);
+    }
     if (path.endsWith('/profile')) return ok({stats:{age:30,height_cm:169,weight_kg:66,waist_in:31,income_band:'₹₹₹ · 25L–50L',diet:'Everything',education:"Master's",nationality:'IN',religion:'Hindu',city:'Bangalore',profession:'Engineering'},visions:[{key:'Intimacy',stance:['Emotional']},{key:'Cohabitate',stance:['Chores split']} ]});
 
     if (path.endsWith('/guidance')) return ok({headline:'Your next chapter starts here',body:'Take a moment to review your profile before meeting someone new.',cta:'See this week',
@@ -316,6 +378,7 @@ export function previewTransport() {
     if (path.endsWith('/feedback/decision')) {
       debrief.my_feedback.decision = body.decision; debrief.my_feedback.reason = body.reason;
       debrief.resolution = body.decision === 'pass' ? 'rejected' : body.decision === 'relationship' ? 'both_relationship' : 'keep_dating';
+      if (body.decision === 'relationship') { userJourneyState = 'relationship'; ensureCouple(); }
       return ok(debrief);
     }
 

@@ -18,7 +18,7 @@ export const SURFACE_LABELS = {
   align: 'Before the date', calendar: 'Calendar', plan: 'Date plan',
   boundaries: 'Boundaries', debrief: 'Debrief', ceremony: 'Ceremony',
   after_date: 'After the date', expectations: 'Expectations', escalations: 'Sharing',
-  next_level: 'Next level', gate: 'Relationship gate', vibes: 'Vibes',
+  next_level: 'Next level', gate: 'Relationship gate', vibes: 'Vibes', road: 'ROAD',
 };
 export const TAB_KEYS = ['dashboard', 'reach', 'week', 'guru', 'vision', 'chemistry', 'stats', 'relationship', 'journey', 'verify'];
 
