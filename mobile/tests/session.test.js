@@ -52,3 +52,19 @@ test('logout waits for rotation then revokes the newly issued access token',asyn
   await session.accept(token(1),0);await Promise.all([session.refresh(),session.logout()]);
   assert.equal(sent,'access-2');assert.equal(await vault.read(),null);
 });
+
+test('real journey IDs reach transport in raw and encoded form', async()=>{
+  const calls=[];
+  const {session}=setup(async path=>{calls.push(path);return ok({id:'date'});});
+  for(const id of ['lockin:owner|partner:1', encodeURIComponent('lockin:owner|partner:1')]) {
+    await session.raw(`/api/v1/lock-ins/${id}/calendar`);
+    await session.raw(`/api/v1/date-plans/plan:${id}/agreement`);
+  }
+  assert.equal(calls.length,4);
+});
+test('path validation still rejects traversal, encoded separators and external URLs',async()=>{
+  const {session}=setup(async()=>{assert.fail('Invalid path reached transport');});
+  for(const path of ['https://other.example/api/v1/me','/api/v1/../me','/api/v1/%2e%2e/me','/api/v1/id%2Fother','/api/v1/id%5cother','/api/v1/id%253Aother','/api/v1/me?x=1','/api/v1/me#x','/api/v1/%zz']) {
+    await assert.rejects(session.raw(path),/Invalid API path/);
+  }
+});

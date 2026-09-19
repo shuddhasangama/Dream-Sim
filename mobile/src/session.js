@@ -31,7 +31,13 @@ export class Session {
     this.tokens = null; this.flight = null; this.generation = 0;
   }
   async raw(path, method = 'GET', body, token) {
-    if (!/^\/api\/v1\/[a-zA-Z0-9/_-]+$/.test(path)) throw new ApiError('Invalid API path.');
+    // IDs contain ':' and '|'; screens may percent-encode those characters.
+    // Keep requests within the API namespace, excluding traversal and URL syntax.
+    let decoded;
+    try { decoded = decodeURIComponent(path); } catch { throw new ApiError('Invalid API path.'); }
+    if (typeof path !== 'string' || !/^\/api\/v1\/[a-zA-Z0-9/_:|%-]+$/.test(path)
+        || !/^\/api\/v1\/[a-zA-Z0-9/_:|-]+$/.test(decoded)
+        || /%2f/i.test(path)) throw new ApiError('Invalid API path.');
     let response;
     try { response = await this.send(path, method, body, token); }
     catch { throw new ApiError('Connection unavailable. Check your internet and try again.'); }

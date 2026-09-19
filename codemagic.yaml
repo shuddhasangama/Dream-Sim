@@ -1,4 +1,35 @@
 workflows:
+  android-beta:
+    name: DhaShu Android APK Beta
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    environment:
+      node: 22
+      java: 21
+      vars:
+        DHASHU_SIMULATED_CLOCK: "false"
+    scripts:
+      - name: Install npm dependencies
+        script: cd "$CM_BUILD_DIR/mobile" && npm ci
+      - name: Run mobile tests
+        script: cd "$CM_BUILD_DIR/mobile" && npm test
+      - name: Build and sync Android
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/mobile"
+          npm run build
+          npx cap sync android
+          npx capacitor-assets generate --android
+      - name: Build installable beta APK
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/mobile/android"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          chmod +x gradlew
+          ./gradlew assembleDebug -PbuildNumber="$PROJECT_BUILD_NUMBER" --stacktrace
+    artifacts:
+      - mobile/android/app/build/outputs/apk/debug/*.apk
+    # Debug-signed APK for direct installation. Play signing comes separately.
   ios-testflight:
     name: DhaShu iOS TestFlight
     max_build_duration: 45
