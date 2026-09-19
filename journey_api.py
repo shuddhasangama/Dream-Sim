@@ -6,6 +6,7 @@ from journey eligibility so clients are never sent to an unimplemented endpoint.
 """
 import disclosure
 import guru
+import guru_dating
 import progress
 from urllib.parse import quote
 from api_contract import allowlist
@@ -38,17 +39,36 @@ def surface(key, reached, reach_is_locked):
     }
 
 
-def guidance(reached, facts, reach_is_locked):
+def guidance(reached, facts, reach_is_locked, *, in_dating=False, partner_greeting=None):
     action = guru.next_action(reached, facts=facts)
     key = disclosure.ENDPOINT_TO_KEY.get(action['endpoint'])
+    open_cards = guru.cards(reached, exclude_endpoint=action['endpoint'])
     return {
         **allowlist(action, ('headline', 'body', 'cta')),
         'destination': surface(key, reached, reach_is_locked) if key else None,
+        # round3-fixes-spec.md §6.3: "anything I can help you with?" —
+        # every door currently open, not just the one next_action already
+        # points at. The same list the web's guru_all_view()/"Also open"
+        # tiles use (guru.cards()), exposed here so a client that has no
+        # template of its own can still offer it.
+        'also_open': [
+            {**allowlist(c, ('code', 'title', 'subtitle')),
+             'destination': surface(c['surface'], reached, reach_is_locked)}
+            for c in open_cards
+        ],
+        # round3-fixes-spec.md §6.1/§6.2: Dating-only, in Guru's own voice
+        # — the consent model, the rules of engagement, and what to expect
+        # on a date. None outside Dating; guru_dating.py stays the one
+        # place this content is defined.
+        'dating_context': {
+            **guru_dating.dating_context(),
+            'date_prep': guru_dating.pre_date_briefing(partner_greeting),
+        } if in_dating else None,
     }
 
 
 def snapshot(user, *, active, plan, couple, reached, contact, clock,
-             reach_is_locked, facts, display_name, simulated):
+             reach_is_locked, facts, display_name, simulated, partner_greeting=None):
     """Only pair summaries; never partner identity, private responses or contacts."""
     # Defence in depth if a future adapter supplies a row from another pair.
     uid = user['user_id']
@@ -76,7 +96,9 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
         'current_couple': allowlist(couple, ('id', 'stage', 'stage_week_index')),
         'surfaces': [surface(key, reached, reach_is_locked)
                      for key in disclosure.BY_KEY],
-        'next_action': guidance(reached, facts, reach_is_locked),
+        'next_action': guidance(reached, facts, reach_is_locked,
+                                 in_dating=(user['journey_state'] == 'dating'),
+                                 partner_greeting=partner_greeting),
     }
     routes = {}
     if active and active['status'] == 'active' and user['journey_state'] == 'dating' and user['bgv_status'] == 'verified':

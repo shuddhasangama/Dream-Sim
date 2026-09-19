@@ -83,12 +83,23 @@
     </div>
     {% endfor %}
 
+    {# round3-fixes-spec.md §7.1: Travel together carries no sub-options —
+       a plain chip, no .goal-detail, so the "tick a detail, its parent
+       follows" script below has nothing to attach to it (nor needs to). #}
+    {% for goal in simple_goals %}
+    <label class="chip-check">
+      <input type="checkbox" name="other_keys" value="{{ goal }}"
+             {% if goal in chosen_others %}checked{% endif %}>
+      <span>{{ goal }}</span>
+    </label>
+    {% endfor %}
+
     {# 2026-09-09 (evening), user's rule: "Ensure that if sub options are
        chose automatically parent option is chosen across all Visions."
        Handled server-side in onboarding.selected_goals(), so it holds
        whether or not the browser runs the script below. #}
     <div class="hint" style="margin-top:14px;">
-      Ticking a detail picks its goal. All of this is revisited at the Relationship stage.
+      Ticking a detail picks its goal. {{ vision_detail_explanation }}
     </div>
   </div>
 

@@ -158,7 +158,7 @@ class EnterRelationshipTests(JourneyTestCase):
         self.gate = stage_gate.open_gate("lockin-1", "exclusivity_raised", "Mon:12")
         self.no_divergence_analysis = {"pair_id": "lockin-1", "divergences": [], "must_resolve": [], "guru_prompts": []}
         self.met_prerequisites = vision.prerequisites_met(
-            [{"user_id": "u_a", "element_key": "children"}],
+            [{"user_id": "u_a", "element_key": "Kids"}],
             {field: "x" for field in MANDATORY_STATS_FIELDS},
             [{"key": k, "value": "x"} for k in (*CHEMISTRY_MANDATORY_KEYS, *CHEMISTRY_INTIMACY_KEYS)],
         )
@@ -175,7 +175,7 @@ class EnterRelationshipTests(JourneyTestCase):
             consent_b=True,
             biometric_a=True,
             biometric_b=True,
-            vision_entries_for_couple=[{"element_key": "children"}, {"element_key": "cohabitation"}],
+            vision_entries_for_couple=[{"element_key": "Kids"}, {"element_key": "Cohabitate"}],
             today="2026-03-01",
         )
         kwargs.update(overrides)

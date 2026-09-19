@@ -11,9 +11,9 @@ import * as debriefScreen from './screens/debrief.js';
 import * as guruScreen from './screens/guru.js';
 import * as visionScreen from './screens/vision.js';
 import * as chemistryScreen from './screens/chemistry.js';
-import * as statsScreen from './screens/stats.js';
 import * as relationshipScreen from './screens/relationship.js';
 import * as roadScreen from './screens/road.js';
+import { editableFieldsForm, collectFields, fieldsEqual, withSubmittedValues } from './statsFields.js';
 import './style.css';
 
 const native = Capacitor.isNativePlatform();
@@ -43,6 +43,11 @@ let challenge=null, phone='', busy=false, message='', journey=null, profile=null
 // be shown when it can't (ineligible, or eligible but not on this build yet
 // — §2's "api_available" distinction from §1's journey/status contract).
 let screenData=null, screenBlocked=null, screenUnavailable=false;
+// round3-fixes-spec.md §2/§3: no standalone Stats screen any more — the
+// Dashboard edits its own Stats card inline. Non-null while that editor
+// is open; holds GET /api/v1/profile/stats's own shape (plus, on a save
+// failure, _saved/_error like chemistry.js).
+let dashboardStats=null;
 const safe = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const nav = createNav(render);
@@ -63,7 +68,6 @@ const screens = {
   guru: guruScreen,
   vision: visionScreen,
   chemistry: chemistryScreen,
-  stats: statsScreen,
   relationship: relationshipScreen,
   journey: relationshipScreen,
   road: roadScreen,
@@ -180,12 +184,62 @@ function renderDashboard() {
     <section class="card guidance"><span class="eyebrow">NEXT FOR YOU</span><h2>${safe(next?.headline||'Welcome back')}</h2><p>${safe(next?.body||'Review your profile and take your next step when ready.')}</p>
       ${next?.destination && next.destination.eligible && next.destination.request ? `<button id="next-action" class="primary" ${busy?'disabled':''}>${safe(next.cta||'Continue')} <span aria-hidden="true">→</span></button>` : ''}</section>
     <section class="card"><div class="micro">Vision</div><div class="chip-row">${(profile?.visions||[]).map(v=>`<span class="chip">${safe(v.key)}${v.stance?' — '+safe(Array.isArray(v.stance)?v.stance.join(', '):v.stance):''}</span>`).join('')||'<p class="hint">Your vision is still taking shape.</p>'}</div></section>
-    <section class="card"><div class="micro">Stats</div><div class="stat-rows">${DASHBOARD_STAT_ROWS.filter(([k])=>stats[k]!=null).map(([k,label,unit])=>`<div class="stat-row"><span>${safe(label)}</span><span>${safe(stats[k])}${unit}</span></div>`).join('')||'<p class="hint">Nothing on file yet.</p>'}</div>
-      <button id="edit-stats" class="secondary" type="button" style="margin-top:14px;">Edit stats</button></section>`;
+    <section class="card"><div class="micro">Stats</div>
+      ${dashboardStats ? `${editableFieldsForm(dashboardStats, safe, 'dashboard-stats-form')}
+        <button id="cancel-edit-stats" class="secondary" type="button" style="margin-top:8px;">${dashboardStats._saved ? 'Done' : 'Cancel'}</button>
+        ${dashboardStats._saved ? '<p class="save-note">Saved.</p>' : ''}
+        ${dashboardStats._error ? `<p class="warn">${safe(dashboardStats._error)}</p>` : ''}`
+        : `<div class="stat-rows">${DASHBOARD_STAT_ROWS.filter(([k])=>stats[k]!=null).map(([k,label,unit])=>`<div class="stat-row"><span>${safe(label)}</span><span>${safe(stats[k])}${unit}</span></div>`).join('')||'<p class="hint">Nothing on file yet.</p>'}</div>
+        <button id="edit-stats" class="secondary" type="button" style="margin-top:14px;">Edit stats</button>`}
+    </section>`;
 }
 function bindDashboard() {
   root.querySelector('#next-action')?.addEventListener('click',()=>navigateTo(journey.next_action.destination.key));
-  root.querySelector('#edit-stats')?.addEventListener('click',()=>navigateTo('stats'));
+
+  root.querySelector('#edit-stats')?.addEventListener('click',()=>run(async()=>{
+    dashboardStats = await session.get('/api/v1/profile/stats');
+  }));
+  root.querySelector('#cancel-edit-stats')?.addEventListener('click',()=>run(async()=>{ dashboardStats=null; }));
+
+  root.querySelector('#dashboard-stats-form')?.addEventListener('submit',(e)=>{
+    e.preventDefault();
+    run(async()=>{
+      const fields = collectFields(e.target);
+      console.info('[dashboard] PATCH /api/v1/profile/stats request', {fields});
+      try {
+        await session.patch('/api/v1/profile/stats', {fields});
+      } catch (err) {
+        console.error('[dashboard] PATCH failed', err);
+        dashboardStats = {...withSubmittedValues(dashboardStats, fields), _saved:false, _error: err.message || 'Could not save — try again.'};
+        throw err;
+      }
+      // Same independent-reconfirm discipline as chemistry.js: a 200
+      // does not prove the write landed as sent.
+      let confirmed;
+      try {
+        confirmed = await session.get('/api/v1/profile/stats');
+        console.info('[dashboard] confirmation GET response', confirmed);
+      } catch (err) {
+        console.error('[dashboard] confirmation GET failed', err);
+        dashboardStats = {...withSubmittedValues(dashboardStats, fields), _saved:false, _error:'Saved, but could not confirm — reload to check.'};
+        return;
+      }
+      const byKey = Object.fromEntries((confirmed.rows||[]).map(r=>[r.key,r.value]));
+      const mismatched = Object.keys(fields).filter(k=>!fieldsEqual(byKey[k], fields[k]));
+      if (mismatched.length) {
+        console.error('[dashboard] MISMATCH: server read-back does not match what was submitted', {submitted:fields, read_back:byKey, mismatched});
+        dashboardStats = {...withSubmittedValues(confirmed, fields), _saved:false, _error:"That didn't actually save — the server's own copy doesn't match. Try again, or reload to see what's really there."};
+        return;
+      }
+      // Stay open with an explicit confirmation (same as chemistry.js)
+      // rather than silently collapsing back to the read-only view —
+      // "Cancel" below doubles as "Done" once there is something saved.
+      // Refresh the read-only summary in the background so it is current
+      // whenever the person does close the editor.
+      dashboardStats = {...confirmed, _saved:true, _error:null};
+      profile = await session.get('/api/v1/profile');
+    });
+  });
 }
 
 // ── generic fallback (§1: never a blank screen) ───────────────────────────
@@ -202,13 +256,13 @@ function genericScreen(key) {
 // ── navigation + loading ───────────────────────────────────────────────
 function navigateTo(key, params) {
   if (busy) return;
-  screenData=null; screenBlocked=null; screenUnavailable=false;
+  screenData=null; screenBlocked=null; screenUnavailable=false; dashboardStats=null;
   nav.push(key, params);
   run(() => loadScreen(key, params));
 }
 function goBack() {
   if (busy) return;
-  screenData=null; screenBlocked=null; screenUnavailable=false;
+  screenData=null; screenBlocked=null; screenUnavailable=false; dashboardStats=null;
   if (nav.pop()) run(() => loadScreen(nav.current.key, nav.current.params));
 }
 async function loadScreen(key, params) {

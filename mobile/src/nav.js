@@ -20,7 +20,11 @@ export const SURFACE_LABELS = {
   after_date: 'After the date', expectations: 'Expectations', escalations: 'Sharing',
   next_level: 'Next level', gate: 'Relationship gate', vibes: 'Vibes', road: 'ROAD',
 };
-export const TAB_KEYS = ['dashboard', 'reach', 'week', 'guru', 'vision', 'chemistry', 'stats', 'relationship', 'journey', 'verify'];
+// round3-fixes-spec.md §2: the standalone Stats screen/tab is gone — the
+// Dashboard shows and edits stats inline, and REACH links into the same
+// inline editor for a missing filter's stat. Nothing routes to 'stats'
+// any more.
+export const TAB_KEYS = ['dashboard', 'reach', 'week', 'guru', 'vision', 'chemistry', 'relationship', 'journey', 'verify'];
 
 export function labelFor(key) { return SURFACE_LABELS[key] || key; }
 

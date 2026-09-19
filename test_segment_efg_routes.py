@@ -560,6 +560,73 @@ class DebriefRouteTests(RouteTestCase):
         self.assertEqual(self.client.get("/debrief").status_code, 403)
 
 
+class WeekPersonalizationTests(RouteTestCase):
+    """round3-fixes-spec.md §5.2/§5.3: the Week screen's grid — both the
+    web route and the JSON API mobile actually uses — replaces the
+    generic Debrief/RC-Opens placeholders with this person's real ones."""
+
+    def setUp(self):
+        super().setUp()
+        self.login(self.make_user("u1"))
+        self.make_user("u2")
+
+    def _grid_moments(self, body):
+        return [m for row in body["schedule"]["grid"]["rows"] for d in row["days"] for m in d["moments"]]
+
+    def test_a_locked_in_user_with_a_confirmed_plan_sees_their_real_debrief_time(self):
+        lock = self.make_lockin("u1", "u2")
+        # Sunday breakfast — deliberately not the generic Sat 21:00 slot,
+        # so a coincidental match can't hide a broken substitution.
+        db.insert_row(self.conn, "DatePlan", {
+            "id": "plan-1", "lockin_id": lock, "datetime": "2026-01-11T09:00",
+            "meal": "breakfast", "venue": "Toit", "cuisine": "Thai",
+            "budget_estimate": "1500-2500", "bill_split": "pay-your-own", "status": "confirmed"})
+        self.conn.commit()
+        self.set_clock(week=1, day="Sat", hour=10)
+
+        body = self.client.get("/api/v1/week").json["data"]
+        moments = self._grid_moments(body)
+        debriefs = [m for m in moments if m["label"] == "Debrief"]
+        self.assertEqual(len(debriefs), 1)
+        self.assertEqual(debriefs[0]["at"], ["Sun", 10])
+        self.assertTrue(debriefs[0]["personal"])
+
+        self.assertEqual(self.client.get("/week").status_code, 200)
+
+    def test_someone_not_locked_in_still_sees_the_generic_debrief_placeholder(self):
+        self.set_clock(week=1, day="Mon", hour=13)
+        body = self.client.get("/api/v1/week").json["data"]
+        moments = self._grid_moments(body)
+        debriefs = [m for m in moments if m["label"] == "Debrief"]
+        self.assertEqual(len(debriefs), 1)
+        self.assertEqual(debriefs[0]["at"], ["Sat", 21])
+        self.assertNotIn("personal", debriefs[0])
+
+    def test_a_released_pair_sees_rc_opens_marked_as_theirs(self):
+        lock = self.make_lockin("u1", "u2")
+        row = dict(db.fetch_one(self.conn, "LockIn", id=lock))
+        row["status"] = "released"
+        row["release_reason"] = "one_passed"
+        db.insert_row(self.conn, "LockIn", row)
+        self.conn.commit()
+        self.set_clock(week=1, day="Mon", hour=13)
+
+        body = self.client.get("/api/v1/week").json["data"]
+        moments = self._grid_moments(body)
+        rc_opens = [m for m in moments if m["label"] == "RC Opens"]
+        self.assertEqual(len(rc_opens), 1)
+        self.assertTrue(rc_opens[0]["personal"])
+
+    def test_a_still_active_lockin_does_not_get_the_pool_return_marker(self):
+        self.make_lockin("u1", "u2")  # still active, never released
+        self.set_clock(week=1, day="Mon", hour=13)
+        body = self.client.get("/api/v1/week").json["data"]
+        moments = self._grid_moments(body)
+        rc_opens = [m for m in moments if m["label"] == "RC Opens"]
+        self.assertEqual(len(rc_opens), 1)
+        self.assertNotIn("personal", rc_opens[0])
+
+
 class CancellationTests(RouteTestCase):
     """2026-09-04, user's rule: dates are set Thursday for the weekend, so
     a free cancellation is an invitation to change your mind at everyone

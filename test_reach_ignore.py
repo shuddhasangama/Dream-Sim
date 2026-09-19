@@ -142,6 +142,16 @@ class FilterStateTests(unittest.TestCase):
         marked = {f["name"] for f in matching.filter_states(self.me, self.pool) if f["sensitive"]}
         self.assertEqual(marked, {"religion", "nationality"})
 
+    def test_wants_kids_and_no_kids_wanted_name_each_other_as_opposite(self):
+        """round3-fixes-spec.md §4.2: lets a client merge the two rows
+        into one three-way control without hardcoding which names pair
+        up — everything else has no opposite at all."""
+        by_name = {f["name"]: f for f in matching.filter_states(self.me, self.pool)}
+        self.assertEqual(by_name["wants_kids"]["opposite"], "no_kids_wanted")
+        self.assertEqual(by_name["no_kids_wanted"]["opposite"], "wants_kids")
+        self.assertIsNone(by_name["age"]["opposite"])
+        self.assertIsNone(by_name["veg_only"]["opposite"])
+
     def test_widening_is_not_offered_for_a_filter_already_set_to_any(self):
         """A Widen button on an ignored lever is a control that does
         nothing."""

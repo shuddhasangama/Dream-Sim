@@ -40,7 +40,6 @@ from generate_users import (
     INTIMACY_KINDS,
     KIDS_ROUTES,
     KIDS_STANCES,
-    TRAVEL_STYLES,
     LANGUAGES_POOL,
     MARITAL_HISTORY,
     OTHER_VISION_KEYS,
@@ -240,41 +239,50 @@ def account_row(user_id: str, email: str | None, phone: str | None, created_at: 
 
 VISION_STANCE_AT_SIGNUP = None
 
-# Goals that take no detail at signup, in the order they are offered.
-# 2026-09-09 (evening): every goal now carries sub-options, so there are
-# no "simple" goals left. Kept as an empty tuple rather than deleted so a
-# stale import fails loudly rather than silently importing something else.
-SIMPLE_GOALS: list[str] = []
+# round3-fixes-spec.md §7.1: Travel together carries no sub-detail at
+# all now — it used to (TRAVEL_STYLES), but the four-pillar table is
+# explicit: "No detail required". Kept here, no longer a "simple goal"
+# in the old sense (every goal used to carry sub-options); Travel
+# together is once again the one that doesn't.
+SIMPLE_GOALS: list[str] = ["Travel together"]
 
 # The sub-options each goal carries. ONE table — the form, the validation
 # and the payload all read it, so adding a goal's detail is one edit here
-# rather than three in step.
+# rather than three in step. Travel together is deliberately absent —
+# see SIMPLE_GOALS above.
 DETAILED_GOALS = {
     "Cohabitate": COHABIT_FOCUS,
     "Kids": KIDS_ROUTES,
-    "Travel together": TRAVEL_STYLES,
 }
 
 # The form field each goal's sub-options arrive under.
 DETAIL_FIELD = {
     "Cohabitate": "cohabit_focus",
     "Kids": "kids_route",
-    "Travel together": "travel_style",
 }
 
 # The question each goal's sub-options answer, on the form.
 DETAIL_HINT = {
     "Cohabitate": "What are you actually agreeing about? Pick one or both.",
     "Kids": "How are you open to having them? Pick as many as apply.",
-    "Travel together": "What kind of travelling do you mean? Pick as many as apply.",
 }
 
 # What to say when a goal is picked with none of its sub-options.
 DETAIL_PROMPT = {
     "Cohabitate": "Cohabitating means chores, expenses, or both — say which.",
     "Kids": "Say how you are open to having kids — pick one or more.",
-    "Travel together": "Say what kind of travelling you mean — pick one or more.",
 }
+
+# round3-fixes-spec.md §7.1's own explanatory copy, verbatim — shown next
+# to the pillar picker so the asymmetry (Travel takes nothing, Kids and
+# Cohabitate each require a sub-selection) reads as a considered choice,
+# not an inconsistency.
+VISION_DETAIL_EXPLANATION = (
+    "Travel together takes no detail now. Kids and Cohabitate do, because picking "
+    "either without saying what you mean says almost nothing — and they are "
+    "revisited together, at the Relationship stage, once it is a decision rather "
+    "than a preference."
+)
 
 # Sub-options that carry a prerequisite of their own.
 #
@@ -312,8 +320,11 @@ def preset_selection(name: str) -> dict[str, list[str]]:
     from what the form can express."""
     if name != PRESET_MARRIAGE:
         return {}
+    # other_keys is every pillar (OTHER_VISION_KEYS), not just the ones
+    # with sub-options (DETAILED_GOALS) — Travel together has none since
+    # round3-fixes-spec.md §7.1, but "ticks all four" still means all four.
     out = {"intimacy_kinds": list(INTIMACY_KINDS),
-           "other_keys": list(DETAILED_GOALS)}
+           "other_keys": list(OTHER_VISION_KEYS)}
     for goal, options in DETAILED_GOALS.items():
         out[DETAIL_FIELD[goal]] = list(options)
     return out
@@ -346,7 +357,6 @@ def validate_vision(
     other_keys: list[str],
     cohabit_focus: list[str] | None = None,
     kids_route: list[str] | None = None,
-    travel_style: list[str] | None = None,
 ) -> dict[str, Any]:
     """Check a submitted vision against the rules above.
 
@@ -354,11 +364,12 @@ def validate_vision(
     picking a detail and then unticking the goal discards it rather than
     storing a preference for something the user did not choose. But note
     selected_goals(): ticking only the detail SELECTS the goal, so the
-    discard applies to unticking, not to never having ticked.
+    discard applies to unticking, not to never having ticked. Travel
+    together carries no sub-options at all (round3-fixes-spec.md §7.1) —
+    ticking it in other_keys is the whole answer.
     """
     kinds = [k for k in INTIMACY_KINDS if k in (intimacy_kinds or [])]
-    details = _details(cohabit_focus=cohabit_focus, kids_route=kids_route,
-                       travel_style=travel_style)
+    details = _details(cohabit_focus=cohabit_focus, kids_route=kids_route)
     others = selected_goals(other_keys, details)
 
     if not kinds:
@@ -366,14 +377,14 @@ def validate_vision(
     if not others:
         return {"ok": False, "error": "Pick at least one more end goal alongside Intimacy."}
 
-    needs_physical = {o for goal in others for o in details[goal]} & NEEDS_PHYSICAL
+    needs_physical = {o for goal in others for o in details.get(goal, [])} & NEEDS_PHYSICAL
     if needs_physical and "Physical" not in kinds:
         return {"ok": False,
                 "error": "Having kids naturally needs Physical intimacy selected too. "
                          "Add it, or choose surrogacy or adoption instead."}
 
     for goal in others:
-        if not details[goal]:
+        if goal in DETAILED_GOALS and not details[goal]:
             return {"ok": False, "error": DETAIL_PROMPT[goal]}
 
     return {
@@ -383,7 +394,6 @@ def validate_vision(
         "other_keys": others,
         "cohabit_focus": sorted(details["Cohabitate"]) if "Cohabitate" in others else [],
         "kids_route": sorted(details["Kids"]) if "Kids" in others else [],
-        "travel_style": sorted(details["Travel together"]) if "Travel together" in others else [],
     }
 
 
@@ -392,15 +402,13 @@ def build_visions(
     other_keys: list[str],
     cohabit_focus: list[str] | None = None,
     kids_route: list[str] | None = None,
-    travel_style: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """The vision_json payload. Call only after validate_vision() passes."""
-    details = _details(cohabit_focus=cohabit_focus, kids_route=kids_route,
-                       travel_style=travel_style)
+    details = _details(cohabit_focus=cohabit_focus, kids_route=kids_route)
     visions = [{"key": "Intimacy", "stance": sorted(intimacy_kinds)}]
     for key in selected_goals(other_keys, details):
         visions.append({"key": key,
-                        "stance": sorted(details[key]) or VISION_STANCE_AT_SIGNUP})
+                        "stance": sorted(details[key]) if key in details else VISION_STANCE_AT_SIGNUP})
     return visions
 
 
@@ -756,11 +764,11 @@ def default_preferences(stats: dict[str, Any]) -> dict[str, Any]:
     """Starting REACH filters for a self-registered user.
 
     Every value is deliberately one step in from the widest option, so the
-    REACH lever machinery has somewhere to widen to. nationality and
-    religion MUST be exact members of generate_users.NATIONALITY_OPTIONS
-    and RELIGION_OPTIONS — matching._next_wider_option() looks the current
-    value up in those lists, and an off-list value would make the widen
-    lever a no-op.
+    REACH lever machinery has somewhere to widen to. nationality, religion
+    and education MUST be exact members of generate_users.NATIONALITY_OPTIONS,
+    RELIGION_OPTIONS and EDUCATION_OPTIONS respectively —
+    matching._next_wider_option() looks the current value up in those
+    lists, and an off-list value would make the widen lever a no-op.
 
     No dealbreakers are assumed on the user's behalf. A dealbreaker is a
     hard exclusion of other people; the product should never invent one
@@ -773,6 +781,10 @@ def default_preferences(stats: dict[str, Any]) -> dict[str, Any]:
         # city is always given — so it is always available.
         "distance_km": [0, 30],
         "nationality": ["IN", "NRI"],
+        # round3-fixes-spec.md §4.3: education is mandatory at sign-up
+        # (onboarding.CHOICE_STATS), same as nationality — always
+        # available, never gated on a later stat fill-in.
+        "education": ["Bachelor's", "Master's", "Doctorate"],
     }
 
     # 2026-09-04, user's rule: REACH filters on what you actually keyed in.

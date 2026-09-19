@@ -27,6 +27,7 @@ class DerivedFromTheClockTests(unittest.TestCase):
         "calendar_closes": clock_module.CALENDAR_CLOSES,
         "sign": clock_module.DATES_LIVE,
         "feedback": clock_module.FEEDBACK_OPENS,
+        "rc_ends": clock_module.RC_ENDS,
     }
 
     def moments(self):
@@ -96,11 +97,107 @@ class GridTests(unittest.TestCase):
         keys = [(order.index(m["at"][0]), m["at"][1]) for m in week_map.explained()]
         self.assertEqual(keys, sorted(keys))
 
+    def test_cell_labels_abbreviate_reality_check_the_full_term_stays_in_the_legend(self):
+        """round3-fixes-spec.md §5.1: "Reality" alone in a small cell read
+        as noise; the full term belongs in the legend only, via `kind`."""
+        by_key = {m["key"]: m for m in week_map.MOMENTS}
+        self.assertEqual(by_key["feedback"]["label"], "RC Opens")
+        self.assertEqual(by_key["rc_ends"]["label"], "RC Closes")
+        for m in week_map.MOMENTS:
+            self.assertNotEqual(m["label"], "Reality", m["key"])
+        legend_kinds = {e["kind"] for e in week_map.legend()}
+        self.assertIn("Reality Check", legend_kinds)
+
     def test_it_works_with_no_clock_at_all(self):
         """The grid is also a static timetable — nothing should require
         knowing what time it is."""
         g = week_map.grid(None)
         self.assertFalse(any(d["is_today"] for d in g["days"]))
+
+
+class PersonalMomentTests(unittest.TestCase):
+    """round3-fixes-spec.md §5.2/§5.3: the personalized, conditional
+    moments — separate from the fixed MOMENTS timetable above."""
+
+    def test_debrief_moment_follows_the_actual_confirmed_slot(self):
+        """Saturday dinner's debrief lands after Saturday dinner, not on
+        the generic MOMENTS 'Debrief' entry's own fixed Sat 21:00 — this
+        assertion would still pass by coincidence for dinner, so it uses
+        a different meal on purpose."""
+        plan = {"datetime": "2026-01-11T00:00:00", "meal": "breakfast"}  # a Sunday
+        moment = week_map.personal_debrief_moment(plan)
+        self.assertIsNotNone(moment)
+        day, hour = moment["at"]
+        self.assertEqual(day, "Sun")
+        import dateplan
+        self.assertEqual(hour, dateplan.debrief_opens_hour("breakfast"))
+        self.assertNotEqual((day, hour), next(m["at"] for m in week_map.MOMENTS if m["key"] == "debrief"))
+
+    def test_debrief_moment_is_none_without_a_readable_slot(self):
+        self.assertIsNone(week_map.personal_debrief_moment({}))
+        self.assertIsNone(week_map.personal_debrief_moment({"datetime": "not-a-date", "meal": "dinner"}))
+
+    def test_plan_slot_matches_app_pys_own_debrief_opens_label_computation(self):
+        """Both derive from the same stored datetime + meal — this guards
+        the app.py._plan_slot refactor that now just calls this."""
+        plan = {"datetime": "2026-01-09T19:30:00", "meal": "dinner"}
+        day_index, hour = week_map.plan_slot(plan)
+        self.assertEqual(week_map.DAYS[day_index], "Fri")
+
+    def test_pool_return_moment_is_none_when_not_released(self):
+        self.assertIsNone(week_map.pool_return_moment(False))
+
+    def test_pool_return_moment_reuses_rcs_own_fixed_clock_time(self):
+        """RC opens for everyone at the same synchronized moment — being
+        released changes whether it applies to you, never when it is."""
+        moment = week_map.pool_return_moment(True)
+        feedback = next(m for m in week_map.MOMENTS if m["key"] == "feedback")
+        self.assertEqual(moment["at"], feedback["at"])
+        self.assertEqual(moment["key"], "feedback")
+
+
+class PersonalizedGridTests(unittest.TestCase):
+    """round3-fixes-spec.md §5.3 ('replace in place'): a personalized
+    moment swaps out its generic counterpart rather than sitting
+    alongside it."""
+
+    def grid(self, **personal):
+        return week_map.grid(clock_module.SimulationClock.at(1, "Mon", 13), **personal)
+
+    def _cell_labels(self, g, day):
+        return [m["label"] for row in g["rows"] for d in row["days"]
+                if d["day"] == day for m in d["moments"]]
+
+    def test_with_no_personal_data_the_grid_is_unchanged(self):
+        g = self.grid()
+        placed = sum(len(d["moments"]) for row in g["rows"] for d in row["days"])
+        self.assertEqual(placed, len(week_map.MOMENTS))
+        self.assertFalse(any(m.get("personal") for row in g["rows"] for d in row["days"] for m in d["moments"]))
+
+    def test_a_personal_debrief_replaces_the_generic_one_not_alongside_it(self):
+        plan = {"datetime": "2026-01-11T00:00:00", "meal": "breakfast"}  # Sunday
+        personal = week_map.personal_debrief_moment(plan)
+        g = self.grid(personal_debrief=personal)
+        self.assertNotIn("Debrief", self._cell_labels(g, "Sat"))
+        sun_labels = self._cell_labels(g, "Sun")
+        self.assertIn("Debrief", sun_labels)
+        self.assertEqual(sun_labels.count("Debrief"), 1)
+        placed = sum(len(d["moments"]) for row in g["rows"] for d in row["days"])
+        self.assertEqual(placed, len(week_map.MOMENTS))  # swapped, not added
+
+    def test_pool_return_replaces_the_generic_rc_opens_cell(self):
+        personal = week_map.pool_return_moment(True)
+        g = self.grid(personal_pool_return=personal)
+        feedback = next(m for m in week_map.MOMENTS if m["key"] == "feedback")
+        day, _hour = feedback["at"]
+        labels_in_cell = self._cell_labels(g, day)
+        self.assertEqual(labels_in_cell.count("RC Opens"), 1)
+        placed = sum(len(d["moments"]) for row in g["rows"] for d in row["days"])
+        self.assertEqual(placed, len(week_map.MOMENTS))
+
+    def test_none_for_both_leaves_the_grid_fully_generic(self):
+        g = self.grid(personal_debrief=None, personal_pool_return=None)
+        self.assertFalse(any(m.get("personal") for row in g["rows"] for d in row["days"] for m in d["moments"]))
 
 
 if __name__ == "__main__":

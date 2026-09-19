@@ -146,3 +146,38 @@ class JourneyApiTests(RouteTestCase):
         self.assertEqual(response.status_code, 405)
         self.assertEqual(response.json['error']['code'], 'method_not_allowed')
         self.assertIsNone(response.json['data'])
+
+    def test_dating_context_is_present_while_dating_and_absent_outside_it(self):
+        """round3-fixes-spec.md §6.1/§6.2: consent explainer, playbook and
+        date prep — Dating only, never in Relationship or beyond."""
+        action = self.get('/guidance').json['data']
+        self.assertIsNotNone(action['dating_context'])
+        self.assertTrue(action['dating_context']['consent'])
+        self.assertTrue(action['dating_context']['playbook'])
+        self.assertIn('courtesies', action['dating_context']['date_prep'])
+
+        self.conn.execute('UPDATE User SET journey_state = ? WHERE id = ?', ('relationship', 'owner'))
+        self.conn.commit()
+        self.assertIsNone(self.get('/guidance').json['data']['dating_context'])
+
+    def test_date_prep_carries_the_locked_in_partners_greeting(self):
+        self.make_lockin('owner', 'partner')
+        db.insert_row(self.conn, 'ChemistryEntry', {
+            'id': 'ce-1', 'user_id': 'partner', 'key': 'physical_boundary',
+            'value': 'side-hug', 'updated_at': 'Mon:12', 'updated_at_hours': 0})
+        self.conn.commit()
+        action = self.get('/guidance').json['data']
+        self.assertEqual(action['dating_context']['date_prep']['partner_greeting'], 'side-hug')
+
+    def test_also_open_lists_currently_open_doors(self):
+        """round3-fixes-spec.md §6.3: "anything I can help you with?" —
+        every open surface, not just the one thing next_action points at."""
+        self.make_lockin('owner', 'partner')
+        self.make_plan('lock-1', status='confirmed')
+        action = self.get('/guidance').json['data']
+        self.assertIsInstance(action['also_open'], list)
+        self.assertTrue(action['also_open'])
+        for card in action['also_open']:
+            for field in ('code', 'title', 'subtitle', 'destination'):
+                self.assertIn(field, card)
+            self.assertTrue(card['destination']['eligible'])

@@ -14,20 +14,27 @@ export function previewTransport() {
     // against — reach.js discovers this list from the response, it never
     // hardcodes it, so what's here is what shows up.
     sliders: [
-      { key: 'age', label: 'Age', unit: 'yrs', min: 18, max: 70, step: 1, current: [27, 36], suggested: [26, 38], self_value: 30, ignored: false, delta_if_ignored: 2, basic: true, sensitive: false },
+      // round3-fixes-spec.md §4.1: track 21-80, self_value 38 — the
+      // spec's own test fixture, so the marker's on-track position is
+      // directly checkable in preview/e2e.
+      { key: 'age', label: 'Age', unit: 'yrs', min: 21, max: 80, step: 1, current: [27, 42], suggested: [32, 44], self_value: 38, ignored: false, delta_if_ignored: 2, basic: true, sensitive: false },
       { key: 'distance_km', label: 'Distance', unit: 'km', min: 0, max: 1600, step: 10, current: [0, 40], suggested: null, self_value: null, ignored: false, delta_if_ignored: 4, basic: true, sensitive: false },
       { key: 'height_cm', label: 'Height', unit: 'cm', min: 140, max: 210, step: 1, current: [160, 185], suggested: [158, 182], self_value: 169, ignored: false, delta_if_ignored: 1, basic: false, sensitive: false },
       { key: 'weight_kg', label: 'Weight', unit: 'kg', min: 40, max: 150, step: 1, current: [55, 80], suggested: [58, 78], self_value: 66, ignored: false, delta_if_ignored: 1, basic: false, sensitive: false },
       { key: 'waist_in', label: 'Waist', unit: 'in', min: 20, max: 55, step: 1, current: [26, 36], suggested: [27, 34], self_value: 31, ignored: false, delta_if_ignored: 0, basic: false, sensitive: false },
     ],
     filters: [
-      { name: 'veg_only', label: 'Diet', on_label: 'Vegetarian only', kind: 'dealbreaker', basic: true, control: 'choice', ignored: false, value: true, delta_if_ignored: 3, sensitive: false, blurb: '' },
-      { name: 'wants_kids', label: 'Wants kids', on_label: 'Required', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: true, delta_if_ignored: 1, sensitive: false, blurb: '' },
-      { name: 'no_kids_wanted', label: 'Does not want kids', on_label: 'Required', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '' },
-      { name: 'nationality', label: 'Nationality', on_label: 'IN, NRI', kind: 'lever', basic: false, control: 'choice', ignored: false, value: ['IN', 'NRI'], delta_if_ignored: 1, sensitive: true, blurb: '' },
-      { name: 'religion', label: 'Religion', on_label: 'As set', kind: 'lever', basic: false, control: 'choice', ignored: false, value: 'Hindu', delta_if_ignored: 1, sensitive: true, blurb: '' },
-      { name: 'non_smoker', label: 'Non-smoker', on_label: 'Never or quitting', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '' },
-      { name: 'non_drinker', label: 'Non-drinker', on_label: 'Rarely or never', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '' },
+      { name: 'veg_only', label: 'Diet', on_label: 'Vegetarian only', kind: 'dealbreaker', basic: true, control: 'choice', ignored: false, value: true, delta_if_ignored: 3, sensitive: false, blurb: '', opposite: null },
+      // round3-fixes-spec.md §4.3: education as a real REACH filter.
+      { name: 'education', label: 'Education', on_label: 'As set', kind: 'lever', basic: true, control: 'choice', ignored: false, value: ["Bachelor's", "Master's", 'Doctorate'], delta_if_ignored: 1, sensitive: false, blurb: '', opposite: null },
+      // round3-fixes-spec.md §4.2: two answers to one question — see
+      // matching.py's _OPPOSITES and its `opposite` field on each row.
+      { name: 'wants_kids', label: 'Wants kids', on_label: 'Only people who do', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: true, delta_if_ignored: 1, sensitive: false, blurb: '', opposite: 'no_kids_wanted' },
+      { name: 'no_kids_wanted', label: 'Does not want kids', on_label: "Only people who don't", kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: 'wants_kids' },
+      { name: 'nationality', label: 'Nationality', on_label: 'IN, NRI', kind: 'lever', basic: false, control: 'choice', ignored: false, value: ['IN', 'NRI'], delta_if_ignored: 1, sensitive: true, blurb: '', opposite: null },
+      { name: 'religion', label: 'Religion', on_label: 'As set', kind: 'lever', basic: false, control: 'choice', ignored: false, value: 'Hindu', delta_if_ignored: 1, sensitive: true, blurb: '', opposite: null },
+      { name: 'non_smoker', label: 'Non-smoker', on_label: 'Never or quitting', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: null },
+      { name: 'non_drinker', label: 'Non-drinker', on_label: 'Rarely or never', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: null },
     ],
   };
   function reachIgnoredSummary() {
@@ -35,7 +42,11 @@ export function previewTransport() {
     const all = [...reach.sliders, ...reach.filters];
     return { ignored_count: switched.length, all_ignored: all.length > 0 && all.every((f) => f.ignored) };
   }
-  function reachState() { return { ...reach, ...reachIgnoredSummary() }; }
+  // round3-fixes-spec.md §4.3: every real lever is already unlocked in
+  // this fixture (a slider or filter entry exists for all seven), so
+  // there is nothing to list here — matches the real API always
+  // including the key, empty or not.
+  function reachState() { return { ...reach, locked_levers: [], ...reachIgnoredSummary() }; }
 
   // "The week" grid, mirroring week_map.py's own algorithm (BANDS/MOMENTS)
   // against a fixed clock — a faithful preview fixture, not a second copy
@@ -44,7 +55,7 @@ export function previewTransport() {
   const WM_BANDS = [['morn', 'MORN', 0, 12], ['aft', 'AFT', 12, 17], ['eve', 'EVE', 17, 21], ['night', 'NIGHT', 21, 24]];
   const WM_MOMENTS = [
     { key: 'match_1', at: ['Mon', 12], label: 'Match 1', tone: 'match', kind: 'Matches', means: 'Match 1 is revealed. You have until Tuesday midday.' },
-    { key: 'rc_ends', at: ['Mon', 11], label: 'RC ends', tone: 'reality', kind: 'Reality Check', means: "Last week's Reality Check closes, just before the new week opens." },
+    { key: 'rc_ends', at: ['Mon', 11], label: 'RC Closes', tone: 'reality', kind: 'Reality Check', means: "Last week's Reality Check closes, just before the new week opens." },
     { key: 'rank', at: ['Tue', 11], label: 'Rank', tone: 'muted', kind: 'Matches', means: 'Keenness from Match 1 is counted before Match 2 is drawn.' },
     { key: 'match_2', at: ['Tue', 12], label: 'Match 2', tone: 'match', kind: 'Matches', means: "Match 1's window closes and Match 2 is revealed." },
     { key: 'match_3', at: ['Wed', 12], label: 'Match 3', tone: 'match', kind: 'Matches', means: "Match 2's window closes and Match 3 is revealed — the last of the week." },
@@ -55,13 +66,36 @@ export function previewTransport() {
     { key: 'date_sat_e', at: ['Sat', 19], label: 'Dinner', tone: 'date', kind: 'Dates' },
     { key: 'date_sun_a', at: ['Sun', 13], label: 'Lunch', tone: 'date', kind: 'Dates' },
     { key: 'debrief', at: ['Sat', 21], label: 'Debrief', tone: 'debrief', kind: 'After', means: 'The debrief opens an hour after a date, not before it.' },
-    { key: 'feedback', at: ['Sun', 21], label: 'Reality', tone: 'reality', kind: 'After', means: 'Feedback closes the week, and next week’s Reality Check is drawn from it.' },
+    { key: 'feedback', at: ['Sun', 21], label: 'RC Opens', tone: 'reality', kind: 'Reality Check', means: 'Feedback closes the week, and next week’s Reality Check is drawn from it.' },
   ];
-  function weekMapGrid(now) {
+  // round3-fixes-spec.md §5.2/§5.3: mirrors dateplan.debrief_opens_hour()
+  // so the preview's own "replace in place" personalization is computed
+  // the same way the real server does, not a second set of numbers.
+  const WM_MEAL_SLOT_TIMES = { breakfast: [9, 0], lunch: [13, 0], coffee: [17, 0], dinner: [19, 30] };
+  function debriefOpensHour(mealSlot) {
+    const [hour, minute] = WM_MEAL_SLOT_TIMES[mealSlot] || [21, 0];
+    return Math.min(23, Math.ceil((hour * 60 + minute + 60) / 60));
+  }
+  function personalDebriefMoment(plan) {
+    if (!plan?.datetime) return null;
+    const [datePart] = plan.datetime.split('T');
+    const dayIndex = (new Date(datePart + 'T00:00:00Z').getUTCDay() + 6) % 7; // Mon=0
+    return { key: 'debrief', at: [WM_DAYS[dayIndex], debriefOpensHour(plan.meal)], label: 'Debrief',
+      tone: 'debrief', kind: 'After', means: "Opens an hour after your actual date — this date's real time, not a fixed slot." };
+  }
+  function poolReturnMoment(released) {
+    if (!released) return null;
+    const feedback = WM_MOMENTS.find((m) => m.key === 'feedback');
+    return { ...feedback, means: "You're back in the pool — Reality Check for the coming week applies to you." };
+  }
+  function weekMapGrid(now, { personalDebrief = null, personalPoolReturn = null } = {}) {
     const today = now?.day ?? null;
     const bandFor = (hour) => (WM_BANDS.find(([, , s, e]) => hour >= s && hour < e) || WM_BANDS[WM_BANDS.length - 1])[0];
+    let moments = WM_MOMENTS;
+    if (personalDebrief) moments = moments.filter((m) => m.key !== 'debrief').concat({ ...personalDebrief, personal: true });
+    if (personalPoolReturn) moments = moments.filter((m) => m.key !== 'feedback').concat({ ...personalPoolReturn, personal: true });
     const cells = {};
-    for (const m of WM_MOMENTS) {
+    for (const m of moments) {
       const [day, hour] = m.at;
       const band = bandFor(hour);
       const past = now ? (WM_DAYS.indexOf(day) < WM_DAYS.indexOf(now.day) || (day === now.day && hour < now.hour)) : false;
@@ -95,6 +129,18 @@ export function previewTransport() {
     return 'feedback_open';
   }
 
+  // "Replace in place", the same personalization the real server applies
+  // — only wired for personalDebrief here, since this preview fixture
+  // has no release-tracking state to drive personalPoolReturn from.
+  // Reads the FULLER `plan` object (declared further down, holds `meal`
+  // and the ceremony's own status writes), not the compact `week.date_plan`
+  // summary — the two are separate mock objects and only `plan` has both
+  // the meal slot and the real post-ceremony 'confirmed' status.
+  function personalizedGrid(now) {
+    const personalDebrief = plan?.status === 'confirmed' ? personalDebriefMoment(plan) : null;
+    return weekMapGrid(now, { personalDebrief });
+  }
+
   function advanceClock(hours) {
     const c = week.clock;
     const weekLen = 24 * 7;
@@ -103,7 +149,7 @@ export function previewTransport() {
     total = ((total % weekLen) + weekLen) % weekLen;
     week.clock = { mode: 'simulation', week: c.week + weekDelta, day: WM_DAYS[Math.floor(total / 24)], hour: total % 24 };
     week.phase = weekPhase(week.clock);
-    week.schedule = { grid: weekMapGrid(week.clock), legend: weekMapLegend() };
+    week.schedule = { grid: personalizedGrid(week.clock), legend: weekMapLegend() };
   }
 
   let week = {
@@ -160,10 +206,29 @@ export function previewTransport() {
     road.overlap = road.my_shared_slots.filter((s) => partnerKeys.has(key(s)));
   }
 
-  const visionGoals = [{ key: 'Intimacy', stance: ['Emotional'] }, { key: 'Cohabitate', stance: ['Chores split'] }];
-  const visionElementKeys = ['children', 'cohabitation', 'relocation', 'career', 'intimacy', 'travel'];
+  // round3-fixes-spec.md §7: mirrors vision.py's PILLAR_OPTIONS/validate_pillars()/
+  // rc_open() so the preview enforces the same rules the server does.
+  let visionGoals = [{ key: 'Intimacy', stance: ['Emotional', 'Physical'] }, { key: 'Cohabitate', stance: ['Chores split'] }, { key: 'Travel together', stance: null }];
+  const PILLAR_OPTIONS = { Intimacy: ['Emotional', 'Physical'], 'Travel together': [], Kids: ['Naturally', 'Surrogacy', 'Adoption'], Cohabitate: ['Chores split', 'Expenses sharing'] };
+  const visionElementKeys = ['Intimacy', 'Kids', 'Cohabitate', 'Travel together'];
+  const VISION_EXPLANATION = 'Travel together takes no detail now. Kids and Cohabitate do, because picking either without saying what you mean says almost nothing — and they are revisited together, at the Relationship stage, once it is a decision rather than a preference.';
   let visionEntries = [];
   let visionChanges = [];
+  const visionRcOpen = () => { const c = week.clock; return (c.day === 'Sun' && c.hour >= 21) || (c.day === 'Mon' && c.hour < 11); };
+  const visionRead = () => ({ goals: visionGoals, element_keys: visionElementKeys, pillar_options: PILLAR_OPTIONS, detail_explanation: VISION_EXPLANATION, rc_open: visionRcOpen(), entries: visionEntries, changes: visionChanges });
+  function visionValidate(map) {
+    if (!(map.Intimacy || []).length) return 'Intimacy is mandatory — pick Emotional, Physical, or both.';
+    const others = [];
+    for (const k of ['Kids', 'Cohabitate', 'Travel together']) {
+      if (!(k in map)) continue;
+      if (k !== 'Travel together' && !map[k].length) return `${k} needs at least one sub-selection — picking it alone says almost nothing.`;
+      if (k === 'Kids' && map[k].includes('Naturally') && !map.Intimacy.includes('Physical')) return 'Having kids naturally needs Physical intimacy selected too. Add it, or choose surrogacy or adoption instead.';
+      others.push(k);
+    }
+    return others.length ? null : 'Pick at least one more pillar alongside Intimacy — Travel together, Kids, or Cohabitate.';
+  }
+  const visionMap = () => Object.fromEntries(visionGoals.map((g) => [g.key, Array.isArray(g.stance) ? [...g.stance] : []]));
+  const visionCommit = (map) => { visionGoals = visionElementKeys.filter((k) => k in map).map((k) => ({ key: k, stance: map[k].length ? [...map[k]].sort() : null })); };
 
   const chemistryBuckets = [['good', '★', 'Already good at it'], ['improve', '↑', 'Want to improve'], ['maybe', '?', 'Never considered, so maybe'], ['no', '✕', 'Not my cup of tea']];
   const chemistryActivities = ['Cooking', 'Hiking', 'Salsa', 'Tennis', 'Yoga', 'Photography', 'Board games', 'Live gigs', 'Cycling', 'Pottery', 'Stand-up', 'Scuba diving'];
@@ -171,15 +236,25 @@ export function previewTransport() {
 
   let statsData = { age: 30, height_cm: 169, weight_kg: 66, waist_in: 31, income_band: '₹₹₹ · 25L–50L', education: "Master's", nationality: 'IN', profession: 'Engineering',
     diet: 'Everything', religion: 'Hindu', smoking: 'Never', drinking: 'Socially', fitness_routine: 'Gym 3x/week', marital_history: 'Never married', ethnicity: ['South Asian'], languages: ['English', 'Hindi'], cuisine: ['North Indian', 'Italian'], budget: ['₹2,500–4,000'] };
+  // round3-fixes-spec.md §3: all five start actually verified, matching
+  // the "Verified" pill this fixture's user already shows — editing one
+  // reopens it (see the PATCH handler below), same as the real API.
+  let statsChecks = { age: 'verified', education: 'verified', nationality: 'verified', profession: 'verified', income_band: 'verified' };
   const statChanges = [];
   const STAT_OPTIONS = { education: ["Bachelor's", "Master's", 'PhD'], nationality: ['IN', 'NRI'], profession: ['Engineering', 'Design', 'Medicine', 'Law'], diet: ['Vegetarian', 'Vegan', 'Everything'], smoking: ['Never', 'Occasionally', 'Regularly'], drinking: ['Never', 'Socially', 'Regularly'], fitness_routine: ['Sedentary', 'Occasional', 'Gym 3x/week', 'Athlete'], marital_history: ['Never married', 'Divorced', 'Widowed'], ethnicity: ['South Asian', 'East Asian', 'Mixed', 'Other'], religion: ['Hindu', 'Muslim', 'Christian', 'Other'], languages: ['English', 'Hindi', 'Tamil', 'Bengali'], cuisine: ['North Indian', 'South Indian', 'Italian', 'Cafe'], income_band: ['₹₹ · 10L–25L', '₹₹₹ · 25L–50L', '₹₹₹₹ · 50L+'], budget: ['₹1,500–2,500', '₹2,500–4,000', '₹4,000+'] };
   const STAT_RANGES = { age: [21, 75], height_cm: [140, 210], weight_kg: [40, 150], waist_in: [20, 55] };
+  const VERIFIED_KEYS = ['age', 'education', 'nationality', 'profession', 'income_band'];
+  const VERIFIED_EDIT_WARNING = 'This is vouched for by a background check. Changing it moves the value now, but drops it out of "verified" until BGV re-checks it — REACH filters and match cards will show it as pending in the meantime. Send it anyway?';
   function statsRows() {
     const editable = ['height_cm', 'weight_kg', 'waist_in', 'diet', 'religion', 'smoking', 'drinking', 'fitness_routine', 'marital_history', 'ethnicity', 'languages', 'cuisine', 'budget'];
-    const verified = ['age', 'education', 'nationality', 'profession', 'income_band'];
     return [
-      ...editable.map((key) => ({ key, value: statsData[key] ?? null, editable: true, why: 'open', reason: null })),
-      ...verified.map((key) => ({ key, value: statsData[key] ?? null, editable: false, why: 'verified', reason: 'Vouched for by a background check, so it is not typed over. If one has genuinely changed, send it back to be re-checked — the value moves when the check clears, not when you say so.' })),
+      ...editable.map((key) => ({ key, value: statsData[key] ?? null, editable: true, why: 'open', reason: null, warning: null, check: null })),
+      ...VERIFIED_KEYS.map((key) => {
+        const verifiedNow = statsChecks[key] === 'verified';
+        return { key, value: statsData[key] ?? null, editable: true,
+          why: verifiedNow ? 'verified_editable' : 'open', reason: null,
+          warning: verifiedNow ? VERIFIED_EDIT_WARNING : null, check: statsChecks[key] || null };
+      }),
     ];
   }
 
@@ -268,23 +343,70 @@ export function previewTransport() {
       recomputeOverlap();
       return ok(road);
     }
-    if (path.endsWith('/profile')) return ok({stats:{age:30,height_cm:169,weight_kg:66,waist_in:31,income_band:'₹₹₹ · 25L–50L',diet:'Everything',education:"Master's",nationality:'IN',religion:'Hindu',city:'Bangalore',profession:'Engineering'},visions:[{key:'Intimacy',stance:['Emotional']},{key:'Cohabitate',stance:['Chores split']} ]});
+    // Reads straight off statsData/statsChecks rather than a fixed
+    // snapshot, so a Dashboard/REACH stats save (round3-fixes-spec.md
+    // §2/§3) actually shows up here on the next GET, the same way the
+    // real API's per-user state does.
+    if (path.endsWith('/profile')) return ok({stats:{...statsData,city:'Bangalore'},visions:[{key:'Intimacy',stance:['Emotional']},{key:'Cohabitate',stance:['Chores split']} ]});
 
+    // round3-fixes-spec.md §6.1/§6.2/§6.3: mirrors guru_dating.dating_context()/
+    // pre_date_briefing() and journey_api.guidance()'s `also_open` — real
+    // server content, not invented copy, so the mobile screen has something
+    // faithful to render in preview.
     if (path.endsWith('/guidance')) return ok({headline:'Your next chapter starts here',body:'Take a moment to review your profile before meeting someone new.',cta:'See this week',
-      destination:{key:'week',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/week'}}});
+      destination:{key:'week',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/week'}},
+      also_open: [
+        {code:'VB', title:'Vibes', subtitle:'What keeps this alive', destination:{key:'vibes',eligible:false,blocked_reason:"This isn't available right now.",api_available:false,request:null}},
+      ],
+      dating_context: {
+        consent: "Every yes here is a real yes. Declining anything — a match, a slot, a second date — costs you nothing and is never shown to the other person as a rejection. What they see is that it didn't happen, never that you said no.",
+        playbook: [
+          'Matches are drawn for you through the week — there is no searching or swiping.',
+          "Interest is private until it's mutual. A pass is never shown to the other person.",
+          'Once you lock in with someone, you stop appearing to anyone else, and REACH closes for you.',
+          'Contact details move in-app, only once both of you choose to share them.',
+          'A date is confirmed once both of you sign the same agreement — one signature holds nothing.',
+        ],
+        date_prep: {
+          courtesies: ['Arrive on time; message through the app if delayed', 'Be present — phone away, genuine attention', 'Basic table courtesy, and politeness to venue staff', 'Honour the agreed bill split gracefully — no scene over payment', 'End the date respectfully regardless of romantic outcome'],
+          safety: ['Meet at the confirmed public venue', 'Share date details with a trusted contact outside the platform', 'In-app reporting is available at any time'],
+          boundaries: ["The other person's stated greeting preference is shown before you meet — respect it", 'No recording or photographing without consent', 'Contact exchange happens in-app, by mutual choice'],
+          partner_greeting: week.lock_in ? 'handshake' : null,
+          note: 'Contact details are exchanged in-app when both are ready — never asked for in person.',
+        },
+      },
+    });
 
-    if (path.endsWith('/profile/vision') && method === 'GET') return ok({goals:visionGoals,element_keys:visionElementKeys,entries:visionEntries,changes:visionChanges});
+    if (path.endsWith('/profile/vision') && method === 'GET') return ok(visionRead());
     if (path.endsWith('/profile/vision/details')) {
-      const existing = visionEntries.filter((e) => e.element_key === body.element_key);
-      const row = { id: 'vision-entry-'+(visionEntries.length+1), user_id: 'preview-user', element_key: body.element_key, detail_text: body.detail_text, added_at: 'Mon:12', parent_id: existing.length ? existing[existing.length-1].id : null };
+      const map = visionMap();
+      const { pillar, sub_selection: sub } = body;
+      if (!(pillar in PILLAR_OPTIONS) || (sub && !PILLAR_OPTIONS[pillar].includes(sub))) return err('Unknown pillar or sub-selection.', 400);
+      if (pillar in map && (!sub || map[pillar].includes(sub))) return err('That is already part of your Vision.', 400);
+      map[pillar] = [...(map[pillar] || []), ...(sub ? [sub] : [])];
+      const bad = visionValidate(map);
+      if (bad) return err(bad, 400);
+      visionCommit(map);
+      const row = { id: 'vision-entry-' + (visionEntries.length + 1), user_id: 'preview-user', element_key: pillar, detail_text: sub || pillar, added_at: 'Mon:12', parent_id: null };
       visionEntries = [...visionEntries, row];
-      return ok({goals:visionGoals,element_keys:visionElementKeys,entries:visionEntries,changes:visionChanges});
+      return ok(row);
     }
     if (path.endsWith('/profile/vision/changes')) {
-      if (body.disclosed_to_partner !== true) return err('A reversal must be disclosed to the partner.', 409);
-      const row = { id: 'vision-change-'+(visionChanges.length+1), user_id: 'preview-user', element_key: body.element_key, from_value: body.from_value, to_value: body.to_value, declared_at: 'Mon:12', disclosed_to_partner: true, guru_conversation_id: 'guru-preview' };
+      if (body.disclosed_to_partner !== true) return err('A change must be disclosed to your partner — it cannot be declared silently.', 409);
+      if (!visionRcOpen()) return err('This is only editable while Reality Check is open.', 409);
+      const map = visionMap();
+      const { pillar } = body; const add = body.add || [], remove = body.remove || [];
+      if (!(pillar in map)) return err('You have not set this pillar yet — use Add Detail instead.', 400);
+      if (!add.length && !remove.length) return err('Nothing to change.', 400);
+      const before = [...map[pillar]];
+      const after = [...new Set([...before, ...add])].filter((x) => !remove.includes(x)).sort();
+      if (after.length) map[pillar] = after; else if (pillar === 'Intimacy') map[pillar] = []; else delete map[pillar];
+      const bad = visionValidate(map);
+      if (bad) return err(bad, 400);
+      visionCommit(map);
+      const row = { id: 'vision-change-' + (visionChanges.length + 1), user_id: 'preview-user', element_key: pillar, from_value: before.join(', ') || '(none)', to_value: after.join(', ') || '(none)', declared_at: 'Mon:12', disclosed_to_partner: 1, guru_conversation_id: null };
       visionChanges = [...visionChanges, row];
-      return ok({goals:visionGoals,element_keys:visionElementKeys,entries:visionEntries,changes:visionChanges});
+      return ok(row);
     }
 
     if (path.endsWith('/profile/chemistry') && method === 'GET') return ok({ activities: chemistryPicks, activity_options: chemistryActivities, buckets: chemistryBuckets });
@@ -299,8 +421,18 @@ export function previewTransport() {
 
     if (path.endsWith('/profile/stats') && method === 'GET') return ok({ rows: statsRows(), options: STAT_OPTIONS, ranges: STAT_RANGES, changes: statChanges });
     if (path.endsWith('/profile/stats') && method === 'PATCH') {
-      Object.assign(statsData, body.fields);
-      return ok({ saved: Object.keys(body.fields || {}) });
+      const reopened = [];
+      for (const [key, value] of Object.entries(body.fields || {})) {
+        const before = statsData[key] ?? null;
+        const after = value === '' || value == null ? null : value;
+        const changed = JSON.stringify(before) !== JSON.stringify(after);
+        if (changed && VERIFIED_KEYS.includes(key) && statsChecks[key] === 'verified') {
+          statsChecks[key] = 'in_review';
+          reopened.push(key);
+        }
+        statsData[key] = after;
+      }
+      return ok({ saved: Object.keys(body.fields || {}), reopened });
     }
     if (path.endsWith('/profile/stats/reverification')) return ok({ status: 'in_review', provider_mode: 'manual_review_required', verification_granted: false });
 
@@ -317,7 +449,16 @@ export function previewTransport() {
     }
     if (path.endsWith('/reach/ignore')) {
       const target = reach.sliders.find((s) => s.key === body.filter) || reach.filters.find((f) => f.name === body.filter);
-      if (target) target.ignored = !!body.ignore;
+      if (target) {
+        target.ignored = !!body.ignore;
+        // Mirrors matching.set_ignored(): turning a dealbreaker ON
+        // clears its opposite (wanting kids and not wanting them can't
+        // both be held at once).
+        if (!body.ignore && target.opposite) {
+          const opp = reach.filters.find((f) => f.name === target.opposite);
+          if (opp) opp.ignored = true;
+        }
+      }
       return ok(reachState());
     }
     if (path.endsWith('/reach/show-all')) {
@@ -327,12 +468,16 @@ export function previewTransport() {
 
     if (path.endsWith('/simulated-clock')) {
       if (typeof body.advance_hours === 'number') advanceClock(body.advance_hours);
-      else if (body.week && body.day && body.hour != null) { week.clock = { mode: 'simulation', week: body.week, day: body.day, hour: body.hour }; week.phase = weekPhase(week.clock); week.schedule = { grid: weekMapGrid(week.clock), legend: weekMapLegend() }; }
+      else if (body.week && body.day && body.hour != null) { week.clock = { mode: 'simulation', week: body.week, day: body.day, hour: body.hour }; week.phase = weekPhase(week.clock); week.schedule = { grid: personalizedGrid(week.clock), legend: weekMapLegend() }; }
       else return err('Provide either advance_hours or week+day+hour, not both.', 400);
       return ok({}); // caller reloads journey/status + week itself
     }
     if (path.endsWith('/week/prepare')) { week.prepared = true; return ok(week); }
-    if (path.endsWith('/week')) return ok(week);
+    // Recomputed fresh on every read, same as the real _api_week_state()
+    // — a cached week.schedule would go stale the moment date_plan's own
+    // status changes (e.g. the ceremony completing) without the clock
+    // itself moving.
+    if (path.endsWith('/week')) return ok({ ...week, schedule: { grid: personalizedGrid(week.clock), legend: weekMapLegend() } });
     if (path.includes('/matches/') && path.endsWith('/actions')) {
       const id = path.split('/matches/')[1].split('/')[0];
       const match = week.matches.find((m) => m.id === id);

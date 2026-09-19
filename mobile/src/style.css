@@ -72,6 +72,16 @@ p{line-height:1.65;color:var(--text-2);font-size:15px}
 .guidance{background:linear-gradient(130deg,var(--card-2),var(--card))}
 .guru-card{display:flex;gap:12px;align-items:flex-start;font-size:13.5px;line-height:1.5;color:var(--text-2)}
 .guru-avatar{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--coral-1),var(--coral-2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#3A0A16}
+/* round3-fixes-spec.md §6.3: "anything I can help you with?" tiles —
+   single column at phone width, matching static/style.css's own
+   .guru-tile grid which already collapses to one column under 560px. */
+.guru-cards{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.guru-tile{display:flex;gap:11px;align-items:flex-start;width:100%;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:left;color:var(--white);font:inherit}
+.guru-tile:disabled{opacity:.45}
+.guru-tile-code{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--teal)}
+.guru-tile-body{display:flex;flex-direction:column;gap:3px}
+.guru-tile-title{font-size:13.5px;font-weight:600}
+.guru-tile-sub{font-size:11.5px;line-height:1.45;color:var(--muted)}
 
 /* ── buttons ────────────────────────────────────────────────────────── */
 .primary,.secondary,.btn-widen{display:flex;justify-content:center;align-items:center;width:100%;border:none;border-radius:12px;padding:14px 18px;font-family:var(--font-display);font-weight:700;font-size:14.5px;cursor:pointer;text-align:center;box-sizing:border-box;margin-top:14px;min-height:46px}
@@ -125,6 +135,19 @@ dd{margin:0;text-align:right;overflow-wrap:anywhere}
 .filter.is-choice.is-any .filter-readout{color:var(--coral-1);text-decoration:none}
 .filter-foot{display:flex;justify-content:space-between;gap:10px;margin-top:6px;font-family:var(--font-mono);font-size:11px;color:var(--muted)}
 .filter-delta{color:var(--mint);white-space:nowrap}
+
+/* round3-fixes-spec.md §4.2: one three-way control for a pair of
+   opposite dealbreakers (e.g. wants/doesn't want kids), replacing two
+   separate Any-switch rows. */
+.paired-choice-options{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.paired-choice-option{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border-strong);border-radius:999px;font-size:12.5px;color:var(--text-2);cursor:pointer}
+.paired-choice-option input{position:absolute;opacity:0;width:0;height:0}
+.paired-choice-option:has(input:checked){border-color:var(--mint);color:var(--mint);background:rgba(46,213,161,.10)}
+
+/* round3-fixes-spec.md §4.3: locked_levers — filters the API says are
+   not filterable yet because their stat is unset, named explicitly
+   rather than just silently missing from the list above. */
+.locked-levers{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13px}
 .filter.is-any .filter-delta{color:var(--gold)}
 .more-filters{margin-top:14px;border-top:1px solid var(--border);padding-top:10px}
 .more-filters>summary{cursor:pointer;font-size:13px;color:var(--muted);list-style:none;padding:4px 0}
@@ -141,8 +164,14 @@ dd{margin:0;text-align:right;overflow-wrap:anywhere}
 .slider-track-wrap input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:22px;height:22px;border-radius:50%;background:var(--white);border:3px solid var(--mint);cursor:pointer;margin-top:3px}
 .slider-track-wrap input[type="range"]::-moz-range-track{background:transparent}
 .slider-track-wrap input[type="range"]::-moz-range-thumb{pointer-events:auto;width:16px;height:16px;border-radius:50%;background:var(--white);border:3px solid var(--mint);cursor:pointer}
-.slider-self{position:absolute;top:2px;bottom:2px;width:2px;background:var(--white);pointer-events:none;z-index:1}
-.slider-self::before{content:"";position:absolute;top:-3px;left:50%;transform:translateX(-50%);width:6px;height:6px;border-radius:50%;background:var(--white)}
+/* round3-fixes-spec.md §4.1: the dot (the part someone actually reads as
+   "you are here") sits exactly on the track's own centerline, same
+   top:50%/translateY(-50%) as .slider-track itself — a short stem either
+   side of it, not a line spanning the whole 28px control with the dot
+   pinned to its top, which read as floating above the track rather than
+   on it. */
+.slider-self{position:absolute;top:50%;height:12px;width:2px;transform:translateY(-50%);background:var(--white);pointer-events:none;z-index:1}
+.slider-self::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:6px;height:6px;border-radius:50%;background:var(--white)}
 
 /* ── week / candidate review ───────────────────────────────────────── */
 .candidate-card{text-align:left;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:8px}
@@ -180,6 +209,12 @@ dd{margin:0;text-align:right;overflow-wrap:anywhere}
 .tw-chip{display:block;font-size:7.5px;font-weight:600;line-height:1.1;padding:4px 1px;border-radius:5px;border:1px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tw-chip+.tw-chip{margin-top:2px}
 .tw-chip.is-past{opacity:.42}
+/* round3-fixes-spec.md §5.3: a personalized moment (real debrief time,
+   or "you're back in the pool") gets a small mark of its own — the same
+   tone as its generic counterpart, so it still reads as the same kind
+   of thing, just distinguishably theirs. */
+.tw-chip.is-personal{box-shadow:0 0 0 1px var(--white) inset}
+.tw-personal-dot{display:inline-block;width:4px;height:4px;border-radius:50%;background:currentColor;margin-left:3px;vertical-align:middle}
 .tone-match{background:rgba(255,77,109,.16);border-color:rgba(255,77,109,.45);color:#FF8DA1}
 .tone-calendar{background:rgba(167,139,250,.16);border-color:rgba(167,139,250,.45);color:var(--lilac)}
 .tone-publish{background:rgba(61,220,151,.14);border-color:rgba(61,220,151,.42);color:var(--mint)}

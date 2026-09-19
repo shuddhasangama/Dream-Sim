@@ -58,6 +58,21 @@ class ApiTests(RouteTestCase):
             self.assertEqual(api.json["data"], web.json)
             self.assertEqual(api.json["data"]["counting_unverified"], status == "pending")
 
+    def test_reach_state_names_a_locked_lever_instead_of_silently_dropping_it(self):
+        """round3-fixes-spec.md §4.3: the JSON API used to omit
+        locked_levers entirely — a filter whose stat was not filled in
+        (e.g. height) just had no representation at all in the response,
+        so the mobile screen could not say why it was missing."""
+        row = dict(db.fetch_one(self.conn, "User", id="owner"))
+        prefs = json.loads(row["preferences_json"])
+        del prefs["adjustable"]["height_cm"]
+        row["preferences_json"] = json.dumps(prefs)
+        db.insert_row(self.conn, "User", row)
+        self.conn.commit()
+        api = self.client.get("/api/v1/reach")
+        locked = {l["lever"] for l in api.json["data"]["locked_levers"]}
+        self.assertIn("height_cm", locked)
+
     def test_all_mutations_persist_and_match_web(self):
         cases = [("ignore", {"filter": "age", "ignore": True}),
                  ("show-all", {"ignore": True}),

@@ -8,7 +8,12 @@ their match."
 
 Two decisions were taken with the user before this was built:
   * a live match freezes only the stats a candidate can SEE or FILTER on
-  * BGV-verified fields are not editable in-app at all
+  * BGV-verified fields were not editable in-app at all
+
+round3-fixes-spec.md §3 (2026-09-18) reversed the second one: a verified
+field is editable, and editing one that IS currently verified drops it
+back to declared and re-opens verification. See stats_edit.py's own
+"RE-VERIFIES ON EDIT" docstring for the reasoning.
 """
 
 from __future__ import annotations
@@ -56,16 +61,37 @@ class GroupTests(unittest.TestCase):
 
 
 class WhenTests(unittest.TestCase):
-    def yes(self, field, state):
-        return se.editable(field, state)["editable"]
+    def yes(self, field, state, verified_now=False):
+        return se.editable(field, state, verified_now)["editable"]
 
-    def test_a_verified_field_is_never_editable(self):
-        """Not even in a relationship — being exclusive does not make a
-        badge retypeable."""
-        for state in (QUIET, LIVE, KEEN, COUPLE):
+    def test_a_not_yet_verified_field_is_freely_editable(self):
+        """A field in the VERIFIED group that has never actually been
+        checked (no Verification row, or one that isn't 'verified' yet)
+        behaves like any other open field — there is no badge to protect."""
+        for state in (QUIET, COUPLE):
             for field in se.VERIFIED:
                 with self.subTest(field=field, state=state):
-                    self.assertFalse(self.yes(field, state))
+                    self.assertTrue(self.yes(field, state, verified_now=False))
+
+    def test_a_currently_verified_field_is_editable_but_warns(self):
+        """round3-fixes-spec.md §3: editable, not blocked — but the
+        caller (rows()) must be told to warn before save."""
+        for field in se.VERIFIED:
+            with self.subTest(field=field):
+                verdict = se.editable(field, QUIET, verified_now=True)
+                self.assertTrue(verdict["editable"])
+                self.assertTrue(verdict["warning"])
+                self.assertEqual(verdict["why"], "verified_editable")
+
+    def test_a_verified_field_freezes_the_same_as_candidate_facing(self):
+        """Being checked by BGV does not make a field any less visible to
+        a live match, or any less frozen once someone has said yes."""
+        for field in se.VERIFIED:
+            with self.subTest(field=field):
+                self.assertFalse(self.yes(field, LIVE, verified_now=True))
+                self.assertFalse(self.yes(field, LIVE, verified_now=False))
+                self.assertFalse(self.yes(field, KEEN, verified_now=True))
+                self.assertFalse(self.yes(field, KEEN, verified_now=False))
 
     def test_a_quiet_week_opens_everything_soft(self):
         for field in se.EDITABLE:
@@ -168,13 +194,46 @@ class StatsScreenTests(RouteTestCase):
         self.assertNotIn("weight_kg", stats)
         self.assertIn("form-error", self.client.get("/stats").get_data(as_text=True))
 
-    def test_a_verified_stat_is_refused_by_the_route(self):
-        """Re-checked server-side. A disabled input is a suggestion."""
+    def test_a_not_yet_verified_stat_is_saved_by_the_route(self):
+        """round3-fixes-spec.md §3: no Verification row for this field
+        means there is no badge yet, so it behaves like any open field."""
         import json
-        before = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
         self.client.post("/stats/save", data={"profession": "Astronaut"})
         after = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
-        self.assertEqual(before.get("profession"), after.get("profession"))
+        self.assertEqual(after.get("profession"), "Astronaut")
+
+    def test_editing_a_currently_verified_stat_saves_it_and_reopens_verification(self):
+        """The reversal itself: the new value lands immediately, and the
+        field's own Verification row drops back to in_review rather than
+        staying verified for a value nobody re-checked."""
+        import json
+        db.insert_row(self.conn, "Verification", {
+            "id": "u1:profession", "user_id": "u1", "field": "profession",
+            "status": "verified", "note": None, "updated_at": "W1 Mon 09:00"})
+        self.conn.commit()
+        self.client.post("/stats/save", data={"profession": "Astronaut"})
+        after_stats = json.loads(dict(db.fetch_one(self.conn, "User", id="u1"))["stats_json"])
+        self.assertEqual(after_stats.get("profession"), "Astronaut")
+        row = db.fetch_one(self.conn, "Verification", user_id="u1", field="profession")
+        self.assertEqual(row["status"], "in_review")
+
+    def test_resubmitting_the_same_verified_value_does_not_reopen_it(self):
+        """No actual change means nothing to re-check — save_stats treats
+        an unchanged value as a no-op before it ever gets to the reopen
+        step, so a verified badge cannot be knocked over by mistake."""
+        import json
+        user = dict(db.fetch_one(self.conn, "User", id="u1"))
+        stats = json.loads(user["stats_json"])
+        stats["profession"] = "Engineer"
+        user["stats_json"] = json.dumps(stats)
+        db.insert_row(self.conn, "User", user)
+        db.insert_row(self.conn, "Verification", {
+            "id": "u1:profession", "user_id": "u1", "field": "profession",
+            "status": "verified", "note": None, "updated_at": "W1 Mon 09:00"})
+        self.conn.commit()
+        self.client.post("/stats/save", data={"profession": "Engineer"})
+        row = db.fetch_one(self.conn, "Verification", user_id="u1", field="profession")
+        self.assertEqual(row["status"], "verified")
 
     def test_it_says_what_it_saved(self):
         """user's rule: "the saved option visible in 'Stats' edit UI"."""
@@ -192,10 +251,26 @@ class StatsScreenTests(RouteTestCase):
         self.client.post("/stats/save", data={})
         self.assertNotIn("save-note", self.client.get("/stats").get_data(as_text=True))
 
-    def test_held_fields_are_shown_rather_than_hidden(self):
+    def test_a_not_yet_verified_field_is_shown_editable_not_hidden(self):
+        """round3-fixes-spec.md §3: with no Verification row for it,
+        Profession is not a held badge any more — it is just another
+        open field, visible in "Yours to change"."""
         body = self.client.get("/stats").get_data(as_text=True)
-        self.assertIn("Verified — held", body)
+        self.assertIn("Yours to change", body)
         self.assertIn("Profession", body)
+
+    def test_a_currently_verified_field_is_shown_with_its_warning(self):
+        db.insert_row(self.conn, "Verification", {
+            "id": "u1:profession", "user_id": "u1", "field": "profession",
+            "status": "verified", "note": None, "updated_at": "W1 Mon 09:00"})
+        self.conn.commit()
+        body = self.client.get("/stats").get_data(as_text=True)
+        # Jinja HTML-escapes the quotes in VERIFIED_EDIT_WARNING, so match
+        # a quote-free slice of it rather than the constant verbatim.
+        self.assertIn("drops it out of", body)
+        # Still separately offered for a re-check that does not change
+        # the value, in its own "Verified" card.
+        self.assertIn("Verified", body)
 
     def test_a_verified_field_can_be_sent_for_re_checking(self):
         """2026-09-09 (evening), the user's correction: "Mandatory

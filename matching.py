@@ -53,7 +53,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from generate_users import NATIONALITY_OPTIONS, RELIGION_OPTIONS
+from generate_users import NATIONALITY_OPTIONS, RELIGION_OPTIONS, EDUCATION_OPTIONS
 
 # Approximate straight-line distances (km, rounded) between the 7 cities
 # generate_users.py draws from. Illustrative for this simulation, not
@@ -143,7 +143,7 @@ def _has_vision(user: dict[str, Any], key: str) -> bool:
 # where the person left it and comes back the moment they switch it on
 # again, which is what makes it safe to offer as a one-click experiment.
 IGNORABLE_LEVERS = ("age", "height_cm", "weight_kg", "waist_in",
-                    "distance_km", "nationality", "religion")
+                    "distance_km", "nationality", "religion", "education")
 IGNORABLE_DEALBREAKERS = ("veg_only", "wants_kids", "no_kids_wanted",
                           "non_smoker", "non_drinker")
 IGNORABLE = IGNORABLE_LEVERS + IGNORABLE_DEALBREAKERS
@@ -271,6 +271,14 @@ def _nationality_fits(accepted: list[str], candidate_nationality: str | None) ->
     return candidate_nationality is not None and candidate_nationality in accepted
 
 
+def _education_fits(accepted: list[str], candidate_education: str | None) -> bool:
+    """round3-fixes-spec.md §4.3. Exact-match against the accepted tier,
+    same shape as _nationality_fits — no "any" sentinel to check for,
+    because EDUCATION_OPTIONS' widest tier already lists every value
+    generate_users.EDUCATION can hold."""
+    return candidate_education is not None and candidate_education in accepted
+
+
 def _religion_fits(tiers: list[str], own_religion: str, candidate_religion: str | None) -> bool:
     if any(t.lower() == "any" for t in tiers):
         return True
@@ -385,6 +393,10 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
 
     if "nationality" in adj and "nationality" not in off:
         if not _nationality_fits(adj["nationality"], b_stats.get("nationality")):
+            return False
+
+    if "education" in adj and "education" not in off:
+        if not _education_fits(adj["education"], b_stats.get("education")):
             return False
 
     # A religion filter needs BOTH sides declared: "same" and "related" are
@@ -503,6 +515,9 @@ def _widened_user(user: dict[str, Any], lever: str) -> tuple[dict[str, Any], Any
     elif lever == "religion":
         from_value = adj["religion"]
         to_value = _next_wider_option(RELIGION_OPTIONS, adj["religion"])
+    elif lever == "education":
+        from_value = adj["education"]
+        to_value = _next_wider_option(EDUCATION_OPTIONS, adj["education"])
     else:
         raise ValueError(f"Unknown lever: {lever!r}")
 
@@ -511,7 +526,7 @@ def _widened_user(user: dict[str, Any], lever: str) -> tuple[dict[str, Any], Any
 
 
 _SENSITIVE_LEVERS = {"nationality", "religion"}
-LEVERS = ["age", "height_cm", "weight_kg", "waist_in", "distance_km", "nationality", "religion"]
+LEVERS = ["age", "height_cm", "weight_kg", "waist_in", "distance_km", "nationality", "religion", "education"]
 
 # 2026-09-04, user's rule: REACH filters on what the user actually keyed
 # in. A lever exists only where the backing stat does, so the whole lever
@@ -740,7 +755,7 @@ def whatif_deltas(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict
 _FILTER_LABELS = {
     "age": "Age", "height_cm": "Height", "weight_kg": "Weight",
     "waist_in": "Waist", "distance_km": "Distance", "nationality": "Nationality",
-    "religion": "Religion", "veg_only": "Diet",
+    "religion": "Religion", "veg_only": "Diet", "education": "Education",
     # Two rows, two names. Both said "Kids" at first, which put two
     # identical labels next to each other saying opposite things.
     "wants_kids": "Wants kids", "no_kids_wanted": "Does not want kids",
@@ -760,12 +775,13 @@ _FILTER_ON_LABELS = {
     "non_drinker": "Rarely or never",
     "nationality": "As set",
     "religion": "As set",
+    "education": "As set",
 }
 
 # The filters shown without asking. Everything else sits behind "More
 # filters" — 2026-09-10, user's rule: "Maybe keep basic stats here. And
 # provide option to add additional where needed."
-BASIC_FILTERS = {"age", "distance_km", "wants_kids", "no_kids_wanted", "veg_only"}
+BASIC_FILTERS = {"age", "distance_km", "wants_kids", "no_kids_wanted", "veg_only", "education"}
 
 
 def filter_states(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -814,6 +830,12 @@ def filter_states(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict
             # putting it back, and reads as a negative number.
             "delta_if_ignored": (after - baseline) if not ignored else (baseline - after),
             "sensitive": name in _SENSITIVE_LEVERS,
+            # round3-fixes-spec.md §4.2: "wants_kids" and "no_kids_wanted"
+            # are two answers to the same question (_OPPOSITES above) —
+            # naming the pairing here lets a client merge them into one
+            # three-way control (wants / doesn't want / any) instead of
+            # inventing which filter names pair up.
+            "opposite": _OPPOSITES.get(name),
         })
     return out
 

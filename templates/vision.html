@@ -35,11 +35,11 @@
 
 {% if show_detail %}
 <div class="section-label" style="margin-top:26px;">Detail you have added together</div>
-<div class="micro" style="margin-bottom:10px;">Additive-only &mdash; nothing here is ever deleted.</div>
+<div class="micro" style="margin-bottom:10px;">{{ detail_explanation }}</div>
 
 {% for key in element_keys %}
 <div class="card">
-  <div class="micro section-label">{{ key|capitalize }}</div>
+  <div class="micro section-label">{{ key }}</div>
   {% if grouped.get(key) %}
   {% for e in grouped[key] %}
   <div class="micro" style="margin-top:4px;">&middot; {{ e.detail_text }} <span style="color:var(--muted);">({{ e.added_at }})</span></div>
@@ -47,25 +47,54 @@
   {% else %}
   <div class="micro">Nothing added yet.</div>
   {% endif %}
+  {# round3-fixes-spec.md §7.2: Add Detail is a pillar plus, for the three
+     that carry sub-selections, one from the same fixed list sign-up
+     offers — never free text, and additive-only (evolution_service.
+     add_vision_detail() refuses anything already present). #}
   <form method="post" action="{{ url_for('vision_add') }}" class="action-row" style="margin-top:8px;">
-    <input type="hidden" name="element_key" value="{{ key }}">
-    <input type="text" name="detail_text" placeholder="Add more detail" style="flex:1;">
+    <input type="hidden" name="pillar" value="{{ key }}">
+    {% if pillar_options[key] %}
+    <select name="sub_selection" style="flex:1;">
+      {% for option in pillar_options[key] %}<option value="{{ option }}">{{ option }}</option>{% endfor %}
+    </select>
     <button type="submit" class="btn-secondary">Add</button>
+    {% else %}
+    <button type="submit" class="btn-secondary">Add {{ key }}</button>
+    {% endif %}
   </form>
 </div>
 {% endfor %}
 
 <div class="card">
   <div class="micro section-label">Declare a change (a genuine change of mind, not a routine edit)</div>
-  <div class="micro">Disclosed to your partner, routed to Guru, kept in full version history &mdash; never silent.</div>
+  <div class="micro">
+    Disclosed to your partner, kept in full version history &mdash; never silent. Adds and/or
+    removes sub-selections within one pillar.
+    {% if not rc_open %}<strong>Locked right now — only editable while Reality Check is open.</strong>{% endif %}
+  </div>
+  {# One pillar per declared change — a radio per fieldset legend picks
+     which, and each of that pillar's own sub-selections gets an add/
+     remove checkbox pair. JS below hides the other pillars' fieldsets
+     once one is picked, purely cosmetic; the server only ever reads the
+     one selected pillar's own add[]/remove[] regardless. #}
   <form method="post" action="{{ url_for('vision_declare_change') }}">
-    <select name="element_key" style="margin-top:8px;">
-      {% for key in element_keys %}<option value="{{ key }}">{{ key|capitalize }}</option>{% endfor %}
-    </select>
-    <input type="text" name="from_value" placeholder="From" style="margin-top:6px;width:100%;">
-    <input type="text" name="to_value" placeholder="To" style="margin-top:6px;width:100%;">
-    <label class="checkbox-row"><input type="checkbox" name="disclosed" required> I'm disclosing this to my partner</label>
-    <button type="submit" class="btn-primary">Declare change</button>
+    {% for key in element_keys if pillar_options[key] %}
+    <fieldset style="margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:10px;" {% if not rc_open %}disabled{% endif %}>
+      <legend class="micro">
+        <label class="checkbox-row" style="display:inline-flex;">
+          <input type="radio" name="pillar" value="{{ key }}" required> {{ key }}
+        </label>
+      </legend>
+      {% for option in pillar_options[key] %}
+      <div class="chip-row" style="margin-top:4px;">
+        <label class="checkbox-row"><input type="checkbox" name="add" value="{{ option }}"> add {{ option }}</label>
+        <label class="checkbox-row"><input type="checkbox" name="remove" value="{{ option }}"> remove {{ option }}</label>
+      </div>
+      {% endfor %}
+    </fieldset>
+    {% endfor %}
+    <label class="checkbox-row" style="margin-top:10px;"><input type="checkbox" name="disclosed" required {% if not rc_open %}disabled{% endif %}> I'm disclosing this to my partner</label>
+    <button type="submit" class="btn-primary" {% if not rc_open %}disabled{% endif %}>Declare change</button>
   </form>
 </div>
 

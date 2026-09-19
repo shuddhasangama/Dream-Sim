@@ -38,13 +38,31 @@ class EvolutionApiTests(RouteTestCase):
         self.assertEqual(list(self.conn.iterdump()),before)
 
     def test_vision_retry_and_reversal_disclosure(self):
-        b={'request_id':'detail1','element_key':'children','detail_text':'Talk together'}
+        import json
+        row=db.fetch_one(self.conn,'User',id='owner')
+        row['vision_json']=json.dumps([{'key':'Intimacy','stance':['Emotional']},{'key':'Travel together','stance':None}])
+        db.insert_row(self.conn,'User',row);self.conn.commit()
+        b={'request_id':'detail1','pillar':'Kids','sub_selection':'Adoption'}
+        # An identical replay returns the same audit row without re-applying.
         for _ in range(2):self.assertEqual(self.post('/profile/vision/details',b).status_code,200)
         self.assertEqual(len(db.fetch_all(self.conn,'VisionEntry')),1)
-        self.assertEqual(self.post('/profile/vision/details',{**b,'detail_text':'Changed'}).status_code,409)
-        r=self.post('/profile/vision/changes',{'request_id':'change1','element_key':'children','from_value':'yes','to_value':'no','disclosed_to_partner':False})
+        # It actually changed the real vision, not just a note.
+        kids=[v for v in json.loads(db.fetch_one(self.conn,'User',id='owner')['vision_json']) if v['key']=='Kids']
+        self.assertEqual(kids[0]['stance'],['Adoption'])
+        self.assertEqual(self.post('/profile/vision/details',{**b,'sub_selection':'Surrogacy'}).status_code,409)
+        # An undisclosed change is refused before anything else is checked.
+        r=self.post('/profile/vision/changes',{'request_id':'change1','pillar':'Kids','add':['Surrogacy'],'disclosed_to_partner':False})
         self.assertEqual(r.status_code,409)
-        self.assertNotIn('Talk together',self.request('/profile/vision',uid='partner').get_data(as_text=True))
+        # Disclosed, but outside the Reality Check window: locked, with a reason.
+        self.set_clock(day='Wed',hour=12)
+        r=self.post('/profile/vision/changes',{'request_id':'change2','pillar':'Kids','add':['Surrogacy'],'disclosed_to_partner':True})
+        self.assertEqual(r.status_code,409);self.assertEqual(r.json['error']['code'],'change_window_closed')
+        # Inside the window it applies.
+        self.set_clock(day='Sun',hour=22)
+        r=self.post('/profile/vision/changes',{'request_id':'change3','pillar':'Kids','add':['Surrogacy'],'disclosed_to_partner':True})
+        self.assertEqual(r.status_code,200,r.json)
+        # The partner's own read shows none of the owner's entries.
+        self.assertEqual(self.request('/profile/vision',uid='partner').json['data']['entries'],[])
 
     def test_chemistry_pacing_and_no_foreign_write(self):
         self.set_clock(day='Mon',hour=12)

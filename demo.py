@@ -34,6 +34,7 @@ import clock as clock_module
 import matching
 from generate_users import (
     COHABIT_FOCUS,
+    EDUCATION_OPTIONS,
     ETHNICITIES,
     INCOME_BANDS,
     RESTAURANT_BUDGETS,
@@ -224,9 +225,14 @@ def build_partner_for(user: dict[str, Any], partner_id: str) -> dict[str, Any]:
         **{lever: _mid(adj[lever]) for lever in matching.RANGE_LEVERS},
         "diet": _diet_for(user),
         "marital_history": "Never married",
-        # nationality/religion chosen to satisfy the user's own filters
+        # nationality/religion/education chosen to satisfy the user's own
+        # filters (round3-fixes-spec.md §4.3 added education as a real
+        # matching.py lever — same "first accepted value" construction as
+        # nationality, since adj["education"] is always set: mandatory at
+        # sign-up, per onboarding.default_preferences()).
         "nationality": adj["nationality"][0],
         "religion": u_stats.get("religion", "Hindu"),
+        "education": adj["education"][0],
     })
     stats.setdefault("income_band", INCOME_BANDS[1])
     stats.setdefault("budget", RESTAURANT_BUDGETS[1])
@@ -236,8 +242,10 @@ def build_partner_for(user: dict[str, Any], partner_id: str) -> dict[str, Any]:
     partner_prefs = {
         "fixed": {"dealbreakers": []},
         "adjustable": {
-            # wide enough to accept the user, whatever they entered
-            "age": [max(18, user_age - 15), user_age + 15],
+            # wide enough to accept the user, whatever they entered —
+            # floored at 21, matching SLIDER_LEVERS' own track minimum
+            # (round3-fixes-spec.md §4.1) so this never renders below it.
+            "age": [max(21, user_age - 15), user_age + 15],
             **{
                 lever: [max(1, int(u_stats[lever]) - 40), int(u_stats[lever]) + 40]
                 for lever in matching.RANGE_LEVERS
@@ -246,6 +254,7 @@ def build_partner_for(user: dict[str, Any], partner_id: str) -> dict[str, Any]:
             "distance_km": [0, 1600],
             "nationality": ["IN", "NRI", "Any"],
             "religion": ["same", "related", "any"],
+            "education": list(EDUCATION_OPTIONS[-1]),
         },
     }
 

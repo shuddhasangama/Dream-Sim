@@ -190,6 +190,14 @@ NATIONALITY_WEIGHTS = [0.70, 0.22, 0.08]
 RELIGION_OPTIONS = [["same"], ["same", "related"], ["same", "related", "any"]]
 RELIGION_WEIGHTS = [0.75, 0.18, 0.07]
 
+# round3-fixes-spec.md §4.3: education as a REACH filter — a preference
+# TIER list, same shape as NATIONALITY_OPTIONS/RELIGION_OPTIONS above and
+# distinct from EDUCATION (the person's own declared level). Narrowest
+# tier excludes only "High school"; the widest accepts everyone EDUCATION
+# can hold, so there is no separate "Any" sentinel to check for.
+EDUCATION_OPTIONS = [["Bachelor's", "Master's", "Doctorate"], EDUCATION]
+EDUCATION_PREF_WEIGHTS = [0.75, 0.25]
+
 # "Most people set moderately narrow filters, a minority set very narrow
 # ones": each numeric adjustable lever draws from a two-component mixture —
 # 80% land in the moderate band, 20% in the tighter/narrower band.
@@ -322,6 +330,7 @@ def _generate_preferences(rng: random.Random, gender: str, age: int) -> dict[str
             "distance_km": [distance_min, distance_max],
             "nationality": _weighted_choice(rng, NATIONALITY_OPTIONS, NATIONALITY_WEIGHTS),
             "religion": _weighted_choice(rng, RELIGION_OPTIONS, RELIGION_WEIGHTS),
+            "education": _weighted_choice(rng, EDUCATION_OPTIONS, EDUCATION_PREF_WEIGHTS),
         },
     }
 

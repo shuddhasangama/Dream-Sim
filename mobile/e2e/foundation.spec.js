@@ -126,6 +126,15 @@ test('full date pipeline: calendar overlap, plan, order-enforced ceremony, and t
   await page.getByRole('button',{name:'Verify',exact:true}).click();
   await expect(page.getByRole('heading',{name:'All set'})).toBeVisible();
 
+  // round3-fixes-spec.md §5.2/§5.3: with the plan now confirmed, the Week
+  // screen's grid swaps the generic Debrief placeholder for this couple's
+  // real one — marked distinctly ("replace in place"), not just present.
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+  const personalDebrief = page.locator('.tw-chip.is-personal', { hasText: 'Debrief' });
+  await expect(personalDebrief).toBeVisible();
+  await expect(personalDebrief).toHaveAttribute('title', /your actual date/);
+  await page.getByRole('button',{name:'← Back'}).click();
+
   await page.getByRole('button',{name:'After the date'}).click();
   await expect(page.getByRole('heading',{name:'How did it go?'})).toBeVisible();
 
@@ -159,31 +168,30 @@ test('Guru entry reflects the same next-action as the dashboard, and Vision reco
   // projection the dashboard's own "NEXT FOR YOU" card already shows, in
   // its own coral-avatar voice component (§5).
   await expect(page.getByRole('heading',{name:'What now?'})).toBeVisible();
-  await expect(page.locator('.guru-avatar')).toHaveText('G');
+  await expect(page.locator('.guru-avatar').first()).toHaveText('G');
   await expect(page.getByText('Your next chapter starts here')).toBeVisible();
+
+  // round3-fixes-spec.md §6.2: consent + playbook, in Guru's own voice,
+  // Dating-only — never an escalation suggestion, only how things work.
+  await expect(page.getByText('How this works')).toBeVisible();
+  await expect(page.getByText('Every yes here is a real yes.')).toBeVisible();
+  await expect(page.getByText('there is no searching or swiping.')).toBeVisible();
+
+  // §6.1: date-prep content (courtesies/safety/boundaries) surfaced
+  // directly on Guru, not only on the plan-review screen.
+  await expect(page.getByText('Before you meet',{exact:true})).toBeVisible();
+  await expect(page.getByText('Meet at the confirmed public venue')).toBeVisible();
+
+  // §6.3: the open-ended "anything else I can help with?" entry point.
+  await expect(page.getByText('Anything else I can help with?')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Vibes'})).toBeDisabled();
+
   await page.getByRole('button',{name:'See this week'}).click();
   await expect(page.getByRole('heading',{name:"This week's matches"})).toBeVisible();
 
   await tabbar.getByRole('button',{name:'Vision'}).click();
   await expect(page.getByRole('heading',{name:"Where you're headed"})).toBeVisible();
-  await expect(page.getByText('Intimacy · Emotional')).toBeVisible();
-
-  // Adding detail is always allowed — no disclosure gate.
-  await page.getByLabel('Detail').fill('Would like at least one child, open to timing');
-  await page.getByRole('button',{name:'Add',exact:true}).click();
-  await expect(page.getByText('Would like at least one child, open to timing')).toBeVisible();
-
-  // Declaring a change is disclosure-gated client-side (required checkbox) —
-  // §2.6/evolution_service.add_vision: an undisclosed reversal is refused.
-  await page.getByLabel('From').fill('Wanted kids');
-  await page.getByLabel('To',{exact:true}).fill('Not sure about kids anymore');
-  await page.getByRole('button',{name:'Declare change'}).click();
-  await expect(page.getByRole('heading',{name:'History'})).toHaveCount(0);
-
-  await page.getByLabel("I've disclosed this to my match").check();
-  await page.getByRole('button',{name:'Declare change'}).click();
-  await expect(page.getByRole('heading',{name:'History'})).toBeVisible();
-  await expect(page.getByText('Children: Wanted kids → Not sure about kids anymore')).toBeVisible();
+  await expect(page.getByText('Intimacy · Emotional, Physical')).toBeVisible();
 });
 
 test('Chemistry actually saves and shows an explicit saved indicator (road-fixes-clock-spec.md §2)',async({page})=>{
@@ -227,10 +235,15 @@ test('REACH heading is plain, and "More filters" exposes every filter the API re
   await expect(page.locator('.topnav').getByRole('button',{name:'Reality Check'})).toHaveCount(0);
   await expect(page.getByText('Reality Check')).toHaveCount(0);
 
-  // Basic filters are visible without expanding anything.
-  for (const name of ['Age','Distance','Diet','Wants kids','Does not want kids']) {
+  // Basic filters are visible without expanding anything. round3-fixes-spec.md
+  // §4.2: "Wants kids"/"Does not want kids" are now one merged "Kids" row
+  // with a three-way choice, not two separate filter rows. §4.3: Education
+  // is a real filter now, not silently missing.
+  for (const name of ['Age','Distance','Diet','Kids','Education']) {
     await expect(page.locator('.filter-name',{hasText:name})).toBeVisible();
   }
+  await expect(page.getByText('Only people who do',{exact:true})).toBeVisible();
+  await expect(page.getByText("Only people who don't")).toBeVisible();
 
   // Discovered from the API, not hardcoded — every non-basic filter the
   // fixture returns (sliders and choices alike) must show up once
@@ -241,32 +254,91 @@ test('REACH heading is plain, and "More filters" exposes every filter the API re
   }
 });
 
-test('Stats are editable from Dashboard and inline from REACH (road-fixes-clock-spec.md §6)',async({page})=>{
+test('REACH kids filter is one three-way control, mutually exclusive (round3-fixes-spec.md §4.2)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.locator('.topnav').getByRole('button',{name:'REACH',exact:true}).click();
+
+  const kidsRow = page.locator('[data-paired="wants_kids|no_kids_wanted"]');
+  await expect(kidsRow).toBeVisible();
+  // The radio itself is visually hidden behind its pill label (same
+  // pattern as chemistry.js's bucket-pick radios) — click the label.
+  const option = (value) => kidsRow.locator(`label:has(input[value="${value}"])`);
+  // Fixture starts with both ignored — "Any" is selected.
+  await expect(kidsRow.locator('input[value=""]')).toBeChecked();
+
+  await option('wants_kids').click();
+  await expect(kidsRow.locator('input[value="wants_kids"]')).toBeChecked();
+  await expect(kidsRow.locator('input[value="no_kids_wanted"]')).not.toBeChecked();
+
+  // Picking the opposite clears the first — never both held at once.
+  await option('no_kids_wanted').click();
+  await expect(kidsRow.locator('input[value="no_kids_wanted"]')).toBeChecked();
+  await expect(kidsRow.locator('input[value="wants_kids"]')).not.toBeChecked();
+
+  // Back to Any switches the held one off again.
+  await option('').click();
+  await expect(kidsRow.locator('input[value=""]')).toBeChecked();
+});
+
+test('Stats are editable inline from Dashboard, with cancel, and a verified field warns before it reopens verification (round3-fixes-spec.md §2/§3)',async({page})=>{
   await page.goto('/');
   await page.getByLabel('Phone number').fill('+15550001111');
   await page.getByRole('button',{name:'Send SMS code'}).click();
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
 
-  // Entry point 1: Dashboard.
-  await page.getByRole('button',{name:'Edit stats'}).click();
-  await expect(page.getByRole('heading',{name:'Your stats'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Save changes'})).toBeVisible();
-  // Verified fields are held, never directly editable — re-checking is
-  // clearly flagged as dropping them out of "verified" in the meantime.
-  await expect(page.getByText('Verified — held')).toBeVisible();
-  await expect(page.getByText('drops it out of "verified"')).toBeVisible();
+  // The standalone Stats screen/tab is gone entirely.
+  await expect(page.locator('.topnav').getByRole('button',{name:'Stats',exact:true})).toHaveCount(0);
 
-  // Entry point 2: inline from REACH, without navigating away.
+  // Entry point 1: Dashboard, inline — no navigation away.
+  await page.getByRole('button',{name:'Edit stats'}).click();
+  await expect(page.getByRole('button',{name:'Save changes'})).toBeVisible();
+  // Profession is currently verified — editable, but warns before save
+  // (one warning per verified field: age, education, nationality,
+  // profession, income_band).
+  await expect(page.getByText('drops it out of "verified"').first()).toBeVisible();
+
+  // Cancel discards the open editor without saving anything.
+  await page.getByRole('button',{name:'Cancel'}).click();
+  await expect(page.getByRole('button',{name:'Edit stats'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Save changes'})).toHaveCount(0);
+
+  // Reopen and actually save: an ordinary field plus the verified one.
+  await page.getByRole('button',{name:'Edit stats'}).click();
+  await page.locator('input[name="waist_in"]').fill('30');
+  await page.locator('select[name="profession"]').selectOption('Design');
+  await page.locator('#dashboard-stats-form').getByRole('button',{name:'Save changes'}).click();
+  // Confirmed by an independent re-GET (same discipline as chemistry.js)
+  // before "Saved." shows — the editor stays open with the confirmation
+  // rather than silently collapsing.
+  await expect(page.getByText('Saved.')).toBeVisible();
+  await page.getByRole('button',{name:'Done'}).click();
+  await expect(page.getByRole('button',{name:'Edit stats'})).toBeVisible();
+  await expect(page.getByText('30 in')).toBeVisible();
+});
+
+test('Stats are editable inline from REACH without leaving the screen (round3-fixes-spec.md §3)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
   await page.locator('.topnav').getByRole('button',{name:'REACH',exact:true}).click();
   await expect(page.getByText('Missing a filter you expected?')).toBeVisible();
   await page.getByRole('button',{name:'Edit your stats'}).click();
   const waistInput = page.locator('input[name="waist_in"]');
   await expect(waistInput).toBeVisible();
+  await expect(page.getByRole('button',{name:'Cancel'})).toBeVisible();
   await waistInput.fill('30');
   await page.locator('#inline-stats-form').getByRole('button',{name:'Save changes'}).click();
-  // Saving collapses the inline editor back to its toggle and reloads
-  // the REACH screen itself (a saved stat can unlock a new lever).
+  // A saved stat can unlock a new REACH lever, so saving reloads the
+  // REACH screen itself once persistence is confirmed — not just the
+  // stats sub-form — and collapses the inline editor back to its toggle.
   await expect(page.getByRole('button',{name:'Edit your stats'})).toBeVisible();
   await expect(page.getByRole('heading',{name:'See who opens up.'})).toBeVisible();
 });
@@ -373,4 +445,56 @@ test('simulated clock: labelled stepping controls on Week, gated on the server-r
 
   await page.locator('.demo-step',{hasText:'+1 week'}).click();
   await expect(page.locator('.demo-clock')).toContainText('Week 2');
+});
+
+test('Vision: four pillars only, additive Add Detail, and Declare a Change gated on Reality Check (round3-fixes-spec.md §7)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.locator('.topnav').getByRole('button',{name:'Vision'}).click();
+
+  // §7.1: the explanatory copy, and no Relocation/Career anywhere.
+  await expect(page.getByText('Travel together takes no detail now.')).toBeVisible();
+  await expect(page.getByText(/Relocation|Career/)).toHaveCount(0);
+
+  // §7.2: Add Detail offers only what is NOT already held (Kids isn't set,
+  // Chores split already is) and actually changes the Vision.
+  const choice = page.locator('#detail-choice');
+  await expect(choice.locator('option[value="Cohabitate|Chores split"]')).toHaveCount(0);
+  await expect(choice.locator('option[value="Cohabitate|Expenses sharing"]')).toHaveCount(1);
+  await choice.selectOption('Kids|Adoption');
+  await page.getByRole('button',{name:'Add',exact:true}).click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+  await expect(page.locator('.chips').getByText('Kids · Adoption')).toBeVisible();
+  await expect(choice.locator('option[value="Kids|Adoption"]')).toHaveCount(0);
+
+  // §7.3: outside Reality Check the change form is locked, with the reason.
+  await expect(page.getByText(/Locked right now/)).toBeVisible();
+  await expect(page.getByRole('button',{name:'Declare change'})).toBeDisabled();
+
+  // Step the simulated clock to Sunday 22:00 (RC open) and declare one.
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+  for (let i = 0; i < 6; i++) await page.locator('.demo-step',{hasText:'+1 day'}).click();
+  for (let i = 0; i < 10; i++) await page.locator('.demo-step',{hasText:'+1 hour'}).click();
+  await expect(page.locator('.demo-clock')).toContainText('Sun 22:00');
+  await page.getByRole('button',{name:'← Back'}).click();
+  await page.locator('.topnav').getByRole('button',{name:'Vision'}).click();
+  await expect(page.getByText(/Locked right now/)).toHaveCount(0);
+
+  await page.locator('#change-pillar').selectOption('Kids');
+  await page.getByLabel('Add Surrogacy').check();
+  await page.getByLabel("I've disclosed this to my match").check();
+  await page.getByRole('button',{name:'Declare change'}).click();
+  await expect(page.locator('.chips').getByText('Kids · Adoption, Surrogacy')).toBeVisible();
+
+  // A removal that would break the rules is refused with the server's reason:
+  // Kids only (two pillars would remain, fine) — but Intimacy's last kind is not.
+  await page.locator('#change-pillar').selectOption('Intimacy');
+  await page.getByLabel('Remove Emotional').check();
+  await page.getByLabel('Remove Physical').check();
+  await page.getByLabel("I've disclosed this to my match").check();
+  await page.getByRole('button',{name:'Declare change'}).click();
+  await expect(page.getByText('Intimacy is mandatory')).toBeVisible();
 });

@@ -118,23 +118,22 @@ class VisionRuleTests(unittest.TestCase):
 
     def test_unknown_values_are_dropped_not_stored(self):
         result = onboarding.validate_vision(
-            ["Emotional", "Telepathic"], ["Travel together", "Yachting"],
-            None, None, ["Road trips"])
+            ["Emotional", "Telepathic"], ["Travel together", "Yachting"])
         self.assertTrue(result["ok"], result["error"])
         self.assertEqual(result["intimacy_kinds"], ["Emotional"])
         self.assertEqual(result["other_keys"], ["Travel together"])
 
     def test_built_visions_match_the_generated_shape(self):
         visions = onboarding.build_visions(
-            ["Physical"], ["Kids", "Travel together"], None, ["Naturally"], ["Road trips"])
+            ["Physical"], ["Kids", "Travel together"], None, ["Naturally"])
         self.assertEqual(visions[0]["key"], "Intimacy")
         self.assertEqual(visions[0]["stance"], ["Physical"])
         by_key = {v["key"]: v["stance"] for v in visions[1:]}
         for key in by_key:
             self.assertIn(key, OTHER_VISION_KEYS)
-        # 2026-09-09 (evening): every goal carries detail now.
         self.assertEqual(by_key["Kids"], ["Naturally"])
-        self.assertEqual(by_key["Travel together"], ["Road trips"])
+        # round3-fixes-spec.md §7.1: Travel together carries no detail.
+        self.assertIsNone(by_key["Travel together"])
 
 
 class CohabitateFocusTests(unittest.TestCase):
@@ -219,7 +218,7 @@ class KidsRouteTests(unittest.TestCase):
         """REVERSED 2026-09-09 (evening) — see the Cohabitate twin above.
         Ticking "Adoption" says you want kids."""
         result = onboarding.validate_vision(
-            ["Physical"], ["Travel together"], None, ["Adoption"], ["Road trips"])
+            ["Physical"], ["Travel together"], None, ["Adoption"])
         self.assertTrue(result["ok"], result["error"])
         self.assertIn("Kids", result["other_keys"])
         self.assertEqual(result["kids_route"], ["Adoption"])
@@ -231,39 +230,26 @@ class KidsRouteTests(unittest.TestCase):
 
 
 class TravelStyleTests(unittest.TestCase):
-    """2026-09-09 (evening), user's rule: "Also include these multiple
-    selectable sub options under Travel Together - Relaxing escapes,
-    Adventure & outdoors, Culture & cities, Road trips."
+    """round3-fixes-spec.md §7.1 (2026-09-18): reverses the 2026-09-09
+    (evening) rule this class used to test. The four-pillar table is
+    explicit — "No sub-selections... no detail required" — so Travel
+    together goes back to being the one goal that takes none.
+    TRAVEL_STYLES itself is gone; onboarding.py no longer imports it."""
 
-    Travel together was the last goal carrying no detail. "We both like
-    travelling" hides the same gap Kids and Cohabitate did."""
-
-    def test_the_four_styles_are_offered(self):
-        self.assertEqual(onboarding.TRAVEL_STYLES,
-                         ["Relaxing escapes", "Adventure & outdoors",
-                          "Culture & cities", "Road trips"])
-
-    def test_travel_without_a_style_is_refused(self):
+    def test_travel_together_needs_no_detail(self):
         result = onboarding.validate_vision(["Physical"], ["Travel together"])
-        self.assertFalse(result["ok"])
-        self.assertIn("what kind of travelling", result["error"])
-
-    def test_any_single_style_is_enough(self):
-        for style in onboarding.TRAVEL_STYLES:
-            with self.subTest(style=style):
-                got = onboarding.validate_vision(
-                    ["Physical"], ["Travel together"], None, None, [style])
-                self.assertTrue(got["ok"], got["error"])
-
-    def test_several_styles_are_allowed(self):
-        result = onboarding.validate_vision(
-            ["Physical"], ["Travel together"], None, None, list(onboarding.TRAVEL_STYLES))
-        self.assertEqual(result["travel_style"], sorted(onboarding.TRAVEL_STYLES))
-
-    def test_a_style_selects_travel_together(self):
-        result = onboarding.validate_vision(["Physical"], [], None, None, ["Road trips"])
         self.assertTrue(result["ok"], result["error"])
         self.assertEqual(result["other_keys"], ["Travel together"])
+
+    def test_travel_together_is_not_a_detailed_goal(self):
+        self.assertNotIn("Travel together", onboarding.DETAILED_GOALS)
+        self.assertIn("Travel together", onboarding.SIMPLE_GOALS)
+        self.assertIn("Travel together", OTHER_VISION_KEYS)
+
+    def test_built_travel_together_stance_is_none(self):
+        visions = onboarding.build_visions(["Physical"], ["Travel together"])
+        by_key = {v["key"]: v["stance"] for v in visions}
+        self.assertIsNone(by_key["Travel together"])
 
 
 class ParentSelectionTests(unittest.TestCase):
@@ -300,13 +286,11 @@ class ParentSelectionTests(unittest.TestCase):
                 self.assertIn(goal, onboarding.DETAIL_HINT)
                 self.assertIn(goal, onboarding.DETAIL_PROMPT)
 
-    def test_travel_together_now_carries_detail_too(self):
-        """REVERSED 2026-09-09 (evening): it was the last goal taking no
-        detail, and "we both like travelling" hides the same gap Kids and
-        Cohabitate did."""
-        self.assertFalse(onboarding.validate_vision(["Emotional"], ["Travel together"], [])["ok"])
-        self.assertTrue(onboarding.validate_vision(
-            ["Emotional"], ["Travel together"], None, None, ["Road trips"])["ok"])
+    def test_travel_together_carries_no_detail(self):
+        """RE-REVERSED by round3-fixes-spec.md §7.1 (2026-09-18): back to
+        no sub-selections at all — "we both like travelling" is the whole
+        answer again."""
+        self.assertTrue(onboarding.validate_vision(["Emotional"], ["Travel together"])["ok"])
 
     def test_physical_is_required_by_the_route_not_by_the_goal(self):
         """REVERSED 2026-09-09 (evening), user's rule: "Kids with
@@ -585,7 +569,9 @@ class PreferenceCompatibilityTests(unittest.TestCase):
         A height filter belonging to someone who never gave their height
         is a filter that means nothing."""
         sparse = onboarding.default_preferences({"age": 31})["adjustable"]
-        self.assertEqual(sorted(sparse), ["age", "distance_km", "nationality"])
+        # age/distance_km/nationality/education are always available —
+        # education is mandatory at sign-up, same as nationality.
+        self.assertEqual(sorted(sparse), ["age", "distance_km", "education", "nationality"])
         for absent in ("height_cm", "weight_kg", "waist_in", "religion"):
             self.assertNotIn(absent, sparse, absent)
 
@@ -701,13 +687,16 @@ class RetainOnFailureTests(RouteTestCase):
         self.assertIn('value="Kids" checked', body)
 
     def test_it_keeps_the_sub_options_too(self):
-        """Rejected for the missing travel style, so the Kids answers
-        beside it have to come back."""
+        """Rejected for the missing Cohabitate focus, so the Kids and
+        Travel together answers beside it have to come back — Travel
+        together itself needs no sub-option (round3-fixes-spec.md §7.1)
+        so it survives purely as a ticked pillar."""
         body = self.post_vision(intimacy_kinds=["Emotional"],
-                                other_keys=["Kids", "Travel together"],
+                                other_keys=["Kids", "Travel together", "Cohabitate"],
                                 kids_route=["Adoption"])
-        self.assertIn("what kind of travelling", body)
+        self.assertIn("chores, expenses, or both", body)
         self.assertIn('value="Adoption" checked', body)
+        self.assertIn('value="Travel together" checked', body)
 
     def test_a_sub_option_shows_its_parent_ticked_after_a_rejection(self):
         """The screen must not argue with the rule: if a detail selects
@@ -723,8 +712,7 @@ class RetainOnFailureTests(RouteTestCase):
         """Save a valid vision, come back, submit something invalid. The
         newer rejected answer is still the most recent thing they said."""
         self.client.post("/onboarding/vision", data={
-            "intimacy_kinds": ["Physical"], "other_keys": ["Travel together"],
-            "travel_style": ["Road trips"]})
+            "intimacy_kinds": ["Physical"], "other_keys": ["Travel together"]})
         body = self.post_vision(intimacy_kinds=[], other_keys=["Cohabitate"],
                                 cohabit_focus=["Chores split"])
         self.assertIn('value="Cohabitate" checked', body)

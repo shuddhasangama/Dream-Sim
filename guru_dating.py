@@ -38,6 +38,35 @@ PRE_DATE_BOUNDARIES = [
 ]
 
 
+# round3-fixes-spec.md §6.2: Guru, in its own voice, explaining the two
+# things underneath every screen in Dating rather than leaving them
+# implicit — the consent model, and the rules of engagement someone would
+# otherwise only ever discover by running into them. Informational only:
+# no step here is a suggestion to do anything, which is the same §12
+# guardrail pre_date_briefing() already keeps ("reflects and structures,
+# never nudges escalation").
+CONSENT_EXPLAINER = (
+    "Every yes here is a real yes. Declining anything — a match, a slot, a second date — "
+    "costs you nothing and is never shown to the other person as a rejection. What they "
+    "see is that it didn't happen, never that you said no."
+)
+
+DATING_PLAYBOOK = [
+    "Matches are drawn for you through the week — there is no searching or swiping.",
+    "Interest is private until it's mutual. A pass is never shown to the other person.",
+    "Once you lock in with someone, you stop appearing to anyone else, and REACH closes for you.",
+    "Contact details move in-app, only once both of you choose to share them.",
+    "A date is confirmed once both of you sign the same agreement — one signature holds nothing.",
+]
+
+
+def dating_context() -> dict[str, Any]:
+    """§6.2's consent explainer and rules-of-engagement summary. Static
+    and stage-scoped — this module stays Dating-only by design (see the
+    module docstring), so this is not "the playbook", only Dating's."""
+    return {"consent": CONSENT_EXPLAINER, "playbook": list(DATING_PLAYBOOK)}
+
+
 def pre_date_briefing(partner_greeting: str | None) -> dict[str, Any]:
     """Everything Guru surfaces before a date (§8), framed as shared
     etiquette — never as rules or threats. `partner_greeting` is the OTHER

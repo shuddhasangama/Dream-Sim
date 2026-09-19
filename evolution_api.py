@@ -31,7 +31,8 @@ def register(api,get_db,get_clock,stats_situation,milestones):
 
     @api.get('/profile/stats')
     def stats_editor():
-        return jsonify(rows=stats_edit.rows(g.api_user['stats'],stats_situation(g.api_user)),
+        verified_fields=stats_edit.verified_field_set(db.fetch_all(get_db(),'Verification',user_id=uid()))
+        return jsonify(rows=stats_edit.rows(g.api_user['stats'],stats_situation(g.api_user),verified_fields),
             options=onboarding.STAT_OPTIONS,ranges=onboarding.STAT_RANGES,
             changes=db.fetch_all(get_db(),'StatChange',user_id=uid()))
 
@@ -55,18 +56,27 @@ def register(api,get_db,get_clock,stats_situation,milestones):
 
     @api.get('/profile/vision')
     def vision_read():
+        # round3-fixes-spec.md §7: pillar_options carries the real
+        # sub-selection lists (empty for Travel together) so a client
+        # never hardcodes them, plus the explanatory copy §7.1 asks to
+        # show next to the picker, and whether RC is open right now
+        # (declare_change()'s own gate — surfaced ahead of time so the
+        # UI can show why it's locked rather than just disabling it).
         return jsonify(goals=g.api_user['visions'],element_keys=vision.VISION_ELEMENT_KEYS,
+            pillar_options={k:list(v) for k,v in vision.PILLAR_OPTIONS.items()},
+            detail_explanation=vision.VISION_DETAIL_EXPLANATION,
+            rc_open=vision.rc_open(get_clock()),
             entries=db.fetch_all(get_db(),'VisionEntry',user_id=uid()),changes=db.fetch_all(get_db(),'VisionChange',user_id=uid()))
 
     @api.post('/profile/vision/details')
     def vision_detail():
-        body=json_object(required={'request_id','element_key','detail_text'})
-        return jsonify(service.add_vision(get_db(),uid(),body,get_clock()))
+        body=json_object(required={'request_id','pillar'},optional={'sub_selection'})
+        return jsonify(service.add_vision_detail(get_db(),uid(),body,get_clock()))
 
     @api.post('/profile/vision/changes')
     def vision_change():
-        body=json_object(required={'request_id','element_key','from_value','to_value','disclosed_to_partner'})
-        return jsonify(service.add_vision(get_db(),uid(),body,get_clock(),True))
+        body=json_object(required={'request_id','pillar','disclosed_to_partner'},optional={'add','remove'})
+        return jsonify(service.declare_vision_change(get_db(),uid(),body,get_clock()))
 
     @api.get('/profile/chemistry')
     def chemistry_read():

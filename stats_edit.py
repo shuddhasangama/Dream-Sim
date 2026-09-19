@@ -20,10 +20,17 @@ evening is a bait-and-switch, however innocently meant.
 
 So editing is not one permission. It is three, decided per field:
 
-  NEVER          The BGV-verified fields — age, education, nationality,
-                 profession, salary band. A verified badge that the
-                 holder can retype is not a verified badge. Changing one
-                 is a support request, not a form.
+  RE-VERIFIES    The BGV-verified fields — age, education, nationality,
+  ON EDIT        profession, salary band. round3-fixes-spec.md §3
+                 (2026-09-18) reverses the earlier "never editable" rule:
+                 a verified field CAN be retyped, but doing so is not a
+                 quiet edit — it drops the field's own verification
+                 status back to in-review and the new value is "declared"
+                 (self-reported, not yet checked) until BGV clears it
+                 again. The caller must warn the person before they save,
+                 not just after. Frozen the same as a candidate-facing
+                 field while a match is live or keenness is in play —
+                 these are exactly the fields a stranger is deciding on.
 
   WHILE NOBODY   The soft stats a candidate can SEE on a match card or
   IS LOOKING     FILTER on in REACH. Editable freely, but frozen while a
@@ -39,19 +46,28 @@ freezes until the date is done. That is the window the user called out.
 IN A RELATIONSHIP the freeze lifts entirely and the rule inverts: stats
 change, and the change is disclosed to the partner — the same shape
 VisionChange already uses, where a declared change is always disclosed.
-Nothing is hidden and nothing is blocked.
+Nothing is hidden and nothing is blocked. A verified field edited inside
+a relationship still re-opens verification; disclosure and re-verification
+are independent, both happen.
 
 This module decides. It reads no database and no clock; app.py hands it
-the situation.
+the situation and, for VERIFIED fields, whether each is currently
+verified (verified_fields) — the one fact that lives in the Verification
+table rather than in stats_json.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+import bgv
+
 # ── the three groups ──────────────────────────────────────────────────────
 
-# Verified at sign-up and re-checked by BGV. Never editable in-app.
+# Verified at sign-up and re-checked by BGV. Editable — see the module
+# docstring's "RE-VERIFIES ON EDIT" — but editing a field that is
+# CURRENTLY verified re-opens verification rather than silently updating
+# a badge.
 VERIFIED = ("age", "education", "nationality", "profession", "income_band")
 
 # Soft, but a candidate sees these on the match card or screens on them
@@ -81,11 +97,20 @@ def bgv_field(field: str) -> str:
     return BGV_FIELD.get(field, field)
 
 
+def verified_field_set(verification_rows: list[dict[str, Any]]) -> set[str]:
+    """Which VERIFIED-group stats fields are currently verified for this
+    user, keyed by the STATS name (income_band), not the BGV name
+    (salary_bracket) — what rows()/editable() actually take."""
+    by_bgv_key = {r["field"]: r["status"] for r in verification_rows}
+    return {field for field in VERIFIED if by_bgv_key.get(bgv_field(field)) == bgv.VERIFIED}
+
+
 # Why each group is what it is, in words a person should read.
-VERIFIED_REASON = (
-    "Vouched for by a background check, so it is not typed over. If one "
-    "has genuinely changed, send it back to be re-checked — the value "
-    "moves when the check clears, not when you say so."
+VERIFIED_EDIT_WARNING = (
+    "This is vouched for by a background check. Changing it moves the "
+    "value now, but drops it out of \"verified\" until BGV re-checks it — "
+    "REACH filters and match cards will show it as pending in the "
+    "meantime. Send it anyway?"
 )
 LIVE_MATCH_REASON = (
     "Someone is looking at your profile this week. This one is on your "
@@ -104,27 +129,39 @@ def situation(*, in_relationship: bool = False, keenness: bool = False,
             "live_match": bool(live_match)}
 
 
-def editable(field: str, state: dict[str, bool]) -> dict[str, Any]:
+def editable(field: str, state: dict[str, bool], verified_now: bool = False) -> dict[str, Any]:
     """Whether one field can be changed right now, and why not if not.
 
-    Order matters. Verified is checked first because it outranks
-    everything — being in a relationship does not make a badge editable.
+    `verified_now` is the one thing this module cannot derive itself —
+    whether THIS field is currently in the "verified" state for THIS
+    user (the caller reads that off the Verification table). It only
+    changes what `why`/`warning` come back as for a VERIFIED-group
+    field; the freeze rules below (keenness, live match) apply to a
+    verified field exactly like any other candidate-facing one — being
+    checked by BGV does not make it any less visible to a match.
     """
-    if field in VERIFIED:
-        return {"editable": False, "reason": VERIFIED_REASON, "why": "verified"}
+    def verified_editable():
+        if field in VERIFIED and verified_now:
+            return {"editable": True, "reason": None, "why": "verified_editable", "warning": VERIFIED_EDIT_WARNING}
+        return {"editable": True, "reason": None, "why": "open", "warning": None}
 
     # In a relationship there is no pool, no match window and no date to
-    # protect. Everything soft opens, and the disclosure rule takes over.
+    # protect against — the freeze lifts entirely, same precedence as the
+    # original rule (relationship beats keenness). A verified field still
+    # warns on edit even here — re-verification is independent of
+    # disclosure.
     if state.get("in_relationship"):
-        return {"editable": True, "reason": None, "why": "relationship"}
+        if field in VERIFIED and verified_now:
+            return verified_editable()
+        return {"editable": True, "reason": None, "why": "relationship", "warning": None}
 
     if state.get("keenness"):
-        return {"editable": False, "reason": KEENNESS_REASON, "why": "keenness"}
+        return {"editable": False, "reason": KEENNESS_REASON, "why": "keenness", "warning": None}
 
-    if state.get("live_match") and field in CANDIDATE_FACING:
-        return {"editable": False, "reason": LIVE_MATCH_REASON, "why": "live_match"}
+    if state.get("live_match") and (field in CANDIDATE_FACING or field in VERIFIED):
+        return {"editable": False, "reason": LIVE_MATCH_REASON, "why": "live_match", "warning": None}
 
-    return {"editable": True, "reason": None, "why": "open"}
+    return verified_editable()
 
 
 def discloses_to_partner(state: dict[str, bool]) -> bool:
@@ -136,12 +173,18 @@ def discloses_to_partner(state: dict[str, bool]) -> bool:
     return bool(state.get("in_relationship"))
 
 
-def rows(stats: dict[str, Any], state: dict[str, bool]) -> list[dict[str, Any]]:
+def rows(stats: dict[str, Any], state: dict[str, bool],
+         verified_fields: frozenset[str] | set[str] = frozenset()) -> list[dict[str, Any]]:
     """Every field with its current value and its verdict, in the order
-    the screen shows them: what you can change, then what you cannot."""
+    the screen shows them: what you can change, then what you cannot.
+
+    `verified_fields` is the set of VERIFIED-group field keys that are
+    CURRENTLY verified for this user (bgv.VERIFIED per bgv_field(field)) —
+    the caller reads it off the Verification table.
+    """
     out = []
     for field in EDITABLE + VERIFIED:
-        verdict = editable(field, state)
+        verdict = editable(field, state, verified_now=field in verified_fields)
         out.append({"key": field, "value": stats.get(field), **verdict})
     return out
 

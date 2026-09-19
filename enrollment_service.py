@@ -62,8 +62,10 @@ def options():
 
 
 def vision_options():
+    # round3-fixes-spec.md §7.1: Travel together carries no sub-options
+    # any more, so there is no travel_style array to submit.
     return {'intimacy_kinds': forms.INTIMACY_KINDS, 'other_keys': forms.OTHER_VISION_KEYS,
-        'cohabit_focus': forms.COHABIT_FOCUS, 'kids_route': forms.KIDS_ROUTES, 'travel_style': forms.TRAVEL_STYLES}
+        'cohabit_focus': forms.COHABIT_FOCUS, 'kids_route': forms.KIDS_ROUTES}
 
 
 def validate(section, body):
@@ -72,7 +74,7 @@ def validate(section, body):
     if section == 'vision':
         allowed = vision_options()
         if set(body) != set(allowed):
-            raise ApiError('validation_error', 'Supply all five vision arrays.')
+            raise ApiError('validation_error', 'Supply all four vision arrays.')
         for key, values in body.items():
             if type(values) is not list or any(type(v) is not str or v not in allowed[key] for v in values) or len(set(values)) != len(values):
                 raise ApiError('validation_error', 'Invalid vision choices.')

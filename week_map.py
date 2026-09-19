@@ -23,9 +23,11 @@ drawn between MORN and AFT because midday is when matches turn over.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 import clock as clock_module
+import dateplan
 
 DAYS = clock_module.DAYS_OF_WEEK          # Mon … Sun
 BANDS = [
@@ -49,7 +51,12 @@ MOMENTS: list[dict[str, Any]] = [
     {"key": "match_1", "at": clock_module.MATCH_1_REVEAL, "label": "Match 1",
      "tone": "match", "kind": "Matches",
      "means": "Match 1 is revealed. You have until Tuesday midday."},
-    {"key": "rc_ends", "at": ("Mon", 11), "label": "RC ends",
+    # round3-fixes-spec.md §5.1: "RC Opens"/"RC Closes" inside the grid's
+    # own small cells — "Reality Check" spelled out doesn't fit and reads
+    # as noise at that size. The full term stays in the legend, via
+    # `kind` below, which is what actually names it for anyone reading
+    # cold rather than skimming the grid.
+    {"key": "rc_ends", "at": clock_module.RC_ENDS, "label": "RC Closes",
      "tone": "reality", "kind": "Reality Check",
      "means": "Last week's Reality Check closes, just before the new week opens."},
     {"key": "rank", "at": ("Tue", 11), "label": "Rank",
@@ -84,8 +91,8 @@ MOMENTS: list[dict[str, Any]] = [
     {"key": "debrief", "at": ("Sat", 21), "label": "Debrief",
      "tone": "debrief", "kind": "After",
      "means": "The debrief opens an hour after a date, not before it."},
-    {"key": "feedback", "at": clock_module.FEEDBACK_OPENS, "label": "Reality",
-     "tone": "reality", "kind": "After",
+    {"key": "feedback", "at": clock_module.FEEDBACK_OPENS, "label": "RC Opens",
+     "tone": "reality", "kind": "Reality Check",
      "means": "Feedback closes the week, and next week's Reality Check is drawn from it."},
 ]
 
@@ -109,18 +116,38 @@ def _band_for(hour: int) -> str:
     return BANDS[-1][0]
 
 
-def grid(now: clock_module.SimulationClock | None = None) -> dict[str, Any]:
+def grid(now: clock_module.SimulationClock | None = None, *,
+         personal_debrief: dict[str, Any] | None = None,
+         personal_pool_return: dict[str, Any] | None = None) -> dict[str, Any]:
     """The whole grid, as the template needs it: one cell per (band, day),
     each holding however many moments land there.
 
     `now` marks today's column and the cells already behind you, so the
     screen answers "where am I in this?" rather than just listing a
     timetable.
+
+    round3-fixes-spec.md §5.3 ("replace in place"): with no personalized
+    moments, this is exactly the fixed, same-for-everyone timetable it has
+    always been. Pass `personal_debrief` (from personal_debrief_moment())
+    to swap out the generic Saturday-21:00 "Debrief" placeholder for
+    where THIS person's actual date really put it; pass
+    `personal_pool_return` (from pool_return_moment()) to add a moment
+    that only exists for someone whose pair has actually been released.
+    Each substituted/added moment carries `"personal": True` so a
+    template can mark it as theirs rather than the general rhythm.
     """
     today = now.day if now is not None else None
     cells: dict[tuple[str, str], list[dict[str, Any]]] = {}
 
-    for moment in MOMENTS:
+    moments = list(MOMENTS)
+    if personal_debrief is not None:
+        moments = [m for m in moments if m["key"] != "debrief"]
+        moments.append({**personal_debrief, "personal": True})
+    if personal_pool_return is not None:
+        moments = [m for m in moments if m["key"] != "feedback"]
+        moments.append({**personal_pool_return, "personal": True})
+
+    for moment in moments:
         day, hour = moment["at"]
         band = _band_for(hour)
         past = False
@@ -166,3 +193,72 @@ def explained() -> list[dict[str, str]]:
 
 def phase_copy(phase: str) -> str:
     return PHASE_COPY.get(phase, "")
+
+
+# ── round3-fixes-spec.md §5.2/§5.3: personalized, conditional moments ──────
+#
+# Everything above is one fixed timetable — the same for every user, every
+# week, on purpose (it is the general rhythm, not any one person's
+# calendar). Debrief is different: it only applies to someone who
+# actually had a date, at the actual time THEIR date happened, not a
+# generic placeholder — §5.2's fix. "Back in the pool" is conditional in
+# a different way: RC's own clock time is already fixed and synchronized
+# for the whole population (matches are drawn together, the week turns
+# over together — there is no per-couple time to compute), so what is
+# personal here is not WHEN, only WHETHER it applies to this viewer at
+# all — decided in grid(), which is what §5.3 asked to build ("replace in
+# place") once a treatment was chosen.
+
+
+def plan_slot(plan: dict[str, Any]) -> tuple[int, int] | None:
+    """Where a confirmed DatePlan's debrief actually opens, as
+    (day_index, hour) — derived from the plan's own stored datetime and
+    meal slot via dateplan.debrief_opens_hour(), the same real scheduling
+    app.py's web debrief screen and the JSON debrief API already use.
+    None if the plan has no readable slot yet."""
+    stamp = plan.get("datetime")
+    if not stamp or "T" not in stamp:
+        return None
+    try:
+        day_index = date.fromisoformat(stamp.split("T")[0]).weekday()
+    except ValueError:
+        return None
+    return day_index, dateplan.debrief_opens_hour(plan["meal"])
+
+
+def personal_debrief_moment(plan: dict[str, Any]) -> dict[str, Any] | None:
+    """The one real 'Debrief' moment for the person who actually has this
+    date — not the fixed Saturday-21:00 entry in MOMENTS above, which is
+    only ever a placeholder for the general shape of a week.
+
+    round3-fixes-spec.md §5.2: "If a date is scheduled Saturday dinner,
+    the debrief appears after that, not on a generic Sunday marker" — this
+    is the function that makes that true, given the plan actually confirmed.
+    """
+    slot = plan_slot(plan)
+    if slot is None:
+        return None
+    day_index, hour = slot
+    return {"key": "debrief", "at": (DAYS[day_index], hour), "label": "Debrief",
+            "tone": "debrief", "kind": "After",
+            "means": "Opens an hour after your actual date — this date's real time, not a fixed slot."}
+
+
+def pool_return_moment(released: bool) -> dict[str, Any] | None:
+    """round3-fixes-spec.md §5.3: 'After a date: Debrief opens → if the
+    pair returns to the pool, RC opens.' RC's own timing is already fixed
+    and synchronized for everyone (the "feedback" MOMENTS entry, at
+    clock.FEEDBACK_OPENS — matches are drawn and the week turns over for
+    the whole population together, not per couple), so there is no new
+    time to compute — this reuses that exact moment. What IS conditional
+    is whether RC is relevant to THIS person at all this week: only once
+    their LockIn has actually been released (outcomes.release_lockin),
+    never while they are still locked in or have moved to Relationship.
+    `released` is that one fact, from the caller.
+    """
+    if not released:
+        return None
+    feedback = next(m for m in MOMENTS if m["key"] == "feedback")
+    # Same key as the generic entry on purpose — grid() replaces it in
+    # place rather than adding a second marker in the same cell.
+    return {**feedback, "means": "You're back in the pool — Reality Check for the coming week applies to you."}

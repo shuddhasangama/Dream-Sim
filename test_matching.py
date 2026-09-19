@@ -57,6 +57,7 @@ def _base_user() -> dict:
                 "distance_km": [0, 20],
                 "nationality": ["IN"],
                 "religion": ["same"],
+                "education": ["Bachelor's", "Master's", "Doctorate"],
             },
         },
     }
@@ -91,6 +92,7 @@ def _candidate(**overrides) -> dict:
                 "distance_km": [0, 20],
                 "nationality": ["IN"],
                 "religion": ["same"],
+                "education": ["Bachelor's", "Master's", "Doctorate"],
             },
         },
     }
@@ -176,6 +178,29 @@ class FitsFiltersTests(unittest.TestCase):
         a["preferences"]["adjustable"]["nationality"] = ["IN", "NRI", "Any"]
         b = _candidate(**{"stats.nationality": "NRI"})
         self.assertTrue(fits_filters(a, b))
+
+    def test_education_outside_accepted_tier_rejected(self) -> None:
+        a = _base_user()  # education=["Bachelor's", "Master's", "Doctorate"]
+        b = _candidate(**{"stats.education": "High school"})
+        self.assertFalse(fits_filters(a, b))
+
+    def test_education_widest_tier_accepts_everyone(self) -> None:
+        a = _base_user()
+        a["preferences"]["adjustable"]["education"] = list(matching.EDUCATION_OPTIONS[-1])
+        b = _candidate(**{"stats.education": "High school"})
+        self.assertTrue(fits_filters(a, b))
+
+    def test_education_not_filtered_when_not_keyed_in(self) -> None:
+        a = _base_user()
+        del a["preferences"]["adjustable"]["education"]
+        b = _candidate(**{"stats.education": "High school"})
+        self.assertTrue(fits_filters(a, b))
+
+    def test_undeclared_candidate_education_fails_a_set_filter(self) -> None:
+        a = _base_user()  # education=["Bachelor's", "Master's", "Doctorate"]
+        b = _candidate()
+        del b["stats"]["education"]
+        self.assertFalse(fits_filters(a, b))
 
     def test_religion_same_requires_own_religion_match(self) -> None:
         a = _base_user()  # own religion=Hindu, wants "same"
@@ -351,14 +376,14 @@ class ReciprocityCountsTests(unittest.TestCase):
 
 
 class WhatifDeltasTests(unittest.TestCase):
-    def test_covers_all_seven_levers(self) -> None:
+    def test_covers_all_eight_levers(self) -> None:
         a = _base_user()
         pool = [a, _candidate()]
         levers = [e["lever"] for e in whatif_deltas(a, pool)]
         self.assertEqual(levers, LEVERS)
         self.assertEqual(
             set(levers),
-            {"age", "height_cm", "weight_kg", "waist_in", "distance_km", "nationality", "religion"},
+            {"age", "height_cm", "weight_kg", "waist_in", "distance_km", "nationality", "religion", "education"},
         )
 
     def test_nationality_and_religion_marked_sensitive_only(self) -> None:
@@ -379,7 +404,7 @@ class WhatifDeltasTests(unittest.TestCase):
             if lever in RANGE_LEVERS or lever == "distance_km":
                 self.assertLessEqual(entry["to"][0], original[lever][0], lever)
                 self.assertGreaterEqual(entry["to"][1], original[lever][1], lever)
-            elif lever in ("nationality", "religion"):
+            elif lever in ("nationality", "religion", "education"):
                 self.assertTrue(set(original[lever]).issubset(set(entry["to"])))
         # the input user's own preferences must be untouched
         self.assertEqual(a["preferences"]["adjustable"], original)
@@ -406,6 +431,20 @@ class WhatifDeltasTests(unittest.TestCase):
         entry = next(e for e in whatif_deltas(a, pool) if e["lever"] == "nationality")
         self.assertEqual(entry["from"], entry["to"])
         self.assertEqual(entry["delta_mutual_open"], 0)
+
+    def test_widest_education_tier_widens_no_further(self) -> None:
+        a = _base_user()
+        a["preferences"]["adjustable"]["education"] = list(matching.EDUCATION_OPTIONS[-1])
+        pool = [a, _candidate()]
+        entry = next(e for e in whatif_deltas(a, pool) if e["lever"] == "education")
+        self.assertEqual(entry["from"], entry["to"])
+        self.assertEqual(entry["delta_mutual_open"], 0)
+
+    def test_education_widens_one_tier_at_a_time(self) -> None:
+        a = _base_user()  # education=["Bachelor's"]
+        pool = [a, _candidate()]
+        entry = next(e for e in whatif_deltas(a, pool) if e["lever"] == "education")
+        self.assertEqual(entry["to"], list(matching.EDUCATION_OPTIONS[-1]))
 
 
 class SetRangeTests(unittest.TestCase):
@@ -515,8 +554,11 @@ class LeverAvailabilityTests(unittest.TestCase):
         user["preferences"] = onboarding.default_preferences(user["stats"])
         return user
 
-    def test_a_user_with_five_fields_has_three_levers(self):
-        self.assertEqual(available_levers(self._sparse()), ["age", "distance_km", "nationality"])
+    def test_a_user_with_five_fields_has_four_levers(self):
+        # age/distance_km/nationality/education are all always-available
+        # (mandatory at sign-up, or — for distance_km — always derivable
+        # from the city everyone gives); only the optional stats lock.
+        self.assertEqual(available_levers(self._sparse()), ["age", "distance_km", "nationality", "education"])
 
     def test_the_rest_are_reported_as_locked_rather_than_hidden(self):
         locked = {entry["lever"] for entry in locked_levers(self._sparse())}

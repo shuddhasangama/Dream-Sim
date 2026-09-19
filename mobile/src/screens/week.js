@@ -144,7 +144,7 @@ function theWeek(ctx) {
           ${grid.rows.map((row) => `<tr class="tw-band">
             <th scope="row" class="tw-band-label">${safe(row.label)}</th>
             ${row.days.map((cell) => `<td class="tw-cell${cell.is_today ? ' is-today' : ''}">
-              ${(cell.moments || []).map((m) => `<span class="tw-chip tone-${safe(m.tone)}${m.past ? ' is-past' : ''}" title="${safe(m.day)} ${safe(m.time || '')}${m.means ? ' — ' + safe(m.means) : ''}">${safe(m.label)}</span>`).join('')}
+              ${(cell.moments || []).map((m) => `<span class="tw-chip tone-${safe(m.tone)}${m.past ? ' is-past' : ''}${m.personal ? ' is-personal' : ''}" title="${safe(m.day)} ${safe(m.time || '')}${m.means ? ' — ' + safe(m.means) : ''}">${safe(m.label)}${m.personal ? '<span class="tw-personal-dot" aria-hidden="true"></span>' : ''}</span>`).join('')}
             </td>`).join('')}
           </tr>${row.key === grid.midday_after ? `<tr class="tw-midday" aria-hidden="true"><td colspan="${grid.days.length + 1}"><span>${safe(grid.midday_label)}</span></td></tr>` : ''}`).join('')}
         </tbody>

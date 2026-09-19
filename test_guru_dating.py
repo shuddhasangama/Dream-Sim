@@ -6,7 +6,7 @@ import ast
 import unittest
 from pathlib import Path
 
-from guru_dating import GREEN_FLAGS, RED_FLAGS, capture_flags, capture_pass_reason, pre_date_briefing
+from guru_dating import GREEN_FLAGS, RED_FLAGS, capture_flags, capture_pass_reason, dating_context, pre_date_briefing
 
 
 class ScopeBoundaryTests(unittest.TestCase):
@@ -37,6 +37,27 @@ class PreDateBriefingTests(unittest.TestCase):
     def test_carries_the_partners_greeting_preference(self) -> None:
         briefing = pre_date_briefing("side-hug")
         self.assertEqual(briefing["partner_greeting"], "side-hug")
+
+
+class DatingContextTests(unittest.TestCase):
+    """round3-fixes-spec.md §6.2: the consent explainer and rules of
+    engagement, in Guru's own voice."""
+
+    def test_includes_a_consent_explainer_and_a_playbook(self) -> None:
+        ctx = dating_context()
+        self.assertTrue(ctx["consent"])
+        self.assertTrue(ctx["playbook"])
+
+    def test_never_suggests_an_escalation_action(self) -> None:
+        """§4/§12 guardrail: Guru reflects and structures, never nudges
+        progressing a stage, inviting someone home, or sharing contacts."""
+        ctx = dating_context()
+        banned = ("invite", "share your number", "share your contact", "meet at your place",
+                  "progress to", "move to relationship", "go steady")
+        text = (ctx["consent"] + " " + " ".join(ctx["playbook"])).lower()
+        for phrase in banned:
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, text)
 
     def test_notes_in_app_only_contact_exchange(self) -> None:
         briefing = pre_date_briefing(None)

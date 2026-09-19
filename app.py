@@ -795,7 +795,9 @@ def reach_locked(user: dict) -> bool:
 # Nationality and religion stay as widen cards below the sliders — they're
 # the sensitive, user-explored-only levers, never AI-suggested.
 SLIDER_LEVERS = [
-    {"key": "age", "label": "Age", "unit": "yrs", "min": 18, "max": 70, "step": 1},
+    # round3-fixes-spec.md §4.1: track range 21-80, matching onboarding's
+    # own age floor (STAT_RANGES) rather than the older, narrower 18-70.
+    {"key": "age", "label": "Age", "unit": "yrs", "min": 21, "max": 80, "step": 1},
     {"key": "height_cm", "label": "Height", "unit": "cm", "min": 140, "max": 210, "step": 1},
     {"key": "weight_kg", "label": "Weight", "unit": "kg", "min": 40, "max": 150, "step": 1},
     {"key": "waist_in", "label": "Waist", "unit": "in", "min": 20, "max": 55, "step": 1},
@@ -863,7 +865,7 @@ def locked_lever_view(user: dict) -> list[dict]:
 
 _FILTER_BLURBS = {
     "age": "", "height_cm": "", "weight_kg": "", "waist_in": "",
-    "distance_km": "", "nationality": "", "religion": "",
+    "distance_km": "", "nationality": "", "religion": "", "education": "",
     "veg_only": "", "wants_kids": "", "no_kids_wanted": "",
     "non_smoker": "", "non_drinker": "",
 }
@@ -1023,6 +1025,12 @@ def _reach_state(user_id: str) -> dict:
         "filters": filters,
         "sliders": _merge_sliders(build_sliders(fresh, pool), filters),
         "counting_unverified": counting_unverified,
+        # round3-fixes-spec.md §4.3: the web route (below) has always
+        # passed this to its template; the JSON API never did, so a
+        # locked lever (its stat not filled in yet — e.g. height, weight,
+        # religion) simply had no representation at all here and quietly
+        # vanished from the mobile screen instead of explaining itself.
+        "locked_levers": locked_lever_view(fresh),
         **_ignored_summary(fresh, filters),
     }
 
@@ -1091,6 +1099,15 @@ def _my_active_lockin(user_id: str, active: list[dict] | None = None) -> dict | 
 
 def _partner_id_in_lockin(lockin_row: dict, user_id: str) -> str:
     return lockin_row["user_a"] if lockin_row["user_b"] == user_id else lockin_row["user_b"]
+
+
+def _released_this_week(user_id: str, week: int) -> bool:
+    """round3-fixes-spec.md §5.3: whether this person's pair was
+    released back to the pool THIS week — RC applies to them again. No
+    lock-in this week, or one still active/completed (advanced to
+    Relationship), both answer False; only an actual release does."""
+    return bool(db.fetch_all(get_db(), "LockIn", user_a=user_id, status="released", week=week)) or \
+        bool(db.fetch_all(get_db(), "LockIn", user_b=user_id, status="released", week=week))
 
 
 def _recent_match_ids(user_id: str, week: int, weeks_back: int = 8) -> set[str]:
@@ -1163,15 +1180,12 @@ def _plan_slot(plan: dict) -> tuple[int, int] | None:
 
     Derived from the stored ISO datetime rather than a new column: the
     epoch that produced it (WEEK_ONE_MONDAY) starts on a Monday, so the
-    weekday IS the day index. One source of truth, no migration."""
-    stamp = plan.get("datetime")
-    if not stamp or "T" not in stamp:
-        return None
-    try:
-        day_index = date.fromisoformat(stamp.split("T")[0]).weekday()
-    except ValueError:
-        return None
-    return day_index, dateplan.debrief_opens_hour(plan["meal"])
+    weekday IS the day index. One source of truth, no migration.
+
+    week_map.plan_slot() is this exact computation, made public there so
+    round3-fixes-spec.md §5.2's personalized debrief moment reuses it
+    instead of a second copy."""
+    return week_map.plan_slot(plan)
 
 
 def _debrief_is_open(plan: dict, clock: clock_module.SimulationClock) -> bool:
@@ -1313,6 +1327,21 @@ def week():
             # just got released/completed by the lazy check above — treat
             # as "not locked in" for this render, matches will regenerate
             active = None
+
+    # round3-fixes-spec.md §5.2/§5.3: swap the generic Debrief/RC-Opens
+    # placeholders for this person's real ones, only where real ones
+    # exist — everyone else still sees the same fixed timetable as before.
+    personal_debrief = None
+    if active is not None:
+        confirmed_plan = _dateplan_for_lockin(active["id"])
+        if confirmed_plan is not None and confirmed_plan.get("status") == "confirmed":
+            personal_debrief = week_map.personal_debrief_moment(confirmed_plan)
+    personal_pool_return = (
+        week_map.pool_return_moment(_released_this_week(user["user_id"], week_number))
+        if active is None else None
+    )
+    the_week["grid"] = week_map.grid(clock, personal_debrief=personal_debrief,
+                                      personal_pool_return=personal_pool_return)
 
     if active is not None:
         partner = named_for(user["user_id"], load_user(_partner_id_in_lockin(active, user["user_id"])))
@@ -2131,9 +2160,9 @@ def stats_view():
     """
     user = current_user()
     state = _stats_situation(user)
-    checks = {r["field"]: r["status"]
-              for r in db.fetch_all(get_db(), "Verification", user_id=user["user_id"])}
-    rows = stats_edit.rows(user["stats"] or {}, state)
+    ver_rows = db.fetch_all(get_db(), "Verification", user_id=user["user_id"])
+    checks = {r["field"]: r["status"] for r in ver_rows}
+    rows = stats_edit.rows(user["stats"] or {}, state, stats_edit.verified_field_set(ver_rows))
     for row in rows:
         row["check"] = checks.get(stats_edit.bgv_field(row["key"]))
         row["rechecking"] = row["check"] == bgv.IN_REVIEW
@@ -2151,6 +2180,7 @@ def stats_view():
         changes=db.fetch_all(get_db(), "StatChange", user_id=user["user_id"]),
         # One-shot confirmations, popped so a reload does not repeat them.
         just_saved=session.pop("stats_saved", None),
+        just_reopened=session.pop("stats_reopened", None),
         just_sent=session.pop("stats_reverifying", None),
     )
 
@@ -2166,6 +2196,10 @@ def stats_save():
         _remember_form(' '.join(result['errors'])+(' Held right now, so not changed: '+', '.join(result['refused']) if result['refused'] else ''),endpoint='stats_view')
     elif result['saved']:
         session['stats_saved']=result['saved']
+        # A distinct banner line, so "this re-opened verification" reads
+        # as its own fact rather than getting folded into the save note.
+        if result['reopened']:
+            session['stats_reopened']=result['reopened']
     return redirect(url_for('stats_view'))
 
 
@@ -2250,6 +2284,9 @@ def vision_view():
         # boxes above the thing the person came to see.
         show_detail=user["journey_state"] in disclosure.RELATIONSHIP_STATES,
         element_keys=vision.VISION_ELEMENT_KEYS,
+        pillar_options=vision.PILLAR_OPTIONS,
+        detail_explanation=vision.VISION_DETAIL_EXPLANATION,
+        rc_open=vision.rc_open(get_clock()),
         grouped=grouped,
         changes=changes,
     )
@@ -2258,38 +2295,46 @@ def vision_view():
 @app.route("/vision/add", methods=["POST"])
 @login_required
 def vision_add():
+    # round3-fixes-spec.md §7.2: pillar + an optional sub_selection,
+    # through the same validated evolution_service.add_vision_detail()
+    # the JSON API uses — one implementation of "what Add Detail is
+    # allowed to do", not a second copy that could drift from it.
     user = current_user()
-    element_key = (request.form.get("element_key") or "").strip()
-    detail_text = (request.form.get("detail_text") or "").strip()
-    if not element_key or not detail_text:
+    pillar = (request.form.get("pillar") or "").strip()
+    sub_selection = (request.form.get("sub_selection") or "").strip() or None
+    if not pillar:
         return redirect(url_for("vision_view"))
-    existing = db.fetch_all(get_db(), "VisionEntry", user_id=user["user_id"], element_key=element_key)
-    parent_id = existing[-1]["id"] if existing else None
-    row = vision.add_vision_detail(user["user_id"], element_key, detail_text, str(get_clock()), parent_id=parent_id)
-    db.insert_row(get_db(), "VisionEntry", {"id": uuid.uuid4().hex[:12], **row})
+    try:
+        evolution_service.add_vision_detail(get_db(), user["user_id"],
+            {"request_id": uuid.uuid4().hex, "pillar": pillar, "sub_selection": sub_selection}, get_clock())
+    except ApiError as exc:
+        _remember_form(exc.message, endpoint="vision_view")
     return redirect(url_for("vision_view"))
 
 
 @app.route("/vision/declare-change", methods=["POST"])
 @login_required
 def vision_declare_change():
+    # round3-fixes-spec.md §7.3: add/remove sub-selections within an
+    # existing pillar, disclosure- and RC-gated by
+    # evolution_service.declare_vision_change() — same reasoning as
+    # vision_add() above.
     user = current_user()
-    element_key = (request.form.get("element_key") or "").strip()
-    from_value = (request.form.get("from_value") or "").strip()
-    to_value = (request.form.get("to_value") or "").strip()
+    pillar = (request.form.get("pillar") or "").strip()
+    add = [v for v in request.form.getlist("add") if v]
+    remove = [v for v in request.form.getlist("remove") if v]
     disclosed = "disclosed" in request.form
-    if not (element_key and from_value and to_value):
-        _remember_form("A declared change needs the element, what it was, and what it is now.",
+    if not pillar or (not add and not remove):
+        _remember_form("A declared change needs the pillar and at least one addition or removal.",
                        endpoint="vision_view")
         return redirect(url_for("vision_view"))
     try:
-        row = vision.declare_vision_change(
-            user["user_id"], element_key, from_value, to_value, str(get_clock()),
-            disclosed_to_partner=disclosed, guru_conversation_id=uuid.uuid4().hex[:12] if disclosed else None,
-        )
-    except ValueError:
-        return redirect(url_for("vision_view"))
-    db.insert_row(get_db(), "VisionChange", {"id": uuid.uuid4().hex[:12], **_bool_ints(row)})
+        evolution_service.declare_vision_change(get_db(), user["user_id"], {
+            "request_id": uuid.uuid4().hex, "pillar": pillar, "add": add, "remove": remove,
+            "disclosed_to_partner": disclosed,
+        }, get_clock())
+    except ApiError as exc:
+        _remember_form(exc.message, endpoint="vision_view")
     return redirect(url_for("vision_view"))
 
 
@@ -3107,7 +3152,6 @@ def onboard_vision():
             submitted["other_keys"],
             submitted["cohabit_focus"],
             submitted["kids_route"],
-            submitted["travel_style"],
         )
         if result["ok"]:
             draft["vision"] = {
@@ -3115,7 +3159,6 @@ def onboard_vision():
                 "other_keys": result["other_keys"],
                 "cohabit_focus": result["cohabit_focus"],
                 "kids_route": result["kids_route"],
-                "travel_style": result["travel_style"],
             }
             _save_draft(draft)
             return redirect(url_for("onboard_stats"))
@@ -3146,6 +3189,11 @@ def onboard_vision():
                 "hint": onboarding.DETAIL_HINT[goal],
                 "chosen": saved.get(onboarding.DETAIL_FIELD[goal], []),
             } for goal, options in onboarding.DETAILED_GOALS.items()],
+            # round3-fixes-spec.md §7.1: Travel together — ticked in
+            # chosen_others like any other pillar, but no sub-option form
+            # of its own, so the template needs to know it exists at all.
+            simple_goals=onboarding.SIMPLE_GOALS,
+            vision_detail_explanation=onboarding.VISION_DETAIL_EXPLANATION,
         ),
     )
 
@@ -3269,7 +3317,6 @@ def onboard_finish():
             draft["vision"]["other_keys"],
             draft["vision"].get("cohabit_focus"),
             draft["vision"].get("kids_route"),
-            draft["vision"].get("travel_style"),
         )
         user_row = onboarding.build_user_row(
             user_id=user_id,
@@ -3300,7 +3347,6 @@ def onboard_finish():
                 draft["vision"]["other_keys"],
                 draft["vision"].get("cohabit_focus"),
                 draft["vision"].get("kids_route"),
-                draft["vision"].get("travel_style"),
             ),
             skills=onboarding.build_skills(draft["activities"]),
             bucket_labels={b[0]: b[2] for b in onboarding.BUCKETS},
@@ -4422,11 +4468,30 @@ def _api_week_state(user):
     mode = 'post_dating' if user['journey_state'] != 'dating' else ('locked_in' if state['current_lock_in'] else 'dating')
     rows = db.fetch_all(get_db(), 'Match', user_id=user['user_id'], week=clock.week) if mode == 'dating' else []
     prepared = bool(rows or db.fetch_one(get_db(), 'MatchBatch', user_id=user['user_id'], week=clock.week))
+
+    # round3-fixes-spec.md §5.2/§5.3: the same "replace in place"
+    # personalization the web route applies — real debrief time for a
+    # confirmed date, RC-relevance once actually released, generic
+    # otherwise. `current_date_plan` above is allowlisted for the client
+    # and drops `meal`, so the raw plan is re-read here rather than
+    # widening that allowlist for an internal computation.
+    personal_debrief = None
+    if mode == 'locked_in':
+        raw_plan = _dateplan_for_lockin(state['current_lock_in']['id'])
+        if raw_plan is not None and raw_plan.get('status') == 'confirmed':
+            personal_debrief = week_map.personal_debrief_moment(raw_plan)
+    personal_pool_return = (
+        week_map.pool_return_moment(_released_this_week(user['user_id'], clock.week))
+        if mode == 'dating' else None
+    )
+
     return {'clock': state['clock'], 'phase': clock_module.phase(clock), 'mode': mode,
             'prepared': prepared,
             'prepare_request': {'method': 'POST', 'path': '/api/v1/week/prepare', 'body': {}}
                 if mode == 'dating' and not prepared and clock_module.phase(clock) != 'before_week_start' else None,
-            'schedule': {'grid': week_map.grid(clock), 'legend': week_map.legend()},
+            'schedule': {'grid': week_map.grid(clock, personal_debrief=personal_debrief,
+                                                personal_pool_return=personal_pool_return),
+                         'legend': week_map.legend()},
             'lock_in': state['current_lock_in'], 'date_plan': state['current_date_plan'],
             'matches': [_api_match_view(user, row) for row in sorted(rows, key=lambda r: r['slot'])]}
 
@@ -4436,11 +4501,16 @@ def _api_journey_state(user):
     active = _my_active_lockin(user['user_id'])
     plan = _dateplan_for_lockin(active['id']) if active else None
     couple = find_couple_for_user(user['user_id']) if user['journey_state'] in disclosure.RELATIONSHIP_STATES else None
+    # round3-fixes-spec.md §6.1: the partner's stated greeting preference,
+    # same source _plan_view() reads (_boundary_of), so Guru's date-prep
+    # shows it too, not just the plan-review screen right before signing.
+    partner_greeting = _boundary_of(_partner_id_in_lockin(active, user['user_id'])) if active else None
     return journey_api.snapshot(
         user, active=active, plan=plan, couple=couple,
         reached=_milestones_for(user), contact=verification_status(user['user_id']),
         clock=get_clock(), reach_is_locked=reach_locked(user), facts=_guru_facts(user),
-        display_name=display_name(user['user_id'], user['gender']), simulated=clock_module.simulated())
+        display_name=display_name(user['user_id'], user['gender']), simulated=clock_module.simulated(),
+        partner_greeting=partner_greeting)
 
 
 from api import register_api

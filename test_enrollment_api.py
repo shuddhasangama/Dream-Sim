@@ -9,7 +9,8 @@ def sections():
     stats.update({k:opts[0] for k,_l,opts in onboarding.CHOICE_STATS})
     stats.update(city='Bangalore',gender='female',salary=1500000)
     return {'vision': {'intimacy_kinds':['Emotional'],'other_keys':['Cohabitate'],
-        'cohabit_focus':[onboarding.COHABIT_FOCUS[0]],'kids_route':[],'travel_style':[]},
+        # round3-fixes-spec.md §7.1: no travel_style array any more.
+        'cohabit_focus':[onboarding.COHABIT_FOCUS[0]],'kids_route':[]},
         'stats': stats, 'activities': {k:'good' for k in onboarding.ACTIVITIES[:4]}}
 
 

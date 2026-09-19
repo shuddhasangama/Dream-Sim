@@ -23,17 +23,17 @@
 // transient slice of GET /api/v1/profile/stats folded into this screen's
 // own data, fetched lazily so opening REACH never pays for a request it
 // might not need.
-import { editableFieldsForm, collectFields } from './stats.js';
+import { editableFieldsForm, collectFields, fieldsEqual, withSubmittedValues } from '../statsFields.js';
 
 export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>REACH</h1></section><section class="card"><p>Loading…</p></section>';
   const { counts, filters = [], sliders = [], ignored_count = 0, all_ignored } = data;
-  const choices = filters.filter((f) => f.control === 'choice');
+  const choiceGroups = groupChoices(filters.filter((f) => f.control === 'choice'));
   const basicSliders = sliders.filter((s) => s.basic);
   const moreSliders = sliders.filter((s) => !s.basic);
-  const basicChoices = choices.filter((f) => f.basic);
-  const moreChoices = choices.filter((f) => !f.basic);
+  const basicChoices = choiceGroups.filter((g) => g.basic);
+  const moreChoices = choiceGroups.filter((g) => !g.basic);
   const mutual = counts?.mutual_open ?? 0;
 
   return `<section class="intro"><span class="eyebrow">REACH · Reciprocity this week</span><h1>See who opens up.</h1></section>
@@ -55,10 +55,10 @@ export function render(ctx) {
         ? `${safe(ignored_count)} set to Any. Nothing was deleted — switch one back and it returns as you left it.`
         : 'Set anything to <strong>Any</strong> and it stops narrowing your pool.'}</div>
 
-      <div>${basicSliders.map(sliderRow).join('')}${basicChoices.map(choiceRow(safe)).join('')}</div>
+      <div>${basicSliders.map(sliderRow).join('')}${basicChoices.map(choiceGroupRow(safe)).join('')}</div>
 
       ${moreSliders.length || moreChoices.length ? `<details class="more-filters"><summary>More filters</summary>
-        <div>${moreSliders.map(sliderRow).join('')}${moreChoices.map(choiceRow(safe)).join('')}</div>
+        <div>${moreSliders.map(sliderRow).join('')}${moreChoices.map(choiceGroupRow(safe)).join('')}</div>
       </details>` : ''}
 
       <div class="hint" style="margin-top:12px;">Widening yours only helps where theirs already lets you in — both of you have to be open.</div>
@@ -67,7 +67,12 @@ export function render(ctx) {
     <section class="card">
       <div class="section-label" style="margin:0;">Missing a filter you expected?</div>
       <div class="hint">A filter only appears once you've told us the matching stat — add it here without leaving REACH.</div>
-      ${data._stats ? editableFieldsForm(data._stats, safe, 'inline-stats-form') : '<button id="edit-stats-toggle" class="secondary" type="button">Edit your stats</button>'}
+      ${(data.locked_levers || []).length ? `<ul class="locked-levers">${data.locked_levers.map((l) => `<li>${safe(l.label)} <span class="hint">— add ${safe(l.needs)} to filter on it</span></li>`).join('')}</ul>` : ''}
+      ${data._stats ? `${editableFieldsForm(data._stats, safe, 'inline-stats-form')}
+        <button id="cancel-stats-edit" class="secondary" type="button" style="margin-top:8px;">Cancel</button>
+        ${data._stats._saved ? '<p class="save-note">Saved.</p>' : ''}
+        ${data._stats._error ? `<p class="warn">${safe(data._stats._error)}</p>` : ''}`
+        : '<button id="edit-stats-toggle" class="secondary" type="button">Edit your stats</button>'}
     </section>
 
     <section class="card guru-card"><div class="guru-avatar">G</div><div>Nationality and religion are yours to explore — I'll never suggest widening them.</div></section>`;
@@ -112,11 +117,72 @@ function choiceRow(safe) {
   </div>`;
 }
 
+// round3-fixes-spec.md §4.2: "Wants kids" and "Does not want kids" as two
+// separate Any-switch rows was duplicative — they are two answers to one
+// question (matching.py's _OPPOSITES). Which filter names pair up comes
+// from each filter's own `opposite` field, not a hardcoded list here, so
+// this generalizes to any future opposite pair the API adds.
+function groupChoices(choices) {
+  const byName = new Map(choices.map((f) => [f.name, f]));
+  const seen = new Set();
+  const groups = [];
+  for (const f of choices) {
+    if (seen.has(f.name)) continue;
+    const opp = f.opposite ? byName.get(f.opposite) : null;
+    seen.add(f.name);
+    if (opp) {
+      seen.add(opp.name);
+      groups.push({ kind: 'paired', options: [f, opp], basic: f.basic });
+    } else {
+      groups.push({ kind: 'single', filter: f, basic: f.basic });
+    }
+  }
+  return groups;
+}
+
+function choiceGroupRow(safe) {
+  return (group) => (group.kind === 'paired' ? pairedChoiceRow(safe, group.options) : choiceRow(safe)(group.filter));
+}
+
+// Presentational only, same as nav.js's own SURFACE_LABELS — the API
+// names which two filters pair up (via `opposite`), not what to call the
+// merged row. A pair this map doesn't know falls back to the first
+// filter's own label rather than showing nothing.
+const PAIR_GROUP_LABELS = { wants_kids: 'Kids', no_kids_wanted: 'Kids' };
+
+function pairedChoiceRow(safe, [a, b]) {
+  const selected = !a.ignored ? a.name : (!b.ignored ? b.name : '');
+  const groupName = `paired-${a.name}-${b.name}`;
+  const option = (name, optLabel) => `<label class="paired-choice-option"><input type="radio" name="${safe(groupName)}" value="${safe(name)}" ${selected === name ? 'checked' : ''}><span>${safe(optLabel)}</span></label>`;
+  return `<div class="filter is-choice${!selected ? ' is-any' : ''}" data-paired="${safe(a.name)}|${safe(b.name)}">
+    <div class="filter-head">
+      <span class="filter-name">${safe(PAIR_GROUP_LABELS[a.name] || a.label)}${a.sensitive || b.sensitive ? ' <span class="sensitive-tag">yours</span>' : ''}</span>
+    </div>
+    <div class="paired-choice-options">
+      ${option(a.name, a.on_label)}${option(b.name, b.on_label)}${option('', 'Any')}
+    </div>
+  </div>`;
+}
+
 export function bind(root, ctx) {
   const { session, run, patch, data } = ctx;
 
   root.querySelectorAll('.filter-any').forEach((box) => box.addEventListener('change', () => run(async () => {
     patch(await session.post('/api/v1/reach/ignore', { filter: box.dataset.filter, ignore: box.checked }));
+  })));
+
+  // round3-fixes-spec.md §4.2: the merged kids control still just calls
+  // /api/v1/reach/ignore — the same endpoint the individual Any-switches
+  // use — since matching.set_ignored() already clears the opposite tag
+  // server-side when one of a pair is turned on.
+  root.querySelectorAll('[data-paired] input[type="radio"]').forEach((radio) => radio.addEventListener('change', () => run(async () => {
+    const [nameA, nameB] = radio.closest('[data-paired]').dataset.paired.split('|');
+    if (radio.value) {
+      patch(await session.post('/api/v1/reach/ignore', { filter: radio.value, ignore: false }));
+    } else {
+      const held = (data.filters || []).find((f) => (f.name === nameA || f.name === nameB) && !f.ignored);
+      patch(held ? await session.post('/api/v1/reach/ignore', { filter: held.name, ignore: true }) : data);
+    }
   })));
 
   root.querySelector('#show-all')?.addEventListener('click', (e) => run(async () => {
@@ -127,15 +193,43 @@ export function bind(root, ctx) {
     patch({ ...data, _stats: await session.get('/api/v1/profile/stats') });
   }));
 
+  root.querySelector('#cancel-stats-edit')?.addEventListener('click', () => run(async () => patch({ ...data, _stats: null })));
+
   root.querySelector('#inline-stats-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     run(async () => {
-      await session.patch('/api/v1/profile/stats', { fields: collectFields(e.target) });
+      const fields = collectFields(e.target);
+      console.info('[reach] PATCH /api/v1/profile/stats request', { fields });
+      try {
+        await session.patch('/api/v1/profile/stats', { fields });
+      } catch (err) {
+        console.error('[reach] PATCH failed', err);
+        patch({ ...data, _stats: { ...withSubmittedValues(data._stats, fields), _saved: false, _error: err.message || 'Could not save — try again.' } });
+        throw err;
+      }
+      // Same "don't trust a 200, re-read it back" discipline as
+      // chemistry.js (round3-fixes-spec.md §1/§3): confirm the saved
+      // values independently before treating this as done.
+      let confirmed;
+      try {
+        confirmed = await session.get('/api/v1/profile/stats');
+        console.info('[reach] confirmation GET response', confirmed);
+      } catch (err) {
+        console.error('[reach] confirmation GET failed', err);
+        patch({ ...data, _stats: { ...withSubmittedValues(data._stats, fields), _saved: false, _error: 'Saved, but could not confirm — reload to check.' } });
+        return;
+      }
+      const byKey = Object.fromEntries((confirmed.rows || []).map((r) => [r.key, r.value]));
+      const mismatched = Object.keys(fields).filter((k) => !fieldsEqual(byKey[k], fields[k]));
+      if (mismatched.length) {
+        console.error('[reach] MISMATCH: server read-back does not match what was submitted', { submitted: fields, read_back: byKey, mismatched });
+        patch({ ...data, _stats: { ...withSubmittedValues(confirmed, fields), _saved: false, _error: "That didn't actually save — the server's own copy doesn't match. Try again, or reload to see what's really there." } });
+        return;
+      }
       // A saved stat can unlock a new REACH lever (matching.py's
       // unlock_levers_for runs on every stats save) — reload the reach
       // state itself, not just the stats sub-form, so a newly-unlocked
-      // filter shows up without a manual refresh. The inline editor
-      // collapses back to its toggle; reopening it re-fetches fresh rows.
+      // filter shows up without a manual refresh.
       patch({ ...(await session.get('/api/v1/reach')), _stats: null });
     });
   });

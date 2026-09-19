@@ -198,7 +198,7 @@ class VisionScreenTests(RouteTestCase):
                    "profession": "Engineering", "income_band": "₹₹ · 12L – 25L"},
             visions=app_module.onboarding.build_visions(
                 ["Emotional", "Physical"], ["Kids", "Travel together"],
-                None, ["Adoption"], ["Road trips"]),
+                None, ["Adoption"]),
             activities={})
         row["bgv_status"] = "verified"
         row["journey_state"] = journey_state
@@ -218,10 +218,12 @@ class VisionScreenTests(RouteTestCase):
                 self.assertIn(goal, body)
 
     def test_it_shows_each_goal_s_sub_options(self):
+        """round3-fixes-spec.md §7.1: Travel together carries no
+        sub-detail any more, so its row shows the same em dash a
+        stance-less goal always has, not a travel style."""
         self.make_with_vision("u_v")
         body = self.page()
         self.assertIn("Adoption", body)
-        self.assertIn("Road trips", body)
         self.assertIn("Emotional · Physical", body)
 
     def test_the_relationship_detail_is_hidden_while_dating(self):

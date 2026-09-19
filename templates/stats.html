@@ -21,12 +21,21 @@
 {% if just_saved %}
 <div class="save-note">Saved — {{ just_saved|join(', ') }}</div>
 {% endif %}
+{% if just_reopened %}
+<div class="save-note form-error">Re-opened for verification — {{ just_reopened|join(', ') }}. The value showing is what you just declared; it moves back to verified once BGV clears it.</div>
+{% endif %}
 {% if just_sent %}
 <div class="save-note">Sent for re-checking — {{ just_sent|join(', ') }}</div>
 {% endif %}
 
 {% set open_rows = rows | selectattr('editable') | list %}
 {% set held_rows = rows | rejectattr('editable') | list %}
+{# round3-fixes-spec.md §3: a currently-verified field is now editable
+   too (see stats_edit.py's "RE-VERIFIES ON EDIT" group) — it lives in
+   open_rows like anything else, but still needs its own "send for
+   re-check without changing the value" affordance below, which the old
+   held-only partition can no longer host. #}
+{% set currently_verified_rows = rows | selectattr('check', 'in', ['verified', 'in_review']) | list %}
 
 {# 2026-09-09 (evening), user's rule: "Save across each tab makes it too
    many clicks. Whatever has been changed should be saved. Non one at a
@@ -53,6 +62,7 @@
                min="{{ ranges[row.key][0] }}" max="{{ ranges[row.key][1] }}"
                placeholder="{{ units[row.key] }}">
         {% endif %}
+        {% if row.warning %}<span class="field-hint form-error">{{ row.warning }}</span>{% endif %}
       </label>
       {% endfor %}
     </div>
@@ -108,23 +118,25 @@
   });
 </script>
 
-{% if held_rows %}
+{% if currently_verified_rows %}
 {# 2026-09-09 (evening), user's rule: "Mandatory columns can be selected
-   for reverify." Locked is not the same as stuck — a genuine job change
-   had no route at all before this. The value does not move here; the
-   check does. #}
+   for reverify." round3-fixes-spec.md §3 made these directly editable
+   above (with a warning), but a value that has NOT changed still needs
+   a way to be sent back for a re-check on its own — the value does not
+   move here; the check does. #}
 <form method="post" action="{{ url_for('stats_reverify') }}">
   <div class="card">
-    <div class="section-label">Verified — held</div>
+    <div class="section-label">Verified</div>
     <div class="hint">
-      These are vouched for, so they are not typed over. Tick anything that has
-      genuinely changed and send it back to be re-checked.
+      Vouched for by a background check. Editing one above moves the value
+      and re-opens its check automatically — use this instead to send an
+      unchanged value back for a re-check on its own.
     </div>
     <div class="field-grid">
-      {% for row in held_rows %}
+      {% for row in currently_verified_rows %}
       <label class="field-cell held{% if row.rechecking %} rechecking{% endif %}">
         <span class="field-label">
-          {% if row.why == 'verified' and not row.rechecking %}
+          {% if not row.rechecking %}
           <input type="checkbox" name="field" value="{{ row.key }}">
           {% endif %}
           {{ labels[row.key] }}
@@ -136,14 +148,28 @@
       </label>
       {% endfor %}
     </div>
-    {% if held_rows | selectattr('why', 'equalto', 'verified') | rejectattr('rechecking') | list %}
+    {% if currently_verified_rows | rejectattr('rechecking') | list %}
     <div class="action-row">
       <button type="submit" class="btn-save secondary">Send ticked for re-checking</button>
     </div>
     {% endif %}
-    <div class="micro" style="margin-top:8px;">{{ held_rows[0].reason }}</div>
   </div>
 </form>
+{% endif %}
+
+{% if held_rows %}
+<div class="card">
+  <div class="section-label">Held right now</div>
+  <div class="field-grid">
+    {% for row in held_rows %}
+    <label class="field-cell held">
+      <span class="field-label">{{ labels[row.key] }}</span>
+      <span class="field-value">{{ row.value if row.value is not none and row.value != '' else '—' }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  <div class="micro" style="margin-top:8px;">{{ held_rows[0].reason }}</div>
+</div>
 {% endif %}
 
 {% if discloses and changes %}

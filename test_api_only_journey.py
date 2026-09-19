@@ -80,7 +80,7 @@ class ApiOnlyJourneyTests(RouteTestCase):
         self.assertNotEqual(*plans)
         self.call(base+'/after-date')
         for uid in ('owner','partner'):
-            self.post('/profile/vision/details',{'request_id':'entry','element_key':'children','detail_text':'Discuss together'},uid)
+            self.post('/profile/vision/details',{'request_id':'entry','pillar':'Kids','sub_selection':'Adoption'},uid)
             self.call('/profile/chemistry/entries/intimacy_pace',{'value':'slow'},uid,'PUT')
         self.set_clock(week=3,day='Mon',hour=12)
         for uid in ('owner','partner'):

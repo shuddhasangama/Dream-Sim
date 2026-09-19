@@ -109,6 +109,11 @@ MATCH_3_CLOSE = CALENDAR_OPENS = ("Wed", 18)
 CALENDAR_CLOSES = ("Thu", 12)
 DATES_LIVE = ("Thu", 18)
 FEEDBACK_OPENS = ("Sun", 21)
+# The weekly Reality Check window: FEEDBACK_OPENS through RC_ENDS, into
+# the FOLLOWING week's Monday morning (before that week's own Match 1 at
+# noon) — week_map.py's "rc_ends"/"feedback" moments are this same
+# window's two edges, not a second copy of it.
+RC_ENDS = ("Mon", 11)
 
 MATCH_REVEAL_BY_SLOT = {1: MATCH_1_REVEAL, 2: MATCH_2_REVEAL, 3: MATCH_3_REVEAL}
 MATCH_CLOSE_BY_SLOT = {1: MATCH_1_CLOSE, 2: MATCH_2_CLOSE, 3: MATCH_3_CLOSE}
