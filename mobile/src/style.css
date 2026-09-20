@@ -170,8 +170,16 @@ dd{margin:0;text-align:right;overflow-wrap:anywhere}
    side of it, not a line spanning the whole 28px control with the dot
    pinned to its top, which read as floating above the track rather than
    on it. */
-.slider-self{position:absolute;top:50%;height:12px;width:2px;transform:translateY(-50%);background:var(--white);pointer-events:none;z-index:1}
+.slider-self{position:absolute;top:50%;height:12px;width:2px;transform:translate(-50%,-50%);background:var(--white);pointer-events:none;z-index:1}
 .slider-self::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:6px;height:6px;border-radius:50%;background:var(--white)}
+/* round4-fixes-spec.md §3: a native range thumb's CENTRE travels only from
+   half a thumb in to half a thumb short of each end (22px thumb → 11px), so
+   percentages measured against the full-width wrapper drift from where the
+   thumbs — and therefore the value — actually are. Everything positioned by
+   a value (selected span, suggested span, the "you" marker) lives on this
+   rail, inset to exactly that travel, so 0% and 100% are the thumb centres
+   at min and max. The marker is centred on its point (translateX -50%). */
+.slider-rail{position:absolute;top:0;bottom:0;left:11px;right:11px;pointer-events:none}
 
 /* ── week / candidate review ───────────────────────────────────────── */
 .candidate-card{text-align:left;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:8px}
@@ -206,7 +214,10 @@ dd{margin:0;text-align:right;overflow-wrap:anywhere}
 .tw-band-label{font-size:8px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);text-align:left;width:26px;vertical-align:middle}
 .tw-cell{height:34px;vertical-align:middle;text-align:center;border-radius:6px;background:rgba(255,255,255,.02)}
 .tw-cell.is-today{background:rgba(255,77,109,.06)}
-.tw-chip{display:block;font-size:7.5px;font-weight:600;line-height:1.1;padding:4px 1px;border-radius:5px;border:1px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* round4-fixes-spec.md §6: a label that doesn't fit its ~38px cell wraps
+   BETWEEN words ("M1" / "closes") — never truncated with an ellipsis, and
+   never broken mid-word. */
+.tw-chip{display:block;font-size:7.5px;font-weight:600;line-height:1.1;padding:4px 1px;border-radius:5px;border:1px solid transparent;white-space:normal;overflow-wrap:normal;word-break:normal;hyphens:none;overflow:hidden}
 .tw-chip+.tw-chip{margin-top:2px}
 .tw-chip.is-past{opacity:.42}
 /* round3-fixes-spec.md §5.3: a personalized moment (real debrief time,
@@ -305,3 +316,34 @@ footer{color:var(--muted);text-align:center;font-size:11px;margin-top:35px;lette
 .demo-step{font:inherit;font-size:11.5px;cursor:pointer;background:var(--bg);color:var(--text-2);border:1px solid var(--border);border-radius:7px;padding:4px 10px;min-height:0}
 .demo-step:hover{border-color:var(--gold);color:var(--gold)}
 .demo-step:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* round4-fixes-spec.md §2/§9: collapsible Dashboard sections. */
+.dash-fold{background:var(--card,#fff);border:1px solid var(--border,rgba(0,0,0,.12));border-radius:12px;margin:12px 0;padding:0 14px}
+.dash-fold>summary{cursor:pointer;padding:14px 0;font-size:1.05rem;list-style:none;display:flex;justify-content:space-between;align-items:center;min-height:44px}
+.dash-fold>summary::-webkit-details-marker{display:none}
+.dash-fold>summary::after{content:'+';font-weight:700;opacity:.6}
+.dash-fold[open]>summary::after{content:'–'}
+.dash-fold .fold-body{padding-bottom:14px}
+.fold-body .intro h1,.fold-body .intro .eyebrow{display:none}
+.fold-body .intro{margin:0 0 8px}
+
+/* round4-fixes-spec.md §4: BGV-verified fields grouped under one shared
+   treatment, apart from self-declared ones. */
+.stats-group{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:10px 0}
+.stats-group.is-verified{border-color:var(--mint);background:rgba(120,220,180,.06)}
+fieldset.stats-group{min-width:0}
+.stats-group legend,.group-title{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#9d94b8);padding:0 6px}
+.group-title{padding:0 0 6px}
+.is-verified legend,.is-verified .group-title{color:var(--mint)}
+.verified-mark{font-weight:700}
+.group-note{margin:0 0 8px;font-size:.85rem;color:var(--muted,#9d94b8)}
+
+/* round4-fixes-spec.md §7: calendar explainer video, collapsed by default. */
+.tw-video{margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
+.tw-video>summary{cursor:pointer;font-size:13px;color:var(--muted);list-style:none;padding:3px 0}
+.tw-video>summary::-webkit-details-marker{display:none}
+.tw-video>summary::before{content:"+ ";color:var(--coral-1);font-weight:700}
+.tw-video[open]>summary::before{content:"2 "}
+.tw-video-body{margin-top:10px}
+.tw-video-player{display:block;width:100%;max-height:60vh;border-radius:10px;background:#000}
+.tw-video-placeholder{padding:18px;border:1px dashed var(--border);border-radius:10px;text-align:center;margin:0}

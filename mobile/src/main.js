@@ -13,7 +13,7 @@ import * as visionScreen from './screens/vision.js';
 import * as chemistryScreen from './screens/chemistry.js';
 import * as relationshipScreen from './screens/relationship.js';
 import * as roadScreen from './screens/road.js';
-import { editableFieldsForm, collectFields, fieldsEqual, withSubmittedValues } from './statsFields.js';
+import { editableFieldsForm, groupedStatRows, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from './statsFields.js';
 import './style.css';
 
 const native = Capacitor.isNativePlatform();
@@ -48,6 +48,19 @@ let screenData=null, screenBlocked=null, screenUnavailable=false;
 // is open; holds GET /api/v1/profile/stats's own shape (plus, on a save
 // failure, _saved/_error like chemistry.js).
 let dashboardStats=null;
+// Read-only Stats display's own rows (each carries the server's verified/
+// declared `group`), loaded alongside journey+profile.
+let statsSummary=null;
+// round4-fixes-spec.md §2: Vision and Chemistry are set-once data, so they
+// live on the Dashboard as collapsible sections (collapsed by default)
+// rather than separate tabs. Each fold hosts the SAME screen module it
+// always had — same render/bind, same validation, same save — fed its own
+// data from the surface's own request path. `open` survives re-renders;
+// `data` is loaded on first expand (and refreshed whenever the Dashboard
+// itself is reloaded).
+const FOLDS=['vision','chemistry'];
+const newFolds=()=>Object.fromEntries(FOLDS.map(k=>[k,{open:false,data:null,error:null}]));
+let folds=newFolds();
 const safe = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const nav = createNav(render);
@@ -143,7 +156,7 @@ function renderChrome(current, tabs) {
 function bindChrome(current) {
   root.querySelector('#back')?.addEventListener('click', goBack);
   root.querySelector('#logout')?.addEventListener('click',()=>run(async()=>{
-    journey=null;profile=null;challenge=null;phone='';nav.resetTo('dashboard');
+    journey=null;profile=null;challenge=null;phone='';folds=newFolds();nav.resetTo('dashboard');
     const revoked=await session.logout();
     message=revoked?'You have signed out.':'Signed out on this device. The server could not be reached to revoke the session; it will expire automatically.';
   }));
@@ -173,8 +186,10 @@ function signin() {
 // editorial choice already made there, not one this client invents.
 const DASHBOARD_STAT_ROWS = [
   ['age', 'Age', ''], ['height_cm', 'Height', ' cm'], ['weight_kg', 'Weight', ' kg'],
-  ['waist_in', 'Waist', ' in'], ['income_band', 'Income band', ''], ['diet', 'Diet', ''],
-  ['education', 'Education', ''], ['nationality', 'Nationality', ''], ['religion', 'Religion', ''],
+  ['waist_in', 'Waist', ' in'], ['income_band', 'Salary band', ''], ['diet', 'Diet', ''],
+  ['education', 'Education', ''], ['nationality', 'Nationality', ''], ['profession', 'Profession', ''],
+  ['religion', 'Religion', ''],
+  ['has_children', 'Already has children', ''], ['children_count', 'Number of children', ''],
 ];
 function renderDashboard() {
   const user=journey.user, stats=profile?.stats||{};
@@ -183,17 +198,18 @@ function renderDashboard() {
   return `<section class="intro"><span class="eyebrow">Your file</span><h1>${safe(user.display_name||'Your profile')}</h1><div class="micro">Stage: ${safe(stage)}${journey.clock?.week!=null?` · Week ${safe(journey.clock.week)}`:''}</div></section>
     <section class="card guidance"><span class="eyebrow">NEXT FOR YOU</span><h2>${safe(next?.headline||'Welcome back')}</h2><p>${safe(next?.body||'Review your profile and take your next step when ready.')}</p>
       ${next?.destination && next.destination.eligible && next.destination.request ? `<button id="next-action" class="primary" ${busy?'disabled':''}>${safe(next.cta||'Continue')} <span aria-hidden="true">→</span></button>` : ''}</section>
-    <section class="card"><div class="micro">Vision</div><div class="chip-row">${(profile?.visions||[]).map(v=>`<span class="chip">${safe(v.key)}${v.stance?' — '+safe(Array.isArray(v.stance)?v.stance.join(', '):v.stance):''}</span>`).join('')||'<p class="hint">Your vision is still taking shape.</p>'}</div></section>
     <section class="card"><div class="micro">Stats</div>
       ${dashboardStats ? `${editableFieldsForm(dashboardStats, safe, 'dashboard-stats-form')}
         <button id="cancel-edit-stats" class="secondary" type="button" style="margin-top:8px;">${dashboardStats._saved ? 'Done' : 'Cancel'}</button>
         ${dashboardStats._saved ? '<p class="save-note">Saved.</p>' : ''}
         ${dashboardStats._error ? `<p class="warn">${safe(dashboardStats._error)}</p>` : ''}`
-        : `<div class="stat-rows">${DASHBOARD_STAT_ROWS.filter(([k])=>stats[k]!=null).map(([k,label,unit])=>`<div class="stat-row"><span>${safe(label)}</span><span>${safe(stats[k])}${unit}</span></div>`).join('')||'<p class="hint">Nothing on file yet.</p>'}</div>
+        : `${groupedStatRows(statsSummary?.rows || DASHBOARD_STAT_ROWS.map(([k])=>({key:k,value:stats[k]})), DASHBOARD_STAT_ROWS, safe).trim() || '<p class="hint">Nothing on file yet.</p>'}
         <button id="edit-stats" class="secondary" type="button" style="margin-top:14px;">Edit stats</button>`}
-    </section>`;
+    </section>
+    ${FOLDS.map(renderFold).join('')}`;
 }
 function bindDashboard() {
+  bindFolds();
   root.querySelector('#next-action')?.addEventListener('click',()=>navigateTo(journey.next_action.destination.key));
 
   root.querySelector('#edit-stats')?.addEventListener('click',()=>run(async()=>{
@@ -204,14 +220,23 @@ function bindDashboard() {
   root.querySelector('#dashboard-stats-form')?.addEventListener('submit',(e)=>{
     e.preventDefault();
     run(async()=>{
-      const fields = collectFields(e.target);
+      const { fields, errors, entered } = changedFields(e.target, dashboardStats);
+      if (errors) {
+        dashboardStats = {...withSubmittedValues(dashboardStats, entered), _saved:false, _error:null, _fieldErrors:errors};
+        return;
+      }
+      if (!Object.keys(fields).length) {
+        dashboardStats = {...dashboardStats, _saved:false, _error:'Nothing changed yet — edit a field, then save.', _fieldErrors:null};
+        return;
+      }
       console.info('[dashboard] PATCH /api/v1/profile/stats request', {fields});
       try {
         await session.patch('/api/v1/profile/stats', {fields});
       } catch (err) {
         console.error('[dashboard] PATCH failed', err);
-        dashboardStats = {...withSubmittedValues(dashboardStats, fields), _saved:false, _error: err.message || 'Could not save — try again.'};
-        throw err;
+        const parsed = fieldErrorsFromServer(err.message, dashboardStats);
+        dashboardStats = {...withSubmittedValues(dashboardStats, entered), _saved:false, _fieldErrors:parsed.byField, _error: parsed.general || (parsed.byField ? null : 'Could not save — try again.')};
+        return;
       }
       // Same independent-reconfirm discipline as chemistry.js: a 200
       // does not prove the write landed as sent.
@@ -236,8 +261,9 @@ function bindDashboard() {
       // "Cancel" below doubles as "Done" once there is something saved.
       // Refresh the read-only summary in the background so it is current
       // whenever the person does close the editor.
-      dashboardStats = {...confirmed, _saved:true, _error:null};
+      dashboardStats = {...confirmed, _saved:true, _error:null, _fieldErrors:null};
       profile = await session.get('/api/v1/profile');
+      statsSummary = confirmed;
     });
   });
 }
@@ -256,9 +282,55 @@ function genericScreen(key) {
 // ── navigation + loading ───────────────────────────────────────────────
 function navigateTo(key, params) {
   if (busy) return;
+  // Vision/Chemistry no longer have screens of their own — any link to
+  // them (Guru tiles, next-action CTAs) lands on the Dashboard with that
+  // section expanded.
+  if (FOLDS.includes(key)) { openFold(key); return; }
   screenData=null; screenBlocked=null; screenUnavailable=false; dashboardStats=null;
   nav.push(key, params);
   run(() => loadScreen(key, params));
+}
+function openFold(key) {
+  screenData=null; screenBlocked=null; screenUnavailable=false; dashboardStats=null;
+  if (nav.current.key !== 'dashboard') nav.resetTo('dashboard');
+  folds[key].open = true;
+  run(loadOpenFolds);
+}
+async function loadFold(key) {
+  const f = folds[key], surface = journey?.surfaces?.find(s=>s.key===key);
+  f.error = null;
+  if (!surface || !surface.eligible || !surface.request) { f.data = null; return; }
+  try { f.data = await session.get(surface.request.path); }
+  catch (e) { f.data = null; f.error = classify(e).message; }
+}
+const loadOpenFolds = () => Promise.all(FOLDS.filter(k=>folds[k].open).map(loadFold));
+function foldCtx(key) {
+  const f = folds[key];
+  return { ...buildCtx(), data: f.data, patch(next) { f.data = next; } };
+}
+function renderFold(key) {
+  const f = folds[key], surface = journey.surfaces?.find(s=>s.key===key);
+  if (!surface) return '';
+  const body = !f.open ? ''
+    : !surface.eligible ? `<p class="hint">${safe(surface.blocked_reason||"This isn't available right now.")}</p>`
+    : !surface.request ? "<p class=\"hint\">This isn't part of this beta build yet.</p>"
+    : f.error ? `<p class="warn">${safe(f.error)}</p>`
+    : screens[key].render(foldCtx(key));
+  return `<details class="dash-fold" data-fold="${key}" ${f.open?'open':''}><summary><strong>${safe(labelFor(key))}</strong></summary><div class="fold-body" data-fold-body="${key}">${body}</div></details>`;
+}
+function bindFolds() {
+  for (const key of FOLDS) {
+    const el = root.querySelector(`details[data-fold="${key}"]`);
+    if (!el) continue;
+    const f = folds[key];
+    el.addEventListener('toggle', () => {
+      if (el.open === f.open) return;
+      f.open = el.open;
+      if (f.open && !f.data) run(()=>loadFold(key));
+    });
+    const surface = journey.surfaces?.find(s=>s.key===key);
+    if (f.open && f.data && surface?.eligible) screens[key].bind?.(el.querySelector('.fold-body'), foldCtx(key));
+  }
 }
 function goBack() {
   if (busy) return;
@@ -267,7 +339,7 @@ function goBack() {
 }
 async function loadScreen(key, params) {
   screenBlocked=null; screenUnavailable=false; screenData=null;
-  if (key === 'dashboard') { await load(); return; }
+  if (key === 'dashboard') { await load(); await loadOpenFolds(); return; }
   // A screen reached with its own params (e.g. ceremony, which has no
   // journey/status surface entry of its own — its real path always needs a
   // specific plan id) supplies its own loader instead of the generic
@@ -278,6 +350,9 @@ async function loadScreen(key, params) {
   if (!surface || !surface.eligible) { screenBlocked = surface?.blocked_reason || "This isn't available right now."; return; }
   if (!surface.request) { screenUnavailable = true; return; }
   screenData = await session.get(surface.request.path);
+  // A screen may finish loading with a one-off setup step (Week: prepare).
+  // Done here — on navigation — never from render().
+  if (key === 'week') screenData = await weekScreen.ensurePrepared(session, screenData);
 }
 async function reloadCurrent() {
   await load();
@@ -286,6 +361,7 @@ async function reloadCurrent() {
 async function load() {
   const [nextJourney,nextProfile]=await Promise.all([session.get('/api/v1/journey/status'),session.get('/api/v1/profile')]);
   journey=nextJourney;profile=nextProfile;
+  try { statsSummary=await session.get('/api/v1/profile/stats'); } catch { statsSummary=null; }
 }
 async function run(action) {
   if(busy)return;busy=true;message='';render();

@@ -868,6 +868,7 @@ _FILTER_BLURBS = {
     "distance_km": "", "nationality": "", "religion": "", "education": "",
     "veg_only": "", "wants_kids": "", "no_kids_wanted": "",
     "non_smoker": "", "non_drinker": "",
+    "no_existing_children": "", "has_existing_children": "",
 }
 
 

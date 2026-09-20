@@ -54,10 +54,24 @@ class DatingContextTests(unittest.TestCase):
         ctx = dating_context()
         banned = ("invite", "share your number", "share your contact", "meet at your place",
                   "progress to", "move to relationship", "go steady")
-        text = (ctx["consent"] + " " + " ".join(ctx["playbook"])).lower()
+        text = (ctx["consent"] + " " + " ".join(ctx["consent_points"]) + " " + " ".join(ctx["playbook"])).lower()
         for phrase in banned:
             with self.subTest(phrase=phrase):
                 self.assertNotIn(phrase, text)
+
+    def test_states_the_consent_approach_as_three_points(self) -> None:
+        """round4-fixes-spec.md §10: free/no-penalty/never-a-rejection
+        declining; contact in-app when both choose, never in person; the
+        stated greeting preference shown before meeting and respected."""
+        points = dating_context()["consent_points"]
+        self.assertEqual(len(points), 3)
+        decline, contact, greeting = (p.lower() for p in points)
+        for phrase in ("always free", "no penalty", "never shown to the other person as a rejection"):
+            self.assertIn(phrase, decline)
+        for phrase in ("in-app", "when both", "never asked for in person"):
+            self.assertIn(phrase, contact)
+        for phrase in ("greeting", "before you meet", "respected"):
+            self.assertIn(phrase, greeting)
 
     def test_notes_in_app_only_contact_exchange(self) -> None:
         briefing = pre_date_briefing(None)

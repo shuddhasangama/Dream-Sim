@@ -16,6 +16,19 @@
 // `also_open` (§6.3's "anything I can help you with?", the same list
 // guru.html's "Also open" tiles show on web).
 
+// round4-fixes-spec.md §9: the long reference content — how Dating works and
+// what to expect before a date — is collapsible, collapsed by default, with
+// a bold header, the same treatment as the Dashboard's sections. Open state
+// survives a re-render (the screen re-renders after any action).
+const openSections = new Set();
+
+function fold(key, title, body, safe) {
+  return `<details class="dash-fold" data-fold="${safe(key)}" ${openSections.has(key) ? 'open' : ''}>
+    <summary><strong>${safe(title)}</strong></summary>
+    <div class="fold-body">${body}</div>
+  </details>`;
+}
+
 export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Guru</h1></section><section class="card"><p>Loading…</p></section>';
@@ -35,26 +48,27 @@ export function render(ctx) {
       </div>
     </section>
 
-    ${dc ? `<section class="card guru-card">
-      <div class="guru-avatar">G</div>
-      <div style="flex:1;">
-        <div class="section-label" style="margin:0;">How this works</div>
-        <p style="margin-top:6px;">${safe(dc.consent)}</p>
-        <ul class="hint" style="margin-top:8px;padding-left:18px;">${dc.playbook.map((p) => `<li>${safe(p)}</li>`).join('')}</ul>
-      </div>
-    </section>` : ''}
+    ${dc ? fold('how-dating-works', 'How Dating works', `
+      <div class="guru-card" style="border:0;padding:0;margin:0;">
+        <div class="guru-avatar">G</div>
+        <div style="flex:1;">
+          <p style="margin:0;">${safe(dc.consent)}</p>
+          ${(dc.consent_points || []).length ? `<div class="section-label" style="margin-top:14px;font-size:11px;">Consent</div>
+          <ul data-consent-points style="margin-top:6px;padding-left:18px;">${dc.consent_points.map((p) => `<li>${safe(p)}</li>`).join('')}</ul>` : ''}
+          <div class="section-label" style="margin-top:14px;font-size:11px;">How it goes</div>
+          <ul class="hint" style="margin-top:6px;padding-left:18px;">${dc.playbook.map((p) => `<li>${safe(p)}</li>`).join('')}</ul>
+        </div>
+      </div>`, safe) : ''}
 
-    ${prep ? `<section class="card">
-      <div class="section-label" style="margin:0;">Before you meet</div>
-      ${prep.partner_greeting ? `<p class="hint" style="margin-top:8px;">They've said how they'd like to be greeted: <strong>${safe(prep.partner_greeting)}</strong>.</p>` : ''}
-      <div class="section-label" style="margin-top:14px;font-size:11px;">Courtesies</div>
+    ${prep ? fold('before-you-meet', 'Before you meet', `
+      ${prep.partner_greeting ? `<p class="hint" style="margin-top:0;">They've said how they'd like to be greeted: <strong>${safe(prep.partner_greeting)}</strong>. Please respect it.</p>` : ''}
+      <div class="section-label" style="margin-top:10px;font-size:11px;">Courtesies</div>
       <ul style="margin-top:6px;padding-left:18px;">${prep.courtesies.map((c) => `<li>${safe(c)}</li>`).join('')}</ul>
       <div class="section-label" style="margin-top:14px;font-size:11px;">Safety</div>
       <ul style="margin-top:6px;padding-left:18px;">${prep.safety.map((c) => `<li>${safe(c)}</li>`).join('')}</ul>
       <div class="section-label" style="margin-top:14px;font-size:11px;">Boundaries</div>
       <ul style="margin-top:6px;padding-left:18px;">${prep.boundaries.map((c) => `<li>${safe(c)}</li>`).join('')}</ul>
-      <p class="hint" style="margin-top:10px;">${safe(prep.note)}</p>
-    </section>` : ''}
+      <p class="hint" style="margin-top:10px;">${safe(prep.note)}</p>`, safe) : ''}
 
     ${also.length ? `<section class="card">
       <div class="section-label" style="margin:0;">Anything else I can help with?</div>
@@ -70,6 +84,9 @@ export function render(ctx) {
 
 export function bind(root, ctx) {
   const { data, navigateTo } = ctx;
+  root.querySelectorAll('details[data-fold]').forEach((el) => el.addEventListener('toggle', () => {
+    if (el.open) openSections.add(el.dataset.fold); else openSections.delete(el.dataset.fold);
+  }));
   root.querySelector('#guru-cta')?.addEventListener('click', () => navigateTo(data.destination.key));
   root.querySelectorAll('.guru-tile[data-key]').forEach((btn) => {
     if (btn.dataset.key) btn.addEventListener('click', () => navigateTo(btn.dataset.key));

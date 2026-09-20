@@ -37,6 +37,34 @@ class EvolutionApiTests(RouteTestCase):
             self.assertEqual(r.status_code,status,r.json)
         self.assertEqual(list(self.conn.iterdump()),before)
 
+    def test_stats_patch_partial_vs_stringified_whole_form(self):
+        # round4-fixes-spec.md §1 diagnosis: the client used to PATCH every
+        # form field as a string ("38"), which the strict API refuses for
+        # numeric stats. Only changed fields, correctly typed, must pass.
+        # 'stranger' has no lock-in, so their stats are open to edit.
+        r=self.request('/profile/stats',method='PATCH',body={'fields':{'age':'38','diet':'Vegetarian'}},uid='stranger')
+        self.assertEqual(r.status_code,400,r.json)
+        self.assertIn('age must be a whole number',r.json['error']['message'])
+        r=self.request('/profile/stats',method='PATCH',body={'fields':{'diet':'Vegetarian'}},uid='stranger')
+        self.assertEqual(r.status_code,200,r.json)
+        r=self.request('/profile/stats',method='PATCH',body={'fields':{'age':38}},uid='stranger')
+        self.assertEqual(r.status_code,200,r.json)
+
+    def test_existing_children_can_be_edited_and_a_stale_count_never_survives_no(self):
+        # round4-fixes-spec.md §5. 'stranger' has no lock-in, so stats are open.
+        def patch(fields):
+            return self.request('/profile/stats',method='PATCH',body={'fields':fields},uid='stranger')
+        def stored():
+            return db.load_json_field(db.fetch_one(self.conn,'User',id='stranger')['stats_json'],{})
+        self.assertEqual(patch({'has_children':'Yes','children_count':2}).status_code,200)
+        self.assertEqual((stored()['has_children'],stored()['children_count']),('Yes',2))
+        r=patch({'children_count':11});self.assertEqual(r.status_code,400,r.json)
+        r=patch({'has_children':'No'});self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(stored()['has_children'],'No');self.assertNotIn('children_count',stored())
+        r=patch({'children_count':1});self.assertEqual(r.status_code,400,r.json)
+        self.assertIn('only applies',r.json['error']['message'])
+        self.assertNotIn('children_count',stored())
+
     def test_vision_retry_and_reversal_disclosure(self):
         import json
         row=db.fetch_one(self.conn,'User',id='owner')

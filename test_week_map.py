@@ -71,6 +71,25 @@ class GridTests(unittest.TestCase):
         self.assertIn("Match 2", by_day["Tue"])
         self.assertIn("Match 3", by_day["Wed"])
 
+    def test_each_match_window_closing_is_labelled_to_pair_with_its_reveal(self):
+        """round4-fixes-spec.md §6: "Match N closes", drawn from the clock's
+        own close checkpoints. Matches 1 and 2 close at midday, so they sit
+        just above the midday line (the morning band) like Rank and RC
+        Closes; Match 3 closes Wednesday EVENING per dating-stage-spec §1
+        (not Thursday morning — that is the calendar closing)."""
+        by_key = {m["key"]: m for m in week_map.MOMENTS}
+        for slot, short in ((1, "M1 closes"), (2, "M2 closes"), (3, "M3 closes")):
+            m = by_key[f"match_{slot}_closes"]
+            self.assertEqual(m["label"], short)
+            self.assertEqual(m["full_label"], f"Match {slot} closes")
+            self.assertEqual(m["at"][0], clock_module.MATCH_CLOSE_BY_SLOT[slot][0])
+        by_band = {r["key"]: {d["day"]: [m["label"] for m in d["moments"]] for d in r["days"]} for r in self.grid()["rows"]}
+        self.assertIn("M1 closes", by_band["morn"]["Tue"])
+        self.assertIn("M2 closes", by_band["morn"]["Wed"])
+        self.assertIn("M3 closes", by_band["eve"]["Wed"])
+        # Nothing about a close is drawn on the day it is not true.
+        self.assertNotIn("M3 closes", by_band["morn"]["Thu"])
+
     def test_today_is_marked(self):
         g = self.grid(day="Thu")
         self.assertEqual([d["day"] for d in g["days"] if d["is_today"]], ["Thu"])

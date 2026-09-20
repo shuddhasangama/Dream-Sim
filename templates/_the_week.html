@@ -40,7 +40,7 @@
           <td class="tw-cell{% if cell.is_today %} is-today{% endif %}">
             {% for m in cell.moments %}
             <span class="tw-chip tone-{{ m.tone }}{% if m.past %} is-past{% endif %}"
-                  title="{{ m.day }} {{ m.time }}{% if m.means %} — {{ m.means }}{% endif %}">
+                  title="{% if m.full_label %}{{ m.full_label }} · {% endif %}{{ m.day }} {{ m.time }}{% if m.means %} — {{ m.means }}{% endif %}">
               {{ m.label }}
             </span>
             {% endfor %}
@@ -76,7 +76,7 @@
     <dl>
       {% for m in the_week.explained %}
       <div class="tw-explain-row">
-        <dt><span class="tw-chip tone-{{ m.tone }}">{{ m.label }}</span>
+        <dt><span class="tw-chip tone-{{ m.tone }}">{{ m.label }}</span>{% if m.full_label %} <strong class="tw-full">{{ m.full_label }}</strong>{% endif %}
           <span class="mono tw-when">{{ m.at[0] }} {{ "%02d"|format(m.at[1]) }}:00</span></dt>
         <dd>{{ m.means }}</dd>
       </div>

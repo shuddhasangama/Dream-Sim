@@ -41,6 +41,8 @@ from generate_users import (
     KIDS_ROUTES,
     KIDS_STANCES,
     LANGUAGES_POOL,
+    CHILDREN_COUNT_RANGE,
+    CHILDREN_OPTIONS,
     MARITAL_HISTORY,
     OTHER_VISION_KEYS,
     OWN_NATIONALITIES,
@@ -436,6 +438,9 @@ OPTIONAL_NUMERIC_STATS = [
     ("height_cm", "Height", "cm", 140, 210, "178"),
     ("weight_kg", "Weight", "kg", 40, 150, "74"),
     ("waist_in", "Waist", "in", 20, 55, "32"),
+    # round4-fixes-spec.md §5: only meaningful when has_children is "Yes"
+    # (validate_stats enforces that); blank otherwise, never 0.
+    ("children_count", "Number of children", "children", CHILDREN_COUNT_RANGE[0], CHILDREN_COUNT_RANGE[1], "1"),
 ]
 
 CHOICE_STATS = [
@@ -450,6 +455,12 @@ OPTIONAL_CHOICE_STATS = [
     ("drinking", "Drinking", DRINKING),
     ("fitness_routine", "Fitness routine", FITNESS_ROUTINES),
     ("marital_history", "Marital history", MARITAL_HISTORY),
+    # round4-fixes-spec.md §5: children a person ALREADY has — distinct from
+    # the Kids pillar in Vision (which is about wanting them). Asked on the
+    # sign-up form but not one of the five mandatory fields (2026-09-04:
+    # "five mandatory fields, no more"), so a skipped answer is omitted,
+    # never stored as "No".
+    ("has_children", "Do you already have children?", CHILDREN_OPTIONS),
     ("ethnicity", "Ethnicity", ETHNICITIES),
     ("religion", "Religion", OWN_RELIGIONS),
 ]
@@ -674,6 +685,12 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
         if value not in options:
             return {"ok": False, "error": f"{label} is not one of the options.", "stats": None}
         stats[key] = value
+
+    # round4-fixes-spec.md §5: a count is only a real answer when the person
+    # said they have children. Refused rather than silently dropped, so a
+    # form that says "No" and "2" doesn't quietly lose one of them.
+    if "children_count" in stats and stats.get("has_children") != "Yes":
+        return {"ok": False, "error": "Number of children only applies if you already have children.", "stats": None}
 
     for key, label, options, _hint in OPTIONAL_MULTI_STATS:
         raw = form.get(key) or []

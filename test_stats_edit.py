@@ -265,9 +265,7 @@ class StatsScreenTests(RouteTestCase):
             "status": "verified", "note": None, "updated_at": "W1 Mon 09:00"})
         self.conn.commit()
         body = self.client.get("/stats").get_data(as_text=True)
-        # Jinja HTML-escapes the quotes in VERIFIED_EDIT_WARNING, so match
-        # a quote-free slice of it rather than the constant verbatim.
-        self.assertIn("drops it out of", body)
+        self.assertIn("re-opens its BGV check", body)
         # Still separately offered for a re-check that does not change
         # the value, in its own "Verified" card.
         self.assertIn("Verified", body)

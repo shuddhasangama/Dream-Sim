@@ -145,7 +145,11 @@ def _has_vision(user: dict[str, Any], key: str) -> bool:
 IGNORABLE_LEVERS = ("age", "height_cm", "weight_kg", "waist_in",
                     "distance_km", "nationality", "religion", "education")
 IGNORABLE_DEALBREAKERS = ("veg_only", "wants_kids", "no_kids_wanted",
-                          "non_smoker", "non_drinker")
+                          "non_smoker", "non_drinker",
+                          # round4-fixes-spec.md §5: children a candidate
+                          # ALREADY has (stats.has_children) — not the
+                          # Kids pillar the two above check.
+                          "no_existing_children", "has_existing_children")
 IGNORABLE = IGNORABLE_LEVERS + IGNORABLE_DEALBREAKERS
 
 # Gender is absent on purpose. It is not a preference in this model, it
@@ -168,7 +172,9 @@ def is_ignored(preferences: dict[str, Any] | None, name: str) -> bool:
 
 # Two answers to the same question. Turning one on turns the other off,
 # because holding both means no candidate can ever satisfy you.
-_OPPOSITES = {"wants_kids": "no_kids_wanted", "no_kids_wanted": "wants_kids"}
+_OPPOSITES = {"wants_kids": "no_kids_wanted", "no_kids_wanted": "wants_kids",
+              "no_existing_children": "has_existing_children",
+              "has_existing_children": "no_existing_children"}
 
 
 def set_ignored(user: dict[str, Any], name: str, ignore: bool) -> dict[str, Any]:
@@ -262,6 +268,13 @@ def _dealbreaker_satisfied(tag: str, candidate: dict[str, Any]) -> bool:
         return _has_vision(candidate, "Kids")
     if tag == "no_kids_wanted":
         return not _has_vision(candidate, "Kids")
+    # round4-fixes-spec.md §5: existing children, from the declared stat. An
+    # undeclared answer satisfies neither — same rule as a blank diet for
+    # veg_only: a hard exclusion is not waived because the field is empty.
+    if tag == "no_existing_children":
+        return candidate["stats"].get("has_children") == "No"
+    if tag == "has_existing_children":
+        return candidate["stats"].get("has_children") == "Yes"
     return True
 
 
@@ -760,6 +773,7 @@ _FILTER_LABELS = {
     # identical labels next to each other saying opposite things.
     "wants_kids": "Wants kids", "no_kids_wanted": "Does not want kids",
     "non_smoker": "Smoking", "non_drinker": "Drinking",
+    "no_existing_children": "Has no children", "has_existing_children": "Has children",
 }
 
 # What the filter says when it is ON. Paired with "Any" as the off state,
@@ -773,6 +787,8 @@ _FILTER_ON_LABELS = {
     "no_kids_wanted": "Only people who don't",
     "non_smoker": "Non-smoker",
     "non_drinker": "Rarely or never",
+    "no_existing_children": "Only people without children",
+    "has_existing_children": "Only people with children",
     "nationality": "As set",
     "religion": "As set",
     "education": "As set",

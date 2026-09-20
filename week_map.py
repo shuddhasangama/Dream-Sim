@@ -42,6 +42,14 @@ BANDS = [
 # below is today's opening.
 MIDDAY_LABEL = "MIDDAY (12:00)"
 
+def _just_before(at: tuple[str, int]) -> tuple[str, int]:
+    """The hour before a midday checkpoint — where the grid draws a window
+    CLOSING (above the midday line: "yesterday's window closing"), the way
+    "Rank" and "RC Closes" already sit. Derived from the clock.py constant,
+    never a second literal."""
+    return (at[0], at[1] - 1)
+
+
 # Each entry: the checkpoint it comes from, a short label for the cell, a
 # tone (which colour the mock-up gives it), and the sentence that says
 # what it means. `kind` groups them for the legend.
@@ -59,6 +67,28 @@ MOMENTS: list[dict[str, Any]] = [
     {"key": "rc_ends", "at": clock_module.RC_ENDS, "label": "RC Closes",
      "tone": "reality", "kind": "Reality Check",
      "means": "Last week's Reality Check closes, just before the new week opens."},
+    # round4-fixes-spec.md §6: each window's CLOSE reads as its own pair to
+    # the reveal above, in the morning band just above the midday line.
+    # `label` is the short cell text ("M1 closes" — the cell is ~40px wide
+    # and never truncates mid-word); `full_label` is the full wording, used
+    # wherever there is room (the "What each one means" list, tooltips).
+    #
+    # Match 3 is NOT drawn on Thursday morning: docs/dating-stage-spec.md
+    # §1 and clock.MATCH_3_CLOSE close it Wednesday EVENING (the same
+    # moment the calendar opens). Thursday 12:00 is the CALENDAR closing
+    # ("Publish"), a different event.
+    {"key": "match_1_closes", "at": _just_before(clock_module.MATCH_1_CLOSE),
+     "label": "M1 closes", "full_label": "Match 1 closes",
+     "tone": "match", "kind": "Matches",
+     "means": "Match 1's window closes at midday, and Match 2 is revealed."},
+    {"key": "match_2_closes", "at": _just_before(clock_module.MATCH_2_CLOSE),
+     "label": "M2 closes", "full_label": "Match 2 closes",
+     "tone": "match", "kind": "Matches",
+     "means": "Match 2's window closes at midday, and Match 3 is revealed."},
+    {"key": "match_3_closes", "at": clock_module.MATCH_3_CLOSE,
+     "label": "M3 closes", "full_label": "Match 3 closes",
+     "tone": "match", "kind": "Matches",
+     "means": "Match 3's window closes in the evening — the last of the week."},
     {"key": "rank", "at": ("Tue", 11), "label": "Rank",
      "tone": "muted", "kind": "Matches",
      "means": "Keenness from Match 1 is counted before Match 2 is drawn."},

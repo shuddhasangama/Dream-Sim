@@ -57,6 +57,23 @@ class EnrollmentApiTests(RouteTestCase):
         for bad in (True,float('inf'),1.2,10**400):
             r=self.put('stats',{**sections()['stats'],'age':bad},1);self.assertEqual(r.status_code,400,r.json)
         self.assertEqual(self.put('vision',{**sections()['vision'],'intimacy_kinds':[{}]},1).status_code,400)
+    def test_existing_children_is_offered_validated_and_stored(self):
+        """round4-fixes-spec.md §5: sign-up captures existing children, with
+        its options and range coming from the API rather than the client."""
+        opts=self.read().json['data']['options']
+        self.assertEqual(opts['stats_options']['has_children'],['No','Yes'])
+        self.assertEqual(list(opts['stats_ranges']['children_count']),[1,10])
+        self.assertNotIn('has_children',opts['required_stats'])
+        self.assertEqual(self.put('vision',sections()['vision'],0).status_code,200)
+        good={**sections()['stats'],'has_children':'Yes','children_count':2}
+        for bad in ({'has_children':'No','children_count':2},{'has_children':'Maybe'},{'has_children':'Yes','children_count':0},{'has_children':'Yes','children_count':2.5}):
+            r=self.put('stats',{**sections()['stats'],**bad},1);self.assertEqual(r.status_code,400,(bad,r.json))
+        r=self.put('stats',good,1);self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(self.read().json['data']['draft']['stats']['children_count'],2)
+        self.assertEqual(self.put('activities',sections()['activities'],2).status_code,200)
+        r=self.complete(3);self.assertEqual(r.status_code,200,r.json)
+        stats=db.load_json_field(db.fetch_one(self.conn,'User',id=self.uid)['stats_json'],{})
+        self.assertEqual((stats['has_children'],stats['children_count']),('Yes',2))
     def test_invite_collision_and_dry_run_do_not_create_an_identity(self):
         before=list(self.conn.iterdump())
         self.assertFalse(service.invite(self.conn,'new@example.test')['applied'])

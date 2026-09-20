@@ -286,6 +286,55 @@ class FitsFiltersTests(unittest.TestCase):
         self.assertTrue(fits_filters(matching.set_ignored(a, "non_smoker", True), b))
 
 
+class ExistingChildrenFilterTests(unittest.TestCase):
+    """round4-fixes-spec.md §5: children a candidate ALREADY has (a stat),
+    filtered by its own pair of REACH dealbreakers — never the Kids pillar."""
+
+    def _with(self, tag, has_children):
+        a = _base_user()
+        a["preferences"]["fixed"]["dealbreakers"] = [tag]
+        b = _candidate()
+        if has_children is None:
+            b["stats"].pop("has_children", None)
+        else:
+            b["stats"]["has_children"] = has_children
+        return a, b
+
+    def test_only_people_without_children(self) -> None:
+        a, b = self._with("no_existing_children", "No")
+        self.assertTrue(fits_filters(a, b))
+        b["stats"]["has_children"] = "Yes"
+        self.assertFalse(fits_filters(a, b))
+
+    def test_only_people_with_children(self) -> None:
+        a, b = self._with("has_existing_children", "Yes")
+        self.assertTrue(fits_filters(a, b))
+        b["stats"]["has_children"] = "No"
+        self.assertFalse(fits_filters(a, b))
+
+    def test_an_unanswered_question_satisfies_neither(self) -> None:
+        for tag in ("no_existing_children", "has_existing_children"):
+            a, b = self._with(tag, None)
+            self.assertFalse(fits_filters(a, b), tag)
+
+    def test_it_is_independent_of_the_kids_pillar(self) -> None:
+        a, b = self._with("no_existing_children", "No")
+        b["visions"] = [{"key": "Kids", "stance": None}]  # wants (more) kids
+        self.assertTrue(fits_filters(a, b))
+
+    def test_the_pair_is_opposite_and_listed_as_filters(self) -> None:
+        a = _base_user()
+        turned = matching.set_ignored(a, "no_existing_children", False)
+        turned = matching.set_ignored(turned, "has_existing_children", False)
+        tags = turned["preferences"]["fixed"]["dealbreakers"]
+        self.assertIn("has_existing_children", tags)
+        self.assertNotIn("no_existing_children", tags)
+        states = {s["name"]: s for s in matching.filter_states(a, [_candidate()])}
+        self.assertEqual(states["no_existing_children"]["opposite"], "has_existing_children")
+        self.assertEqual(states["has_existing_children"]["opposite"], "no_existing_children")
+        self.assertTrue(states["no_existing_children"]["ignored"])
+
+
 class MutualOpenTests(unittest.TestCase):
     def test_true_when_both_fit(self) -> None:
         a, b = _base_user(), _candidate()

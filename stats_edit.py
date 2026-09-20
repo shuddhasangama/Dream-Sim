@@ -77,7 +77,10 @@ VERIFIED = ("age", "education", "nationality", "profession", "income_band")
 # else's filter runs against them. That is exactly the "working on their
 # diet" case, and it means those edits land between match windows rather
 # than during one.
-CANDIDATE_FACING = ("height_cm", "weight_kg", "waist_in", "diet", "religion")
+# has_children/children_count (round4-fixes-spec.md §5) belong here too:
+# someone else's REACH filter runs against has_children.
+CANDIDATE_FACING = ("height_cm", "weight_kg", "waist_in", "diet", "religion",
+                    "has_children", "children_count")
 
 # Soft and nobody screens on them. Editable whenever.
 FREE = ("smoking", "drinking", "fitness_routine", "marital_history",
@@ -106,12 +109,9 @@ def verified_field_set(verification_rows: list[dict[str, Any]]) -> set[str]:
 
 
 # Why each group is what it is, in words a person should read.
-VERIFIED_EDIT_WARNING = (
-    "This is vouched for by a background check. Changing it moves the "
-    "value now, but drops it out of \"verified\" until BGV re-checks it — "
-    "REACH filters and match cards will show it as pending in the "
-    "meantime. Send it anyway?"
-)
+# round4-fixes-spec.md §4: one short line that covers the whole verified
+# group — never a paragraph, and never repeated per field.
+VERIFIED_EDIT_WARNING = "Editing a verified field re-opens its BGV check."
 LIVE_MATCH_REASON = (
     "Someone is looking at your profile this week. This one is on your "
     "match card, so it holds until the window closes."
@@ -185,7 +185,10 @@ def rows(stats: dict[str, Any], state: dict[str, bool],
     out = []
     for field in EDITABLE + VERIFIED:
         verdict = editable(field, state, verified_now=field in verified_fields)
-        out.append({"key": field, "value": stats.get(field), **verdict})
+        # `group` lets a client show the BGV-verified fields together
+        # without keeping its own copy of which fields those are.
+        out.append({"key": field, "value": stats.get(field), **verdict,
+                    "group": "verified" if field in VERIFIED else "declared"})
     return out
 
 

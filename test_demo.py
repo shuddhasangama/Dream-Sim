@@ -43,7 +43,7 @@ def _self_registered(city, gender, religion, diet, rng):
         "smoking": "Never", "drinking": "Socially", "fitness_routine": "Occasional",
         "education": EDUCATION[rng.randrange(len(EDUCATION))],
         "profession": PROFESSIONS[rng.randrange(len(PROFESSIONS))],
-        "marital_history": "Never married", "nationality": "IN", "religion": religion,
+        "marital_history": "Never married", "has_children": "No", "nationality": "IN", "religion": religion,
         "languages": ["English"], "city": city, "gender": gender,
     })["stats"]
     row = onboarding.build_user_row(

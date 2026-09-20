@@ -46,16 +46,24 @@ PRE_DATE_BOUNDARIES = [
 # guardrail pre_date_briefing() already keeps ("reflects and structures,
 # never nudges escalation").
 CONSENT_EXPLAINER = (
-    "Every yes here is a real yes. Declining anything — a match, a slot, a second date — "
-    "costs you nothing and is never shown to the other person as a rejection. What they "
-    "see is that it didn't happen, never that you said no."
+    "Every yes here is a real yes. Nothing moves forward unless both of you choose it, "
+    "and the other person only ever sees that something didn't happen, never that you said no."
 )
+
+# round4-fixes-spec.md §10: the consent-driven approach, as the three things
+# it actually promises — a preview of how Dating works. Descriptive only:
+# none of these suggests progressing, inviting anyone anywhere, or sharing
+# contact details (guru_dating never nudges escalation).
+CONSENT_POINTS = [
+    "Declining anything is always free. It carries no penalty and is never shown to the other person as a rejection.",
+    "Contact details are exchanged in-app, when both of you choose — they are never asked for in person.",
+    "The greeting or physical-boundary preference each person states is shown before you meet, and it is expected to be respected.",
+]
 
 DATING_PLAYBOOK = [
     "Matches are drawn for you through the week — there is no searching or swiping.",
     "Interest is private until it's mutual. A pass is never shown to the other person.",
     "Once you lock in with someone, you stop appearing to anyone else, and REACH closes for you.",
-    "Contact details move in-app, only once both of you choose to share them.",
     "A date is confirmed once both of you sign the same agreement — one signature holds nothing.",
 ]
 
@@ -64,7 +72,8 @@ def dating_context() -> dict[str, Any]:
     """§6.2's consent explainer and rules-of-engagement summary. Static
     and stage-scoped — this module stays Dating-only by design (see the
     module docstring), so this is not "the playbook", only Dating's."""
-    return {"consent": CONSENT_EXPLAINER, "playbook": list(DATING_PLAYBOOK)}
+    return {"consent": CONSENT_EXPLAINER, "consent_points": list(CONSENT_POINTS),
+            "playbook": list(DATING_PLAYBOOK)}
 
 
 def pre_date_briefing(partner_greeting: str | None) -> dict[str, Any]:

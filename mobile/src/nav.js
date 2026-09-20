@@ -24,7 +24,10 @@ export const SURFACE_LABELS = {
 // Dashboard shows and edits stats inline, and REACH links into the same
 // inline editor for a missing filter's stat. Nothing routes to 'stats'
 // any more.
-export const TAB_KEYS = ['dashboard', 'reach', 'week', 'guru', 'vision', 'chemistry', 'relationship', 'journey', 'verify'];
+// round4-fixes-spec.md §2: likewise Vision and Chemistry — they are
+// collapsible Dashboard sections now (see main.js FOLDS), so neither earns
+// a tab.
+export const TAB_KEYS = ['dashboard', 'reach', 'week', 'guru', 'relationship', 'journey', 'verify'];
 
 export function labelFor(key) { return SURFACE_LABELS[key] || key; }
 

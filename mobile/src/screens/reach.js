@@ -23,7 +23,7 @@
 // transient slice of GET /api/v1/profile/stats folded into this screen's
 // own data, fetched lazily so opening REACH never pays for a request it
 // might not need.
-import { editableFieldsForm, collectFields, fieldsEqual, withSubmittedValues } from '../statsFields.js';
+import { editableFieldsForm, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from '../statsFields.js';
 
 export function render(ctx) {
   const { data, safe } = ctx;
@@ -57,7 +57,7 @@ export function render(ctx) {
 
       <div>${basicSliders.map(sliderRow).join('')}${basicChoices.map(choiceGroupRow(safe)).join('')}</div>
 
-      ${moreSliders.length || moreChoices.length ? `<details class="more-filters"><summary>More filters</summary>
+      ${moreSliders.length || moreChoices.length ? `<details class="more-filters" ${moreFiltersOpen ? 'open' : ''}><summary>More filters</summary>
         <div>${moreSliders.map(sliderRow).join('')}${moreChoices.map(choiceGroupRow(safe)).join('')}</div>
       </details>` : ''}
 
@@ -78,9 +78,21 @@ export function render(ctx) {
     <section class="card guru-card"><div class="guru-avatar">G</div><div>Nationality and religion are yours to explore — I'll never suggest widening them.</div></section>`;
 }
 
+// Every change re-renders the whole screen, which would snap "More filters"
+// shut under the person's finger after each choice inside it — so its open
+// state is remembered across renders.
+let moreFiltersOpen = false;
+
+// Position of a value along a min..max track, as a percentage clamped to
+// the track (round4-fixes-spec.md §3: 38 on the 21–80 age track is 28.8%).
+export function trackPct(min, max, value) {
+  const span = max - min;
+  if (!(span > 0)) return 0;
+  return Math.min(100, Math.max(0, ((value - min) / span) * 100));
+}
+
 function sliderRow(s) {
-  const span = s.max - s.min;
-  const pct = (v) => ((v - s.min) / span) * 100;
+  const pct = (v) => trackPct(s.min, s.max, v);
   const [lo, hi] = s.current || [s.min, s.max];
   return `<div class="filter${s.ignored ? ' is-any' : ''}" data-lever="${s.key}" data-min="${s.min}" data-max="${s.max}" data-step="${s.step}">
     <div class="filter-head">
@@ -90,9 +102,11 @@ function sliderRow(s) {
     </div>
     <div class="slider-track-wrap">
       <div class="slider-track"></div>
+      <div class="slider-rail">
       ${s.suggested ? `<div class="slider-suggested" style="left:${pct(s.suggested[0])}%;width:${pct(s.suggested[1]) - pct(s.suggested[0])}%"></div>` : ''}
       <div class="slider-selected" style="left:${pct(lo)}%;width:${Math.max(0, pct(hi) - pct(lo))}%"></div>
       ${s.self_value != null ? `<div class="slider-self" style="left:${pct(s.self_value)}%" title="You: ${s.self_value} ${s.unit}"></div>` : ''}
+      </div>
       <input type="range" class="range-min" min="${s.min}" max="${s.max}" step="${s.step}" value="${lo}">
       <input type="range" class="range-max" min="${s.min}" max="${s.max}" step="${s.step}" value="${hi}">
     </div>
@@ -148,7 +162,7 @@ function choiceGroupRow(safe) {
 // names which two filters pair up (via `opposite`), not what to call the
 // merged row. A pair this map doesn't know falls back to the first
 // filter's own label rather than showing nothing.
-const PAIR_GROUP_LABELS = { wants_kids: 'Kids', no_kids_wanted: 'Kids' };
+const PAIR_GROUP_LABELS = { wants_kids: 'Kids', no_kids_wanted: 'Kids', no_existing_children: 'Existing children', has_existing_children: 'Existing children' };
 
 function pairedChoiceRow(safe, [a, b]) {
   const selected = !a.ignored ? a.name : (!b.ignored ? b.name : '');
@@ -166,6 +180,8 @@ function pairedChoiceRow(safe, [a, b]) {
 
 export function bind(root, ctx) {
   const { session, run, patch, data } = ctx;
+
+  root.querySelector('details.more-filters')?.addEventListener('toggle', (e) => { moreFiltersOpen = e.target.open; });
 
   root.querySelectorAll('.filter-any').forEach((box) => box.addEventListener('change', () => run(async () => {
     patch(await session.post('/api/v1/reach/ignore', { filter: box.dataset.filter, ignore: box.checked }));
@@ -198,14 +214,23 @@ export function bind(root, ctx) {
   root.querySelector('#inline-stats-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     run(async () => {
-      const fields = collectFields(e.target);
+      const { fields, errors, entered } = changedFields(e.target, data._stats);
+      if (errors) {
+        patch({ ...data, _stats: { ...withSubmittedValues(data._stats, entered), _saved: false, _error: null, _fieldErrors: errors } });
+        return;
+      }
+      if (!Object.keys(fields).length) {
+        patch({ ...data, _stats: { ...data._stats, _saved: false, _error: 'Nothing changed yet — edit a field, then save.', _fieldErrors: null } });
+        return;
+      }
       console.info('[reach] PATCH /api/v1/profile/stats request', { fields });
       try {
         await session.patch('/api/v1/profile/stats', { fields });
       } catch (err) {
         console.error('[reach] PATCH failed', err);
-        patch({ ...data, _stats: { ...withSubmittedValues(data._stats, fields), _saved: false, _error: err.message || 'Could not save — try again.' } });
-        throw err;
+        const parsed = fieldErrorsFromServer(err.message, data._stats);
+        patch({ ...data, _stats: { ...withSubmittedValues(data._stats, entered), _saved: false, _fieldErrors: parsed.byField, _error: parsed.general || (parsed.byField ? null : 'Could not save — try again.') } });
+        return;
       }
       // Same "don't trust a 200, re-read it back" discipline as
       // chemistry.js (round3-fixes-spec.md §1/§3): confirm the saved

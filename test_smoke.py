@@ -112,6 +112,25 @@ class EveryScreenRendersTests(RouteTestCase):
             "act__Tennis": "maybe", "act__Salsa": "no"})
         c.post("/onboarding/finish")
 
+    def test_signup_asks_about_existing_children_and_saves_the_answer(self):
+        """round4-fixes-spec.md §5, web side of the enrolment flow."""
+        c = self.client
+        c.post("/signup", data={"email": "kids@example.test"})
+        c.post("/onboarding/vision", data={
+            "intimacy_kinds": ["Emotional", "Physical"],
+            "other_keys": ["Kids"], "kids_route": ["Naturally"]})
+        page = c.get("/onboarding/stats").get_data(as_text=True)
+        self.assertIn("Do you already have children?", page)
+        self.assertIn("Number of children", page)
+        r = c.post("/onboarding/stats", data={
+            "city": "Bangalore", "gender": "female", "age": "34",
+            "education": "Master's", "nationality": "IN",
+            "profession": "Engineering", "salary": "1800000",
+            "has_children": "Yes", "children_count": "2"})
+        self.assertIn(r.status_code, (200, 302))
+        draft = c.get("/onboarding/stats").get_data(as_text=True)
+        self.assertNotIn("only applies if you already have children", draft)
+
     def test_there_are_routes_to_walk(self):
         """A smoke test that silently walks nothing is the failure mode
         this file exists to stop happening twice."""

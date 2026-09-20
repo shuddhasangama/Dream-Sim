@@ -164,6 +164,12 @@ PROFESSIONS = ["Engineering", "Medicine", "Finance", "Law", "Design", "Education
 PROFESSION_WEIGHTS = [0.20, 0.08, 0.14, 0.06, 0.08, 0.09, 0.13, 0.08, 0.06, 0.08]
 
 MARITAL_HISTORY = ["Never married", "Divorced", "Widowed"]
+
+# round4-fixes-spec.md §5: children a person ALREADY has — a fact about
+# them today, and deliberately not the Kids pillar in Vision, which is
+# about wanting (more) children together. Yes/No, plus a count when Yes.
+CHILDREN_OPTIONS = ["No", "Yes"]
+CHILDREN_COUNT_RANGE = (1, 10)
 MARITAL_HISTORY_WEIGHTS = [0.82, 0.15, 0.03]
 
 LANGUAGES_POOL = ["English", "Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Punjabi", "Malayalam"]
@@ -277,7 +283,16 @@ def _generate_stats(rng: random.Random, gender: str, age: int) -> dict[str, Any]
         "profession": _weighted_choice(rng, PROFESSIONS, PROFESSION_WEIGHTS),
         "marital_history": _weighted_choice(rng, MARITAL_HISTORY, MARITAL_HISTORY_WEIGHTS),
         "languages": sorted(rng.sample(LANGUAGES_POOL, k=rng.randint(1, 3))),
+        **_children_stats(rng),
     }
+
+
+def _children_stats(rng: random.Random) -> dict[str, Any]:
+    """Existing children (round4-fixes-spec.md §5). Drawn LAST in the stats
+    block so it never reorders any earlier stat for a given seed."""
+    if rng.random() < 0.12:
+        return {"has_children": "Yes", "children_count": rng.choice([1, 1, 2, 2, 3])}
+    return {"has_children": "No"}
 
 
 def _range_around(rng: random.Random, center: float, moderate: tuple, narrow: tuple, floor: float, ceil: float) -> list[int]:

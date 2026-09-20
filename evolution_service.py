@@ -77,6 +77,15 @@ def save_stats(conn, uid, submitted, situation, clock, strict=False):
                 stats.pop(field,None)
             else:
                 stats[field]=after
+        # round4-fixes-spec.md §5: a count only means something alongside
+        # "Yes". Saying "No" clears a stale count; naming a count while
+        # the answer is not "Yes" is refused, not silently dropped.
+        if stats.get('has_children') != 'Yes' and 'children_count' in stats:
+            stale = stats.pop('children_count')
+            if 'children_count' in submitted and submitted['children_count'] not in (None, ''):
+                errors.append('Number of children only applies if you already have children.')
+            else:
+                changes.append(('children_count', stale, None))
         if strict and (errors or refused):
             raise ApiError('stats_held' if refused else 'validation_error', '; '.join(errors+(['Held fields: '+', '.join(refused)] if refused else [])),409 if refused else 400)
         if changes or stats != stored:

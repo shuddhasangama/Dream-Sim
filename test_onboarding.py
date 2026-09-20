@@ -40,7 +40,8 @@ def _valid_stats() -> dict:
         "budget": RESTAURANT_BUDGETS[1], "ethnicity": "Indian",
         "diet": "Everything", "cuisine": ["Italian", "Thai"],
         "smoking": "Never", "drinking": "Socially", "fitness_routine": "2-3 times a week",
-        "education": "Master's", "profession": "Engineering",
+        "education": "Master's", "profession": "Engineering", "has_children": "No",
+
         "marital_history": "Never married", "nationality": "IN", "religion": "Hindu",
         "languages": ["English", "Hindi"],
         "city": "Bangalore", "gender": "male",
@@ -360,10 +361,32 @@ class StatsValidationTests(unittest.TestCase):
         form["salary"] = ""
         self.assertFalse(onboarding.validate_stats(form)["ok"])
 
+    def test_existing_children_is_optional_and_only_yes_takes_a_count(self):
+        """round4-fixes-spec.md §5. Distinct from the Kids pillar; asked at
+        sign-up but not one of the five mandatory fields."""
+        base = _valid_stats()
+        base.pop("has_children", None)
+        got = onboarding.validate_stats(base)
+        self.assertTrue(got["ok"], got["error"])
+        self.assertNotIn("has_children", got["stats"])          # skipped = omitted
+        yes = onboarding.validate_stats({**base, "has_children": "Yes", "children_count": "2"})
+        self.assertTrue(yes["ok"], yes["error"])
+        self.assertEqual((yes["stats"]["has_children"], yes["stats"]["children_count"]), ("Yes", 2))
+        self.assertTrue(onboarding.validate_stats({**base, "has_children": "Yes"})["ok"])   # count is optional
+        self.assertTrue(onboarding.validate_stats({**base, "has_children": "No"})["ok"])
+        for bad in ({"has_children": "No", "children_count": "1"}, {"has_children": "Maybe"},
+                    {"has_children": "Yes", "children_count": "0"}, {"has_children": "Yes", "children_count": "11"}):
+            self.assertFalse(onboarding.validate_stats({**base, **bad})["ok"], bad)
+        self.assertNotIn("has_children", onboarding.REQUIRED_STAT_KEYS)
+        self.assertEqual(onboarding.STAT_OPTIONS["has_children"], ["No", "Yes"])
+        self.assertEqual(onboarding.STAT_RANGES["children_count"], (1, 10))
+
     def test_stats_keys_match_the_generated_population_exactly(self):
         mine = set(onboarding.validate_stats(_valid_stats())["stats"])
         generated = set(generate_users(1, seed=7)[0]["stats"])
-        self.assertEqual(mine, generated)
+        # children_count exists only for someone who has children; the
+        # fixture answers "No", so compare on everything else.
+        self.assertEqual(mine, generated - {"children_count"})
 
 
 class MultiSelectStatTests(unittest.TestCase):

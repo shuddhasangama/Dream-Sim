@@ -31,6 +31,10 @@ export function previewTransport() {
       // matching.py's _OPPOSITES and its `opposite` field on each row.
       { name: 'wants_kids', label: 'Wants kids', on_label: 'Only people who do', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: true, delta_if_ignored: 1, sensitive: false, blurb: '', opposite: 'no_kids_wanted' },
       { name: 'no_kids_wanted', label: 'Does not want kids', on_label: "Only people who don't", kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: 'wants_kids' },
+      // round4-fixes-spec.md §5: children a candidate ALREADY has (a stat) —
+      // its own pair, separate from the Kids pillar above.
+      { name: 'no_existing_children', label: 'Has no children', on_label: 'Only people without children', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: 'has_existing_children' },
+      { name: 'has_existing_children', label: 'Has children', on_label: 'Only people with children', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: 'no_existing_children' },
       { name: 'nationality', label: 'Nationality', on_label: 'IN, NRI', kind: 'lever', basic: false, control: 'choice', ignored: false, value: ['IN', 'NRI'], delta_if_ignored: 1, sensitive: true, blurb: '', opposite: null },
       { name: 'religion', label: 'Religion', on_label: 'As set', kind: 'lever', basic: false, control: 'choice', ignored: false, value: 'Hindu', delta_if_ignored: 1, sensitive: true, blurb: '', opposite: null },
       { name: 'non_smoker', label: 'Non-smoker', on_label: 'Never or quitting', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: null },
@@ -56,6 +60,9 @@ export function previewTransport() {
   const WM_MOMENTS = [
     { key: 'match_1', at: ['Mon', 12], label: 'Match 1', tone: 'match', kind: 'Matches', means: 'Match 1 is revealed. You have until Tuesday midday.' },
     { key: 'rc_ends', at: ['Mon', 11], label: 'RC Closes', tone: 'reality', kind: 'Reality Check', means: "Last week's Reality Check closes, just before the new week opens." },
+    { key: 'match_1_closes', at: ['Tue', 11], label: 'M1 closes', full_label: 'Match 1 closes', tone: 'match', kind: 'Matches', means: "Match 1's window closes at midday, and Match 2 is revealed." },
+    { key: 'match_2_closes', at: ['Wed', 11], label: 'M2 closes', full_label: 'Match 2 closes', tone: 'match', kind: 'Matches', means: "Match 2's window closes at midday, and Match 3 is revealed." },
+    { key: 'match_3_closes', at: ['Wed', 18], label: 'M3 closes', full_label: 'Match 3 closes', tone: 'match', kind: 'Matches', means: "Match 3's window closes in the evening — the last of the week." },
     { key: 'rank', at: ['Tue', 11], label: 'Rank', tone: 'muted', kind: 'Matches', means: 'Keenness from Match 1 is counted before Match 2 is drawn.' },
     { key: 'match_2', at: ['Tue', 12], label: 'Match 2', tone: 'match', kind: 'Matches', means: "Match 1's window closes and Match 2 is revealed." },
     { key: 'match_3', at: ['Wed', 12], label: 'Match 3', tone: 'match', kind: 'Matches', means: "Match 2's window closes and Match 3 is revealed — the last of the week." },
@@ -150,12 +157,24 @@ export function previewTransport() {
     week.clock = { mode: 'simulation', week: c.week + weekDelta, day: WM_DAYS[Math.floor(total / 24)], hour: total % 24 };
     week.phase = weekPhase(week.clock);
     week.schedule = { grid: personalizedGrid(week.clock), legend: weekMapLegend() };
+    // A new week starts UNprepared (MatchBatch is per week): the real API's
+    // GET then carries a prepare_request until the client runs it.
+    if (weekDelta > 0 && week.mode === 'dating') { week.prepared = false; week.matches = []; }
+  }
+
+  let preparePosts = 0;   // how many times the client actually ran week/prepare
+  window.__previewPrepareCount = () => preparePosts;
+  function freshMatches(weekNo) {
+    return [
+      { id: `match-1-w${weekNo}`, week: weekNo, slot: 1, revealed_at: 'Mon:12', window_closes_at: 'Tue:12', action: 'none', status: 'not_yet_revealed', candidate: null, their_interest: false, allowed_actions: [] },
+      { id: `match-2-w${weekNo}`, week: weekNo, slot: 2, revealed_at: 'Tue:12', window_closes_at: 'Wed:12', action: 'none', status: 'not_yet_revealed', candidate: null, their_interest: false, allowed_actions: [] },
+    ];
   }
 
   let week = {
     clock: { mode: 'simulation', week: 1, day: 'Mon', hour: 12 },
     phase: 'match_1_open', mode: 'dating', prepared: true,
-    prepare_request: { method: 'POST', path: '/api/v1/week/prepare', body: {} },
+    prepare_request: null,
     schedule: { grid: weekMapGrid({ day: 'Mon', hour: 12 }), legend: weekMapLegend() },
     lock_in: null, date_plan: null,
     matches: [
@@ -235,25 +254,25 @@ export function previewTransport() {
   let chemistryPicks = { Cooking: 'good', Hiking: 'good', Salsa: 'improve', Tennis: 'improve', Yoga: 'no', Photography: 'maybe' };
 
   let statsData = { age: 30, height_cm: 169, weight_kg: 66, waist_in: 31, income_band: '₹₹₹ · 25L–50L', education: "Master's", nationality: 'IN', profession: 'Engineering',
-    diet: 'Everything', religion: 'Hindu', smoking: 'Never', drinking: 'Socially', fitness_routine: 'Gym 3x/week', marital_history: 'Never married', ethnicity: ['South Asian'], languages: ['English', 'Hindi'], cuisine: ['North Indian', 'Italian'], budget: ['₹2,500–4,000'] };
+    diet: 'Everything', religion: 'Hindu', smoking: 'Never', drinking: 'Socially', fitness_routine: 'Gym 3x/week', marital_history: 'Never married', has_children: 'No', ethnicity: ['South Asian'], languages: ['English', 'Hindi'], cuisine: ['North Indian', 'Italian'], budget: ['₹2,500–4,000'] };
   // round3-fixes-spec.md §3: all five start actually verified, matching
   // the "Verified" pill this fixture's user already shows — editing one
   // reopens it (see the PATCH handler below), same as the real API.
   let statsChecks = { age: 'verified', education: 'verified', nationality: 'verified', profession: 'verified', income_band: 'verified' };
   const statChanges = [];
-  const STAT_OPTIONS = { education: ["Bachelor's", "Master's", 'PhD'], nationality: ['IN', 'NRI'], profession: ['Engineering', 'Design', 'Medicine', 'Law'], diet: ['Vegetarian', 'Vegan', 'Everything'], smoking: ['Never', 'Occasionally', 'Regularly'], drinking: ['Never', 'Socially', 'Regularly'], fitness_routine: ['Sedentary', 'Occasional', 'Gym 3x/week', 'Athlete'], marital_history: ['Never married', 'Divorced', 'Widowed'], ethnicity: ['South Asian', 'East Asian', 'Mixed', 'Other'], religion: ['Hindu', 'Muslim', 'Christian', 'Other'], languages: ['English', 'Hindi', 'Tamil', 'Bengali'], cuisine: ['North Indian', 'South Indian', 'Italian', 'Cafe'], income_band: ['₹₹ · 10L–25L', '₹₹₹ · 25L–50L', '₹₹₹₹ · 50L+'], budget: ['₹1,500–2,500', '₹2,500–4,000', '₹4,000+'] };
-  const STAT_RANGES = { age: [21, 75], height_cm: [140, 210], weight_kg: [40, 150], waist_in: [20, 55] };
+  const STAT_OPTIONS = { education: ["Bachelor's", "Master's", 'PhD'], nationality: ['IN', 'NRI'], profession: ['Engineering', 'Design', 'Medicine', 'Law'], diet: ['Vegetarian', 'Vegan', 'Everything'], smoking: ['Never', 'Occasionally', 'Regularly'], drinking: ['Never', 'Socially', 'Regularly'], fitness_routine: ['Sedentary', 'Occasional', 'Gym 3x/week', 'Athlete'], marital_history: ['Never married', 'Divorced', 'Widowed'], has_children: ['No', 'Yes'], ethnicity: ['South Asian', 'East Asian', 'Mixed', 'Other'], religion: ['Hindu', 'Muslim', 'Christian', 'Other'], languages: ['English', 'Hindi', 'Tamil', 'Bengali'], cuisine: ['North Indian', 'South Indian', 'Italian', 'Cafe'], income_band: ['₹₹ · 10L–25L', '₹₹₹ · 25L–50L', '₹₹₹₹ · 50L+'], budget: ['₹1,500–2,500', '₹2,500–4,000', '₹4,000+'] };
+  const STAT_RANGES = { age: [21, 75], height_cm: [140, 210], weight_kg: [40, 150], waist_in: [20, 55], children_count: [1, 10] };
   const VERIFIED_KEYS = ['age', 'education', 'nationality', 'profession', 'income_band'];
-  const VERIFIED_EDIT_WARNING = 'This is vouched for by a background check. Changing it moves the value now, but drops it out of "verified" until BGV re-checks it — REACH filters and match cards will show it as pending in the meantime. Send it anyway?';
+  const VERIFIED_EDIT_WARNING = 'Editing a verified field re-opens its BGV check.';
   function statsRows() {
-    const editable = ['height_cm', 'weight_kg', 'waist_in', 'diet', 'religion', 'smoking', 'drinking', 'fitness_routine', 'marital_history', 'ethnicity', 'languages', 'cuisine', 'budget'];
+    const editable = ['height_cm', 'weight_kg', 'waist_in', 'diet', 'religion', 'has_children', 'children_count', 'smoking', 'drinking', 'fitness_routine', 'marital_history', 'ethnicity', 'languages', 'cuisine', 'budget'];
     return [
-      ...editable.map((key) => ({ key, value: statsData[key] ?? null, editable: true, why: 'open', reason: null, warning: null, check: null })),
+      ...editable.map((key) => ({ key, value: statsData[key] ?? null, editable: true, why: 'open', reason: null, warning: null, check: null, group: 'declared' })),
       ...VERIFIED_KEYS.map((key) => {
         const verifiedNow = statsChecks[key] === 'verified';
         return { key, value: statsData[key] ?? null, editable: true,
           why: verifiedNow ? 'verified_editable' : 'open', reason: null,
-          warning: verifiedNow ? VERIFIED_EDIT_WARNING : null, check: statsChecks[key] || null };
+          warning: verifiedNow ? VERIFIED_EDIT_WARNING : null, check: statsChecks[key] || null, group: 'verified' };
       }),
     ];
   }
@@ -359,12 +378,16 @@ export function previewTransport() {
         {code:'VB', title:'Vibes', subtitle:'What keeps this alive', destination:{key:'vibes',eligible:false,blocked_reason:"This isn't available right now.",api_available:false,request:null}},
       ],
       dating_context: {
-        consent: "Every yes here is a real yes. Declining anything — a match, a slot, a second date — costs you nothing and is never shown to the other person as a rejection. What they see is that it didn't happen, never that you said no.",
+        consent: "Every yes here is a real yes. Nothing moves forward unless both of you choose it, and the other person only ever sees that something didn't happen, never that you said no.",
+        consent_points: [
+          'Declining anything is always free. It carries no penalty and is never shown to the other person as a rejection.',
+          'Contact details are exchanged in-app, when both of you choose — they are never asked for in person.',
+          'The greeting or physical-boundary preference each person states is shown before you meet, and it is expected to be respected.',
+        ],
         playbook: [
           'Matches are drawn for you through the week — there is no searching or swiping.',
           "Interest is private until it's mutual. A pass is never shown to the other person.",
           'Once you lock in with someone, you stop appearing to anyone else, and REACH closes for you.',
-          'Contact details move in-app, only once both of you choose to share them.',
           'A date is confirmed once both of you sign the same agreement — one signature holds nothing.',
         ],
         date_prep: {
@@ -422,6 +445,17 @@ export function previewTransport() {
     if (path.endsWith('/profile/stats') && method === 'GET') return ok({ rows: statsRows(), options: STAT_OPTIONS, ranges: STAT_RANGES, changes: statChanges });
     if (path.endsWith('/profile/stats') && method === 'PATCH') {
       const reopened = [];
+      // Mirror evolution_service.save_stats' strict typing: a numeric stat
+      // must arrive as a real whole number, never the string a form gives.
+      for (const [key, value] of Object.entries(body.fields || {})) {
+        if (STAT_RANGES[key] && value !== null && (typeof value !== 'number' || !Number.isInteger(value))) return err(`${key} must be a whole number or null.`, 400);
+        if (STAT_RANGES[key] && value !== null && (value < STAT_RANGES[key][0] || value > STAT_RANGES[key][1])) return err(`${key} has to be between ${STAT_RANGES[key][0]} and ${STAT_RANGES[key][1]}.`, 400);
+      }
+      // Mirror save_stats' children rule: a count only alongside "Yes".
+      const f = body.fields || {};
+      const finalHas = 'has_children' in f ? f.has_children : statsData.has_children;
+      if (finalHas !== 'Yes' && f.children_count != null) return err('Number of children only applies if you already have children.', 400);
+      if ('has_children' in f && f.has_children !== 'Yes') delete statsData.children_count;
       for (const [key, value] of Object.entries(body.fields || {})) {
         const before = statsData[key] ?? null;
         const after = value === '' || value == null ? null : value;
@@ -472,12 +506,17 @@ export function previewTransport() {
       else return err('Provide either advance_hours or week+day+hour, not both.', 400);
       return ok({}); // caller reloads journey/status + week itself
     }
-    if (path.endsWith('/week/prepare')) { week.prepared = true; return ok(week); }
+    if (path.endsWith('/week/prepare')) {
+      preparePosts += 1;
+      if (week.mode !== 'dating') return err('You are already locked in.', 409);
+      if (!week.prepared) { week.prepared = true; week.matches = freshMatches(week.clock.week); }
+      return ok({ ...week, prepare_request: null });
+    }
     // Recomputed fresh on every read, same as the real _api_week_state()
     // — a cached week.schedule would go stale the moment date_plan's own
     // status changes (e.g. the ceremony completing) without the clock
     // itself moving.
-    if (path.endsWith('/week')) return ok({ ...week, schedule: { grid: personalizedGrid(week.clock), legend: weekMapLegend() } });
+    if (path.endsWith('/week')) return ok({ ...week, prepare_request: week.mode === 'dating' && !week.prepared ? { method: 'POST', path: '/api/v1/week/prepare', body: {} } : null, schedule: { grid: personalizedGrid(week.clock), legend: weekMapLegend() } });
     if (path.includes('/matches/') && path.endsWith('/actions')) {
       const id = path.split('/matches/')[1].split('/')[0];
       const match = week.matches.find((m) => m.id === id);

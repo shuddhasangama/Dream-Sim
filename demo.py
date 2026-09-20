@@ -225,6 +225,7 @@ def build_partner_for(user: dict[str, Any], partner_id: str) -> dict[str, Any]:
         **{lever: _mid(adj[lever]) for lever in matching.RANGE_LEVERS},
         "diet": _diet_for(user),
         "marital_history": "Never married",
+        "has_children": "No",
         # nationality/religion/education chosen to satisfy the user's own
         # filters (round3-fixes-spec.md §4.3 added education as a real
         # matching.py lever — same "first accepted value" construction as

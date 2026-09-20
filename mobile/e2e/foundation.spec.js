@@ -173,13 +173,34 @@ test('Guru entry reflects the same next-action as the dashboard, and Vision reco
 
   // round3-fixes-spec.md §6.2: consent + playbook, in Guru's own voice,
   // Dating-only — never an escalation suggestion, only how things work.
-  await expect(page.getByText('How this works')).toBeVisible();
+  // round4-fixes-spec.md §9: both are collapsible, bold-headed, collapsed by
+  // default — their content appears only once expanded.
+  const how = page.locator('details[data-fold="how-dating-works"]');
+  const before = page.locator('details[data-fold="before-you-meet"]');
+  await expect(how.locator('summary strong')).toHaveText('How Dating works');
+  await expect(before.locator('summary strong')).toHaveText('Before you meet');
+  await expect(how).not.toHaveAttribute('open','');
+  await expect(before).not.toHaveAttribute('open','');
+  await expect(page.getByText('Every yes here is a real yes.')).toBeHidden();
+  await expect(page.getByText('Meet at the confirmed public venue')).toBeHidden();
+
+  await how.locator('summary').click();
   await expect(page.getByText('Every yes here is a real yes.')).toBeVisible();
   await expect(page.getByText('there is no searching or swiping.')).toBeVisible();
+  // §10: the consent approach, as its three points — descriptive, no nudges.
+  const points = page.locator('[data-consent-points] li');
+  await expect(points).toHaveCount(3);
+  await expect(points.nth(0)).toContainText('always free');
+  await expect(points.nth(0)).toContainText('never shown to the other person as a rejection');
+  await expect(points.nth(1)).toContainText('exchanged in-app, when both of you choose');
+  await expect(points.nth(1)).toContainText('never asked for in person');
+  await expect(points.nth(2)).toContainText('shown before you meet');
+  await expect(points.nth(2)).toContainText('expected to be respected');
+  await expect(page.locator('details[data-fold] li')).not.toContainText([/invite|share your (number|contact)|go steady/i]);
 
   // §6.1: date-prep content (courtesies/safety/boundaries) surfaced
   // directly on Guru, not only on the plan-review screen.
-  await expect(page.getByText('Before you meet',{exact:true})).toBeVisible();
+  await before.locator('summary').click();
   await expect(page.getByText('Meet at the confirmed public venue')).toBeVisible();
 
   // §6.3: the open-ended "anything else I can help with?" entry point.
@@ -189,8 +210,9 @@ test('Guru entry reflects the same next-action as the dashboard, and Vision reco
   await page.getByRole('button',{name:'See this week'}).click();
   await expect(page.getByRole('heading',{name:"This week's matches"})).toBeVisible();
 
-  await tabbar.getByRole('button',{name:'Vision'}).click();
-  await expect(page.getByRole('heading',{name:"Where you're headed"})).toBeVisible();
+  // Vision now lives on the Dashboard as a collapsible section (round4 §2).
+  await tabbar.getByRole('button',{name:'Dashboard'}).click();
+  await page.locator('summary',{hasText:'Vision'}).click();
   await expect(page.getByText('Intimacy · Emotional, Physical')).toBeVisible();
 });
 
@@ -201,8 +223,8 @@ test('Chemistry actually saves and shows an explicit saved indicator (road-fixes
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
 
-  await page.locator('.topnav').getByRole('button',{name:'Chemistry'}).click();
-  await expect(page.getByRole('heading',{name:"What you'd actually do together"})).toBeVisible();
+  await page.locator('summary',{hasText:'Chemistry'}).click();
+  await expect(page.getByText("Hobbies, skills and activities.")).toBeVisible();
 
   // Pick a bucket for an activity that had nothing set, save, and confirm
   // it comes back checked AND an explicit "Saved" indicator appears right
@@ -218,8 +240,8 @@ test('Chemistry actually saves and shows an explicit saved indicator (road-fixes
 
   // A round-trip through another screen and back proves it actually
   // persisted server-side, not just an optimistic local render.
-  await page.locator('.topnav').getByRole('button',{name:'Dashboard'}).click();
-  await page.locator('.topnav').getByRole('button',{name:'Chemistry'}).click();
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+  await page.getByRole('button',{name:'← Back'}).click();
   await expect(page.locator('input[name="act__Yoga"][value="improve"]')).toBeChecked();
 });
 
@@ -252,6 +274,48 @@ test('REACH heading is plain, and "More filters" exposes every filter the API re
   for (const name of ['Height','Weight','Waist','Nationality','Religion','Non-smoker','Non-drinker']) {
     await expect(page.locator('.filter-name',{hasText:name})).toBeVisible();
   }
+});
+
+test('REACH age marker sits on the track, in proportion, aligned with the thumbs (round4-fixes-spec.md §3)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.locator('.topnav').getByRole('button',{name:'REACH'}).click();
+
+  const row = page.locator('.filter[data-lever="age"]');
+  const marker = row.locator('.slider-self');
+  await expect(marker).toBeVisible();
+  const wrap = await row.locator('.slider-track-wrap').boundingBox();
+  const track = await row.locator('.slider-track').boundingBox();
+  const m = await marker.boundingBox();
+
+  // Vertically ON the track: marker's centre is the track's centre.
+  expect(Math.abs((m.y + m.height/2) - (track.y + track.height/2))).toBeLessThan(1);
+
+  // 38 on 21–80 sits ~28.8% along the thumb travel, not centred or offset.
+  const thumb = 22, travel = wrap.width - thumb;
+  const expected = (v) => wrap.x + thumb/2 + ((v-21)/59) * travel;
+  expect(Math.abs((m.x + m.width/2) - expected(38))).toBeLessThan(1);
+  const frac = ((m.x + m.width/2) - (wrap.x + thumb/2)) / travel;
+  expect(frac).toBeGreaterThan(0.27); expect(frac).toBeLessThan(0.30);
+
+  // The same rail places any age: 21, 60 and 80 land where a thumb at that
+  // value would (the range input's own thumb is the ground truth).
+  for (const age of [21, 38, 60, 80]) {
+    await marker.evaluate((el, pct) => { el.style.left = pct + '%'; }, ((age-21)/59)*100);
+    const box = await marker.boundingBox();
+    expect(Math.abs((box.x + box.width/2) - expected(age)), `age ${age}`).toBeLessThan(1);
+  }
+  // Ground truth: set the min thumb to 60 and compare its rendered centre.
+  const truth = await page.evaluate(() => {
+    const r = document.querySelector('.filter[data-lever="age"] .range-min');
+    r.min = 21; r.max = 80; r.value = 60;
+    const b = r.getBoundingClientRect();
+    return b.x + 11 + ((60-21)/59) * (b.width - 22);
+  });
+  expect(Math.abs(truth - expected(60))).toBeLessThan(1);
 });
 
 test('REACH kids filter is one three-way control, mutually exclusive (round3-fixes-spec.md §4.2)',async({page})=>{
@@ -297,10 +361,15 @@ test('Stats are editable inline from Dashboard, with cancel, and a verified fiel
   // Entry point 1: Dashboard, inline — no navigation away.
   await page.getByRole('button',{name:'Edit stats'}).click();
   await expect(page.getByRole('button',{name:'Save changes'})).toBeVisible();
-  // Profession is currently verified — editable, but warns before save
-  // (one warning per verified field: age, education, nationality,
-  // profession, income_band).
-  await expect(page.getByText('drops it out of "verified"').first()).toBeVisible();
+  // round4-fixes-spec.md §4: the five BGV-verified fields sit together in
+  // one "Verified" group, apart from self-declared ones, with ONE short
+  // re-verification line for the whole group — not a paragraph per field.
+  const verifiedGroup = page.locator('#dashboard-stats-form [data-group="verified"]');
+  await expect(verifiedGroup.locator('[name]')).toHaveCount(5);
+  for (const k of ['age','education','nationality','profession','income_band']) await expect(verifiedGroup.locator(`[name="${k}"]`)).toHaveCount(1);
+  await expect(page.locator('#dashboard-stats-form [data-group="declared"] [name="age"]')).toHaveCount(0);
+  await expect(page.getByText('Editing a verified field re-opens its BGV check.')).toHaveCount(1);
+  await expect(page.getByText(/vouched for by a background check/)).toHaveCount(0);
 
   // Cancel discards the open editor without saving anything.
   await page.getByRole('button',{name:'Cancel'}).click();
@@ -319,6 +388,87 @@ test('Stats are editable inline from Dashboard, with cancel, and a verified fiel
   await page.getByRole('button',{name:'Done'}).click();
   await expect(page.getByRole('button',{name:'Edit stats'})).toBeVisible();
   await expect(page.getByText('30 in')).toBeVisible();
+  // Read-only display groups the same way.
+  await expect(page.locator('.stats-group[data-group="verified"] .stat-row',{hasText:'Age'})).toBeVisible();
+  await expect(page.locator('.stats-group[data-group="declared"] .stat-row',{hasText:'Waist'})).toBeVisible();
+  await expect(page.locator('.stats-group[data-group="verified"] .stat-row',{hasText:'Waist'})).toHaveCount(0);
+});
+
+test('Editing one unrelated stat sends only that field — untouched Age is never validated (round4-fixes-spec.md §1)',async({page})=>{
+  const patches=[];
+  page.on('console',async(m)=>{ if(m.text().includes('PATCH /api/v1/profile/stats request')) patches.push(JSON.stringify(await m.args()[1].jsonValue())); });
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.getByRole('button',{name:'Edit stats'}).click();
+
+  // Saving with nothing changed is a no-op with a hint, not a failing PATCH.
+  await page.locator('#dashboard-stats-form').getByRole('button',{name:'Save changes'}).click();
+  await expect(page.getByText('Nothing changed yet')).toBeVisible();
+  expect(patches).toHaveLength(0);
+
+  // Change ONE field, leave Age alone: must save.
+  await page.locator('input[name="waist_in"]').fill('33');
+  await page.locator('#dashboard-stats-form').getByRole('button',{name:'Save changes'}).click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+  await expect(page.locator('[data-error-for]')).toHaveCount(0);
+  await expect.poll(()=>patches.length).toBe(1);
+  expect(patches[0]).toContain('waist_in');
+  expect(patches[0]).not.toContain('age');
+  expect(patches[0]).not.toContain('"height_cm"');
+
+  // An edited numeric field is sent as a real number and validated inline,
+  // next to its own input, naming the field.
+  await page.locator('input[name="age"]').fill('150');
+  await page.locator('#dashboard-stats-form').getByRole('button',{name:'Save changes'}).click();
+  await expect(page.locator('[data-error-for="age"]')).toContainText('Age must be between 21 and 75');
+  await page.locator('input[name="age"]').fill('31');
+  await page.locator('#dashboard-stats-form').getByRole('button',{name:'Save changes'}).click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+  await expect.poll(()=>patches.length).toBe(2);
+  expect(patches[1]).toContain('"age":31');
+});
+
+test('Existing children: editable stat with a count, and its own REACH filter pair (round4-fixes-spec.md §5)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  await page.getByRole('button',{name:'Edit stats'}).click();
+  const form = page.locator('#dashboard-stats-form');
+  // Options come from the API (No/Yes), it's a self-declared field, and it is
+  // labelled as existing children — not the Kids pillar.
+  const sel = form.locator('[data-group="declared"] select[name="has_children"]');
+  await expect(sel.locator('option')).toHaveText(['Not set','No','Yes']);
+  await expect(form.getByText('Already has children')).toBeVisible();
+
+  // A count without "Yes" is refused inline, next to the count field.
+  await form.locator('input[name="children_count"]').fill('2');
+  await form.getByRole('button',{name:'Save changes'}).click();
+  await expect(page.locator('[data-error-for="children_count"]')).toContainText('only applies if you already have children');
+
+  // Yes + count saves and shows on the Dashboard.
+  await sel.selectOption('Yes');
+  await form.getByRole('button',{name:'Save changes'}).click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+  await page.getByRole('button',{name:'Done'}).click();
+  await expect(page.locator('.stats-group[data-group="declared"] .stat-row',{hasText:'Already has children'})).toContainText('Yes');
+  await expect(page.locator('.stats-group[data-group="declared"] .stat-row',{hasText:'Number of children'})).toContainText('2');
+
+  // REACH: a generic filter pair under More filters, mutually exclusive.
+  await page.locator('.topnav').getByRole('button',{name:'REACH'}).click();
+  await page.locator('summary',{hasText:'More filters'}).click();
+  const pair = page.locator('[data-paired="no_existing_children|has_existing_children"]');
+  await expect(pair).toContainText('Existing children');
+  await pair.locator('label',{hasText:'Only people without children'}).click();
+  await expect(pair.locator('input[value="no_existing_children"]')).toBeChecked();
+  await pair.locator('label',{hasText:'Only people with children'}).click();
+  await expect(pair.locator('input[value="has_existing_children"]')).toBeChecked();
+  await expect(pair.locator('input[value="no_existing_children"]')).not.toBeChecked();
 });
 
 test('Stats are editable inline from REACH without leaving the screen (round3-fixes-spec.md §3)',async({page})=>{
@@ -422,6 +572,102 @@ test('ROAD: reachable at Relationship entry, routine/obligations/sharing, shared
   await expect(page.locator('.chip',{hasText:'Sat 10:00–22:00'})).toBeVisible();
 });
 
+test('Week grid labels each match window closing, untruncated at phone widths (round4-fixes-spec.md §6)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+
+  for (const width of [375, 320]) {
+    await page.setViewportSize({width, height: 800});
+    const chips = page.locator('.tw-grid .tw-chip');
+    // Pairs with the reveal: Tue/Wed mornings close Match 1/2; Match 3 closes Wed evening.
+    await expect(page.locator('.tw-grid .tw-chip',{hasText:'M1 closes'})).toHaveCount(1);
+    await expect(page.locator('.tw-grid .tw-chip',{hasText:'M2 closes'})).toHaveCount(1);
+    await expect(page.locator('.tw-grid .tw-chip',{hasText:'M3 closes'})).toHaveCount(1);
+    // Never cut off: every chip's text fits inside its own box.
+    const clipped = await chips.evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth + 0.5).map((el) => el.textContent.trim()));
+    expect(clipped, `clipped chips at ${width}px`).toEqual([]);
+  }
+  // The column position: the close sits in its own day's column.
+  const cols = await page.locator('.tw-grid thead th.tw-day').evaluateAll((ths) => ths.map((t) => t.title));
+  const colOf = async (text) => page.locator('.tw-grid .tw-chip',{hasText:text}).evaluate((el) => el.closest('td').cellIndex - 1);
+  expect(cols[await colOf('M1 closes')]).toBe('Tue');
+  expect(cols[await colOf('M2 closes')]).toBe('Wed');
+  expect(cols[await colOf('M3 closes')]).toBe('Wed');
+
+  // Full wording where there is room.
+  await page.locator('summary',{hasText:'What each one means'}).click();
+  for (const n of [1,2,3]) await expect(page.locator('.tw-full',{hasText:`Match ${n} closes`})).toBeVisible();
+});
+
+test('Week: explainer video sits by "What each one means", never autoplays, and never blocks the calendar (round4-fixes-spec.md §7)',async({page})=>{
+  const mediaRequests=[];
+  page.on('request',(r)=>{ if(r.url().includes('/media/')) mediaRequests.push(r.url()); });
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+
+  // Placed right beside the existing expander, collapsed, nothing fetched yet.
+  const video = page.locator('details.tw-video');
+  await expect(video).toBeVisible();
+  await expect(video).not.toHaveAttribute('open','');
+  await expect(page.locator('details.tw-video + details.tw-explain')).toHaveCount(1);
+  expect(mediaRequests).toEqual([]);
+
+  // Opening it mounts a player that is not playing; with the file not yet
+  // supplied it degrades to a placeholder rather than a broken player.
+  await video.locator('summary').click();
+  await expect(video.locator('video, .tw-video-placeholder')).toHaveCount(1);
+  await expect(video.locator('.tw-video-placeholder')).toBeVisible();
+  expect(await page.evaluate(()=>[...document.querySelectorAll('video')].some((v)=>!v.paused||v.autoplay))).toBe(false);
+
+  // The calendar stays fully usable with it open: the clock still steps,
+  // and the "What each one means" expander still opens.
+  await page.locator('.demo-step',{hasText:'+1 hour'}).click();
+  await expect(page.locator('.tw-now')).toContainText('Mon 13:00');
+  await expect(video).toHaveAttribute('open','');
+  await page.locator('summary',{hasText:'What each one means'}).click();
+  await expect(page.locator('.tw-explain-row').first()).toBeVisible();
+});
+
+test('Week: no "Prepare this week" button — preparing is automatic, once, on load (round4-fixes-spec.md §8)',async({page})=>{
+  const infos=[];
+  page.on('console',(m)=>{ if(m.text().includes('[week] preparing this week')) infos.push(m.text()); });
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+  const posts = () => page.evaluate(()=>window.__previewPrepareCount());
+
+  // Already prepared this week: loading Week never posts, and there is no button.
+  await expect(page.getByRole('heading',{name:"This week's matches"})).toBeVisible();
+  await expect(page.getByRole('button',{name:/Prepare this week/})).toHaveCount(0);
+  expect(await posts()).toBe(0);
+
+  // A new week begins unprepared. Stepping the clock into it reloads the
+  // screen; the app prepares it by itself — once — and never shows a button.
+  await page.locator('.demo-step',{hasText:'+1 week'}).click();
+  await expect(page.getByRole('heading',{name:"This week's matches"})).toBeVisible();
+  await expect(page.getByText(/^Reveals /)).toHaveCount(2);
+  await expect(page.getByRole('button',{name:/Prepare this week/})).toHaveCount(0);
+  expect(await posts()).toBe(1);
+
+  // Re-rendering / leaving and coming back does NOT repeat it (GET is read-only).
+  await page.getByRole('button',{name:'← Back'}).click();
+  await page.locator('.topnav').getByRole('button',{name:'Week'}).click();
+  await expect(page.getByText(/^Reveals /)).toHaveCount(2);
+  expect(await posts()).toBe(1);
+  expect(infos).toHaveLength(1);
+});
+
 test('simulated clock: labelled stepping controls on Week, gated on the server-reported flag (road-fixes-clock-spec.md §7)',async({page})=>{
   await page.goto('/');
   await page.getByLabel('Phone number').fill('+15550001111');
@@ -447,13 +693,40 @@ test('simulated clock: labelled stepping controls on Week, gated on the server-r
   await expect(page.locator('.demo-clock')).toContainText('Week 2');
 });
 
+test('Vision and Chemistry are collapsed Dashboard sections, not tabs (round4-fixes-spec.md §2)',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('Phone number').fill('+15550001111');
+  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+
+  const nav = page.locator('.topnav');
+  await expect(nav.getByRole('button',{name:'Vision'})).toHaveCount(0);
+  await expect(nav.getByRole('button',{name:'Chemistry'})).toHaveCount(0);
+
+  // Bold headers, both collapsed by default.
+  for (const name of ['Vision','Chemistry']) {
+    const fold = page.locator(`details[data-fold="${name.toLowerCase()}"]`);
+    await expect(fold.locator('summary strong')).toHaveText(name);
+    await expect(fold).not.toHaveAttribute('open','');
+    expect(await fold.locator('summary strong').evaluate(el=>Number(getComputedStyle(el).fontWeight))).toBeGreaterThanOrEqual(600);
+  }
+  await expect(page.getByRole('button',{name:'Save chemistry'})).toBeHidden();
+
+  // Expanding shows the very same controls; collapsing hides them again.
+  await page.locator('summary',{hasText:'Chemistry'}).click();
+  await expect(page.getByRole('button',{name:'Save chemistry'})).toBeVisible();
+  await page.locator('summary',{hasText:'Chemistry'}).click();
+  await expect(page.getByRole('button',{name:'Save chemistry'})).toBeHidden();
+});
+
 test('Vision: four pillars only, additive Add Detail, and Declare a Change gated on Reality Check (round3-fixes-spec.md §7)',async({page})=>{
   await page.goto('/');
   await page.getByLabel('Phone number').fill('+15550001111');
   await page.getByRole('button',{name:'Send SMS code'}).click();
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  await page.locator('.topnav').getByRole('button',{name:'Vision'}).click();
+  await page.locator('summary',{hasText:'Vision'}).click();
 
   // §7.1: the explanatory copy, and no Relocation/Career anywhere.
   await expect(page.getByText('Travel together takes no detail now.')).toBeVisible();
@@ -480,7 +753,7 @@ test('Vision: four pillars only, additive Add Detail, and Declare a Change gated
   for (let i = 0; i < 10; i++) await page.locator('.demo-step',{hasText:'+1 hour'}).click();
   await expect(page.locator('.demo-clock')).toContainText('Sun 22:00');
   await page.getByRole('button',{name:'← Back'}).click();
-  await page.locator('.topnav').getByRole('button',{name:'Vision'}).click();
+  // The Vision section stays expanded on return to the Dashboard.
   await expect(page.getByText(/Locked right now/)).toHaveCount(0);
 
   await page.locator('#change-pillar').selectOption('Kids');
