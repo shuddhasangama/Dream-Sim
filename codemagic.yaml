@@ -1,4 +1,42 @@
 workflows:
+  android-play:
+    name: DhaShu Android Play Bundle
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    environment:
+      node: 22
+      java: 21
+      android_signing:
+        - dhashu-upload
+      vars:
+        DHASHU_SIMULATED_CLOCK: "false"
+    scripts:
+      - name: Install npm dependencies
+        script: cd "$CM_BUILD_DIR/mobile" && npm ci
+      - name: Run mobile tests
+        script: cd "$CM_BUILD_DIR/mobile" && npm test
+      - name: Build and sync Android
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/mobile"
+          npm run build
+          npx cap sync android
+          npx capacitor-assets generate --android
+      - name: Build signed Play bundle
+        script: |
+          set -e
+          : "${CM_KEYSTORE_PATH:?Missing signing keystore}"
+          : "${CM_KEYSTORE_PASSWORD:?Missing keystore password}"
+          : "${CM_KEY_ALIAS:?Missing key alias}"
+          : "${CM_KEY_PASSWORD:?Missing key password}"
+          : "${PROJECT_BUILD_NUMBER:?Missing build number}"
+          cd "$CM_BUILD_DIR/mobile/android"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          chmod +x gradlew
+          ./gradlew bundleRelease -PbuildNumber="$PROJECT_BUILD_NUMBER" --stacktrace
+    artifacts:
+      - mobile/android/app/build/outputs/bundle/release/*.aab
+    # Download and upload the first bundle manually to Play internal testing.
   android-beta:
     name: DhaShu Android APK Beta
     max_build_duration: 45
