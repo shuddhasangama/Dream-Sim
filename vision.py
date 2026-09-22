@@ -64,6 +64,23 @@ PILLAR_OPTIONS: dict[str, tuple[str, ...]] = {
 # anything that lists all four together.
 VISION_ELEMENT_KEYS = ("Intimacy", *OTHER_VISION_KEYS)
 
+
+def marriage_choices():
+    """A preference shortcut, not a stage transition or a consent decision."""
+    return {key: [value for value in options if value not in ('Adoption', 'Surrogacy')]
+            for key, options in PILLAR_OPTIONS.items()}
+
+
+def marriage_preset(vision_json):
+    # Add the preset without silently reversing an existing declared choice.
+    # Adoption/Surrogacy are not selected by the preset, but an existing choice
+    # must still be removed through the disclosed-change workflow.
+    pillars = _as_pillars(vision_json)
+    for key, values in marriage_choices().items():
+        pillars[key] = sorted(set(pillars.get(key, [])) | set(values))
+    result = validate_pillars(pillars)
+    return {**result, 'vision_json': _as_vision_json(pillars)}
+
 # Sub-selections that carry a prerequisite of their own — mirrors
 # onboarding.NEEDS_PHYSICAL exactly (same 2026-09-09 rule: Surrogacy and
 # Adoption do not require Physical intimacy; only Naturally does).

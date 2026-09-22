@@ -14,6 +14,8 @@ import * as chemistryScreen from './screens/chemistry.js';
 import * as relationshipScreen from './screens/relationship.js';
 import * as roadScreen from './screens/road.js';
 import { editableFieldsForm, groupedStatRows, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from './statsFields.js';
+import { createSignup } from './signup.js';
+import { howItWorks, bindHowItWorks } from './howItWorks.js';
 import './style.css';
 
 const native = Capacitor.isNativePlatform();
@@ -39,6 +41,10 @@ const transport = preview ? previewTransport() : async (path,method,data,token) 
 const session = new Session(transport,vault);
 const root = document.querySelector('#app');
 let challenge=null, phone='', busy=false, message='', journey=null, profile=null;
+let authIntent='login', signupActive=false, screenDirty=false, clockPending=false;
+const signup = createSignup({session, run, safe: value=>safe(value), finish: async()=>{
+  await load(); signupActive=false; screenDirty=false; nav.resetTo('dashboard');
+}});
 // The currently-displayed non-dashboard screen's own data, and why it can't
 // be shown when it can't (ineligible, or eligible but not on this build yet
 // — §2's "api_available" distinction from §1's journey/status contract).
@@ -113,24 +119,38 @@ function render() {
       ${signedIn ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
     </header>
     ${preview?'<aside class="preview">Local preview · no messages sent · code 123456</aside>':''}
-    ${signedIn ? renderChrome(current, tabs) : `<main class="container">${signin()}</main>`}
+    ${signedIn ? signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${signin()}</main>`}
     <p id="notice" role="status" class="notice">${safe(message)}</p>
     ${busy?'<div class="loading" role="status">Please wait…</div>':''}
     <footer>Connection. Clarity. Together.</footer>`;
-  const form=root.querySelector('form');
+  const form=root.querySelector('#signin-form');
   form?.addEventListener('submit', e=>{
     e.preventDefault(); if(busy)return;
     const fields=new FormData(form);
     if(challenge) {
       const code=String(fields.get('code')||'').trim();
-      run(async()=>{await session.verify(challenge,code);challenge=null;await load();});
+      run(async()=>{
+        await session.verify(challenge,code);challenge=null;screenDirty=false;await load();
+        if(authIntent==='signup') { signupActive=true; await signup.begin(); }
+      });
     } else {
       phone=String(fields.get('phone')||'').trim();
       run(async()=>{const result=await session.requestCode(phone);challenge=result.challenge_id;message='If this number is approved, a code will arrive shortly.';});
     }
   });
   root.querySelector('#change')?.addEventListener('click',()=>{challenge=null;message='';render();});
-  if (signedIn) bindChrome(current);
+  root.querySelectorAll('[data-auth-intent]').forEach(button=>button.addEventListener('click',()=>{
+    phone = root.querySelector('input[name="phone"]')?.value || phone;
+    authIntent=button.dataset.authIntent; message=''; render();
+  }));
+  bindHowItWorks(root);
+  if (signedIn && signupActive) signup.bind(root);
+  else if (signedIn) bindChrome(current);
+  if(signedIn && !signupActive) root.querySelectorAll('main form').forEach(form=>{
+    form.addEventListener('input',()=>{screenDirty=true;});
+    form.addEventListener('change',()=>{screenDirty=true;});
+    form.addEventListener('click',e=>{if(e.target.closest('button[type="button"]'))screenDirty=true;});
+  });
 }
 
 function renderChrome(current, tabs) {
@@ -146,6 +166,7 @@ function renderChrome(current, tabs) {
       ${indicator?.show?`<div class="stage-bar" role="list" aria-label="${safe(indicator.label)}">${(indicator.stages||[]).map(s=>`<span role="listitem" class="stage-pip ${safe(s.state)}">${safe(s.label)}</span>`).join('')}</div>`:''}
     </div>
     <main class="container">
+      ${journey.accelerated_test?.enabled ? `<aside class="card accelerated-banner"><strong>Accelerated test · shared clock</strong><p>${safe(journey.clock.day)} ${String(journey.clock.hour).padStart(2,'0')}:00 · Week ${safe(journey.clock.week)} · ${journey.accelerated_test.finished?'30-minute run complete': '3 real minutes per checkpoint'}</p><p class="hint">${clockPending?'Time has advanced. Your unsaved screen is preserved. Save your edits, then refresh.':'Make your own choices at each step. Both partners must respond.'}</p><button id="refresh-clock" class="secondary" type="button">Refresh current step</button></aside>` : ''}
       <div class="toolbar">
         ${nav.depth>1?'<button id="back" class="text-button">← Back</button>':'<span></span>'}
       </div>
@@ -154,9 +175,13 @@ function renderChrome(current, tabs) {
 }
 
 function bindChrome(current) {
+  root.querySelector('#refresh-clock')?.addEventListener('click',()=>{
+    if(screenDirty && !window.confirm('Refresh this screen and discard any unsaved edits?')) return;
+    run(async()=>{await reloadCurrent();screenDirty=false;clockPending=false;});
+  });
   root.querySelector('#back')?.addEventListener('click', goBack);
   root.querySelector('#logout')?.addEventListener('click',()=>run(async()=>{
-    journey=null;profile=null;challenge=null;phone='';folds=newFolds();nav.resetTo('dashboard');
+    journey=null;profile=null;challenge=null;phone='';signupActive=false;authIntent='login';screenDirty=false;folds=newFolds();nav.resetTo('dashboard');
     const revoked=await session.logout();
     message=revoked?'You have signed out.':'Signed out on this device. The server could not be reached to revoke the session; it will expire automatically.';
   }));
@@ -174,8 +199,9 @@ function bindChrome(current) {
 }
 
 function signin() {
-  return `<section class="intro"><span class="eyebrow">A LITTLE CLOSER</span><h1>${challenge?'Check your messages':'Welcome to<br>DhaShu.'}</h1><p>${challenge?'Enter the code sent to your approved number.':'A thoughtful space for your next chapter. Sign in with your invited beta number.'}</p></section>
-    <form class="card"><label for="credential">${challenge?'Verification code':'Phone number'}</label>
+  return `${howItWorks(safe)}<section class="intro"><span class="eyebrow">A LITTLE CLOSER</span><h1>${challenge?'Check your messages':'Welcome to<br>DhaShu.'}</h1><p>${challenge?'Enter the code sent to your approved number.':authIntent==='signup'?'Try guided sign up using your associated beta profile. Verify your number, then review Vision, Stats and Chemistry.':'A thoughtful space for your next chapter. Sign in with your invited beta number.'}</p></section>
+    ${!challenge?`<div class="auth-options" role="group" aria-label="Choose how to enter"><button type="button" class="${authIntent==='login'?'primary':'secondary'}" data-auth-intent="login" aria-pressed="${authIntent==='login'}">Log in</button><button type="button" class="${authIntent==='signup'?'primary':'secondary'}" data-auth-intent="signup" aria-pressed="${authIntent==='signup'}">Sign up</button></div>`:''}
+    <form id="signin-form" class="card"><label for="credential">${challenge?'Verification code':'Phone number'}</label>
     ${challenge?'<input id="credential" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,10}" minlength="4" maxlength="10" required placeholder="Enter SMS code">':`<input id="credential" name="phone" type="tel" autocomplete="tel" maxlength="16" required placeholder="+91 followed by your number" value="${safe(phone)}">`}
     <button class="primary" ${busy?'disabled':''}>${challenge?'Sign in':'Send SMS code'} <span aria-hidden="true">→</span></button>
     ${challenge?`<button type="button" id="change" class="secondary" ${busy?'disabled':''}>Change number / request a new code</button>`:'<p class="hint">Include your country code. Beta access is by invitation.</p>'}</form>`;
@@ -195,7 +221,7 @@ function renderDashboard() {
   const user=journey.user, stats=profile?.stats||{};
   const stage=String(user.journey_state||'').replaceAll('_',' ');
   const next = journey.next_action;
-  return `<section class="intro"><span class="eyebrow">Your file</span><h1>${safe(user.display_name||'Your profile')}</h1><div class="micro">Stage: ${safe(stage)}${journey.clock?.week!=null?` · Week ${safe(journey.clock.week)}`:''}</div></section>
+  return `${howItWorks(safe)}<section class="intro"><span class="eyebrow">Your file</span><h1>${safe(user.display_name||'Your profile')}</h1><div class="micro">Stage: ${safe(stage)}${journey.clock?.week!=null?` · Week ${safe(journey.clock.week)}`:''}</div></section>
     <section class="card guidance"><span class="eyebrow">NEXT FOR YOU</span><h2>${safe(next?.headline||'Welcome back')}</h2><p>${safe(next?.body||'Review your profile and take your next step when ready.')}</p>
       ${next?.destination && next.destination.eligible && next.destination.request ? `<button id="next-action" class="primary" ${busy?'disabled':''}>${safe(next.cta||'Continue')} <span aria-hidden="true">→</span></button>` : ''}</section>
     <section class="card"><div class="micro">Stats</div>
@@ -282,6 +308,7 @@ function genericScreen(key) {
 // ── navigation + loading ───────────────────────────────────────────────
 function navigateTo(key, params) {
   if (busy) return;
+  screenDirty=false;clockPending=false;
   // Vision/Chemistry no longer have screens of their own — any link to
   // them (Guru tiles, next-action CTAs) lands on the Dashboard with that
   // section expanded.
@@ -369,13 +396,33 @@ async function run(action) {
   catch(e) {
     const c = classify(e);
     message = c.message;
-    if (c.kind === 'auth') { journey=null;profile=null;nav.resetTo('dashboard'); }
+    if (c.kind === 'auth') { journey=null;profile=null;signupActive=false;nav.resetTo('dashboard'); }
     else if (c.kind === 'conflict') { try { await reloadCurrent(); } catch {} }
   }
   finally {busy=false;render();}
 }
 
 wireKeyboardScroll();
+// Poll server time on both native platforms. Never advance time from a device,
+// overwrite an edited form, or interrupt a playing walkthrough.
+async function refreshAcceleratedClock() {
+  if (busy || !journey?.accelerated_test?.enabled || signupActive || document.hidden) return;
+  try {
+    const next = await session.get('/api/v1/journey/status');
+    if (!next.accelerated_test?.enabled && !journey.accelerated_test?.enabled) return;
+    if (JSON.stringify(next.clock) === JSON.stringify(journey.clock)) return;
+    if (screenDirty || root.querySelector('video') && [...root.querySelectorAll('video')].some(v=>!v.paused)) {
+      clockPending=true;
+      const hint=root.querySelector('.accelerated-banner .hint');
+      if(hint) hint.textContent='Time has advanced. Your unsaved screen is preserved. Save your edits, then refresh.';
+      return;
+    }
+    await run(async()=>{await reloadCurrent();clockPending=false;});
+  } catch { /* Normal user actions report connectivity/auth errors. */ }
+}
+setInterval(refreshAcceleratedClock, 15000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAcceleratedClock();});
+if(native) import('@capacitor/app').then(({App})=>App.addListener('appStateChange',({isActive})=>{if(isActive)refreshAcceleratedClock();}));
 wireHardwareBack(native, nav, () => {
   if (window.confirm('Exit DhaShu?')) import('@capacitor/app').then(({App})=>App.exitApp());
 });

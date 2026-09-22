@@ -264,8 +264,8 @@ test('REACH heading is plain, and "More filters" exposes every filter the API re
   for (const name of ['Age','Distance','Diet','Kids','Education']) {
     await expect(page.locator('.filter-name',{hasText:name})).toBeVisible();
   }
-  await expect(page.getByText('Only people who do',{exact:true})).toBeVisible();
-  await expect(page.getByText("Only people who don't")).toBeVisible();
+  await expect(page.getByText('Have kids',{exact:true})).toBeVisible();
+  await expect(page.getByText("Don’t have kids")).toBeVisible();
 
   // Discovered from the API, not hardcoded — every non-basic filter the
   // fixture returns (sliders and choices alike) must show up once
@@ -318,7 +318,7 @@ test('REACH age marker sits on the track, in proportion, aligned with the thumbs
   expect(Math.abs(truth - expected(60))).toBeLessThan(1);
 });
 
-test('REACH kids filter is one three-way control, mutually exclusive (round3-fixes-spec.md §4.2)',async({page})=>{
+test('REACH kids filter has two existing-children choices, mutually exclusive (round3-fixes-spec.md §4.2)',async({page})=>{
   await page.goto('/');
   await page.getByLabel('Phone number').fill('+15550001111');
   await page.getByRole('button',{name:'Send SMS code'}).click();
@@ -326,26 +326,26 @@ test('REACH kids filter is one three-way control, mutually exclusive (round3-fix
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await page.locator('.topnav').getByRole('button',{name:'REACH',exact:true}).click();
 
-  const kidsRow = page.locator('[data-paired="wants_kids|no_kids_wanted"]');
+  const kidsRow = page.locator('[data-paired="no_existing_children|has_existing_children"]');
   await expect(kidsRow).toBeVisible();
   // The radio itself is visually hidden behind its pill label (same
   // pattern as chemistry.js's bucket-pick radios) — click the label.
   const option = (value) => kidsRow.locator(`label:has(input[value="${value}"])`);
   // Fixture starts with both ignored — "Any" is selected.
-  await expect(kidsRow.locator('input[value=""]')).toBeChecked();
+  await expect(kidsRow.locator('input:checked')).toHaveCount(0);
 
-  await option('wants_kids').click();
-  await expect(kidsRow.locator('input[value="wants_kids"]')).toBeChecked();
-  await expect(kidsRow.locator('input[value="no_kids_wanted"]')).not.toBeChecked();
+  await option('has_existing_children').click();
+  await expect(kidsRow.locator('input[value="has_existing_children"]')).toBeChecked();
+  await expect(kidsRow.locator('input[value="no_existing_children"]')).not.toBeChecked();
 
   // Picking the opposite clears the first — never both held at once.
-  await option('no_kids_wanted').click();
-  await expect(kidsRow.locator('input[value="no_kids_wanted"]')).toBeChecked();
-  await expect(kidsRow.locator('input[value="wants_kids"]')).not.toBeChecked();
+  await option('no_existing_children').click();
+  await expect(kidsRow.locator('input[value="no_existing_children"]')).toBeChecked();
+  await expect(kidsRow.locator('input[value="has_existing_children"]')).not.toBeChecked();
 
   // Back to Any switches the held one off again.
-  await option('').click();
-  await expect(kidsRow.locator('input[value=""]')).toBeChecked();
+  await option('no_existing_children').click();
+  await expect(kidsRow.locator('input:checked')).toHaveCount(0);
 });
 
 test('Stats are editable inline from Dashboard, with cancel, and a verified field warns before it reopens verification (round3-fixes-spec.md §2/§3)',async({page})=>{
@@ -463,10 +463,10 @@ test('Existing children: editable stat with a count, and its own REACH filter pa
   await page.locator('.topnav').getByRole('button',{name:'REACH'}).click();
   await page.locator('summary',{hasText:'More filters'}).click();
   const pair = page.locator('[data-paired="no_existing_children|has_existing_children"]');
-  await expect(pair).toContainText('Existing children');
-  await pair.locator('label',{hasText:'Only people without children'}).click();
+  await expect(pair).toContainText('Children they already have');
+  await pair.locator('label',{hasText:'Don’t have kids'}).click();
   await expect(pair.locator('input[value="no_existing_children"]')).toBeChecked();
-  await pair.locator('label',{hasText:'Only people with children'}).click();
+  await pair.locator('label',{hasText:/^Have kids$/}).click();
   await expect(pair.locator('input[value="has_existing_children"]')).toBeChecked();
   await expect(pair.locator('input[value="no_existing_children"]')).not.toBeChecked();
 });
@@ -604,6 +604,8 @@ test('Week grid labels each match window closing, untruncated at phone widths (r
 });
 
 test('Week: explainer video sits by "What each one means", never autoplays, and never blocks the calendar (round4-fixes-spec.md §7)',async({page})=>{
+  // Exercise the missing-file fallback explicitly, regardless of local media.
+  await page.route('**/media/calendar-explainer.mp4',route=>route.fulfill({status:404,body:''}));
   const mediaRequests=[];
   page.on('request',(r)=>{ if(r.url().includes('/media/')) mediaRequests.push(r.url()); });
   await page.goto('/');
@@ -734,6 +736,8 @@ test('Vision: four pillars only, additive Add Detail, and Declare a Change gated
 
   // §7.2: Add Detail offers only what is NOT already held (Kids isn't set,
   // Chores split already is) and actually changes the Vision.
+  await expect(page.locator('#detail-choice')).toBeHidden();
+  await page.locator('[data-vision-panel=add] summary').click();
   const choice = page.locator('#detail-choice');
   await expect(choice.locator('option[value="Cohabitate|Chores split"]')).toHaveCount(0);
   await expect(choice.locator('option[value="Cohabitate|Expenses sharing"]')).toHaveCount(1);
@@ -744,6 +748,7 @@ test('Vision: four pillars only, additive Add Detail, and Declare a Change gated
   await expect(choice.locator('option[value="Kids|Adoption"]')).toHaveCount(0);
 
   // §7.3: outside Reality Check the change form is locked, with the reason.
+  await page.locator('[data-vision-panel=change] summary').click();
   await expect(page.getByText(/Locked right now/)).toBeVisible();
   await expect(page.getByRole('button',{name:'Declare change'})).toBeDisabled();
 
@@ -756,6 +761,7 @@ test('Vision: four pillars only, additive Add Detail, and Declare a Change gated
   // The Vision section stays expanded on return to the Dashboard.
   await expect(page.getByText(/Locked right now/)).toHaveCount(0);
 
+  await page.locator('[data-vision-panel=change]').evaluate(el=>el.open=true);
   await page.locator('#change-pillar').selectOption('Kids');
   await page.getByLabel('Add Surrogacy').check();
   await page.getByLabel("I've disclosed this to my match").check();

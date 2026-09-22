@@ -29,12 +29,10 @@ export function previewTransport() {
       { name: 'education', label: 'Education', on_label: 'As set', kind: 'lever', basic: true, control: 'choice', ignored: false, value: ["Bachelor's", "Master's", 'Doctorate'], delta_if_ignored: 1, sensitive: false, blurb: '', opposite: null },
       // round3-fixes-spec.md §4.2: two answers to one question — see
       // matching.py's _OPPOSITES and its `opposite` field on each row.
-      { name: 'wants_kids', label: 'Wants kids', on_label: 'Only people who do', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: true, delta_if_ignored: 1, sensitive: false, blurb: '', opposite: 'no_kids_wanted' },
-      { name: 'no_kids_wanted', label: 'Does not want kids', on_label: "Only people who don't", kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: 'wants_kids' },
       // round4-fixes-spec.md §5: children a candidate ALREADY has (a stat) —
       // its own pair, separate from the Kids pillar above.
-      { name: 'no_existing_children', label: 'Has no children', on_label: 'Only people without children', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: 'has_existing_children' },
-      { name: 'has_existing_children', label: 'Has children', on_label: 'Only people with children', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: 'no_existing_children' },
+      { name: 'no_existing_children', label: 'Has no children', on_label: "Don’t have kids", kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: 'has_existing_children' },
+      { name: 'has_existing_children', label: 'Has children', on_label: 'Have kids', kind: 'dealbreaker', basic: true, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: 'no_existing_children' },
       { name: 'nationality', label: 'Nationality', on_label: 'IN, NRI', kind: 'lever', basic: false, control: 'choice', ignored: false, value: ['IN', 'NRI'], delta_if_ignored: 1, sensitive: true, blurb: '', opposite: null },
       { name: 'religion', label: 'Religion', on_label: 'As set', kind: 'lever', basic: false, control: 'choice', ignored: false, value: 'Hindu', delta_if_ignored: 1, sensitive: true, blurb: '', opposite: null },
       { name: 'non_smoker', label: 'Non-smoker', on_label: 'Never or quitting', kind: 'dealbreaker', basic: false, control: 'choice', ignored: true, value: false, delta_if_ignored: 0, sensitive: false, blurb: '', opposite: null },
@@ -56,7 +54,7 @@ export function previewTransport() {
   // against a fixed clock — a faithful preview fixture, not a second copy
   // of production logic (the real grid always comes from the server).
   const WM_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const WM_BANDS = [['morn', 'MORN', 0, 12], ['aft', 'AFT', 12, 17], ['eve', 'EVE', 17, 21], ['night', 'NIGHT', 21, 24]];
+  const WM_BANDS = [['morn', 'MORN', 0, 12], ['aft', 'AFT', 12, 17], ['eve', 'EVE', 17, 19], ['night', 'NIGHT', 19, 24]];
   const WM_MOMENTS = [
     { key: 'match_1', at: ['Mon', 12], label: 'Match 1', tone: 'match', kind: 'Matches', means: 'Match 1 is revealed. You have until Tuesday midday.' },
     { key: 'rc_ends', at: ['Mon', 11], label: 'RC Closes', tone: 'reality', kind: 'Reality Check', means: "Last week's Reality Check closes, just before the new week opens." },
@@ -234,7 +232,7 @@ export function previewTransport() {
   let visionEntries = [];
   let visionChanges = [];
   const visionRcOpen = () => { const c = week.clock; return (c.day === 'Sun' && c.hour >= 21) || (c.day === 'Mon' && c.hour < 11); };
-  const visionRead = () => ({ goals: visionGoals, element_keys: visionElementKeys, pillar_options: PILLAR_OPTIONS, detail_explanation: VISION_EXPLANATION, rc_open: visionRcOpen(), entries: visionEntries, changes: visionChanges });
+  const visionRead = () => ({ goals: visionGoals, presets: [{key:'marriage',label:'Marriage'}], element_keys: visionElementKeys, pillar_options: PILLAR_OPTIONS, detail_explanation: VISION_EXPLANATION, rc_open: visionRcOpen(), entries: visionEntries, changes: visionChanges });
   function visionValidate(map) {
     if (!(map.Intimacy || []).length) return 'Intimacy is mandatory — pick Emotional, Physical, or both.';
     const others = [];
@@ -401,6 +399,17 @@ export function previewTransport() {
     });
 
     if (path.endsWith('/profile/vision') && method === 'GET') return ok(visionRead());
+    if (path.endsWith('/profile/vision/presets')) {
+      if (body.preset !== 'marriage') return err('Unknown preset.',400);
+      const map = visionMap();
+      for (const [pillar, options] of Object.entries(PILLAR_OPTIONS)) {
+        map[pillar] = [...new Set([...(map[pillar] || []), ...options.filter(x=>!['Adoption','Surrogacy'].includes(x))])];
+      }
+      const bad = visionValidate(map);
+      if (bad) return err(bad,400);
+      visionCommit(map);
+      return ok({id:'marriage-preview'});
+    }
     if (path.endsWith('/profile/vision/details')) {
       const map = visionMap();
       const { pillar, sub_selection: sub } = body;

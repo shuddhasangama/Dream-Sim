@@ -1,5 +1,5 @@
 """Isolated PostgreSQL retry and atomic append tests."""
-import os,unittest,concurrent.futures
+import os,unittest,concurrent.futures,json
 import db
 import test_auth_postgres as pg
 import after_date_service as service
@@ -31,6 +31,20 @@ class PostgresEvolutionTests(unittest.TestCase):
         self.race(lambda c:service.next_level_action(c,'owner','pair',{},self.clock,True))
         self.assertEqual(len(db.fetch_all(self.conn,'NextLevelThread')),10)
     def test_vision_append_retries_do_not_fork_history(self):
-        body={'request_id':'one','element_key':'children','detail_text':'Discuss'}
-        self.race(lambda c:evolution_service.add_vision(c,'owner',body,self.clock))
+        self.conn.execute('UPDATE "User" SET vision_json=%s WHERE id=%s',
+            (json.dumps([{'key':'Intimacy','stance':['Emotional']},{'key':'Travel together','stance':None}]),'owner'))
+        body={'request_id':'one','pillar':'Kids','sub_selection':'Adoption'}
+        result=self.race(lambda c:evolution_service.add_vision_detail(c,'owner',body,self.clock))
+        self.assertEqual(result[0],result[1])
         self.assertEqual(len(db.fetch_all(self.conn,'VisionEntry')),1)
+        goals=json.loads(db.fetch_one(self.conn,'User',id='owner')['vision_json'])
+        self.assertEqual([g for g in goals if g['key']=='Kids'],[{'key':'Kids','stance':['Adoption']}])
+
+    def test_marriage_preset_concurrent_retry_is_one_atomic_change(self):
+        body={'request_id':'marriage','preset':'marriage'}
+        result=self.race(lambda c:evolution_service.apply_vision_preset(c,'owner',body,self.clock))
+        self.assertEqual(result[0],result[1])
+        self.assertEqual(len(db.fetch_all(self.conn,'VisionEntry')),1)
+        goals=json.loads(db.fetch_one(self.conn,'User',id='owner')['vision_json'])
+        self.assertEqual(len(goals),4)
+        self.assertEqual([g for g in goals if g['key']=='Kids'],[{'key':'Kids','stance':['Naturally']}])

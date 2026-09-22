@@ -227,24 +227,23 @@ class FitsFiltersTests(unittest.TestCase):
         self.assertTrue(fits_filters(a, fits))
         self.assertFalse(fits_filters(a, fails))
 
-    def test_wants_kids_dealbreaker_uses_vision_presence(self) -> None:
-        # Kids has no stance at Dating signup anymore (deferred to
-        # /road/vision) — the dealbreaker checks whether "Kids" is one of
-        # the candidate's selected visions at all, not its stance.
+    def test_retired_wants_kids_tag_does_not_hide_candidates(self) -> None:
+        # Removing a legacy control must not leave its hidden constraint active.
+        # Future-parenting stance compatibility is covered separately.
         a = _base_user()
         a["preferences"]["fixed"]["dealbreakers"] = ["wants_kids"]
         wants = _candidate(visions=[{"key": "Kids", "stance": None}])
         doesnt = _candidate(visions=[{"key": "Travel together", "stance": None}])
         self.assertTrue(fits_filters(a, wants))
-        self.assertFalse(fits_filters(a, doesnt))
+        self.assertTrue(fits_filters(a, doesnt))
 
-    def test_no_kids_wanted_dealbreaker_uses_vision_absence(self) -> None:
+    def test_retired_no_kids_tag_does_not_hide_candidates(self) -> None:
         a = _base_user()
         a["preferences"]["fixed"]["dealbreakers"] = ["no_kids_wanted"]
         doesnt_want = _candidate(visions=[{"key": "Travel together", "stance": None}])
         wants = _candidate(visions=[{"key": "Kids", "stance": None}])
         self.assertTrue(fits_filters(a, doesnt_want))
-        self.assertFalse(fits_filters(a, wants))
+        self.assertTrue(fits_filters(a, wants))
 
     def test_the_smoking_dealbreaker_is_no_longer_vacuous(self) -> None:
         """This used to assert the opposite. non_smoker and non_drinker

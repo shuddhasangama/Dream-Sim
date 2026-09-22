@@ -31,6 +31,7 @@ import calendar_dating
 import ceremony
 import chemistry
 import clock as clock_module
+import accelerated_clock
 import date_alignment
 import dateplan
 import db
@@ -136,6 +137,14 @@ def get_clock() -> clock_module.SimulationClock:
     that has since turned simulation off."""
     if not clock_module.simulated():
         return clock_module.real_time_clock()
+    if accelerated_clock.enabled():
+        if not hasattr(g, 'accelerated_test_clock'):
+            from datetime import timezone
+            now = datetime.now(timezone.utc)
+            plans = db.fetch_all(get_db(), 'DatePlan')
+            g.accelerated_test_clock = accelerated_clock.read(plans, now)
+            g.accelerated_test_metadata = accelerated_clock.metadata(now)
+        return g.accelerated_test_clock
     if not SIM_STATE_PATH.exists():
         raw = _DEFAULT_CLOCK
     else:
@@ -144,6 +153,8 @@ def get_clock() -> clock_module.SimulationClock:
 
 
 def set_clock(c: clock_module.SimulationClock) -> None:
+    if accelerated_clock.enabled():
+        raise ApiError('accelerated_clock_active', 'The shared test timetable controls the clock; manual jumps are disabled.', 409)
     # Deliberately NOT gated on clock_module.simulated() here: this writes
     # the override file, but get_clock() above is the only thing that
     # reads it, and get_clock() ignores that file entirely whenever
@@ -4506,12 +4517,14 @@ def _api_journey_state(user):
     # same source _plan_view() reads (_boundary_of), so Guru's date-prep
     # shows it too, not just the plan-review screen right before signing.
     partner_greeting = _boundary_of(_partner_id_in_lockin(active, user['user_id'])) if active else None
-    return journey_api.snapshot(
+    result = journey_api.snapshot(
         user, active=active, plan=plan, couple=couple,
         reached=_milestones_for(user), contact=verification_status(user['user_id']),
         clock=get_clock(), reach_is_locked=reach_locked(user), facts=_guru_facts(user),
         display_name=display_name(user['user_id'], user['gender']), simulated=clock_module.simulated(),
         partner_greeting=partner_greeting)
+    result['accelerated_test'] = getattr(g, 'accelerated_test_metadata', None) if accelerated_clock.enabled() else None
+    return result
 
 
 from api import register_api

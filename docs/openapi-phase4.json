@@ -260,7 +260,15 @@
                   },
                   "day": {
                     "type": "string",
-                    "enum": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                    "enum": [
+                      "Mon",
+                      "Tue",
+                      "Wed",
+                      "Thu",
+                      "Fri",
+                      "Sat",
+                      "Sun"
+                    ]
                   },
                   "hour": {
                     "type": "integer",
@@ -326,6 +334,16 @@
           },
           "500": {
             "description": "Unexpected error; reference is safe to report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Manual clock changes are disabled while the deployment-wide accelerated test is active.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2612,7 +2630,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Actor-scoped result in the data/error envelope. Private partner answers are excluded."
+            "description": "Actor-scoped Vision, pillar_options, entries and changes in the data/error envelope; presets advertises marriage with label and choices. Private partner answers are excluded."
           },
           "400": {
             "description": "Invalid strict JSON body.",
@@ -9664,6 +9682,103 @@
           }
         }
       }
+    },
+    "/profile/vision/presets": {
+      "post": {
+        "operationId": "postProfileVisionPreset",
+        "summary": "Add the Marriage Vision preset without removing existing preferences or changing stage",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped result in the data/error envelope. Private partner answers are excluded."
+          },
+          "400": {
+            "description": "Invalid strict JSON body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Disclosure or ownership restriction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Owned resource not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Current-state, consent, retry or prerequisite conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "request_id",
+                  "preset"
+                ],
+                "properties": {
+                  "request_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "preset": {
+                    "type": "string",
+                    "enum": [
+                      "marriage"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9903,7 +10018,10 @@
             "type": "object",
             "properties": {
               "mode": {
-                "enum": ["simulation", "real_time"]
+                "enum": [
+                  "simulation",
+                  "real_time"
+                ]
               },
               "week": {
                 "type": "integer"
@@ -9926,6 +10044,66 @@
           "simulated_clock": {
             "type": "boolean",
             "description": "road-fixes-clock-spec.md §7: true only when this build's DHASHU_SIMULATED_CLOCK is on. The client must gate day/hour stepping controls on this field alone — never infer it from a build variable."
+          },
+          "accelerated_test": {
+            "description": "Null unless the operator enabled the shared three-minute test timetable. Read-only metadata; no client can start or reset a run. See docs/accelerated-beta-walkthrough.md.",
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "interval_seconds": {
+                "const": 180
+              },
+              "step": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "start_week": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "finished": {
+                "type": "boolean"
+              },
+              "starts_in_seconds": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "next_jump_in_seconds": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "scope": {
+                "const": "deployment"
+              },
+              "date_policy": {
+                "const": "latest_saved_weekend_plan"
+              },
+              "decisions_automated": {
+                "const": false
+              }
+            },
+            "required": [
+              "enabled",
+              "interval_seconds",
+              "step",
+              "start_week",
+              "finished",
+              "starts_in_seconds",
+              "next_jump_in_seconds",
+              "scope",
+              "date_policy",
+              "decisions_automated"
+            ],
+            "additionalProperties": false
           },
           "current_lock_in": {
             "anyOf": [
@@ -10227,7 +10405,10 @@
             "type": "object",
             "properties": {
               "mode": {
-                "enum": ["simulation", "real_time"]
+                "enum": [
+                  "simulation",
+                  "real_time"
+                ]
               },
               "week": {
                 "type": "integer"

@@ -92,7 +92,6 @@ export function trackPct(min, max, value) {
 }
 
 function sliderRow(s) {
-  const pct = (v) => trackPct(s.min, s.max, v);
   const [lo, hi] = s.current || [s.min, s.max];
   return `<div class="filter${s.ignored ? ' is-any' : ''}" data-lever="${s.key}" data-min="${s.min}" data-max="${s.max}" data-step="${s.step}">
     <div class="filter-head">
@@ -101,15 +100,16 @@ function sliderRow(s) {
       <label class="any-switch"><input type="checkbox" class="filter-any" data-filter="${s.key}" ${s.ignored ? 'checked' : ''}><span>Any</span></label>
     </div>
     <div class="slider-track-wrap">
-      <div class="slider-track"></div>
       <div class="slider-rail">
-      ${s.suggested ? `<div class="slider-suggested" style="left:${pct(s.suggested[0])}%;width:${pct(s.suggested[1]) - pct(s.suggested[0])}%"></div>` : ''}
-      <div class="slider-selected" style="left:${pct(lo)}%;width:${Math.max(0, pct(hi) - pct(lo))}%"></div>
-      ${s.self_value != null ? `<div class="slider-self" style="left:${pct(s.self_value)}%" title="You: ${s.self_value} ${s.unit}"></div>` : ''}
+      <div class="slider-track"></div>
+      ${s.suggested ? '<div class="slider-suggested"></div>' : ''}
+      <div class="slider-selected"></div>
+      ${s.self_value != null ? `<div class="slider-self" title="You: ${s.self_value} ${s.unit}"></div>` : ''}
       </div>
-      <input type="range" class="range-min" min="${s.min}" max="${s.max}" step="${s.step}" value="${lo}">
-      <input type="range" class="range-max" min="${s.min}" max="${s.max}" step="${s.step}" value="${hi}">
+      <input type="range" class="range-min" aria-label="Minimum ${s.label}" min="${s.min}" max="${s.max}" step="${s.step}" value="${lo}">
+      <input type="range" class="range-max" aria-label="Maximum ${s.label}" min="${s.min}" max="${s.max}" step="${s.step}" value="${hi}">
     </div>
+    <div class="slider-scale" aria-label="${s.label} scale ${s.min} to ${s.max}"><span class="scale-min">${s.min}</span><span class="scale-max">${s.max}</span></div>
     <div class="filter-foot">
       <span>${s.self_value != null ? `You: ${s.self_value} ${s.unit}` : ''}${s.suggested ? ` · suggested ${s.suggested[0]}–${s.suggested[1]}` : ''}</span>
       <span class="filter-delta">${s.ignored ? (s.delta_if_ignored > 0 ? `−${s.delta_if_ignored} if you set a range` : '') : (s.delta_if_ignored > 0 ? `+${s.delta_if_ignored} on Any` : '')}</span>
@@ -162,10 +162,14 @@ function choiceGroupRow(safe) {
 // names which two filters pair up (via `opposite`), not what to call the
 // merged row. A pair this map doesn't know falls back to the first
 // filter's own label rather than showing nothing.
-const PAIR_GROUP_LABELS = { wants_kids: 'Kids', no_kids_wanted: 'Kids', no_existing_children: 'Existing children', has_existing_children: 'Existing children' };
+const PAIR_GROUP_LABELS = { wants_kids: 'Kids', no_kids_wanted: 'Kids', no_existing_children: 'Kids', has_existing_children: 'Kids' };
 
 function pairedChoiceRow(safe, [a, b]) {
   const selected = !a.ignored ? a.name : (!b.ignored ? b.name : '');
+  if (a.name === 'no_existing_children' || a.name === 'has_existing_children') {
+    const choice = f => `<label class="paired-choice-option"><input type="checkbox" data-children-filter="${safe(f.name)}" value="${safe(f.name)}" ${!f.ignored ? 'checked' : ''}><span>${safe(f.on_label)}</span></label>`;
+    return `<div class="filter is-choice" data-paired="${safe(a.name)}|${safe(b.name)}"><div class="filter-head"><span class="filter-name">Kids</span></div><p class="muted">Children they already have. Future parenting preferences belong in Vision.</p><div class="paired-choice-options">${choice(b)}${choice(a)}</div><p class="muted">Leave both unselected to include everyone.</p></div>`;
+  }
   const groupName = `paired-${a.name}-${b.name}`;
   const option = (name, optLabel) => `<label class="paired-choice-option"><input type="radio" name="${safe(groupName)}" value="${safe(name)}" ${selected === name ? 'checked' : ''}><span>${safe(optLabel)}</span></label>`;
   return `<div class="filter is-choice${!selected ? ' is-any' : ''}" data-paired="${safe(a.name)}|${safe(b.name)}">
@@ -191,6 +195,9 @@ export function bind(root, ctx) {
   // /api/v1/reach/ignore — the same endpoint the individual Any-switches
   // use — since matching.set_ignored() already clears the opposite tag
   // server-side when one of a pair is turned on.
+  root.querySelectorAll('[data-children-filter]').forEach(box=>box.addEventListener('change',()=>run(async()=>{
+    patch(await session.post('/api/v1/reach/ignore',{filter:box.dataset.childrenFilter,ignore:!box.checked}));
+  })));
   root.querySelectorAll('[data-paired] input[type="radio"]').forEach((radio) => radio.addEventListener('change', () => run(async () => {
     const [nameA, nameB] = radio.closest('[data-paired]').dataset.paired.split('|');
     if (radio.value) {
@@ -292,5 +299,17 @@ export function bind(root, ctx) {
     };
     minInput.addEventListener('change', commit);
     maxInput.addEventListener('change', commit);
+    // Property assignments work under the installed app's strict CSP. Inline
+    // style attributes in HTML strings were blocked outside Vite preview.
+    redraw();
+    const slider=data.sliders.find(s=>s.key===card.dataset.lever);
+    const self=card.querySelector('.slider-self');
+    if(self) self.style.left=trackPct(min,max,slider.self_value)+'%';
+    const suggested=card.querySelector('.slider-suggested');
+    if(suggested) {
+      const left=trackPct(min,max,slider.suggested[0]);
+      suggested.style.left=left+'%';
+      suggested.style.width=(trackPct(min,max,slider.suggested[1])-left)+'%';
+    }
   });
 }

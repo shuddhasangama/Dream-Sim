@@ -21,7 +21,11 @@ class ApiOnlyJourneyTests(RouteTestCase):
                 mock.patch.dict(os.environ,{'BETA_DATE_SIMULATION_ENABLED':'1'}),
                 mock.patch.object(auth_delivery,'configured',return_value=True),
                 mock.patch.object(auth_delivery,'start',return_value='VE'+'b'*32),
-                mock.patch.object(auth_delivery,'check',return_value=True)):
+                mock.patch.object(auth_delivery,'check',return_value=True),
+                # This test validates the full happy-path state machine. The
+                # separate planning tests cover failed face simulation; a
+                # random 5% failure must not make this integration test flaky.
+                mock.patch('dateplan.verify_face',return_value=True)):
             p.start();self.addCleanup(p.stop)
         self.headers={};self.tokens={}
         for uid in ('owner','partner','stranger'):

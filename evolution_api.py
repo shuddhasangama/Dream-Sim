@@ -63,6 +63,7 @@ def register(api,get_db,get_clock,stats_situation,milestones):
         # (declare_change()'s own gate — surfaced ahead of time so the
         # UI can show why it's locked rather than just disabling it).
         return jsonify(goals=g.api_user['visions'],element_keys=vision.VISION_ELEMENT_KEYS,
+            presets=[{'key':'marriage','label':'Marriage','choices':vision.marriage_choices()}],
             pillar_options={k:list(v) for k,v in vision.PILLAR_OPTIONS.items()},
             detail_explanation=vision.VISION_DETAIL_EXPLANATION,
             rc_open=vision.rc_open(get_clock()),
@@ -72,6 +73,11 @@ def register(api,get_db,get_clock,stats_situation,milestones):
     def vision_detail():
         body=json_object(required={'request_id','pillar'},optional={'sub_selection'})
         return jsonify(service.add_vision_detail(get_db(),uid(),body,get_clock()))
+
+    @api.post('/profile/vision/presets')
+    def vision_preset():
+        body=json_object(required={'request_id','preset'})
+        return jsonify(service.apply_vision_preset(get_db(),uid(),body,get_clock()))
 
     @api.post('/profile/vision/changes')
     def vision_change():

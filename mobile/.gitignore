@@ -2,6 +2,7 @@ node_modules/
 .tools/
 dist/
 test-results/
+artifacts/
 playwright-report/
 .env*
 android/local.properties

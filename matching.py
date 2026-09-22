@@ -144,11 +144,12 @@ def _has_vision(user: dict[str, Any], key: str) -> bool:
 # again, which is what makes it safe to offer as a one-click experiment.
 IGNORABLE_LEVERS = ("age", "height_cm", "weight_kg", "waist_in",
                     "distance_km", "nationality", "religion", "education")
-IGNORABLE_DEALBREAKERS = ("veg_only", "wants_kids", "no_kids_wanted",
+RETIRED_DEALBREAKERS = {"wants_kids", "no_kids_wanted"}
+IGNORABLE_DEALBREAKERS = ("veg_only",
                           "non_smoker", "non_drinker",
                           # round4-fixes-spec.md §5: children a candidate
                           # ALREADY has (stats.has_children) — not the
-                          # Kids pillar the two above check.
+                          # Kids pillar used for future-parenting compatibility.
                           "no_existing_children", "has_existing_children")
 IGNORABLE = IGNORABLE_LEVERS + IGNORABLE_DEALBREAKERS
 
@@ -229,7 +230,7 @@ def active_filter_names(user: dict[str, Any]) -> list[str]:
     off = ignored_set(prefs)
     names = [lever for lever in IGNORABLE_LEVERS
              if lever in prefs["adjustable"] and lever not in off]
-    names += [tag for tag in prefs["fixed"]["dealbreakers"] if tag not in off]
+    names += [tag for tag in prefs["fixed"]["dealbreakers"] if tag not in off and tag not in RETIRED_DEALBREAKERS]
     return names
 
 
@@ -331,10 +332,9 @@ def visions_compatible(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     special case per pillar, which is how Kids ended up with a rule
     Intimacy did not have.
 
-    A pillar only ONE of them chose is not a disagreement about stance;
-    it is a difference in what they want at all, and that is what the
-    wants_kids / no_kids_wanted dealbreakers are for. Silence is not
-    dissent.
+    A pillar only ONE of them chose is not a disagreement about stance.
+    Silence is not dissent. Future parenting is governed here; REACH's
+    children filters refer only to children already present in Stats.
 
     A pillar chosen with no stance recorded (VISION_STANCE_AT_SIGNUP)
     likewise cannot disagree with anything, so it passes.
@@ -371,7 +371,7 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     off = ignored_set(prefs)
 
     for tag in prefs["fixed"]["dealbreakers"]:
-        if tag in off:
+        if tag in off or tag in RETIRED_DEALBREAKERS:
             continue
         if not _dealbreaker_satisfied(tag, user_b):
             return False
@@ -787,8 +787,8 @@ _FILTER_ON_LABELS = {
     "no_kids_wanted": "Only people who don't",
     "non_smoker": "Non-smoker",
     "non_drinker": "Rarely or never",
-    "no_existing_children": "Only people without children",
-    "has_existing_children": "Only people with children",
+    "no_existing_children": "Don’t have kids",
+    "has_existing_children": "Have kids",
     "nationality": "As set",
     "religion": "As set",
     "education": "As set",
@@ -797,7 +797,7 @@ _FILTER_ON_LABELS = {
 # The filters shown without asking. Everything else sits behind "More
 # filters" — 2026-09-10, user's rule: "Maybe keep basic stats here. And
 # provide option to add additional where needed."
-BASIC_FILTERS = {"age", "distance_km", "wants_kids", "no_kids_wanted", "veg_only", "education"}
+BASIC_FILTERS = {"age", "distance_km", "no_existing_children", "has_existing_children", "veg_only", "education"}
 
 
 def filter_states(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict[str, Any]]:

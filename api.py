@@ -7,6 +7,7 @@ import math
 
 from flask import Blueprint, g, jsonify, request
 import clock as clock_module
+import accelerated_clock
 from api_contract import ApiError, json_object
 
 
@@ -96,6 +97,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
             def simulated_clock_step():
                 if not clock_module.simulated():
                     return failure('simulated_clock_disabled', 'The simulated clock is off in this build.', 403)
+                if accelerated_clock.enabled():
+                    return failure('accelerated_clock_active', 'The shared test timetable controls the clock; manual jumps are disabled.', 409)
                 body = json_object(optional={'advance_hours', 'week', 'day', 'hour'})
                 explicit = {'week', 'day', 'hour'} & body.keys()
                 if ('advance_hours' in body) == bool(explicit):

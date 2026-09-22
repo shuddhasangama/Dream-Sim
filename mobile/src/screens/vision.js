@@ -38,16 +38,19 @@ export function render(ctx) {
     <section class="card"><h2>Your Vision</h2>
     <div class="chips">${goals.map((g) => `<span>${safe(g.key)}${stanceOf(g).length ? ' · ' + safe(stanceOf(g).join(', ')) : ''}</span>`).join('') || '<p class="hint">Nothing chosen yet.</p>'}</div>
     <p class="hint" style="margin-top:10px;">${safe(detail_explanation)}</p></section>
+    ${(data.presets || []).some(p=>p.key==='marriage') ? `<section class="card"><h2>Marriage</h2>
+      <p class="hint">A Vision shortcut: all four pillars and their choices, with Kids set to Naturally. Adoption and Surrogacy are not added. Existing choices are kept; use Declare a change to remove them. This does not change your journey stage or anyone's consent.</p>
+      <button id="marriage-preset" type="button" class="secondary">Choose Marriage</button></section>` : ''}
 
-    <section class="card"><h2>Add detail</h2>
+    <details class="card vision-editor" data-vision-panel="add" ${ctx.onboarding || data._panels?.add ? 'open' : ''}><summary><strong>Add detail</strong></summary>
     <p class="hint">A pillar or choice you haven't set yet. This only ever adds — it never removes anything.</p>
     ${addable.length ? `<form id="detail-form">
       <div class="field"><label for="detail-choice">What to add</label>
         <select id="detail-choice" name="choice">${addable.map((a) => `<option value="${safe(a.pillar)}|${safe(a.sub)}">${safe(a.sub ? `${a.pillar} — ${a.sub}` : a.pillar)}</option>`).join('')}</select></div>
       <button class="primary" type="submit">Add</button>
-    </form>` : '<p class="hint">Everything on offer is already part of your Vision.</p>'}</section>
+    </form>` : '<p class="hint">Everything on offer is already part of your Vision.</p>'}</details>
 
-    <section class="card"><h2>Declare a change</h2>
+    <details class="card vision-editor" data-vision-panel="change" ${ctx.onboarding || data._panels?.change ? 'open' : ''}><summary><strong>Declare a change</strong></summary>
     <p class="hint">A genuine change of mind within a pillar — adding or removing a choice. It must be disclosed to your partner and can't be made silently.</p>
     ${rc_open ? '' : '<p class="warn">Locked right now: changes can only be declared while Reality Check is open (Sunday 9pm to Monday 11am).</p>'}
     ${changeable.length ? `<form id="change-form">
@@ -61,14 +64,24 @@ export function render(ctx) {
       <label class="checkbox-row"><input type="checkbox" name="disclosed_to_partner" required ${rc_open ? '' : 'disabled'}> I've disclosed this to my match</label>
       <button class="secondary" type="submit" ${rc_open ? '' : 'disabled'}>Declare change</button>
     </form>` : '<p class="hint">No pillar with choices to change yet.</p>'}
-    ${error}${saved}
-    ${changes.length ? `<h2>History</h2>${changes.map((c) => `<div class="clause">${safe(label(c.element_key))}: ${safe(c.from_value)} → ${safe(c.to_value)}</div>`).join('')}` : ''}</section>`;
+    </details>${error}${saved}
+    ${changes.length ? `<section class="card"><h2>History</h2>${changes.map((c) => `<div class="clause">${safe(label(c.element_key))}: ${safe(c.from_value)} → ${safe(c.to_value)}</div>`).join('')}</section>` : ''}`;
 }
 
 async function reload(session) { return session.get('/api/v1/profile/vision'); }
 
 export function bind(root, ctx) {
-  const { session, run, patch, data } = ctx;
+  const { session, run, data } = ctx;
+  const patch = next=>ctx.patch({...next,_panels:data._panels});
+  root.querySelectorAll('[data-vision-panel]').forEach(panel=>panel.addEventListener('toggle',()=>{
+    data._panels={...data._panels,[panel.dataset.visionPanel]:panel.open};
+  }));
+  root.querySelector('#marriage-preset')?.addEventListener('click',()=>run(async()=>{
+    try {
+      await session.post('/api/v1/profile/vision/presets',{request_id:crypto.randomUUID(),preset:'marriage'});
+      patch({...await reload(session),_saved:true});
+    } catch(e) { patch({...data,_saved:false,_error:e.message}); }
+  }));
 
   root.querySelector('#detail-form')?.addEventListener('submit', (e) => {
     e.preventDefault();

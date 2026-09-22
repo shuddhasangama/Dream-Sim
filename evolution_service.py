@@ -184,6 +184,26 @@ def add_vision_detail(conn,uid,body,clock):
         return db.fetch_one(conn,'VisionEntry',id=rid)
 
 
+def apply_vision_preset(conn,uid,body,clock):
+    if body.get('preset') != 'marriage':
+        raise ApiError('validation_error','Unknown Vision preset.')
+    request_id=text(body.get('request_id'),'request_id',80)
+    rid=f'{uid}:{request_id}'
+    content={'element_key':'Marriage','detail_text':'All pillars; Kids: Naturally; additive preset'}
+    with transaction(conn):
+        old=_vision_replay_or_conflict(conn,'VisionEntry',rid,content)
+        if old is not None:
+            return old
+        row=db.fetch_one(conn,'User',id=uid)
+        result=vision.marriage_preset(db.load_json_field(row['vision_json'],[]))
+        if not result['ok']:
+            raise ApiError('validation_error',result['error'])
+        row['vision_json']=json.dumps(result['vision_json'],ensure_ascii=False)
+        db.insert_row(conn,'User',row)
+        db.insert_row(conn,'VisionEntry',{'id':rid,'user_id':uid,**content,'added_at':str(clock),'parent_id':None})
+        return db.fetch_one(conn,'VisionEntry',id=rid)
+
+
 def declare_vision_change(conn,uid,body,clock):
     """round3-fixes-spec.md §7.3: "Declare a Change" — add and/or remove
     sub-selections within an EXISTING pillar. Requires disclosure and an

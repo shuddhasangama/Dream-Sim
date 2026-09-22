@@ -158,7 +158,7 @@ function theWeek(ctx) {
   // §7.6/§7.8: the server's own simulated_clock is the primary gate —
   // never inferred from the build flag alone. The build flag is only ever
   // an ADDITIONAL restriction (both must be true), never a replacement.
-  const simClock = journey?.simulated_clock && simulatedClockBuild ? `<div class="demo-bar">
+  const simClock = journey?.simulated_clock && simulatedClockBuild && !journey?.accelerated_test?.enabled ? `<div class="demo-bar">
       <span class="demo-tag">SIMULATION</span>
       <span class="demo-clock">${safe(data.clock?.day)} ${String(data.clock?.hour ?? 0).padStart(2, '0')}:00 · Week ${safe(data.clock?.week)}</span>
       <div class="demo-steps">

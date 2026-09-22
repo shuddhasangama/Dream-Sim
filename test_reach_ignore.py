@@ -142,15 +142,15 @@ class FilterStateTests(unittest.TestCase):
         marked = {f["name"] for f in matching.filter_states(self.me, self.pool) if f["sensitive"]}
         self.assertEqual(marked, {"religion", "nationality"})
 
-    def test_wants_kids_and_no_kids_wanted_name_each_other_as_opposite(self):
-        """round3-fixes-spec.md §4.2: lets a client merge the two rows
-        into one three-way control without hardcoding which names pair
-        up — everything else has no opposite at all."""
+    def test_has_existing_children_and_no_existing_children_name_each_other_as_opposite(self):
+        """Existing children is one mutually exclusive filter pair."""
         by_name = {f["name"]: f for f in matching.filter_states(self.me, self.pool)}
-        self.assertEqual(by_name["wants_kids"]["opposite"], "no_kids_wanted")
-        self.assertEqual(by_name["no_kids_wanted"]["opposite"], "wants_kids")
+        self.assertEqual(by_name["has_existing_children"]["opposite"], "no_existing_children")
+        self.assertEqual(by_name["no_existing_children"]["opposite"], "has_existing_children")
         self.assertIsNone(by_name["age"]["opposite"])
         self.assertIsNone(by_name["veg_only"]["opposite"])
+        self.assertNotIn('wants_kids',by_name)
+        self.assertNotIn('no_kids_wanted',by_name)
 
     def test_widening_is_not_offered_for_a_filter_already_set_to_any(self):
         """A Widen button on an ignored lever is a control that does
@@ -282,11 +282,11 @@ class AnyIsSymmetricTests(unittest.TestCase):
 
     def test_wanting_kids_and_not_wanting_them_cannot_both_be_on(self):
         both = matching.set_ignored(
-            matching.set_ignored(self.BARE, "wants_kids", False),
-            "no_kids_wanted", False)
+            matching.set_ignored(self.BARE, "has_existing_children", False),
+            "no_existing_children", False)
         tags = both["preferences"]["fixed"]["dealbreakers"]
-        self.assertIn("no_kids_wanted", tags)
-        self.assertNotIn("wants_kids", tags)
+        self.assertIn("no_existing_children", tags)
+        self.assertNotIn("has_existing_children", tags)
 
     def test_a_dealbreaker_not_held_reads_as_any_on_the_screen(self):
         states = {f["name"]: f for f in matching.filter_states(self.BARE | {

@@ -24,6 +24,35 @@ class EvolutionApiTests(RouteTestCase):
     def post(self,path,body=None,uid='owner'):
         return self.request(path,method='POST',body=body or {},uid=uid)
 
+    def test_marriage_preset_owned_atomic_and_retry_safe(self):
+        import json
+        before=db.fetch_one(self.conn,'User',id='partner')
+        body={'request_id':'marriage1','preset':'marriage'}
+        first=self.post('/profile/vision/presets',body)
+        self.assertEqual(first.status_code,200,first.json)
+        self.assertEqual(self.post('/profile/vision/presets',body).json,first.json)
+        self.assertEqual(len(db.fetch_all(self.conn,'VisionEntry',user_id='owner')),1)
+        row=db.fetch_one(self.conn,'User',id='owner')
+        goals={g['key']:g['stance'] for g in json.loads(row['vision_json'])}
+        self.assertEqual(set(goals),set(vision.PILLAR_OPTIONS))
+        self.assertIn('Naturally',goals['Kids'])
+        self.assertIn('Physical',goals['Intimacy'])
+        self.assertEqual(row['journey_state'],'dating')
+        self.assertEqual(db.fetch_one(self.conn,'User',id='partner'),before)
+        snapshot=list(self.conn.iterdump())
+        for bad in ({**body,'user_id':'partner'},{**body,'preset':'unknown'}):
+            self.assertEqual(self.post('/profile/vision/presets',bad).status_code,400)
+        self.assertEqual(list(self.conn.iterdump()),snapshot)
+
+    def test_marriage_default_excludes_adoption_surrogacy_but_never_reverses(self):
+        fresh=vision.marriage_preset([])
+        self.assertTrue(fresh['ok'])
+        goals={g['key']:g['stance'] for g in fresh['vision_json']}
+        self.assertEqual(goals['Kids'],['Naturally'])
+        existing=vision.marriage_preset([{'key':'Kids','stance':['Adoption','Surrogacy']}])
+        goals={g['key']:g['stance'] for g in existing['vision_json']}
+        self.assertEqual(set(goals['Kids']),{'Naturally','Adoption','Surrogacy'})
+
     def sign(self,kind,uid):
         with mock.patch.dict(os.environ,{'BETA_DATE_SIMULATION_ENABLED':'1'}):
             for body in ({'step':'playbook'},{'step':'sign','signed_name':uid,'acks':list(ceremony.ack_keys(kind))},{'step':'face'}):

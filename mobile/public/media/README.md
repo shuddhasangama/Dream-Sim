@@ -1,7 +1,12 @@
-Drop the calendar explainer video here as `calendar-explainer.mp4` (H.264/AAC,
-short, captions burned in or a .vtt alongside). Until it exists the Week screen
-shows a "video coming soon" placeholder instead of a broken player.
+# Calendar explainer
 
-To serve it from somewhere else, set `DHASHU_CALENDAR_VIDEO_SRC` (and optionally
-`DHASHU_CALENDAR_VIDEO_POSTER`) at build time — see `src/config.js`. A remote URL
-must also be allowed by `media-src` in the CSP in `index.html`.
+`calendar-explainer.mp4` is a 30-second, portrait 1080×1440 H.264 video
+with burned-in captions and animated highlights over the current mobile
+calendar screenshot. It is intentionally silent and does not autoplay.
+
+Created 2026-09-20 from the local preview calendar. Uses the calendar labels
+Matches, Slots, Publish, Sign, Dates and Debrief. Recreate if cadence changes.
+
+The default source in `src/config.js` loads this bundled file. Rebuild the
+mobile app in Codemagic to include it; a Railway deployment alone will not
+update bundled media. A custom source can be set with DHASHU_CALENDAR_VIDEO_SRC.

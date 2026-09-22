@@ -33,8 +33,8 @@ DAYS = clock_module.DAYS_OF_WEEK          # Mon … Sun
 BANDS = [
     ("morn", "MORN", 0, 12),
     ("aft", "AFT", 12, 17),
-    ("eve", "EVE", 17, 21),
-    ("night", "NIGHT", 21, 24),
+    ("eve", "EVE", 17, 19),
+    ("night", "NIGHT", 19, 24),
 ]
 
 # The midday rule, drawn as a line on the grid rather than explained in a
