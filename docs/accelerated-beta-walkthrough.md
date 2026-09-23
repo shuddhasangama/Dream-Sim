@@ -1,5 +1,9 @@
 # Guided sign-up and accelerated beta walkthrough
 
+For the optional **action-driven pair rehearsal**, see [async-rehearsal.md](async-rehearsal.md).
+It uses `DHASHU_ASYNC_TEST=true` and waits for partner actions instead of this
+document's one-shot timer. Keep the two modes distinct; action mode takes precedence.
+
 Shared implementation for the Android and iOS Capacitor applications. Changes
 remain local until the backend is deployed and both mobile bundles are rebuilt.
 

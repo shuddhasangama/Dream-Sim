@@ -99,6 +99,11 @@ def match_status(match: dict[str, Any], clock: SimulationClock) -> str:
     (parse stored strings with SimulationClock.parse() first) and an
     `action` key ('interest' | 'pass' | 'none', matching the Match table's
     own default)."""
+    # Isolated rehearsal policy: show the existing batch without timed expiry.
+    # Generation limits, matching filters and mutual interest remain unchanged.
+    import async_rehearsal
+    if async_rehearsal.enabled() and clock.week == match['revealed_at'].week:
+        return 'acted' if match.get('action', 'none') != 'none' else 'open'
     if clock < match["revealed_at"]:
         return "not_yet_revealed"
     acted = match.get("action", "none") != "none"

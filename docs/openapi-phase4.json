@@ -9779,6 +9779,134 @@
           }
         }
       }
+    },
+    "/rehearsal/date-plans/{pid}/ready": {
+      "post": {
+        "operationId": "postRehearsalReadiness",
+        "summary": "Record only the authenticated partner’s readiness for a confirmed test date",
+        "description": "Requires DHASHU_SIMULATED_CLOCK and DHASHU_ASYNC_TEST. Both readiness submissions advance the pair checkpoint, not consent, attendance or feedback. Retries are idempotent while the date is current and unresolved. No provider bypass.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "step"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "step": {
+                    "enum": [
+                      "date",
+                      "debrief"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated actor-scoped rehearsal state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AsyncRehearsal"
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid strict JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Test mode disabled, eligibility missing or bearer required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Owned date not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date is stale, unresolved agreement or preceding checkpoint incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10043,7 +10171,7 @@
           },
           "simulated_clock": {
             "type": "boolean",
-            "description": "road-fixes-clock-spec.md §7: true only when this build's DHASHU_SIMULATED_CLOCK is on. The client must gate day/hour stepping controls on this field alone — never infer it from a build variable."
+            "description": "Server simulation mode. Manual stepping is forbidden when accelerated_test or async_rehearsal is enabled."
           },
           "accelerated_test": {
             "description": "Null unless the operator enabled the shared three-minute test timetable. Read-only metadata; no client can start or reset a run. See docs/accelerated-beta-walkthrough.md.",
@@ -10198,6 +10326,9 @@
           },
           "next_action": {
             "$ref": "#/components/schemas/Guidance"
+          },
+          "async_rehearsal": {
+            "$ref": "#/components/schemas/AsyncRehearsal"
           }
         },
         "required": [
@@ -12235,6 +12366,100 @@
             }
           }
         }
+      },
+      "AsyncRehearsal": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Opt-in action-driven Dating rehearsal. Null when disabled. No elapsed-time expiry or automatic reset. See docs/async-rehearsal.md.",
+        "properties": {
+          "enabled": {
+            "const": true
+          },
+          "scope": {
+            "const": "pair"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "matching",
+              "availability",
+              "planning",
+              "agreement",
+              "ready_for_date",
+              "date",
+              "debrief",
+              "resolved"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "decisions_automated": {
+            "const": false
+          },
+          "lock_in_id": {
+            "type": "string"
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "my_ready": {
+            "type": "boolean"
+          },
+          "partner_ready": {
+            "type": "boolean"
+          },
+          "request": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "method": {
+                "const": "POST"
+              },
+              "path": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "body": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "enum": [
+                      "date",
+                      "debrief"
+                    ]
+                  }
+                },
+                "required": [
+                  "step"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "path",
+              "label",
+              "body"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "enabled",
+          "scope",
+          "stage",
+          "message",
+          "request",
+          "decisions_automated"
+        ],
+        "additionalProperties": false
       }
     }
   }

@@ -9,12 +9,19 @@ import dateplan
 import db
 import payments
 import planning_service as service
+import async_rehearsal
 from api_contract import ApiError, allowlist, json_object
 
 
 def register(api, get_db, get_clock, slot_datetime, agreement_context):
     def uid():
         return g.api_user['user_id']
+
+    @api.post('/rehearsal/date-plans/<pid>/ready')
+    def rehearsal_ready(pid):
+        body = json_object(required={'step'})
+        async_rehearsal.mark_ready(get_db(), uid(), pid, body['step'])
+        return jsonify(async_rehearsal.snapshot(get_db(), uid())[1])
 
     def simulation_enabled():
         account = db.fetch_one(get_db(), 'Account', user_id=uid())

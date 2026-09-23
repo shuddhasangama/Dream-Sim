@@ -16,6 +16,7 @@ import * as roadScreen from './screens/road.js';
 import { editableFieldsForm, groupedStatRows, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from './statsFields.js';
 import { createSignup } from './signup.js';
 import { howItWorks, bindHowItWorks } from './howItWorks.js';
+import { renderRehearsal, progressKey } from './rehearsal.js';
 import './style.css';
 
 const native = Capacitor.isNativePlatform();
@@ -166,6 +167,7 @@ function renderChrome(current, tabs) {
       ${indicator?.show?`<div class="stage-bar" role="list" aria-label="${safe(indicator.label)}">${(indicator.stages||[]).map(s=>`<span role="listitem" class="stage-pip ${safe(s.state)}">${safe(s.label)}</span>`).join('')}</div>`:''}
     </div>
     <main class="container">
+      ${renderRehearsal(journey.async_rehearsal, safe)}
       ${journey.accelerated_test?.enabled ? `<aside class="card accelerated-banner"><strong>Accelerated test · shared clock</strong><p>${safe(journey.clock.day)} ${String(journey.clock.hour).padStart(2,'0')}:00 · Week ${safe(journey.clock.week)} · ${journey.accelerated_test.finished?'30-minute run complete': '3 real minutes per checkpoint'}</p><p class="hint">${clockPending?'Time has advanced. Your unsaved screen is preserved. Save your edits, then refresh.':'Make your own choices at each step. Both partners must respond.'}</p><button id="refresh-clock" class="secondary" type="button">Refresh current step</button></aside>` : ''}
       <div class="toolbar">
         ${nav.depth>1?'<button id="back" class="text-button">← Back</button>':'<span></span>'}
@@ -175,6 +177,12 @@ function renderChrome(current, tabs) {
 }
 
 function bindChrome(current) {
+  root.querySelector('#rehearsal-ready')?.addEventListener('click',()=>{
+    if (screenDirty) { message='Save your edits before advancing the test journey.'; render(); return; }
+    const action=journey?.async_rehearsal?.request;
+    if (!action || busy) return;
+    run(async()=>{await session.post(action.path,action.body);await reloadCurrent();});
+  });
   root.querySelector('#refresh-clock')?.addEventListener('click',()=>{
     if(screenDirty && !window.confirm('Refresh this screen and discard any unsaved edits?')) return;
     run(async()=>{await reloadCurrent();screenDirty=false;clockPending=false;});
@@ -406,14 +414,13 @@ wireKeyboardScroll();
 // Poll server time on both native platforms. Never advance time from a device,
 // overwrite an edited form, or interrupt a playing walkthrough.
 async function refreshAcceleratedClock() {
-  if (busy || !journey?.accelerated_test?.enabled || signupActive || document.hidden) return;
+  if (busy || !(journey?.accelerated_test?.enabled || journey?.async_rehearsal?.enabled) || signupActive || document.hidden) return;
   try {
     const next = await session.get('/api/v1/journey/status');
-    if (!next.accelerated_test?.enabled && !journey.accelerated_test?.enabled) return;
-    if (JSON.stringify(next.clock) === JSON.stringify(journey.clock)) return;
+    if (progressKey(next) === progressKey(journey)) return;
     if (screenDirty || root.querySelector('video') && [...root.querySelectorAll('video')].some(v=>!v.paused)) {
       clockPending=true;
-      const hint=root.querySelector('.accelerated-banner .hint');
+      const hint=root.querySelector('.accelerated-banner .hint, .rehearsal-banner .hint');
       if(hint) hint.textContent='Time has advanced. Your unsaved screen is preserved. Save your edits, then refresh.';
       return;
     }

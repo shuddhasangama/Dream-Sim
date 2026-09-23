@@ -846,6 +846,14 @@ CREATE TABLE IF NOT EXISTS "DateCharge" (
 );
 
 -- Only operator-invited accounts can own a resumable enrollment draft.
+CREATE TABLE IF NOT EXISTS "RehearsalReady" (
+    id TEXT PRIMARY KEY,
+    dateplan_id TEXT NOT NULL REFERENCES "DatePlan"(id),
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    step TEXT NOT NULL CHECK (step IN ('date', 'debrief')),
+    UNIQUE (dateplan_id, user_id, step)
+);
+
 CREATE TABLE IF NOT EXISTS "EnrollmentDraft" (
     id TEXT PRIMARY KEY REFERENCES "User"(id),
     payload_json TEXT NOT NULL DEFAULT '{}',

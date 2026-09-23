@@ -32,6 +32,7 @@ import ceremony
 import chemistry
 import clock as clock_module
 import accelerated_clock
+import async_rehearsal
 import date_alignment
 import dateplan
 import db
@@ -137,6 +138,9 @@ def get_clock() -> clock_module.SimulationClock:
     that has since turned simulation off."""
     if not clock_module.simulated():
         return clock_module.real_time_clock()
+    if async_rehearsal.enabled():
+        user = getattr(g, 'api_user', None) or current_user()
+        return async_rehearsal.snapshot(get_db(), user['user_id'] if user else None)[0]
     if accelerated_clock.enabled():
         if not hasattr(g, 'accelerated_test_clock'):
             from datetime import timezone
@@ -153,6 +157,8 @@ def get_clock() -> clock_module.SimulationClock:
 
 
 def set_clock(c: clock_module.SimulationClock) -> None:
+    if async_rehearsal.enabled():
+        raise ApiError('rehearsal_active', 'Partner actions control the rehearsal; manual clock jumps are disabled.', 409)
     if accelerated_clock.enabled():
         raise ApiError('accelerated_clock_active', 'The shared test timetable controls the clock; manual jumps are disabled.', 409)
     # Deliberately NOT gated on clock_module.simulated() here: this writes
@@ -4500,7 +4506,7 @@ def _api_week_state(user):
     return {'clock': state['clock'], 'phase': clock_module.phase(clock), 'mode': mode,
             'prepared': prepared,
             'prepare_request': {'method': 'POST', 'path': '/api/v1/week/prepare', 'body': {}}
-                if mode == 'dating' and not prepared and clock_module.phase(clock) != 'before_week_start' else None,
+                if mode == 'dating' and not prepared and (async_rehearsal.enabled() or clock_module.phase(clock) != 'before_week_start') else None,
             'schedule': {'grid': week_map.grid(clock, personal_debrief=personal_debrief,
                                                 personal_pool_return=personal_pool_return),
                          'legend': week_map.legend()},
@@ -4523,7 +4529,8 @@ def _api_journey_state(user):
         clock=get_clock(), reach_is_locked=reach_locked(user), facts=_guru_facts(user),
         display_name=display_name(user['user_id'], user['gender']), simulated=clock_module.simulated(),
         partner_greeting=partner_greeting)
-    result['accelerated_test'] = getattr(g, 'accelerated_test_metadata', None) if accelerated_clock.enabled() else None
+    result['accelerated_test'] = getattr(g, 'accelerated_test_metadata', None) if accelerated_clock.enabled() and not async_rehearsal.enabled() else None
+    result['async_rehearsal'] = async_rehearsal.snapshot(get_db(), user['user_id'])[1] if async_rehearsal.enabled() else None
     return result
 
 

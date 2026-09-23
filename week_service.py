@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 
 import auth_sessions
+import async_rehearsal
 import cadence
 import clock as clock_module
 import db
@@ -51,7 +52,7 @@ def prepare(conn, uid, clock):
         batch = db.fetch_one(conn, 'MatchBatch', user_id=uid, week=clock.week)
         if batch:
             return sorted(existing, key=lambda r: r['slot'])
-        if clock_module.phase(clock) == 'before_week_start':
+        if clock_module.phase(clock) == 'before_week_start' and not async_rehearsal.enabled():
             raise ApiError('week_not_started', 'The matching week has not opened.', 409)
         if not existing:
             pool = [from_user_row(r) for r in db.fetch_all(conn, 'User', journey_state='dating')]

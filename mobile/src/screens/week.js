@@ -73,10 +73,10 @@ function dating(ctx) {
   const slots = data.matches || [];
   return `<section class="intro"><span class="eyebrow">WEEK ${safe(data.clock?.week)} · ${safe(data.clock?.day)} ${String(data.clock?.hour ?? 0).padStart(2, '0')}:00</span><h1>This week's matches</h1></section>
     ${theWeek(ctx)}
-    ${slots.length ? slots.map((m) => matchSlot(m, safe)).join('') : '<section class="card"><p>No matches this week — an honest zero, not a filter problem to fix.</p></section>'}`;
+    ${slots.length ? slots.map((m) => matchSlot(m, safe, ctx.journey?.async_rehearsal?.enabled)).join('') : '<section class="card"><p>No matches this week — an honest zero, not a filter problem to fix.</p></section>'}`;
 }
 
-function matchSlot(m, safe) {
+function matchSlot(m, safe, rehearsal=false) {
   if (m.status === 'not_yet_revealed') {
     return `<div class="card"><div class="muted">Match ${m.slot}</div><p>Reveals ${safe(m.revealed_at)}</p></div>`;
   }
@@ -92,7 +92,7 @@ function matchSlot(m, safe) {
   const c = m.candidate;
   const stats = c?.stats || {};
   return `<div class="candidate-card" data-match="${safe(m.id)}">
-    <div class="muted">Match ${m.slot} · window closes ${safe(m.window_closes_at)}</div>
+    <div class="muted">Match ${m.slot} · ${rehearsal ? 'stays open during this test journey' : `window closes ${safe(m.window_closes_at)}`}</div>
     ${c ? `<div class="candidate-name">${safe(c.display_name)}</div><div class="muted">${safe(c.city)}${c.bgv_status ? ' · ' + safe(c.bgv_status) : ''}</div>
     <div class="chips">${(c.visions || []).map((v) => `<span>${safe(v.key)}${v.stance ? ' · ' + safe(Array.isArray(v.stance) ? v.stance.join(', ') : v.stance) : ''}</span>`).join('')}</div>
     <div class="stat-grid">${Object.entries(stats).filter(([, v]) => v != null).map(([k, v]) => `<div>${safe(k.replace(/_/g, ' '))}: ${safe(v)}</div>`).join('')}</div>` : ''}
@@ -153,12 +153,12 @@ function theWeek(ctx) {
   if (!schedule?.grid) return '';
   const { grid, legend = [] } = schedule;
   const nowText = data.clock ? `${safe(data.clock.day)} ${String(data.clock.hour ?? 0).padStart(2, '0')}:00` : '';
-  const phaseCopy = WEEK_PHASE_COPY[data.phase] || '';
+  const phaseCopy = journey?.async_rehearsal?.enabled ? 'Reference weekly timetable. This test journey advances through partner actions, not these deadlines.' : WEEK_PHASE_COPY[data.phase] || '';
   const explained = explainedMoments(grid);
   // §7.6/§7.8: the server's own simulated_clock is the primary gate —
   // never inferred from the build flag alone. The build flag is only ever
   // an ADDITIONAL restriction (both must be true), never a replacement.
-  const simClock = journey?.simulated_clock && simulatedClockBuild && !journey?.accelerated_test?.enabled ? `<div class="demo-bar">
+  const simClock = journey?.simulated_clock && simulatedClockBuild && !journey?.accelerated_test?.enabled && !journey?.async_rehearsal?.enabled ? `<div class="demo-bar">
       <span class="demo-tag">SIMULATION</span>
       <span class="demo-clock">${safe(data.clock?.day)} ${String(data.clock?.hour ?? 0).padStart(2, '0')}:00 · Week ${safe(data.clock?.week)}</span>
       <div class="demo-steps">

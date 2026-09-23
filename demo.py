@@ -88,6 +88,7 @@ def clock_view(current: clock_module.SimulationClock) -> dict[str, Any]:
 # leaving the demo user in a state worse than the one being reset.
 
 RESET_TABLES_IN_ORDER = [
+    "RehearsalReady",  # explicit operator reset only; never reset on login
     "Signature",       # -> DatePlan
     "DateOutcome",     # -> DatePlan
     "DateFeedback",    # -> DatePlan
