@@ -52,6 +52,12 @@ export class Session {
     if (!/^\+[1-9]\d{7,14}$/.test(destination)) throw new ApiError('Include the country code, for example +91 followed by your number.');
     return this.raw('/api/v1/auth/request', 'POST', {channel: 'phone', destination});
   }
+  async testerLogin(phone) {
+    if (!/^\+[1-9]\d{7,14}$/.test(phone)) throw new ApiError('Include the country code.');
+    const epoch = this.generation;
+    const result = await this.raw('/api/v1/auth/tester', 'POST', {phone});
+    await this.accept(result, epoch);
+  }
   async verify(challenge_id, code) {
     if (!/^\d{4,10}$/.test(code)) throw new ApiError('Enter the code from your SMS.');
     const epoch = this.generation;

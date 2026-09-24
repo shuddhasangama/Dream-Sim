@@ -4,6 +4,7 @@ Uses real UTC epoch time, never the simulation clock. Authentication writes
 use one transaction rather than db.insert_row's per-row commits.
 """
 from contextlib import contextmanager
+import os
 import hashlib
 import secrets
 import time
@@ -58,9 +59,9 @@ def issue(conn, user_id, kind='mobile'):
         return issue_in_transaction(conn, user_id, kind)
 
 
-def issue_in_transaction(conn, user_id, kind='mobile'):
+def issue_in_transaction(conn, user_id, kind='mobile', tester=False):
     timestamp = now()
-    sid, access = uuid.uuid4().hex, secrets.token_urlsafe(32)
+    sid, access = ('tester_' if tester else '') + uuid.uuid4().hex, secrets.token_urlsafe(32)
     access_seconds = ACCESS_SECONDS if kind == 'mobile' else WEB_SECONDS
     expires = timestamp + (SESSION_SECONDS if kind == 'mobile' else WEB_SECONDS)
     sql(conn, '''INSERT INTO "AuthSession"
@@ -78,6 +79,16 @@ def issue_in_transaction(conn, user_id, kind='mobile'):
     return result
 
 
+def tester_allowed(user_id):
+    """Explicit operator allowlist; never inferred from phone or store access."""
+    return (os.environ.get('DHASHU_TESTER_NO_OTP', '').lower() == 'true'
+            and user_id in {v.strip() for v in os.environ.get('DHASHU_TESTER_USER_IDS', '').split(',') if v.strip()})
+
+
+def session_allowed(row):
+    return not row['id'].startswith('tester_') or tester_allowed(row['user_id'])
+
+
 def authenticate(conn, token, kind='mobile'):
     if not valid_token(token):
         return None
@@ -86,7 +97,7 @@ def authenticate(conn, token, kind='mobile'):
         WHERE s.access_hash = ? AND s.kind = ? AND s.revoked_at IS NULL
         AND s.access_expires_at > ? AND s.expires_at > ?''',
         (digest(token), kind, now(), now())).fetchone()
-    return dict(row) if row else None
+    return dict(row) if row and session_allowed(row) else None
 
 
 def refresh(conn, token):
@@ -104,7 +115,7 @@ def refresh(conn, token):
                       (old['session_id'],)).fetchone()
         old = sql(conn, 'SELECT * FROM "AuthRefresh" WHERE id = ?', (token_hash,)).fetchone()
         timestamp = now()
-        if not session or session['revoked_at'] is not None or session['expires_at'] <= timestamp:
+        if not session or not session_allowed(session) or session['revoked_at'] is not None or session['expires_at'] <= timestamp:
             return None
         account = sql(conn, 'SELECT id FROM "Account" WHERE user_id = ? AND auth_enabled = 1', (session['user_id'],)).fetchone()
         if not account:

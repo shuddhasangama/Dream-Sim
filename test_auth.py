@@ -55,6 +55,42 @@ class AuthenticationTests(RouteTestCase):
     def bearer(self, tokens):
         return {'Authorization': 'Bearer ' + tokens['access_token']}
 
+    def test_optional_tester_login_and_revocation(self):
+        body = {'phone': '+919876543210'}
+        with mock.patch.dict('os.environ', {'DHASHU_TESTER_NO_OTP': 'false', 'DHASHU_TESTER_USER_IDS': 'owner'}):
+            self.assertEqual(self.post('tester', body).status_code, 403)
+        with mock.patch.dict('os.environ', {'DHASHU_TESTER_NO_OTP': 'true', 'DHASHU_TESTER_USER_IDS': 'owner'}):
+            self.assertEqual(self.post('tester', {'phone': '+919876543211'}).status_code, 403)
+            self.assertEqual(self.post('tester', {'phone': 'bad'}).status_code, 400)
+            self.assertEqual(self.post('tester', dict(body, user_id='other')).status_code, 400)
+            result = self.post('tester', body)
+            self.assertEqual(result.status_code, 200, result.json)
+            tokens = result.json['data']
+            self.assertEqual(self.client.get('/api/v1/me', headers=self.bearer(tokens)).status_code, 200)
+            self.assertEqual(db.fetch_one(self.conn, 'Account', user_id='owner')['verified_phone'], 0)
+            refreshed = self.post('refresh', {'refresh_token': tokens['refresh_token']})
+            self.assertEqual(refreshed.status_code, 200)
+            tokens = refreshed.json['data']
+        with mock.patch.dict('os.environ', {'DHASHU_TESTER_NO_OTP': 'false'}):
+            self.assertEqual(self.client.get('/api/v1/me', headers=self.bearer(tokens)).status_code, 401)
+            self.assertEqual(self.post('refresh', {'refresh_token': tokens['refresh_token']}).status_code, 401)
+        self.start.assert_not_called()
+        self.check.assert_not_called()
+
+    def test_tester_disabled_account_unknown_and_logout(self):
+        with mock.patch.dict('os.environ', {'DHASHU_TESTER_NO_OTP': 'true', 'DHASHU_TESTER_USER_IDS': 'owner,other'}):
+            self.conn.execute('UPDATE Account SET auth_enabled = 0 WHERE user_id = ?', ('other',))
+            self.conn.commit()
+            for phone in ('+919876543211', '+15550009999'):
+                self.assertEqual(self.post('tester', {'phone': phone}).status_code, 403)
+            tokens = self.post('tester', {'phone': '+919876543210'}).json['data']
+            with mock.patch.dict('os.environ', {'DHASHU_TESTER_USER_IDS': 'other'}):
+                self.assertEqual(self.client.get('/api/v1/me', headers=self.bearer(tokens)).status_code, 401)
+            self.assertEqual(self.post('logout', {}, headers=self.bearer(tokens)).status_code, 200)
+            self.assertEqual(self.client.get('/api/v1/me', headers=self.bearer(tokens)).status_code, 401)
+            self.assertEqual(self.post('refresh', {'refresh_token': tokens['refresh_token']}).status_code, 401)
+        self.start.assert_not_called()
+
     def test_email_login_issues_hashed_credentials_and_current_identity(self):
         tokens = self.login_mobile()
         self.start.assert_called_once_with('email', 'owner@example.test')

@@ -68,3 +68,12 @@ test('path validation still rejects traversal, encoded separators and external U
     await assert.rejects(session.raw(path),/Invalid API path/);
   }
 });
+
+test('tester entry stores tokens without an OTP request and validates phone',async()=>{
+  const calls=[];const {session,vault}=setup(async(...args)=>{calls.push(args);return ok(token(3));});
+  await session.testerLogin('+919999999999');
+  assert.deepEqual(calls[0].slice(0,3),['/api/v1/auth/tester','POST',{phone:'+919999999999'}]);
+  assert.equal(await vault.read(),'refresh-3');
+  await assert.rejects(session.testerLogin('bad'),/country code/);
+  assert.equal(calls.length,1);
+});

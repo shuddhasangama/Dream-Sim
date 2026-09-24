@@ -139,6 +139,14 @@ function render() {
       run(async()=>{const result=await session.requestCode(phone);challenge=result.challenge_id;message='If this number is approved, a code will arrive shortly.';});
     }
   });
+  root.querySelector('#tester-login')?.addEventListener('click',()=>{
+    if(busy)return;
+    phone=String(root.querySelector('input[name="phone"]')?.value||'').trim();
+    run(async()=>{
+      await session.testerLogin(phone); challenge=null; screenDirty=false; await load();
+      if(authIntent==='signup') { signupActive=true; await signup.begin(); }
+    });
+  });
   root.querySelector('#change')?.addEventListener('click',()=>{challenge=null;message='';render();});
   root.querySelectorAll('[data-auth-intent]').forEach(button=>button.addEventListener('click',()=>{
     phone = root.querySelector('input[name="phone"]')?.value || phone;
@@ -216,11 +224,12 @@ function bindChrome(current) {
 }
 
 function signin() {
-  return `${howItWorks(safe)}<section class="intro"><span class="eyebrow">A LITTLE CLOSER</span><h1>${challenge?'Check your messages':'Welcome to<br>DhaShu.'}</h1><p>${challenge?'Enter the code sent to your approved number.':authIntent==='signup'?'Try guided sign up using your associated beta profile. Verify your number, then review Vision, Stats and Chemistry.':'A thoughtful space for your next chapter. Sign in with your invited beta number.'}</p></section>
+  return `${howItWorks(safe)}<section class="intro"><span class="eyebrow">A LITTLE CLOSER</span><h1>${challenge?'Check your messages':'Welcome to<br>DhaShu.'}</h1><p>${challenge?'Enter the code sent to your approved number.':authIntent==='signup'?'Try guided sign up using your associated beta profile. Sign in, then review Vision, Stats and Chemistry.':'A thoughtful space for your next chapter. Sign in with your invited beta number.'}</p></section>
     ${!challenge?`<div class="auth-options" role="group" aria-label="Choose how to enter"><button type="button" class="${authIntent==='login'?'primary':'secondary'}" data-auth-intent="login" aria-pressed="${authIntent==='login'}">Log in</button><button type="button" class="${authIntent==='signup'?'primary':'secondary'}" data-auth-intent="signup" aria-pressed="${authIntent==='signup'}">Sign up</button></div>`:''}
     <form id="signin-form" class="card"><label for="credential">${challenge?'Verification code':'Phone number'}</label>
     ${challenge?'<input id="credential" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,10}" minlength="4" maxlength="10" required placeholder="Enter SMS code">':`<input id="credential" name="phone" type="tel" autocomplete="tel" maxlength="16" required placeholder="+91 followed by your number" value="${safe(phone)}">`}
     <button class="primary" ${busy?'disabled':''}>${challenge?'Sign in':'Send SMS code'} <span aria-hidden="true">→</span></button>
+    ${!challenge?`<button type="button" id="tester-login" class="secondary" ${busy?'disabled':''}>Continue as tester without SMS</button><p class="hint">Only for profiles explicitly enabled for OTP-free testing.</p>`:''}
     ${challenge?`<button type="button" id="change" class="secondary" ${busy?'disabled':''}>Change number / request a new code</button>`:'<p class="hint">Include your country code. Beta access is by invitation.</p>'}</form>`;
 }
 

@@ -217,6 +217,29 @@ def register_auth(app, get_db):
         result, error = start_challenge(get_db(), body['channel'], destination, 'mobile')
         return error if error else (jsonify(result), 202)
 
+    @app.post('/api/v1/auth/tester')
+    def auth_tester():
+        body, error = payload(('phone',))
+        if error:
+            return error
+        phone = normalize('phone', body['phone'])
+        if phone is None:
+            return failure('Include a valid phone number with country code.')
+        conn = get_db()
+        if not sessions.throttle(conn, [key('tester-ip:' + (request.remote_addr or 'unknown'))], 20, 600):
+            return failure('Please wait before trying again.', 429, 'rate_limited')
+        with sessions.transaction(conn):
+            suffix = ' FOR UPDATE' if db._is_postgres_connection(conn) else ''
+            rows = sessions.sql(conn, 'SELECT * FROM "Account"' + suffix).fetchall()
+            matches = [dict(row) for row in rows if normalize('phone', row['phone'], stored=True) == phone]
+            account = matches[0] if len(matches) == 1 else None
+            if not account or not account['auth_enabled'] or not sessions.tester_allowed(account['user_id']):
+                return failure('OTP-free testing is not enabled for this profile. Use SMS sign-in.', 403, 'forbidden')
+            # Never mark phone/email/BGV as verified. Session is revocable and
+            # rejected immediately when the flag or allowlist is removed.
+            result = sessions.issue_in_transaction(conn, account['user_id'], tester=True)
+        return jsonify(result)
+
     @app.post('/api/v1/auth/verify')
     def auth_verify():
         body, error = payload(('challenge_id', 'code'))

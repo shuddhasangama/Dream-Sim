@@ -10145,6 +10145,54 @@
           }
         }
       }
+    },
+    "/auth/tester": {
+      "post": {
+        "summary": "Optional operator-allowlisted OTP-free tester login",
+        "security": [],
+        "description": "Disabled by default. Requires DHASHU_TESTER_NO_OTP=true and account user ID in DHASHU_TESTER_USER_IDS. Does not verify phone ownership. Returns normal revocable mobile tokens; tester sessions require continued flag and allowlist membership.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "phone"
+                ],
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "description": "E.164 phone mapped to an enabled Account"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session token envelope"
+          },
+          "400": {
+            "description": "Invalid payload"
+          },
+          "403": {
+            "description": "Not enabled for this account"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "401": {
+            "description": "Authentication rejected"
+          },
+          "503": {
+            "description": "Authentication is disabled"
+          }
+        },
+        "operationId": "authTester"
+      }
     }
   },
   "components": {

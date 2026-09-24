@@ -4,7 +4,7 @@ import { editableFieldsForm, changedFields, fieldErrorsFromServer, fieldsEqual, 
 
 export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry'];
 
-// A rehearsal of onboarding for an OTP-authenticated, already associated
+// A rehearsal of onboarding for an authenticated, already associated
 // profile. The normal profile APIs remain the authority for edit eligibility.
 export function createSignup({session, run, safe, finish}) {
   let step = 0, data = null, dirty = false, error = '', draft = [];
