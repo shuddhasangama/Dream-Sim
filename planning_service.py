@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import json
 import uuid
 
+import async_rehearsal
 import auth_sessions
 import calendar_dating
 import ceremony
@@ -96,7 +97,7 @@ def alignment(conn, uid, lid, body):
         sql(conn, 'UPDATE "User" SET stats_json=? WHERE id=?', (json.dumps(stats, ensure_ascii=False), uid))
 
 
-def availability(conn, uid, lid, chosen):
+def validate_slots(chosen):
     valid = calendar_dating.valid_slots()
     if not isinstance(chosen, list) or len(chosen) > len(valid):
         raise ApiError('validation_error', 'Slots must be an array of valid weekend slots.')
@@ -108,6 +109,12 @@ def availability(conn, uid, lid, chosen):
         if slot not in valid or slot in parsed:
             raise ApiError('validation_error', 'Invalid or duplicate slot.')
         parsed.append(slot)
+    return parsed
+
+
+def availability(conn, uid, lid, chosen):
+    parsed = validate_slots(chosen)
+    async_rehearsal.require_intro_complete(conn, uid)
     with transition(conn):
         pair(conn, uid, lid)
         if current_plan(conn, lid):
@@ -142,6 +149,7 @@ def confirm(conn, uid, lid, day, meal, slot_datetime, cycle=None):
         if (day, meal) not in overlap:
             raise ApiError('overlap_required', 'Both partners must select this slot.', 409)
         for who in (active['user_a'], active['user_b']):
+            async_rehearsal.require_intro_complete(conn, who)
             require_paid(conn, who, payments.AVAILABILITY, availability_scope(conn,lid))
         venue = calendar_dating.suggest_venue(day, meal, a.get('diet'), b.get('diet'))
         shared = date_alignment.shared_cuisines(a.get('cuisine'), b.get('cuisine'))

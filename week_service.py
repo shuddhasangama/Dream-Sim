@@ -115,6 +115,8 @@ def decide(conn, uid, match_id, action, pass_reason, clock):
             sql(conn, '''INSERT INTO "LockIn" (id,user_a,user_b,week,created_at,status)
                         VALUES (?,?,?,?,?,?)''',
                 (lid, pair['user_a'], pair['user_b'], pair['week'], pair['created_at'], pair['status']))
+            if async_rehearsal.enabled():
+                async_rehearsal.transfer_drafts(conn, lid, (uid, row['candidate_id']), row['week'])
             for owner, partner in ((uid, row['candidate_id']), (row['candidate_id'], uid)):
                 sql(conn, 'DELETE FROM "Match" WHERE user_id = ? AND week = ? AND candidate_id <> ?',
                     (owner, clock.week, partner))

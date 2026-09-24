@@ -860,3 +860,11 @@ CREATE TABLE IF NOT EXISTS "EnrollmentDraft" (
     revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0),
     completed_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS "RehearsalIntro" (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL UNIQUE REFERENCES "User"(id),
+ week INTEGER NOT NULL,
+ started_at TEXT NOT NULL,
+ slots_json TEXT NOT NULL DEFAULT '[]'
+);

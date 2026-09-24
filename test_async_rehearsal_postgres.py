@@ -40,3 +40,22 @@ class PostgresRehearsalTests(unittest.TestCase):
         with mock.patch.object(planning_service,'sql',side_effect=failed):
             with self.assertRaises(RuntimeError): async_rehearsal.mark_ready(self.conn,'owner','plan:pair','date')
         self.assertEqual(db.fetch_all(self.conn,'RehearsalReady'),[])
+
+    def test_concurrent_intro_start_is_idempotent_and_transfer_rolls_back(self):
+        import week_service
+        self.conn.execute('DELETE FROM "DatePlan"')
+        self.conn.execute('DELETE FROM "Availability"')
+        self.conn.execute('DELETE FROM "LockIn"')
+        self.run_pair(lambda conn,uid:async_rehearsal.start_intro(conn,'owner'))
+        self.assertEqual(len(db.fetch_all(self.conn,'RehearsalIntro')),1)
+        self.conn.execute('UPDATE "RehearsalIntro" SET started_at=%s',('0',))
+        self.run_pair(lambda conn,uid:async_rehearsal.save_draft(conn,'owner',[{'day':'Sat','meal_slot':'dinner'}]))
+        before=db.fetch_one(self.conn,'RehearsalIntro',id='owner')['slots_json']
+        with self.assertRaises(RuntimeError):
+            with week_service.transition(self.conn):
+                self.conn.execute('INSERT INTO "LockIn" (id,user_a,user_b,week,created_at,status) VALUES (%s,%s,%s,1,%s,%s)',('new','owner','partner','test','active'))
+                async_rehearsal.transfer_drafts(self.conn,'new',('owner','partner'),1)
+                raise RuntimeError('injected after transfer')
+        self.assertEqual(db.fetch_all(self.conn,'LockIn'),[])
+        self.assertEqual(db.fetch_all(self.conn,'Availability'),[])
+        self.assertEqual(db.fetch_one(self.conn,'RehearsalIntro',id='owner')['slots_json'],before)

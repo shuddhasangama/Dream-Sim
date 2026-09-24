@@ -9907,6 +9907,244 @@
           }
         }
       }
+    },
+    "/rehearsal/start": {
+      "post": {
+        "operationId": "startRehearsalIntro",
+        "summary": "Idempotently start the authenticated verified Dating user personal 12-minute introduction. Existing pairs are retained. No restart on login.",
+        "description": "Requires DHASHU_SIMULATED_CLOCK and DHASHU_ASYNC_TEST. Both readiness submissions advance the pair checkpoint, not consent, attendance or feedback. Retries are idempotent while the date is current and unresolved. No provider bypass.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated actor-scoped rehearsal state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AsyncRehearsal"
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid strict JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Test mode disabled, eligibility missing or bearer required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Owned date not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date is stale, unresolved agreement or preceding checkpoint incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rehearsal/availability": {
+      "put": {
+        "operationId": "saveRehearsalAvailability",
+        "summary": "Replace own draft weekend slots after minute 12 while unmatched. Draft slots transfer atomically on mutual lock-in; plan creation still enforces both alignment, overlap and payment prerequisites.",
+        "description": "Requires DHASHU_SIMULATED_CLOCK and DHASHU_ASYNC_TEST. Both readiness submissions advance the pair checkpoint, not consent, attendance or feedback. Retries are idempotent while the date is current and unresolved. No provider bypass.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "slots"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "slots": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "day",
+                        "meal_slot"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "day": {
+                          "type": "string"
+                        },
+                        "meal_slot": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated actor-scoped rehearsal state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AsyncRehearsal"
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid strict JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Test mode disabled, eligibility missing or bearer required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Owned date not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date is stale, unresolved agreement or preceding checkpoint incomplete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12449,6 +12687,25 @@
               "body"
             ],
             "additionalProperties": false
+          },
+          "intro_step": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "next_jump_in_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "start_request": {
+            "type": "object",
+            "description": "POST automatically on authenticated app entry when present; never from rendering."
+          },
+          "draft_availability": {
+            "type": "object",
+            "description": "Own valid_slots, my_slots and PUT path, available at minute 12 before matching."
           }
         },
         "required": [

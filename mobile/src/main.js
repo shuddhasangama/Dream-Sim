@@ -167,7 +167,7 @@ function renderChrome(current, tabs) {
       ${indicator?.show?`<div class="stage-bar" role="list" aria-label="${safe(indicator.label)}">${(indicator.stages||[]).map(s=>`<span role="listitem" class="stage-pip ${safe(s.state)}">${safe(s.label)}</span>`).join('')}</div>`:''}
     </div>
     <main class="container">
-      ${renderRehearsal(journey.async_rehearsal, safe)}
+      ${renderRehearsal(journey.async_rehearsal, safe, journey.clock)}
       ${journey.accelerated_test?.enabled ? `<aside class="card accelerated-banner"><strong>Accelerated test · shared clock</strong><p>${safe(journey.clock.day)} ${String(journey.clock.hour).padStart(2,'0')}:00 · Week ${safe(journey.clock.week)} · ${journey.accelerated_test.finished?'30-minute run complete': '3 real minutes per checkpoint'}</p><p class="hint">${clockPending?'Time has advanced. Your unsaved screen is preserved. Save your edits, then refresh.':'Make your own choices at each step. Both partners must respond.'}</p><button id="refresh-clock" class="secondary" type="button">Refresh current step</button></aside>` : ''}
       <div class="toolbar">
         ${nav.depth>1?'<button id="back" class="text-button">← Back</button>':'<span></span>'}
@@ -177,6 +177,15 @@ function renderChrome(current, tabs) {
 }
 
 function bindChrome(current) {
+  root.querySelector('#rehearsal-slots')?.addEventListener('submit',(event)=>{
+    event.preventDefault();
+    const slots=new FormData(event.target).getAll('slot').map(value=>{
+      const [day,meal_slot]=value.split('|'); return {day,meal_slot};
+    });
+    const path=journey?.async_rehearsal?.draft_availability?.path;
+    if (!path) return;
+    run(async()=>{await session.put(path,{slots});screenDirty=false;await reloadCurrent();message='Weekend availability saved.';});
+  });
   root.querySelector('#rehearsal-ready')?.addEventListener('click',()=>{
     if (screenDirty) { message='Save your edits before advancing the test journey.'; render(); return; }
     const action=journey?.async_rehearsal?.request;
@@ -396,6 +405,11 @@ async function reloadCurrent() {
 async function load() {
   const [nextJourney,nextProfile]=await Promise.all([session.get('/api/v1/journey/status'),session.get('/api/v1/profile')]);
   journey=nextJourney;profile=nextProfile;
+  if (journey?.async_rehearsal?.start_request) {
+    const req=journey.async_rehearsal.start_request;
+    await session.post(req.path,req.body);
+    journey=await session.get('/api/v1/journey/status');
+  }
   try { statsSummary=await session.get('/api/v1/profile/stats'); } catch { statsSummary=null; }
 }
 async function run(action) {

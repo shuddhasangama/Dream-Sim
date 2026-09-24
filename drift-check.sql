@@ -387,7 +387,12 @@ WITH expected(table_name, column_name) AS (VALUES
   ('EnrollmentDraft','id'),
   ('EnrollmentDraft','payload_json'),
   ('EnrollmentDraft','revision'),
-  ('EnrollmentDraft','completed_at')
+  ('EnrollmentDraft','completed_at'),
+  ('RehearsalIntro','id'),
+  ('RehearsalIntro','user_id'),
+  ('RehearsalIntro','week'),
+  ('RehearsalIntro','started_at'),
+  ('RehearsalIntro','slots_json')
 )
 SELECT e.table_name, e.column_name,
        CASE WHEN t.table_name IS NULL THEN 'TABLE MISSING' ELSE 'COLUMN MISSING' END AS problem

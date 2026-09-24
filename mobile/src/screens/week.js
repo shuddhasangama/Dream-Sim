@@ -60,7 +60,7 @@ function lockedIn(ctx) {
       <div class="stat-row"><span>Dates completed</span><strong>${safe(li?.dates_completed ?? 0)}</strong></div>
     </section>
     <section class="card guidance"><p>No one else can be matched to you while you're locked in — REACH is closed for now. Next is setting up when to meet.</p>
-      <button id="to-calendar" class="primary" type="button">Open calendar <span aria-hidden="true">→</span></button></section>`;
+      <button id="to-calendar" class="primary" type="button" ${ctx.journey?.async_rehearsal?.intro_step < 4 ? 'disabled' : ''}>Open calendar <span aria-hidden="true">→</span></button></section>`;
 }
 
 function dating(ctx) {
@@ -153,7 +153,7 @@ function theWeek(ctx) {
   if (!schedule?.grid) return '';
   const { grid, legend = [] } = schedule;
   const nowText = data.clock ? `${safe(data.clock.day)} ${String(data.clock.hour ?? 0).padStart(2, '0')}:00` : '';
-  const phaseCopy = journey?.async_rehearsal?.enabled ? 'Reference weekly timetable. This test journey advances through partner actions, not these deadlines.' : WEEK_PHASE_COPY[data.phase] || '';
+  const phaseCopy = journey?.async_rehearsal?.enabled ? 'Test clock: 3-minute steps until Wednesday 18:00, then partner actions. Revealed matches stay open.' : WEEK_PHASE_COPY[data.phase] || '';
   const explained = explainedMoments(grid);
   // §7.6/§7.8: the server's own simulated_clock is the primary gate —
   // never inferred from the build flag alone. The build flag is only ever

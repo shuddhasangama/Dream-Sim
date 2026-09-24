@@ -17,6 +17,18 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
     def uid():
         return g.api_user['user_id']
 
+    @api.post('/rehearsal/start')
+    def rehearsal_start():
+        json_object()
+        async_rehearsal.start_intro(get_db(), uid())
+        return jsonify(async_rehearsal.snapshot(get_db(), uid())[1])
+
+    @api.put('/rehearsal/availability')
+    def rehearsal_availability():
+        body = json_object(required={'slots'})
+        async_rehearsal.save_draft(get_db(), uid(), body['slots'])
+        return jsonify(async_rehearsal.snapshot(get_db(), uid())[1])
+
     @api.post('/rehearsal/date-plans/<pid>/ready')
     def rehearsal_ready(pid):
         body = json_object(required={'step'})

@@ -139,6 +139,9 @@ class AsyncRehearsalTests(RouteTestCase):
 
     def test_match_choices_do_not_expire_with_real_elapsed_time(self):
         db.delete_row(self.conn,'LockIn','lock-1')
+        for who in ('owner','partner'):
+            with mock.patch('async_rehearsal.time.time',return_value=0):
+                service.start_intro(self.conn,who)
         for who,other in [('owner','partner'),('partner','owner')]:
             db.insert_row(self.conn,'Match',{'id':who,'user_id':who,'candidate_id':other,'week':1,'slot':3,
                 'revealed_at':'Wed:12','window_closes_at':'Wed:18'})
@@ -161,3 +164,76 @@ class AsyncRehearsalTests(RouteTestCase):
         for stage in ('date','debrief'):
             for who in ('owner','partner'): self.ready(path,who,stage)
         self.assertEqual(self.state('stranger')['clock'],other_clock)
+
+    def test_personal_intro_boundaries_restart_and_late_partner(self):
+        db.delete_row(self.conn,'LockIn','lock-1')
+        before=list(self.conn.iterdump())
+        self.assertIn('start_request',self.state()['async_rehearsal'])
+        self.assertEqual(before,list(self.conn.iterdump()))
+        with mock.patch('async_rehearsal.time.time',return_value=1000):
+            r=self.request('/rehearsal/start',method='POST',body={})
+            self.assertEqual(r.status_code,200,r.json)
+        for elapsed,day,hour,step in [(0,'Mon',10,0),(179,'Mon',10,0),(180,'Mon',12,1),
+                (359,'Mon',12,1),(360,'Tue',12,2),(540,'Wed',12,3),(719,'Wed',12,3),
+                (720,'Wed',18,4),(10800,'Wed',18,4)]:
+            with mock.patch('async_rehearsal.time.time',return_value=1000+elapsed):
+                state=self.state()
+                self.assertEqual((state['clock']['day'],state['clock']['hour']),(day,hour))
+                self.assertEqual(state['async_rehearsal']['intro_step'],step)
+                self.assertEqual(self.request('/rehearsal/start',method='POST',body={}).status_code,200)
+        self.assertEqual(float(db.fetch_one(self.conn,'RehearsalIntro',id='owner')['started_at']),1000)
+        with mock.patch('async_rehearsal.time.time',return_value=11800):
+            self.assertEqual(self.request('/rehearsal/start',uid='partner',method='POST',body={}).status_code,200)
+            self.assertEqual(self.state('partner')['clock']['hour'],10)
+            self.assertEqual(self.state()['clock']['hour'],18)
+        self.assertEqual(self.request('/rehearsal/start',method='POST',body={'user_id':'stranger'}).status_code,400)
+        with mock.patch.dict('os.environ',{'DHASHU_ASYNC_TEST':'false'}):
+            self.assertEqual(self.request('/rehearsal/start',method='POST',body={}).status_code,403)
+
+    def test_draft_validated_owned_and_transferred_at_mutual_interest(self):
+        db.delete_row(self.conn,'LockIn','lock-1')
+        with mock.patch('async_rehearsal.time.time',return_value=1000):
+            for who in ('owner','partner'):
+                service.start_intro(self.conn,who)
+            self.assertEqual(self.request('/rehearsal/availability',method='PUT',body={'slots':[self.slot]}).status_code,409)
+        with mock.patch('async_rehearsal.time.time',return_value=1720):
+            for slots in [[{'day':'Mon','meal_slot':'dinner'}],[self.slot,self.slot],['Sat'],None]:
+                self.assertEqual(self.request('/rehearsal/availability',method='PUT',body={'slots':slots}).status_code,400)
+            self.assertEqual(self.request('/rehearsal/availability',method='PUT',body={'slots':[self.slot],'user_id':'partner'}).status_code,400)
+            for who in ('owner','partner'):
+                for _ in range(2):
+                    self.assertEqual(self.request('/rehearsal/availability',uid=who,method='PUT',body={'slots':[self.slot]}).status_code,200)
+            self.assertNotIn('draft_availability',self.state('stranger')['async_rehearsal'])
+            for who,other in [('owner','partner'),('partner','owner')]:
+                db.insert_row(self.conn,'Match',{'id':who,'user_id':who,'candidate_id':other,'week':1,'slot':1,
+                    'revealed_at':'Mon:12','window_closes_at':'Tue:10'})
+                self.assertEqual(self.request('/matches/'+who+'/actions',uid=who,method='POST',body={'action':'interest'}).status_code,200)
+            pair=db.fetch_all(self.conn,'LockIn',status='active')[0]
+            self.assertEqual(len(db.fetch_all(self.conn,'Availability',lockin_id=pair['id'])),2)
+            self.assertEqual(db.fetch_one(self.conn,'RehearsalIntro',id='owner')['slots_json'],'[]')
+            self.assertEqual(self.state()['async_rehearsal']['stage'],'availability')
+            self.assertEqual(self.request('/rehearsal/availability',method='PUT',body={'slots':[]}).status_code,409)
+            self.base='/lock-ins/'+pair['id']
+            for who in ('owner','partner'): self.align(who)
+            with mock.patch.dict('os.environ',{'PAYMENTS_ENABLED':'1'}):
+                r=self.request(self.base+'/date-plan',method='POST',body=self.slot)
+                self.assertEqual(r.status_code,403,r.json)
+            r=self.request(self.base+'/date-plan',method='POST',body=self.slot)
+            self.assertEqual(r.status_code,200,r.json)
+
+    def test_staggered_reveal_and_early_pair_still_reaches_minute_twelve(self):
+        import cadence, clock
+        for elapsed in (0,180,360,540,720,7200):
+            day,hour=service.INTRO_POINTS[min(4,elapsed//180)]
+            for slot,(reveal_day,reveal_hour) in enumerate(service.INTRO_POINTS[1:4],1):
+                status=cadence.match_status({'revealed_at':clock.SimulationClock.at(1,reveal_day,reveal_hour),
+                    'window_closes_at':clock.SimulationClock.at(1,'Wed',18),'action':'none'},clock.SimulationClock.at(1,day,hour))
+                self.assertEqual(status,'open' if elapsed>=slot*180 else 'not_yet_revealed')
+        # Simulate a pair established after minute three. The intro is preserved.
+        db.insert_row(self.conn,'RehearsalIntro',{'id':'owner','user_id':'owner','week':1,'started_at':'1000','slots_json':'[]'})
+        with mock.patch('async_rehearsal.time.time',return_value=1180):
+            self.assertEqual(self.state()['clock']['day'],'Mon')
+            self.assertEqual(self.request(self.base+'/availability',method='PUT',body={'slots':[self.slot]}).status_code,409)
+        with mock.patch('async_rehearsal.time.time',return_value=1720):
+            self.assertEqual(self.state()['clock']['day'],'Wed')
+            self.assertEqual(self.request(self.base+'/availability',method='PUT',body={'slots':[self.slot]}).status_code,200)
