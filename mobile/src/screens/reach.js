@@ -1,87 +1,23 @@
-// REACH (mobile-journey-build-spec.md §2.1), ported from templates/reach.html
-// and static/app.js — one row per filter, name + Any switch + (for a range)
-// a real draggable slider, never a name shown twice in two different
-// controls. Every field comes straight from GET /api/v1/reach's own
-// _reach_state() shape — counts, filters, sliders — nothing here is a
-// client-side guess at what REACH considers a match.
-//
-// Two rules enforced structurally, not just by care:
+// REACH — design_handoff_app_ui_pulse/README.md ("Pulse", option 1a):
+// the same GET /api/v1/reach shape and the same set of mutations
+// (ignore/set-range/show-all) reach.js has always used, now presented as
+// a hero ring plus tap-to-loosen filter chips instead of one accordion
+// row per filter. Every rule from the older row-based screen still
+// applies structurally, not just by care:
 //   - nationality/religion never appear as a "widen this" suggestion —
 //     `deltas` (the auto-suggested widen list) is never rendered at all;
 //     they only ever show up in `filters`, the person's own deliberate
-//     choice, marked "yours" (sensitive) rather than nudged.
+//     choice.
 //   - every mutation (widen/set-range/ignore/show-all) returns the FULL
 //     fresh state already (the server's own _reach_state()), so a
 //     successful call patches ctx directly instead of a second round-trip.
-//
-// road-fixes-clock-spec.md §6: a missing stat is what keeps a filter out
-// of this screen in the first place (matching.unlock_levers_for runs on
-// every stats save, so filling one in is what actually adds the row) —
-// but /api/v1/reach has no "here's what's locked and why" field to key an
-// inline prompt off, so this offers stats editing unconditionally rather
-// than pretending to know which filter a person is missing. `_stats` is a
-// transient slice of GET /api/v1/profile/stats folded into this screen's
-// own data, fetched lazily so opening REACH never pays for a request it
-// might not need.
+//   - a chip TAP toggles Any/Set — the exact behaviour the old Any-switch
+//     checkbox had (matching.set_ignored() keeps the saved value either
+//     way, "Nothing was deleted"). A chip's small "…" (sliders and the
+//     Kids-style paired choice only — the two kinds that ever had a real
+//     picker) opens a bottom sheet with that SAME picker markup, just
+//     moved off the main screen per the spec's own instruction.
 import { editableFieldsForm, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from '../statsFields.js';
-
-export function render(ctx) {
-  const { data, safe } = ctx;
-  if (!data) return '<section class="intro"><h1>REACH</h1></section><section class="card"><p>Loading…</p></section>';
-  const { counts, filters = [], sliders = [], ignored_count = 0, all_ignored } = data;
-  const choiceGroups = groupChoices(filters.filter((f) => f.control === 'choice'));
-  const basicSliders = sliders.filter((s) => s.basic);
-  const moreSliders = sliders.filter((s) => !s.basic);
-  const basicChoices = choiceGroups.filter((g) => g.basic);
-  const moreChoices = choiceGroups.filter((g) => !g.basic);
-  const mutual = counts?.mutual_open ?? 0;
-
-  return `<section class="intro"><span class="eyebrow">REACH · Reciprocity this week</span><h1>See who opens up.</h1></section>
-    <section class="card reach-summary">
-      <div><span class="reach-number">${safe(mutual)}</span> ${mutual === 1 ? 'person' : 'people'}</div>
-      <div class="micro">of ${safe(counts?.fits_user_filters ?? 0)} who fit what you want are also open to you</div>
-      <div class="micro">${data.counting_unverified
-        ? 'Counting everyone here — verified and not yet verified — so you can see the place. Once you are verified this narrows to people you could actually be matched with.'
-        : 'Counting verified people only. These are the ones the weekly matcher can actually pair you with.'}</div>
-      ${counts?.no_realistic_matches ? '<div class="micro" style="color:var(--coral-1);margin-top:8px;">No realistic matches yet at your current filters — the one for you may not have signed up yet.</div>' : ''}
-    </section>
-
-    <section class="card">
-      <div class="filter-bar">
-        <div class="section-label" style="margin:0;">Your filters</div>
-        <button class="secondary btn-showall" id="show-all" data-ignore="${all_ignored ? 'false' : 'true'}" type="button">${all_ignored ? 'Put them back' : 'Any for everything'}</button>
-      </div>
-      <div class="hint">${ignored_count
-        ? `${safe(ignored_count)} set to Any. Nothing was deleted — switch one back and it returns as you left it.`
-        : 'Set anything to <strong>Any</strong> and it stops narrowing your pool.'}</div>
-
-      <div>${basicSliders.map(sliderRow).join('')}${basicChoices.map(choiceGroupRow(safe)).join('')}</div>
-
-      ${moreSliders.length || moreChoices.length ? `<details class="more-filters" ${moreFiltersOpen ? 'open' : ''}><summary>More filters</summary>
-        <div>${moreSliders.map(sliderRow).join('')}${moreChoices.map(choiceGroupRow(safe)).join('')}</div>
-      </details>` : ''}
-
-      <div class="hint" style="margin-top:12px;">Widening yours only helps where theirs already lets you in — both of you have to be open.</div>
-    </section>
-
-    <section class="card">
-      <div class="section-label" style="margin:0;">Missing a filter you expected?</div>
-      <div class="hint">A filter only appears once you've told us the matching stat — add it here without leaving REACH.</div>
-      ${(data.locked_levers || []).length ? `<ul class="locked-levers">${data.locked_levers.map((l) => `<li>${safe(l.label)} <span class="hint">— add ${safe(l.needs)} to filter on it</span></li>`).join('')}</ul>` : ''}
-      ${data._stats ? `${editableFieldsForm(data._stats, safe, 'inline-stats-form')}
-        <button id="cancel-stats-edit" class="secondary" type="button" style="margin-top:8px;">Cancel</button>
-        ${data._stats._saved ? '<p class="save-note">Saved.</p>' : ''}
-        ${data._stats._error ? `<p class="warn">${safe(data._stats._error)}</p>` : ''}`
-        : '<button id="edit-stats-toggle" class="secondary" type="button">Edit your stats</button>'}
-    </section>
-
-    <section class="card guru-card"><div class="guru-avatar">G</div><div>Nationality and religion are yours to explore — I'll never suggest widening them.</div></section>`;
-}
-
-// Every change re-renders the whole screen, which would snap "More filters"
-// shut under the person's finger after each choice inside it — so its open
-// state is remembered across renders.
-let moreFiltersOpen = false;
 
 // Position of a value along a min..max track, as a percentage clamped to
 // the track (round4-fixes-spec.md §3: 38 on the 21–80 age track is 28.8%).
@@ -91,11 +27,143 @@ export function trackPct(min, max, value) {
   return Math.min(100, Math.max(0, ((value - min) / span) * 100));
 }
 
-function sliderRow(s) {
+// A conic-gradient string for the hero ring — same helper contract as
+// home.js's ringGradient (0–100 in, a CSS background out), duplicated
+// rather than imported so reach.js and home.js stay free of a mutual
+// import for one three-line function.
+export function reachRingGradient(mutual, fit, color, track) {
+  const pct = fit > 0 ? (mutual / fit) * 100 : 0;
+  const clamped = Math.min(100, Math.max(0, pct));
+  const deg = mutual > 0 ? Math.max(6, (clamped / 100) * 360) : 0;
+  return `conic-gradient(${color} 0deg ${deg}deg, ${track} ${deg}deg 360deg)`;
+}
+
+// round3-fixes-spec.md §4.2: two answers to one question are one merged
+// control (matching.py's _OPPOSITES/`opposite` field) — a chip per
+// filter, not per row of the API's own list. Sliders are their own group;
+// `sensitive` (nationality/religion) chips carry no visible "yours" tag in
+// Pulse's clean chip design, only an aria-label, matching the spec's plain
+// chip look while keeping the information available to assistive tech.
+function groupChoices(choices) {
+  const byName = new Map(choices.map((f) => [f.name, f]));
+  const seen = new Set();
+  const groups = [];
+  for (const f of choices) {
+    if (seen.has(f.name)) continue;
+    const opp = f.opposite ? byName.get(f.opposite) : null;
+    seen.add(f.name);
+    if (opp) { seen.add(opp.name); groups.push({ kind: 'paired', options: [f, opp] }); }
+    else groups.push({ kind: 'single', filter: f });
+  }
+  return groups;
+}
+
+const PAIR_GROUP_LABELS = { wants_kids: 'Kids', no_kids_wanted: 'Kids', no_existing_children: 'Kids', has_existing_children: 'Kids' };
+
+// One "unit" per chip: a slider, a single ignore-only choice, or a paired
+// group — whatever kind, a chip only ever needs {chipKey, label, active,
+// valueText, hasSheet}. `hasSheet` is true only for the two kinds that
+// ever had a real picker beyond Any/Set (round3-fixes-spec.md §4.1's
+// slider, §4.2's paired 3-way choice) — nothing is lost by NOT giving the
+// rest a sheet, since Any/Set (the chip tap itself) is all they ever had.
+function sliderUnit(s) {
+  const [lo, hi] = s.current || [s.min, s.max];
+  return { kind: 'slider', chipKey: s.key, label: s.label, active: !s.ignored,
+    valueText: s.ignored ? 'Any' : `${lo}–${hi} ${s.unit}`, hasSheet: true, raw: s };
+}
+function singleUnit(f) {
+  return { kind: 'single', chipKey: f.name, label: f.label, active: !f.ignored,
+    valueText: f.ignored ? 'Any' : f.on_label, hasSheet: false, raw: f, sensitive: f.sensitive };
+}
+function pairedUnit(a, b) {
+  const selected = !a.ignored ? a : (!b.ignored ? b : null);
+  return { kind: 'paired', chipKey: `${a.name}|${b.name}`, label: PAIR_GROUP_LABELS[a.name] || a.label,
+    active: !!selected, valueText: selected ? selected.on_label : 'Any', hasSheet: true, raw: [a, b] };
+}
+
+function chipUnits(data) {
+  const { sliders = [], filters = [] } = data;
+  const choiceGroups = groupChoices(filters.filter((f) => f.control === 'choice'));
+  return [
+    ...sliders.map(sliderUnit),
+    ...choiceGroups.map((g) => (g.kind === 'paired' ? pairedUnit(...g.options) : singleUnit(g.filter))),
+  ];
+}
+
+export function render(ctx) {
+  const { data, safe } = ctx;
+  if (!data) return '<section class="intro"><h1>Reach</h1></section><section class="card"><p>Loading…</p></section>';
+  const { counts, ignored_count = 0, all_ignored } = data;
+  const mutual = counts?.mutual_open ?? 0;
+  const fit = counts?.fits_user_filters ?? 0;
+  const units = chipUnits(data);
+
+  return `<section class="intro"><span class="p-eyebrow">REACH · THIS WEEK</span></section>
+    <div class="p-reach-hero">
+      <div class="p-reach-ring" style="background:${reachRingGradient(mutual, fit, 'var(--p-success)', 'var(--p-track)')}">
+        <div class="p-reach-ring-inner"><div><div class="p-reach-num">${safe(mutual)}</div><div class="p-reach-sub">open to you</div></div></div>
+      </div>
+      <div>
+        <div class="p-reach-fit">of ${safe(fit)} who fit</div>
+        <div class="p-reach-verified">${data.counting_unverified ? 'Counting everyone, verified or not' : 'Verified only'}</div>
+      </div>
+    </div>
+    ${counts?.no_realistic_matches ? '<p class="warn">No realistic matches yet at your current filters.</p>' : ''}
+
+    <div class="p-reach-hint"><span>Tap a filter to loosen it</span>
+      <button type="button" class="p-text-link" id="show-all" data-ignore="${all_ignored ? 'false' : 'true'}">${all_ignored ? 'Put them back' : 'Any for everything'}</button>
+    </div>
+    ${ignored_count ? `<p class="hint">${safe(ignored_count)} set to Any. Nothing was deleted — tap one back and it returns as you left it.</p>` : ''}
+
+    <div class="p-chip-row">${units.map((u) => chip(u, safe)).join('')}</div>
+
+    <div class="p-card" style="margin-top:20px;">
+      <div class="p-detail-title" style="font-size:15px;">Missing a filter you expected?</div>
+      <div class="hint">A filter only appears once you've told us the matching stat — add it here without leaving REACH.</div>
+      ${(data.locked_levers || []).length ? `<ul class="locked-levers">${data.locked_levers.map((l) => `<li>${safe(l.label)} <span class="hint">— add ${safe(l.needs)} to filter on it</span></li>`).join('')}</ul>` : ''}
+      ${data._stats ? `${editableFieldsForm(data._stats, safe, 'inline-stats-form')}
+        <button id="cancel-stats-edit" class="secondary" type="button" style="margin-top:8px;">Cancel</button>
+        ${data._stats._saved ? '<p class="save-note">Saved.</p>' : ''}
+        ${data._stats._error ? `<p class="warn">${safe(data._stats._error)}</p>` : ''}`
+        : '<button id="edit-stats-toggle" class="p-outline-cta" type="button">Edit your stats</button>'}
+    </div>
+
+    ${sheetKey ? renderSheet(sheetKey, units, safe) : ''}
+
+    <section class="card guru-card" style="margin-top:20px;"><div class="guru-avatar">G</div><div>Nationality and religion are yours to explore — I'll never suggest widening them.</div></section>`;
+}
+
+function chip(u, safe) {
+  return `<div class="filter-chip ${u.active ? 'is-active' : ''}" data-chip="${safe(u.chipKey)}">
+    <button type="button" class="chip-tap" data-toggle="${safe(u.chipKey)}" aria-label="${safe(u.label)}${u.sensitive ? ' (yours — never suggested)' : ''}, ${u.active ? safe(u.valueText) : 'Any'}">
+      <span class="chip-label">${safe(u.label)}</span><span class="chip-value">${safe(u.valueText)}</span>
+    </button>
+    ${u.hasSheet ? `<button type="button" class="chip-more" data-open-sheet="${safe(u.chipKey)}" aria-label="Adjust ${safe(u.label)}">⋯</button>` : ''}
+  </div>`;
+}
+
+// Which chip's sheet is open — module-level, like the old `moreFiltersOpen`
+// (every mutation re-renders the whole app; this is purely a client-side
+// selection, never server state).
+let sheetKey = null;
+
+function renderSheet(key, units, safe) {
+  const unit = units.find((u) => u.chipKey === key);
+  if (!unit) return '';
+  const body = unit.kind === 'slider' ? sliderSheetBody(unit.raw) : pairedSheetBody(unit.raw, safe);
+  return `<div class="p-chip-sheet-backdrop" data-close-sheet></div>
+    <div class="p-chip-sheet" role="dialog" aria-label="Adjust ${safe(unit.label)}">
+      <div class="p-sheet-handle" aria-hidden="true"></div>
+      <div class="p-detail-title" style="margin-bottom:10px;">${safe(unit.label)}</div>
+      ${body}
+      <button type="button" class="secondary" data-close-sheet style="margin-top:14px;">Done</button>
+    </div>`;
+}
+
+function sliderSheetBody(s) {
   const [lo, hi] = s.current || [s.min, s.max];
   return `<div class="filter${s.ignored ? ' is-any' : ''}" data-lever="${s.key}" data-min="${s.min}" data-max="${s.max}" data-step="${s.step}">
     <div class="filter-head">
-      <span class="filter-name">${s.label}</span>
       <span class="filter-readout"><span class="sv-min">${lo}</span>–<span class="sv-max">${hi}</span> ${s.unit}</span>
       <label class="any-switch"><input type="checkbox" class="filter-any" data-filter="${s.key}" ${s.ignored ? 'checked' : ''}><span>Any</span></label>
     </div>
@@ -117,92 +185,56 @@ function sliderRow(s) {
   </div>`;
 }
 
-function choiceRow(safe) {
-  return (f) => `<div class="filter is-choice${f.ignored ? ' is-any' : ''}" data-filter="${f.name}">
-    <div class="filter-head">
-      <span class="filter-name">${safe(f.label)}${f.sensitive ? ' <span class="sensitive-tag">yours</span>' : ''}</span>
-      <span class="filter-readout">${f.ignored ? 'Any' : safe(f.on_label)}</span>
-      <label class="any-switch"><input type="checkbox" class="filter-any" data-filter="${safe(f.name)}" ${f.ignored ? 'checked' : ''}><span>Any</span></label>
-    </div>
-    <div class="filter-foot">
-      <span></span>
-      <span class="filter-delta">${f.ignored ? (f.delta_if_ignored > 0 ? `−${f.delta_if_ignored} if switched back on` : '') : (f.delta_if_ignored > 0 ? `+${f.delta_if_ignored} on Any` : '')}</span>
-    </div>
-  </div>`;
-}
-
-// round3-fixes-spec.md §4.2: "Wants kids" and "Does not want kids" as two
-// separate Any-switch rows was duplicative — they are two answers to one
-// question (matching.py's _OPPOSITES). Which filter names pair up comes
-// from each filter's own `opposite` field, not a hardcoded list here, so
-// this generalizes to any future opposite pair the API adds.
-function groupChoices(choices) {
-  const byName = new Map(choices.map((f) => [f.name, f]));
-  const seen = new Set();
-  const groups = [];
-  for (const f of choices) {
-    if (seen.has(f.name)) continue;
-    const opp = f.opposite ? byName.get(f.opposite) : null;
-    seen.add(f.name);
-    if (opp) {
-      seen.add(opp.name);
-      groups.push({ kind: 'paired', options: [f, opp], basic: f.basic });
-    } else {
-      groups.push({ kind: 'single', filter: f, basic: f.basic });
-    }
-  }
-  return groups;
-}
-
-function choiceGroupRow(safe) {
-  return (group) => (group.kind === 'paired' ? pairedChoiceRow(safe, group.options) : choiceRow(safe)(group.filter));
-}
-
-// Presentational only, same as nav.js's own SURFACE_LABELS — the API
-// names which two filters pair up (via `opposite`), not what to call the
-// merged row. A pair this map doesn't know falls back to the first
-// filter's own label rather than showing nothing.
-const PAIR_GROUP_LABELS = { wants_kids: 'Kids', no_kids_wanted: 'Kids', no_existing_children: 'Kids', has_existing_children: 'Kids' };
-
-function pairedChoiceRow(safe, [a, b]) {
+// round3-fixes-spec.md §4.2's merged control — the same three-way radio
+// (or, for the "existing children" pair, two independent checkboxes) as
+// the old accordion row, just living in the sheet now.
+function pairedSheetBody([a, b], safe) {
   const selected = !a.ignored ? a.name : (!b.ignored ? b.name : '');
   if (a.name === 'no_existing_children' || a.name === 'has_existing_children') {
-    const choice = f => `<label class="paired-choice-option"><input type="checkbox" data-children-filter="${safe(f.name)}" value="${safe(f.name)}" ${!f.ignored ? 'checked' : ''}><span>${safe(f.on_label)}</span></label>`;
-    return `<div class="filter is-choice" data-paired="${safe(a.name)}|${safe(b.name)}"><div class="filter-head"><span class="filter-name">Kids</span></div><p class="muted">Children they already have. Future parenting preferences belong in Vision.</p><div class="paired-choice-options">${choice(b)}${choice(a)}</div><p class="muted">Leave both unselected to include everyone.</p></div>`;
+    const choice = (f) => `<label class="paired-choice-option"><input type="checkbox" data-children-filter="${safe(f.name)}" value="${safe(f.name)}" ${!f.ignored ? 'checked' : ''}><span>${safe(f.on_label)}</span></label>`;
+    return `<p class="muted">Children they already have. Future parenting preferences belong in Vision.</p>
+      <div class="paired-choice-options" data-paired="${safe(a.name)}|${safe(b.name)}">${choice(b)}${choice(a)}</div>
+      <p class="muted">Leave both unselected to include everyone.</p>`;
   }
   const groupName = `paired-${a.name}-${b.name}`;
   const option = (name, optLabel) => `<label class="paired-choice-option"><input type="radio" name="${safe(groupName)}" value="${safe(name)}" ${selected === name ? 'checked' : ''}><span>${safe(optLabel)}</span></label>`;
-  return `<div class="filter is-choice${!selected ? ' is-any' : ''}" data-paired="${safe(a.name)}|${safe(b.name)}">
-    <div class="filter-head">
-      <span class="filter-name">${safe(PAIR_GROUP_LABELS[a.name] || a.label)}${a.sensitive || b.sensitive ? ' <span class="sensitive-tag">yours</span>' : ''}</span>
-    </div>
-    <div class="paired-choice-options">
-      ${option(a.name, a.on_label)}${option(b.name, b.on_label)}${option('', 'Any')}
-    </div>
+  return `<div class="paired-choice-options" data-paired="${safe(a.name)}|${safe(b.name)}">
+    ${option(a.name, a.on_label)}${option(b.name, b.on_label)}${option('', 'Any')}
   </div>`;
 }
 
 export function bind(root, ctx) {
   const { session, run, patch, data } = ctx;
+  const units = chipUnits(data);
+  const unitByKey = new Map(units.map((u) => [u.chipKey, u]));
 
-  root.querySelector('details.more-filters')?.addEventListener('toggle', (e) => { moreFiltersOpen = e.target.open; });
+  root.querySelectorAll('[data-toggle]').forEach((btn) => btn.addEventListener('click', () => run(async () => {
+    const unit = unitByKey.get(btn.dataset.toggle);
+    if (!unit) return;
+    if (unit.kind === 'paired') {
+      const [a, b] = unit.raw;
+      if (unit.active) { patch(await session.post('/api/v1/reach/ignore', { filter: unit.raw.find((f) => !f.ignored).name, ignore: true })); }
+      else { patch(await session.post('/api/v1/reach/ignore', { filter: a.name, ignore: false })); }
+      return;
+    }
+    patch(await session.post('/api/v1/reach/ignore', { filter: unit.chipKey, ignore: unit.active }));
+  })));
 
-  root.querySelectorAll('.filter-any').forEach((box) => box.addEventListener('change', () => run(async () => {
+  root.querySelectorAll('[data-open-sheet]').forEach((btn) => btn.addEventListener('click', () => run(async () => { sheetKey = btn.dataset.openSheet; })));
+  root.querySelectorAll('[data-close-sheet]').forEach((el) => el.addEventListener('click', () => run(async () => { sheetKey = null; })));
+
+  // Inside the sheet: the same ignore/paired/slider wiring the old
+  // accordion rows used, just scoped to whichever sheet is open.
+  root.querySelectorAll('.p-chip-sheet .filter-any').forEach((box) => box.addEventListener('change', () => run(async () => {
     patch(await session.post('/api/v1/reach/ignore', { filter: box.dataset.filter, ignore: box.checked }));
   })));
-
-  // round3-fixes-spec.md §4.2: the merged kids control still just calls
-  // /api/v1/reach/ignore — the same endpoint the individual Any-switches
-  // use — since matching.set_ignored() already clears the opposite tag
-  // server-side when one of a pair is turned on.
-  root.querySelectorAll('[data-children-filter]').forEach(box=>box.addEventListener('change',()=>run(async()=>{
-    patch(await session.post('/api/v1/reach/ignore',{filter:box.dataset.childrenFilter,ignore:!box.checked}));
+  root.querySelectorAll('.p-chip-sheet [data-children-filter]').forEach((box) => box.addEventListener('change', () => run(async () => {
+    patch(await session.post('/api/v1/reach/ignore', { filter: box.dataset.childrenFilter, ignore: !box.checked }));
   })));
-  root.querySelectorAll('[data-paired] input[type="radio"]').forEach((radio) => radio.addEventListener('change', () => run(async () => {
+  root.querySelectorAll('.p-chip-sheet [data-paired] input[type="radio"]').forEach((radio) => radio.addEventListener('change', () => run(async () => {
     const [nameA, nameB] = radio.closest('[data-paired]').dataset.paired.split('|');
-    if (radio.value) {
-      patch(await session.post('/api/v1/reach/ignore', { filter: radio.value, ignore: false }));
-    } else {
+    if (radio.value) patch(await session.post('/api/v1/reach/ignore', { filter: radio.value, ignore: false }));
+    else {
       const held = (data.filters || []).find((f) => (f.name === nameA || f.name === nameB) && !f.ignored);
       patch(held ? await session.post('/api/v1/reach/ignore', { filter: held.name, ignore: true }) : data);
     }
@@ -215,9 +247,7 @@ export function bind(root, ctx) {
   root.querySelector('#edit-stats-toggle')?.addEventListener('click', () => run(async () => {
     patch({ ...data, _stats: await session.get('/api/v1/profile/stats') });
   }));
-
   root.querySelector('#cancel-stats-edit')?.addEventListener('click', () => run(async () => patch({ ...data, _stats: null })));
-
   root.querySelector('#inline-stats-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     run(async () => {
@@ -239,9 +269,6 @@ export function bind(root, ctx) {
         patch({ ...data, _stats: { ...withSubmittedValues(data._stats, entered), _saved: false, _fieldErrors: parsed.byField, _error: parsed.general || (parsed.byField ? null : 'Could not save — try again.') } });
         return;
       }
-      // Same "don't trust a 200, re-read it back" discipline as
-      // chemistry.js (round3-fixes-spec.md §1/§3): confirm the saved
-      // values independently before treating this as done.
       let confirmed;
       try {
         confirmed = await session.get('/api/v1/profile/stats');
@@ -258,17 +285,13 @@ export function bind(root, ctx) {
         patch({ ...data, _stats: { ...withSubmittedValues(confirmed, fields), _saved: false, _error: "That didn't actually save — the server's own copy doesn't match. Try again, or reload to see what's really there." } });
         return;
       }
-      // A saved stat can unlock a new REACH lever (matching.py's
-      // unlock_levers_for runs on every stats save) — reload the reach
-      // state itself, not just the stats sub-form, so a newly-unlocked
-      // filter shows up without a manual refresh.
       patch({ ...(await session.get('/api/v1/reach')), _stats: null });
     });
   });
 
-  // Dual overlaid range inputs: dragging redraws the bar locally (no
-  // request per pixel); releasing (the "change" event) commits the range.
-  root.querySelectorAll('.filter[data-lever]').forEach((card) => {
+  // Dual overlaid range inputs, sheet-only now: dragging redraws the bar
+  // locally (no request per pixel); releasing (the "change" event) commits.
+  root.querySelectorAll('.p-chip-sheet .filter[data-lever]').forEach((card) => {
     const minInput = card.querySelector('.range-min');
     const maxInput = card.querySelector('.range-max');
     const min = parseFloat(card.dataset.min), max = parseFloat(card.dataset.max);
@@ -302,14 +325,14 @@ export function bind(root, ctx) {
     // Property assignments work under the installed app's strict CSP. Inline
     // style attributes in HTML strings were blocked outside Vite preview.
     redraw();
-    const slider=data.sliders.find(s=>s.key===card.dataset.lever);
-    const self=card.querySelector('.slider-self');
-    if(self) self.style.left=trackPct(min,max,slider.self_value)+'%';
-    const suggested=card.querySelector('.slider-suggested');
-    if(suggested) {
-      const left=trackPct(min,max,slider.suggested[0]);
-      suggested.style.left=left+'%';
-      suggested.style.width=(trackPct(min,max,slider.suggested[1])-left)+'%';
+    const slider = data.sliders.find((s) => s.key === card.dataset.lever);
+    const self = card.querySelector('.slider-self');
+    if (self) self.style.left = trackPct(min, max, slider.self_value) + '%';
+    const suggested = card.querySelector('.slider-suggested');
+    if (suggested) {
+      const left = trackPct(min, max, slider.suggested[0]);
+      suggested.style.left = left + '%';
+      suggested.style.width = (trackPct(min, max, slider.suggested[1]) - left) + '%';
     }
   });
 }

@@ -558,7 +558,17 @@ export function previewTransport() {
     if (path.endsWith('/date-plan') && method === 'POST') {
       const id = 'plan-preview';
       calendar.current_plan_id = id;
-      week.date_plan = { id, status: 'pending_signatures', datetime: `2026-01-0${['Fri','Sat','Sun'].indexOf(body.day)+9}T19:00` };
+      // The real hour for whichever day/meal was actually confirmed —
+      // looked up in the SAME WM_MOMENTS table the week grid itself draws
+      // from, rather than a second, hardcoded guess that can drift out of
+      // sync with it (a design-review finding: Friday's own Dinner slot is
+      // 21:00, not the 19:00 every day used to get regardless of which
+      // was picked).
+      const mealLabel = { breakfast: 'Bkfst', lunch: 'Lunch', coffee: 'Coffee', dinner: 'Dinner' }[body.meal_slot] || 'Dinner';
+      const slotMoment = WM_MOMENTS.find((m) => m.at[0] === body.day && m.label === mealLabel && m.tone === 'date');
+      const hour = String(slotMoment ? slotMoment.at[1] : 19).padStart(2, '0');
+      const dateNum = ['Fri', 'Sat', 'Sun'].indexOf(body.day) + 9;
+      week.date_plan = { id, status: 'pending_signatures', datetime: `2026-01-0${dateNum}T${hour}:00` };
       plan = {
         id, lockin_id: week.lock_in.id, datetime: week.date_plan.datetime, meal: body.meal_slot, venue: 'Cafe Noir', cuisine: (calendar.alignment.mine.cuisine || [])[0] || null,
         budget_estimate: (calendar.alignment.mine.budget || [])[0] || null, bill_split: 'pay-your-own', status: 'pending_signatures',

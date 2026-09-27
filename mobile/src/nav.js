@@ -41,6 +41,30 @@ export function visibleTabs(surfaces) {
   return TAB_KEYS.filter((key) => byKey.get(key)?.eligible).map((key) => ({ key, label: labelFor(key) }));
 }
 
+// design_handoff_app_ui_pulse/README.md ("Pulse", option 1a): the four main
+// navigations move onto a floating bottom tab bar, always exactly these
+// four keys in this order — never sourced from disclosure.py's ordering,
+// which is a home for many more surfaces than a phone's thumb-reach bar can
+// hold. 'dashboard' shows as "Home" here only — SURFACE_LABELS keeps calling
+// it "Dashboard" everywhere else (blocked/unavailable messages, generic
+// screens), since that rename is purely the tab bar's own label.
+export const PRIMARY_TAB_KEYS = ['dashboard', 'reach', 'week', 'guru'];
+const PRIMARY_LABELS = { dashboard: 'Home', reach: 'Reach', week: 'Week', guru: 'Guru' };
+
+export function primaryTabs(surfaces) {
+  const byKey = new Map((surfaces || []).map((s) => [s.key, s]));
+  return PRIMARY_TAB_KEYS.filter((key) => byKey.get(key)?.eligible).map((key) => ({ key, label: PRIMARY_LABELS[key] }));
+}
+
+// Everything else nav-worthy (Verify, Relationship, Journey — stage-gated
+// surfaces the floating bar has no room for) still has to be reachable, so
+// it lives behind the Home avatar's profile sheet instead of a tab. Derived
+// from visibleTabs() rather than re-reading surfaces itself, so it can never
+// disagree with which keys are known/eligible.
+export function secondaryTabs(surfaces) {
+  return visibleTabs(surfaces).filter((t) => !PRIMARY_TAB_KEYS.includes(t.key));
+}
+
 export function createNav(onChange) {
   let stack = [{ key: 'dashboard' }];
   return {

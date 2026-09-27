@@ -1,94 +1,113 @@
-// Guru entry (§5, spec item 12), ported from templates/guru.html: the
-// coral "G" avatar in a bordered panel is the established Guru voice
-// component — used everywhere else in the app (dashboard, REACH's
-// nationality/religion note, week's lock-in note).
+// Guru — design_handoff_app_ui_pulse/README.md ("Pulse", option 1a): a
+// conversational "what now?" with quick-reply chips instead of the old
+// screen's fixed paragraphs/accordions. Every answer still comes from
+// EXACTLY the same GET /api/v1/guidance response the old screen read
+// (headline/body/cta/destination, Dating-only `dating_context`, and
+// `also_open` — see journey_api.guidance()) — nothing here invents new
+// server content, it only decides which quick reply surfaces which part
+// of that same response, and in what order.
 //
-// §4 hard constraint 5: "Guru never nudges escalation — it reflects and
-// structures; it does not suggest progressing, inviting home, or sharing
-// contacts." That guarantee is enforced server-side — guru.next_action()
-// for the single answer, guru_dating.dating_context()/pre_date_briefing()
-// for the sections below, all informational, none of them an action this
-// screen invents on its own.
+// §4 hard constraint 5 still holds structurally: Guru reflects and
+// structures, never nudges escalation. Every answer below is either the
+// server's own copy verbatim (dc.consent, dc.playbook, prep.*, a card's
+// own subtitle) or a plain factual sentence built from counts already on
+// the wire (`{mutual} of {fit} who fit...`) — nothing here suggests
+// progressing a stage, inviting someone home, or sharing contacts.
 //
-// round3-fixes-spec.md §6 added the rest of GET /api/v1/guidance's shape
-// this screen was previously ignoring: `dating_context` (§6.1 date prep,
-// §6.2 consent + playbook, Dating-stage only — null outside it) and
-// `also_open` (§6.3's "anything I can help you with?", the same list
-// guru.html's "Also open" tiles show on web).
+// Non-Dating stages have no guru_dating.py content of their own (it is
+// deliberately Dating-only) — so outside Dating the quick replies are
+// "What now?" plus one chip per `also_open` entry, which is already
+// whatever the server's own guru.cards() considers relevant at THIS
+// stage. That is what makes the chip set "stage-aware" without this file
+// hardcoding Relationship/Engaged/Married copy that doesn't exist yet.
 
-// round4-fixes-spec.md §9: the long reference content — how Dating works and
-// what to expect before a date — is collapsible, collapsed by default, with
-// a bold header, the same treatment as the Dashboard's sections. Open state
-// survives a re-render (the screen re-renders after any action).
-const openSections = new Set();
+// Which reflection is showing — module-level, like reach.js's sheet key:
+// every mutation re-renders the whole app, and this is purely a client-
+// side selection, never server state.
+let qa = null; // { question, answer, actionLabel, actionKey }
+// GET /api/v1/reach's counts, fetched once per Guru visit the first time
+// "Why so few matches?" is tapped — reach.js's own screen is the real
+// source of truth; this is only ever read here for one sentence.
+let reachCache = null;
 
-function fold(key, title, body, safe) {
-  return `<details class="dash-fold" data-fold="${safe(key)}" ${openSections.has(key) ? 'open' : ''}>
-    <summary><strong>${safe(title)}</strong></summary>
-    <div class="fold-body">${body}</div>
-  </details>`;
+export function _resetForTest() { qa = null; reachCache = null; }
+
+const STAGE_CHIPS = [
+  { id: 'what_now', label: 'What now?' },
+  { id: 'why_few_matches', label: 'Why so few matches?' },
+  { id: 'how_dating_works', label: 'How Dating works' },
+  { id: 'before_we_meet', label: 'Before we meet' },
+];
+
+function chipsFor(data) {
+  if (data.dating_context) return STAGE_CHIPS;
+  return [
+    { id: 'what_now', label: 'What now?' },
+    ...(data.also_open || []).map((c, i) => ({ id: `also_${i}`, label: c.title, card: c })),
+  ];
 }
 
 export function render(ctx) {
-  const { data, safe } = ctx;
+  const { data, safe, journey } = ctx;
   if (!data) return '<section class="intro"><h1>Guru</h1></section><section class="card"><p>Loading…</p></section>';
-  const dest = data.destination;
-  const dc = data.dating_context;
-  const prep = dc?.date_prep;
-  const also = data.also_open || [];
+  const firstName = safe((journey?.user?.display_name || 'there').trim().split(/\s+/)[0]);
+  const chips = chipsFor(data);
 
-  return `<section class="intro"><span class="eyebrow">Guru</span><h1>What now?</h1>
-    <p class="lede">One answer first. Everything else is one tap away, not spread across this screen.</p></section>
-    <section class="card guru-card">
+  return `<section class="p-guru-header">
       <div class="guru-avatar">G</div>
-      <div style="flex:1;">
-        <div class="section-label" style="margin:0;">${safe(data.headline)}</div>
-        <div style="margin-top:6px;">${safe(data.body)}</div>
-        ${dest && dest.eligible && dest.request ? `<button id="guru-cta" class="primary" type="button" style="width:auto;padding:10px 16px;">${safe(data.cta || 'Continue')} <span aria-hidden="true">→</span></button>` : ''}
-      </div>
+      <div><div style="font-weight:800;">Guru</div><div class="p-guru-role">Relationship navigator</div></div>
     </section>
+    <div class="p-guru-thread">
+      <div class="p-bubble-guru"><span>Hi ${firstName}. What's on your mind?</span></div>
+      ${qa ? `<div class="p-bubble-user">${safe(qa.question)}</div>
+        <div class="p-bubble-guru"><span>${safe(qa.answer)}</span>
+          ${qa.actionLabel ? `<button type="button" class="p-bubble-action" data-goto>${safe(qa.actionLabel)} <span aria-hidden="true">→</span></button>` : ''}
+        </div>` : ''}
+    </div>
+    <div class="p-quick-replies">${chips.map((c) => `<button type="button" class="p-quick-reply" data-chip="${safe(c.id)}">${safe(c.label)}</button>`).join('')}</div>`;
+}
 
-    ${dc ? fold('how-dating-works', 'How Dating works', `
-      <div class="guru-card" style="border:0;padding:0;margin:0;">
-        <div class="guru-avatar">G</div>
-        <div style="flex:1;">
-          <p style="margin:0;">${safe(dc.consent)}</p>
-          ${(dc.consent_points || []).length ? `<div class="section-label" style="margin-top:14px;font-size:11px;">Consent</div>
-          <ul data-consent-points style="margin-top:6px;padding-left:18px;">${dc.consent_points.map((p) => `<li>${safe(p)}</li>`).join('')}</ul>` : ''}
-          <div class="section-label" style="margin-top:14px;font-size:11px;">How it goes</div>
-          <ul class="hint" style="margin-top:6px;padding-left:18px;">${dc.playbook.map((p) => `<li>${safe(p)}</li>`).join('')}</ul>
-        </div>
-      </div>`, safe) : ''}
-
-    ${prep ? fold('before-you-meet', 'Before you meet', `
-      ${prep.partner_greeting ? `<p class="hint" style="margin-top:0;">They've said how they'd like to be greeted: <strong>${safe(prep.partner_greeting)}</strong>. Please respect it.</p>` : ''}
-      <div class="section-label" style="margin-top:10px;font-size:11px;">Courtesies</div>
-      <ul style="margin-top:6px;padding-left:18px;">${prep.courtesies.map((c) => `<li>${safe(c)}</li>`).join('')}</ul>
-      <div class="section-label" style="margin-top:14px;font-size:11px;">Safety</div>
-      <ul style="margin-top:6px;padding-left:18px;">${prep.safety.map((c) => `<li>${safe(c)}</li>`).join('')}</ul>
-      <div class="section-label" style="margin-top:14px;font-size:11px;">Boundaries</div>
-      <ul style="margin-top:6px;padding-left:18px;">${prep.boundaries.map((c) => `<li>${safe(c)}</li>`).join('')}</ul>
-      <p class="hint" style="margin-top:10px;">${safe(prep.note)}</p>`, safe) : ''}
-
-    ${also.length ? `<section class="card">
-      <div class="section-label" style="margin:0;">Anything else I can help with?</div>
-      <div class="guru-cards" style="margin-top:10px;">${also.map((c) => `<button class="guru-tile" type="button" data-key="${safe(c.destination?.key || '')}" ${c.destination?.eligible ? '' : 'disabled'}>
-        <span class="guru-tile-code">${safe(c.code)}</span>
-        <span class="guru-tile-body">
-          <span class="guru-tile-title">${safe(c.title)}</span>
-          <span class="guru-tile-sub">${safe(c.subtitle)}</span>
-        </span>
-      </button>`).join('')}</div>
-    </section>` : ''}`;
+// The one place every chip's question+answer+action gets decided — a plain
+// function of (chip id, the SAME guidance response render() used, the
+// journey surfaces needed to check an action's own eligibility, and a
+// reach-counts fetcher) so it's testable without a DOM.
+export async function answerFor(id, data, journeySurfaces, fetchReach) {
+  const eligible = (key) => journeySurfaces?.find((s) => s.key === key)?.eligible;
+  if (id === 'what_now') {
+    const dest = data.destination;
+    return { question: 'What now?', answer: data.body || data.headline || '',
+      actionLabel: dest?.eligible && dest?.request ? (data.cta || 'Continue') : null, actionKey: dest?.key };
+  }
+  if (id === 'why_few_matches') {
+    if (!reachCache) reachCache = await fetchReach();
+    const mutual = reachCache?.counts?.mutual_open ?? 0, fit = reachCache?.counts?.fits_user_filters ?? 0;
+    return { question: 'Why so few matches?', answer: `${mutual} of ${fit} who fit you are open to you. Loosen one filter.`,
+      actionLabel: eligible('reach') ? 'Open Reach' : null, actionKey: 'reach' };
+  }
+  const dc = data.dating_context;
+  if (id === 'how_dating_works' && dc) {
+    return { question: 'How Dating works', answer: [dc.consent, dc.playbook?.[0]].filter(Boolean).join(' '),
+      actionLabel: eligible('week') ? 'See the week' : null, actionKey: 'week' };
+  }
+  if (id === 'before_we_meet' && dc?.date_prep) {
+    const prep = dc.date_prep;
+    const rulesSurface = ['plan', 'calendar'].find(eligible);
+    return { question: 'Before we meet', answer: [prep.courtesies?.[0], prep.note].filter(Boolean).join(' '),
+      actionLabel: rulesSurface ? 'Rules of engagement' : null, actionKey: rulesSurface };
+  }
+  const card = (data.also_open || []).find((_, i) => `also_${i}` === id);
+  if (card) {
+    return { question: card.title, answer: card.subtitle || '',
+      actionLabel: card.destination?.eligible && card.destination?.request ? `Open ${card.title}` : null, actionKey: card.destination?.key };
+  }
+  return null;
 }
 
 export function bind(root, ctx) {
-  const { data, navigateTo } = ctx;
-  root.querySelectorAll('details[data-fold]').forEach((el) => el.addEventListener('toggle', () => {
-    if (el.open) openSections.add(el.dataset.fold); else openSections.delete(el.dataset.fold);
-  }));
-  root.querySelector('#guru-cta')?.addEventListener('click', () => navigateTo(data.destination.key));
-  root.querySelectorAll('.guru-tile[data-key]').forEach((btn) => {
-    if (btn.dataset.key) btn.addEventListener('click', () => navigateTo(btn.dataset.key));
-  });
+  const { data, navigateTo, run, session, journey } = ctx;
+  root.querySelectorAll('[data-chip]').forEach((btn) => btn.addEventListener('click', () => run(async () => {
+    const next = await answerFor(btn.dataset.chip, data, journey?.surfaces, () => session.get('/api/v1/reach'));
+    if (next) qa = next;
+  })));
+  root.querySelector('[data-goto]')?.addEventListener('click', () => { if (qa?.actionKey) navigateTo(qa.actionKey); });
 }

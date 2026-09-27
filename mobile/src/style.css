@@ -18,10 +18,23 @@
   --font-mono:'IBM Plex Mono',ui-monospace,'Courier New',monospace;
   --radius:18px; --radius-sm:12px;
   color-scheme:dark; font-synthesis:none;
+
+  /* design_handoff_app_ui_pulse/README.md's own "Design Tokens" table,
+     verbatim — scoped to their own --p- names rather than overwriting the
+     tokens above, since only Home/Reach/Week/Guru's presentation changed;
+     everything reached by pushing past them (calendar, plan, ceremony,
+     vision/chemistry's own editor body, road…) keeps the tokens above
+     completely untouched. */
+  --p-bg:#15121F; --p-surface:#1E1B30; --p-surface-2:#26223B; --p-selected:#2B2645;
+  --p-border:#2C2844; --p-border-strong:#3A3654; --p-track:#2A2740;
+  --p-text:#FFFFFF; --p-muted:#8A86A3; --p-faint:#5C5874; --p-faint-2:#4A4663;
+  --p-accent:#FF5A7A; --p-grad-1:#FF4F6D; --p-grad-2:#FF7A59; --p-on-grad:#1A0F14;
+  --p-success:#3DDC97; --p-vision:#B69CFF; --p-warn:#F5B54A;
+  --p-font-mono:'JetBrains Mono',var(--font-mono);
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--white);font-family:var(--font-display);-webkit-font-smoothing:antialiased}
-#app{max-width:460px;margin:auto;min-height:100dvh;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+#app{max-width:460px;margin:auto;min-height:100dvh;padding-bottom:calc(24px + env(safe-area-inset-bottom));position:relative}
 * { -webkit-tap-highlight-color: transparent; }
 .auth-options{display:flex;gap:12px;margin-bottom:20px}
 .auth-options button{flex:1}
@@ -364,3 +377,187 @@ fieldset.stats-group{min-width:0}
 .tw-video-body{margin-top:10px}
 .tw-video-player{display:block;width:100%;max-height:60vh;border-radius:10px;background:#000}
 .tw-video-placeholder{padding:18px;border:1px dashed var(--border);border-radius:10px;text-align:center;margin:0}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PULSE (design_handoff_app_ui_pulse/README.md, option "1a") — Home,
+   Reach, Week and Guru's redesigned presentation. Everything below is
+   scoped to the `p-` prefix and used only by home.js/reach.js/week.js/
+   guru.js and this file's own chrome (the floating tab bar, the avatar
+   sheet) — every other screen's markup/CSS is untouched.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* content area: 14px 20px normally, 120px at the bottom whenever the
+   floating tab bar is showing so the last card never sits under it. */
+main.container.has-tabbar{padding:14px 20px 120px}
+
+/* floating tab bar: position:fixed (not sticky/absolute) so it stays put
+   regardless of how long the page under it grows — centered under #app's
+   own 460px column on a wide (desktop-preview) viewport, edge-inset on a
+   real phone. */
+.p-tabbar{position:fixed;left:16px;right:16px;max-width:428px;margin:0 auto;
+  bottom:calc(22px + env(safe-area-inset-bottom));height:66px;border-radius:33px;
+  background:rgba(32,28,52,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid #2F2B48;display:flex;align-items:center;justify-content:space-around;
+  padding:0 8px;z-index:30}
+.p-tab{border:none;cursor:pointer;background:transparent;color:var(--p-muted);
+  border-radius:24px;padding:10px 14px;display:flex;align-items:center;gap:7px;
+  font-weight:700;font-size:13px;font-family:var(--font-display);min-height:44px}
+.p-tab-dot{width:8px;height:8px;border-radius:50%;background:#4A4663;flex:0 0 auto}
+.p-tab.is-active{background:var(--p-selected);color:var(--p-text)}
+.p-tab.is-active .p-tab-dot{background:var(--p-accent)}
+
+/* avatar / profile sheet: Sign out — and any stage-gated surface the tab
+   bar has no room for (Verify/Relationship/Journey) — lives here now. */
+.p-sheet-backdrop{position:fixed;inset:0;background:rgba(8,7,12,.6);z-index:40}
+.p-sheet{position:fixed;left:16px;right:16px;max-width:428px;margin:0 auto;
+  bottom:calc(16px + env(safe-area-inset-bottom));z-index:41;
+  background:var(--p-surface);border:1px solid var(--p-border);border-radius:24px;
+  padding:14px 20px calc(18px + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;gap:10px}
+.p-sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--p-border-strong);
+  margin:2px auto 6px}
+.p-sheet-name{font-size:18px;font-weight:800;color:var(--p-text)}
+.p-sheet-stage{font-family:var(--p-font-mono);font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--p-muted)}
+.p-sheet-links{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.p-sheet-link{border:1px solid var(--p-border);background:transparent;color:var(--p-text);
+  border-radius:12px;padding:12px 14px;text-align:left;font-weight:600;font-size:14px;min-height:44px}
+
+/* shared bits: cards, outline CTA, text link */
+.p-card{background:var(--p-surface);border:1px solid var(--p-border);border-radius:18px;padding:16px}
+.p-outline-cta{display:flex;justify-content:center;align-items:center;gap:6px;width:100%;
+  border:1px solid var(--p-border-strong);background:transparent;color:var(--p-text);
+  border-radius:14px;padding:12px;font-weight:700;font-size:14px;cursor:pointer;
+  font-family:var(--font-display);min-height:44px;margin-top:2px}
+.p-text-link{border:none;background:none;color:var(--p-muted);font-size:13px;font-weight:600;
+  padding:6px 0;cursor:pointer;font-family:var(--font-display);text-decoration:underline;min-height:32px}
+.p-editor-panel{margin-top:14px}
+
+/* Home */
+.p-home-header{display:flex;justify-content:space-between;align-items:flex-start;margin-top:4px}
+.p-eyebrow{font-family:var(--p-font-mono);font-size:11px;letter-spacing:.14em;color:var(--p-accent)}
+.p-hi{font-size:28px;font-weight:800;letter-spacing:-.02em;color:var(--p-text);margin:2px 0 0}
+.p-avatar{width:42px;height:42px;border-radius:50%;flex:0 0 auto;border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--p-grad-1),var(--p-grad-2));color:var(--p-on-grad);
+  font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center}
+
+.p-stage-stepper{display:flex;gap:6px;margin-top:20px}
+.p-stage-col{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+.p-stage-bar{height:4px;border-radius:2px;background:var(--p-track)}
+.p-stage-bar.is-current{background:linear-gradient(90deg,var(--p-grad-1),var(--p-grad-2))}
+.p-stage-label{font-family:var(--p-font-mono);font-size:8.5px;letter-spacing:.04em;
+  /* --p-faint (#5C5874) measures ~2.7:1 on --p-bg — fails WCAG AA even for
+     large text at this size. --p-muted (~5.3:1) is the smallest of the
+     spec's own tokens that actually passes for text this small. */
+  color:var(--p-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-stage-label.is-current{color:var(--p-text)}
+
+.p-next-up{display:flex;justify-content:space-between;align-items:center;gap:14px;width:100%;
+  border:none;cursor:pointer;text-align:left;margin-top:20px;
+  background:linear-gradient(135deg,var(--p-grad-1),var(--p-grad-2));border-radius:22px;
+  padding:16px 18px;color:var(--p-on-grad);font-family:var(--font-display);min-height:44px}
+.p-next-up-eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em}
+.p-next-up-title{font-size:18px;font-weight:800;margin-top:2px}
+.p-next-up-arrow{font-size:22px;font-weight:800;flex:0 0 auto}
+.p-next-up-empty{margin-top:20px;color:var(--p-muted);font-size:14px;text-align:center}
+/* A journey state with nothing to TAP yet (e.g. "waiting for your
+   partner") still shows the same card, just without the arrow/button
+   semantics — never inventing an action that doesn't exist. */
+.p-next-up-static{cursor:default}
+
+.p-rings-row{display:flex;justify-content:space-between;gap:8px;margin-top:20px}
+.p-ring-btn{border:none;background:none;padding:0;cursor:pointer;display:flex;
+  flex-direction:column;align-items:center;gap:8px;opacity:.5;flex:1;min-height:44px;
+  font-family:var(--font-display)}
+.p-ring-btn.is-selected{opacity:1}
+.p-ring{width:94px;height:94px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.p-ring-inner{width:76px;height:76px;border-radius:50%;background:var(--p-bg);
+  display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:var(--p-text)}
+.p-ring-label{font-size:13px;font-weight:700;color:var(--p-text)}
+
+.p-detail-card{background:var(--p-surface);border:1px solid var(--p-border);border-radius:24px;
+  padding:18px;margin-top:20px;display:flex;flex-direction:column;gap:14px}
+.p-detail-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.p-detail-title{font-size:18px;font-weight:800;color:var(--p-text)}
+.p-detail-summary{font-size:13px;color:var(--p-muted);white-space:nowrap}
+.p-fact-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.p-fact-tile{background:var(--p-surface-2);border-radius:14px;padding:10px 12px;min-width:0}
+.p-fact-key{font-family:var(--p-font-mono);font-size:10px;letter-spacing:.1em;
+  color:var(--p-muted);text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p-fact-value{font-size:14px;font-weight:600;margin-top:2px;color:var(--p-text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Reach */
+.p-reach-hero{display:flex;align-items:center;gap:20px;margin-top:16px}
+.p-reach-ring{width:150px;height:150px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;flex:none}
+.p-reach-ring-inner{width:124px;height:124px;border-radius:50%;background:var(--p-bg);
+  display:flex;align-items:center;justify-content:center;text-align:center}
+.p-reach-num{font-size:54px;font-weight:800;color:var(--p-success);line-height:1}
+.p-reach-sub{font-size:12px;color:var(--p-muted)}
+.p-reach-fit{font-size:26px;font-weight:800;line-height:1.1;color:var(--p-text)}
+.p-reach-verified{font-size:13px;color:var(--p-muted);margin-top:6px}
+.p-reach-hint{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  margin-top:18px;font-size:13px;color:var(--p-muted)}
+.p-chip-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.filter-chip{display:flex;align-items:stretch;border-radius:999px;border:1.5px solid var(--p-border-strong);
+  background:transparent;overflow:hidden;min-height:44px}
+.filter-chip.is-active{border-color:var(--p-accent);background:rgba(255,90,122,.14)}
+.chip-tap{border:none;background:none;cursor:pointer;color:var(--p-muted);
+  padding:12px 8px 12px 16px;display:flex;align-items:baseline;gap:8px;font-family:var(--font-display)}
+.filter-chip.is-active .chip-tap{color:var(--p-text)}
+.chip-label{font-weight:700;font-size:14px}
+.chip-value{font-size:13px;opacity:.8}
+.chip-more{border:none;background:none;color:inherit;cursor:pointer;padding:0 14px 0 4px;
+  font-size:16px;font-weight:700;min-height:44px;min-width:32px}
+.p-chip-sheet-backdrop{position:fixed;inset:0;background:rgba(8,7,12,.55);z-index:40}
+.p-chip-sheet{position:fixed;left:16px;right:16px;max-width:428px;margin:0 auto;
+  bottom:calc(16px + env(safe-area-inset-bottom));z-index:41;
+  background:var(--p-surface);border:1px solid var(--p-border);border-radius:24px;
+  padding:14px 20px calc(18px + env(safe-area-inset-bottom));max-height:70vh;overflow-y:auto}
+.p-chip-sheet .filter{border-bottom:0;padding-top:4px}
+
+/* Week */
+.p-week-header{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  flex-wrap:wrap;margin-top:4px}
+.p-week-title{font-size:28px;font-weight:800;letter-spacing:-.02em;color:var(--p-text)}
+.p-now-pill{font-family:var(--p-font-mono);font-size:12px;color:var(--p-warn);
+  border:1px solid #4A3D22;border-radius:999px;padding:5px 10px;white-space:nowrap}
+.p-day-strip{display:flex;justify-content:space-between;gap:4px;margin-top:20px}
+.p-day-btn{border:none;cursor:pointer;width:46px;flex:0 0 auto;padding:10px 0;border-radius:16px;
+  background:transparent;color:var(--p-muted);display:flex;flex-direction:column;
+  align-items:center;gap:4px;font-family:var(--font-display);min-height:44px}
+.p-day-btn.is-today{color:var(--p-accent)}
+.p-day-btn.is-selected{background:var(--p-selected);color:var(--p-text)}
+.p-day-letter{font-size:12px;font-weight:700}
+.p-day-date{font-size:17px;font-weight:800}
+.p-day-dots{display:flex;gap:2px;height:5px}
+.p-day-dot{width:5px;height:5px;border-radius:50%}
+.p-day-label-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:18px}
+.p-day-label{font-size:15px;font-weight:700;color:var(--p-muted)}
+.p-event-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.p-event-card{background:var(--p-surface);border:1px solid var(--p-border);border-radius:18px;
+  padding:14px 16px;cursor:pointer;width:100%;text-align:left;
+  font-family:var(--font-display);min-height:44px}
+.p-event-row{display:flex;align-items:center;gap:14px}
+.p-event-dot{width:12px;height:12px;border-radius:50%;flex:none}
+.p-event-title{font-size:15px;font-weight:700;flex:1;color:var(--p-text);min-width:0}
+.p-event-time{font-family:var(--p-font-mono);font-size:11px;color:var(--p-muted);white-space:nowrap}
+.p-event-detail{margin-top:12px;padding-top:12px;border-top:1px solid var(--p-border)}
+
+/* Guru */
+.p-guru-header{display:flex;align-items:center;gap:10px;margin-top:4px}
+.p-guru-role{font-size:12px;color:var(--p-success);font-weight:600}
+.p-guru-thread{display:flex;flex-direction:column;gap:14px;margin-top:14px}
+.p-bubble-guru{align-self:flex-start;max-width:82%;background:var(--p-surface);
+  border-radius:20px 20px 20px 6px;padding:12px 16px;font-size:15px;line-height:1.45;
+  color:var(--p-text);display:flex;flex-direction:column;gap:12px}
+.p-bubble-user{align-self:flex-end;max-width:78%;background:var(--p-selected);
+  border-radius:20px 20px 6px 20px;padding:12px 16px;font-size:15px;color:var(--p-text)}
+.p-bubble-action{border:none;cursor:pointer;background:linear-gradient(135deg,var(--p-grad-1),var(--p-grad-2));
+  color:var(--p-on-grad);border-radius:12px;padding:10px 14px;font-weight:800;font-size:14px;
+  align-self:flex-start;font-family:var(--font-display);min-height:44px}
+.p-quick-replies{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:20px}
+.p-quick-reply{border:1px solid var(--p-border-strong);background:transparent;color:var(--p-text);
+  border-radius:999px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;
+  font-family:var(--font-display);min-height:44px}
