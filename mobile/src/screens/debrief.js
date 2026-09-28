@@ -8,8 +8,8 @@ export function flagsValid(green, red) {
 }
 
 const DECISION_COPY = {
-  continue: { label: 'Continue dating', warn: null },
-  relationship: { label: 'Go steady', warn: null },
+  continue: { label: 'Another date together', warn: null },
+  relationship: { label: 'Move to Relationship', warn: null },
   pass: { label: 'Pass', warn: "One No is Enough — this ends things and releases you both immediately, no explanation owed." },
 };
 
@@ -35,6 +35,7 @@ export function render(ctx) {
   if (!f.decision) {
     return `<section class="intro"><span class="eyebrow">DEBRIEF</span><h1>What's next?</h1></section>
       <section class="card"><p>Feedback saved. Now, what's next?</p>
+        <p class="hint">Another date together keeps you in Dating with this partner. Move to Relationship requests the next stage; both partners must choose it and complete any required relationship steps. If one chooses another date, you remain in Dating.</p>
         <form id="decision-form">
           <textarea name="reason" maxlength="2000" placeholder="Optional — only used if you pass"></textarea>
           <div class="action-row" style="flex-wrap:wrap;">

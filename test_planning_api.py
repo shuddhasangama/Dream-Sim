@@ -61,6 +61,24 @@ class PlanningApiTests(RouteTestCase):
             self.assertTrue(self.request(path+'/agreement').json['data']['face_simulation_available'])
         self.assertEqual(before, list(self.conn.iterdump()))
 
+    def test_week_completion_uses_saved_state_and_boundary_has_profile_route(self):
+        before = self.request('/week').json['data']['activity_status']
+        self.assertNotIn('calendar_closes', before)
+        path = self.prepare()
+        data = self.request('/week').json['data']
+        self.assertEqual(data['activity_status']['calendar_closes'], 'Completed')
+        self.assertNotIn('sign', data['activity_status'])
+        journey = self.request('/journey/status').json['data']
+        surfaces = {s['key']: s for s in journey['surfaces']}
+        self.assertFalse(surfaces['calendar']['eligible'])
+        self.assertEqual(surfaces['boundaries']['request']['path'], '/api/v1/profile/chemistry')
+        response = self.request('/profile/chemistry/entries/physical_boundary', method='PUT', body={'value':'namaste'})
+        self.assertEqual(response.status_code,200,response.json)
+        self.assertEqual(response.json['data']['answers']['physical_boundary'],'namaste')
+        self.conn.execute('UPDATE DatePlan SET status=? WHERE id=?', ('confirmed',path.split('/')[-1]))
+        self.conn.commit()
+        self.assertEqual(self.request('/week').json['data']['activity_status']['sign'],'Completed')
+
     def test_complete_two_actor_flow_and_exact_retries(self):
         path = self.prepare()
         self.assertEqual(self.request(self.base+'/date-plan', method='POST', body=self.slot).json['data']['id'], path.split('/')[-1])

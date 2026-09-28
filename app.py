@@ -33,6 +33,7 @@ import chemistry
 import clock as clock_module
 import accelerated_clock
 import async_rehearsal
+import week_activity
 import date_alignment
 import dateplan
 import db
@@ -4505,7 +4506,11 @@ def _api_week_state(user):
         if mode == 'dating' else None
     )
 
+    activity_status = week_activity.completed(get_db(), user['user_id'],
+        state['current_lock_in'], state['current_date_plan'],
+        db.fetch_all(get_db(), 'Match', user_id=user['user_id'], week=clock.week))
     return {'clock': state['clock'], 'phase': clock_module.phase(clock), 'mode': mode,
+            'activity_status': activity_status,
             'prepared': prepared,
             'fixed_test_pair': user['user_id'] in week_service.fixed_test_pairs.configured(),
             'prepare_request': {'method': 'POST', 'path': '/api/v1/week/prepare', 'body': {}}

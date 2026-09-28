@@ -541,6 +541,7 @@ main.container.has-tabbar{padding:14px 20px 120px}
   font-family:var(--font-display);min-height:44px}
 .p-event-toggle{display:block;width:100%;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer;min-height:44px}
 .p-event-row{display:flex;align-items:center;gap:14px}
+.activity-complete{color:var(--mint);font-size:12px;font-weight:700;flex-shrink:0}
 .p-event-dot{width:12px;height:12px;border-radius:50%;flex:none}
 .p-event-title{font-size:15px;font-weight:700;flex:1;color:var(--p-text);min-width:0}
 .p-event-time{font-family:var(--p-font-mono);font-size:11px;color:var(--p-muted);white-space:nowrap}

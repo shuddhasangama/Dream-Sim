@@ -53,14 +53,21 @@ function lockedIn(ctx) {
   const { data, safe } = ctx;
   const li = data.lock_in;
   return `<section class="intro"><span class="p-eyebrow">WEEK · LOCKED IN</span></section>
+    ${confirmDateAvailable(ctx) ? '<section class="p-card guidance"><h2>Confirm Date</h2><p>Save your availability, then confirm a slot when you are both free.</p><button id="to-calendar" class="primary" type="button">Confirm Date →</button></section>' : ''}
     ${weekHeader(ctx)}
     <section class="p-card" style="margin-top:20px;">
       <div class="stat-row"><span>Status</span><strong>${safe(li?.status)}</strong></div>
       <div class="stat-row"><span>Since week</span><strong>${safe(li?.week)}</strong></div>
       <div class="stat-row"><span>Dates completed</span><strong>${safe(li?.dates_completed ?? 0)}</strong></div>
     </section>
-    <section class="p-card" style="margin-top:14px;"><p style="margin:0;">No one else can be matched to you while you're locked in — REACH is closed for now. Next is setting up when to meet.</p>
-      <button id="to-calendar" class="p-outline-cta" type="button" ${ctx.journey?.async_rehearsal?.intro_step < 4 ? 'disabled' : ''}>Open calendar <span aria-hidden="true">→</span></button></section>`;
+    <section class="p-card" style="margin-top:14px;"><p style="margin:0;">No one else can be matched to you while you're locked in — REACH is closed for now.</p></section>`;
+}
+
+export function confirmDateAvailable(ctx) {
+  const day = ctx.data?.clock?.day;
+  return !ctx.data?.date_plan && ['Mon','Tue','Wed','Thu'].includes(day)
+    && !(ctx.journey?.async_rehearsal?.intro_step < 4)
+    && !!ctx.journey?.surfaces?.find(s => s.key === 'calendar' && s.eligible && s.request);
 }
 
 function dating(ctx) {
@@ -144,7 +151,7 @@ const MATCH_KEY_TO_SLOT = { match_1: 1, match_2: 2, match_3: 3 };
 // the surface key it maps to, and the label that screen's own tab already
 // uses for its CTA (calendar.js/plan.js), so nothing new is invented.
 const NAV_FOR_MOMENT = {
-  slots: { surface: 'calendar', label: 'Open calendar' },
+  slots: { surface: 'calendar', label: 'Confirm Date' },
   calendar_closes: { surface: 'plan', label: 'View plan' },
   sign: { surface: 'plan', label: 'Review & sign' },
   debrief: { surface: 'debrief', label: 'Open debrief' },
@@ -241,13 +248,16 @@ function eventCard(m, day, matchBySlot, ctx) {
   const open = expandedKey === key;
   const slot = MATCH_KEY_TO_SLOT[m.key];
   const match = slot ? matchBySlot[slot] : null;
-  const navHere = NAV_FOR_MOMENT[m.key];
-  const navEligible = navHere && ctx.journey?.surfaces?.find((s) => s.key === navHere.surface)?.eligible;
+  const navHere = m.key === 'calendar_closes' && !ctx.data.date_plan
+    ? {surface:'calendar', label:'Confirm Date'} : NAV_FOR_MOMENT[m.key];
+  const navEligible = navHere && ctx.journey?.surfaces?.find((s) => s.key === navHere.surface)?.eligible
+    && (navHere.surface !== 'calendar' || confirmDateAvailable(ctx));
   const hasDetail = !!(m.means || (match && match.status !== 'not_yet_revealed') || navEligible);
 
   const row = `<div class="p-event-row">
       <span class="p-event-dot" style="background:${CATEGORY_COLOR[m.tone] || CATEGORY_COLOR.muted}"></span>
       <span class="p-event-title">${safe(m.full_label || m.label)}</span>
+      ${ctx.data.activity_status?.[m.key] ? `<span class="activity-complete">✓ ${safe(ctx.data.activity_status[m.key])}</span>` : ''}
       <span class="p-event-time">${String(m.hour).padStart(2, '0')}:00</span>
     </div>`;
   const detail = open ? `<div class="p-event-detail">

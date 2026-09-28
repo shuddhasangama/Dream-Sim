@@ -174,10 +174,10 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
 
     if d.DATE_SET not in milestones:
         return action(
-            "Offer your weekend",
+            "Confirm Date",
             "You have locked in with someone. Give at least two slots so a date can be found "
             "between you.",
-            "calendar_view", "Set your availability")
+            "calendar_view", "Confirm Date")
 
     if not f.get("date_done") and not f.get("agreement_signed"):
         return action(

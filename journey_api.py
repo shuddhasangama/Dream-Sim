@@ -106,7 +106,7 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
         routes.update(calendar=calendar, align=calendar)
         if plan and plan['status'] in ('pending_signatures', 'confirmed'):
             routes['plan'] = '/api/v1/date-plans/'+quote(plan['id'], safe='')
-            routes['boundaries'] = routes['plan']
+            routes['boundaries'] = '/api/v1/profile/chemistry'
             routes['debrief'] = routes['plan']+'/debrief'
         if 'first_date' in reached:
             base = '/api/v1/lock-ins/'+quote(active['id'], safe='')
@@ -118,6 +118,8 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
         if user['journey_state'] == 'married':
             routes['married'] = base
     for item in [*result['surfaces'], result['next_action'].get('destination')]:
+        if item and item['key'] == 'calendar' and (plan or clock.day_index > 3):
+            item.update(eligible=False, request=None, blocked_reason='Date planning is complete or closed for this week.')
         if item and item['key'] in routes:
             item['api_available'] = True
             item['request'] = {'method': 'GET', 'path': routes[item['key']]} if item['eligible'] else None

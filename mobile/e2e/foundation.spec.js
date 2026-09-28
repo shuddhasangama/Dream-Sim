@@ -137,7 +137,7 @@ test('mutual interest locks in and REACH disappears from the tab bar live, not j
   // spec.md §2.1: "REACH sunsets at lock-in").
   await expect(tabbar(page).getByRole('button',{name:'Reach'})).toHaveCount(0);
 
-  await page.getByRole('button',{name:'Open calendar'}).click();
+  await page.getByRole('button',{name:'Confirm Date'}).click();
   // Calendar now has its own bespoke screen (Stage 3) — untouched by Pulse.
   await expect(page.getByRole('heading',{name:'When to meet'})).toBeVisible();
 });
@@ -148,7 +148,7 @@ test('full date pipeline: calendar overlap, plan, order-enforced ceremony, and t
   await tabbar(page).getByRole('button',{name:'Week'}).click();
   await eventCard(page,'Match 1').click();
   await page.getByRole('button',{name:'Express interest'}).click();
-  await page.getByRole('button',{name:'Open calendar'}).click();
+  await page.getByRole('button',{name:'Confirm Date'}).click();
 
   // Submit availability that overlaps the fixture's own match availability,
   // then confirm a slot — this generates the date plan (§2.4). Unrelated to
@@ -201,9 +201,9 @@ test('full date pipeline: calendar overlap, plan, order-enforced ceremony, and t
 
   await expect(page.getByRole('heading',{name:"What's next?"})).toBeVisible();
   await expect(page.getByText('One No is Enough')).toBeVisible();
-  await page.getByRole('button',{name:'Go steady'}).click();
+  await page.getByRole('button',{name:'Move to Relationship'}).click();
   await expect(page.getByRole('heading',{name:'Saved'})).toBeVisible();
-  await expect(page.getByText('You said: Go steady.')).toBeVisible();
+  await expect(page.getByText('You said: Move to Relationship.')).toBeVisible();
 });
 
 test('Week: the fixed weekend meal-slot template never reads as real bookings — only the couple\'s own confirmed date survives, and only once (design-review finding)',async({page})=>{
@@ -219,7 +219,7 @@ test('Week: the fixed weekend meal-slot template never reads as real bookings �
     await expect(page.locator('.p-event-card[data-tone="date"]')).toHaveCount(0);
   }
 
-  await page.getByRole('button',{name:'Open calendar'}).click();
+  await page.getByRole('button',{name:'Confirm Date'}).click();
   await page.getByLabel('Fri · Dinner').check();
   await page.getByLabel('Sat · Dinner').check();
   await page.getByRole('button',{name:'Save availability'}).click();
@@ -505,7 +505,7 @@ test('ROAD: reachable at Relationship entry (now behind the avatar sheet), routi
   await tabbar(page).getByRole('button',{name:'Week'}).click();
   await eventCard(page,'Match 1').click();
   await page.getByRole('button',{name:'Express interest'}).click();
-  await page.getByRole('button',{name:'Open calendar'}).click();
+  await page.getByRole('button',{name:'Confirm Date'}).click();
   await page.getByLabel('Fri · Dinner').check();
   await page.getByLabel('Sat · Dinner').check();
   await page.getByRole('button',{name:'Save availability'}).click();
@@ -527,7 +527,7 @@ test('ROAD: reachable at Relationship entry (now behind the avatar sheet), routi
   await page.getByRole('button',{name:'Actually listened'}).click();
   await page.getByRole('button',{name:'On time'}).click();
   await page.getByRole('button',{name:'Save feedback'}).click();
-  await page.getByRole('button',{name:'Go steady'}).click();
+  await page.getByRole('button',{name:'Move to Relationship'}).click();
 
   // Relationship appears in the avatar sheet immediately — no extra manual
   // reload — because the decision handler refreshes journey/status itself.

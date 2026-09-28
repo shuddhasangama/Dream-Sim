@@ -3,6 +3,7 @@ import { Session, classify } from './session.js';
 import { previewTransport } from './preview.js';
 import { createNav, primaryTabs, secondaryTabs, labelFor, wireHardwareBack, wireKeyboardScroll, PRIMARY_TAB_KEYS } from './nav.js';
 import * as homeScreen from './screens/home.js';
+import * as boundariesScreen from './screens/boundaries.js';
 import * as reachScreen from './screens/reach.js';
 import * as weekScreen from './screens/week.js';
 import * as calendarScreen from './screens/calendar.js';
@@ -94,6 +95,7 @@ const screens = {
   reach: reachScreen,
   week: weekScreen,
   calendar: calendarScreen,
+  boundaries: boundariesScreen,
   plan: planScreen,
   ceremony: ceremonyScreen,
   debrief: debriefScreen,
