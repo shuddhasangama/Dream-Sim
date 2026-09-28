@@ -81,7 +81,11 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
         return {'plan_id': pid, 'step': ceremony.next_step(state), 'complete': ceremony.is_complete(state),
                 'my_signed_name': state.get('signed_name'), 'my_signed_at': state.get('signed_at'),
                 'acknowledgements': ceremony.acks_for(ceremony.DATE_AGREEMENT),
-                'clauses': ceremony.clauses_for(ceremony.DATE_AGREEMENT, agreement_context(pid)),
+                # Older installed apps read text/label/term and otherwise render
+                # the entire object as JSON. Keep structured fields for newer
+                # clients, and add readable text for those existing builds.
+                'clauses': [{**c, 'text': f"{c['n']}. {c['title']} — {c['body']}"}
+                            for c in ceremony.clauses_for(ceremony.DATE_AGREEMENT, agreement_context(pid))],
                 'face_mode': 'simulation', 'face_simulation_available': simulation_enabled(),
                 'payment': entitlement(payments.AGREEMENT, pid)}
 

@@ -47,6 +47,20 @@ class PlanningApiTests(RouteTestCase):
     def step(self, path, who, step, **body):
         return self.request(path+'/agreement/steps', uid=who, method='POST', body={'step': step, **body})
 
+    def test_existing_mobile_build_gets_readable_clauses_and_server_face_flag(self):
+        path = self.prepare()
+        before = list(self.conn.iterdump())
+        with mock.patch.dict(os.environ, {'BETA_DATE_SIMULATION_ENABLED': '0'}):
+            data = self.request(path+'/agreement').json['data']
+            self.assertFalse(data['face_simulation_available'])
+        self.assertTrue(data['clauses'])
+        for clause in data['clauses']:
+            self.assertEqual(clause['text'], f"{clause['n']}. {clause['title']} — {clause['body']}")
+            self.assertFalse(clause['text'].startswith('{'))
+        with mock.patch.dict(os.environ, {'BETA_DATE_SIMULATION_ENABLED': '1'}):
+            self.assertTrue(self.request(path+'/agreement').json['data']['face_simulation_available'])
+        self.assertEqual(before, list(self.conn.iterdump()))
+
     def test_complete_two_actor_flow_and_exact_retries(self):
         path = self.prepare()
         self.assertEqual(self.request(self.base+'/date-plan', method='POST', body=self.slot).json['data']['id'], path.split('/')[-1])
