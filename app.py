@@ -3398,7 +3398,7 @@ def verification_status(user_id: str) -> dict:
 def contact_verified(user_id: str) -> bool:
     """The gate. False only for an account created since this existed
     that has confirmed neither channel."""
-    return signup_verification.is_satisfied(_account_for(user_id))
+    return signup_verification.matching_satisfied(_account_for(user_id))
 
 
 @app.route("/verify-contact", methods=["GET"])
@@ -4463,7 +4463,9 @@ def _api_match_view(user, row):
     result['their_interest'] = candidate['user_id'] in _interested_in_me(user['user_id'], row['week'])
     if row['week'] == get_clock().week and state == 'open' and not reach_locked(user):
         result['allowed_actions'] = ['pass']
-        if contact_verified(user['user_id']) and candidate['journey_state'] == 'dating' and not reach_locked(candidate):
+        if (contact_verified(user['user_id']) and candidate['journey_state'] == 'dating'
+                and not reach_locked(candidate)
+                and week_service.fixed_test_pairs.permits(user['user_id'], candidate['user_id'])):
             result['allowed_actions'].append('interest')
     return result
 
@@ -4505,6 +4507,7 @@ def _api_week_state(user):
 
     return {'clock': state['clock'], 'phase': clock_module.phase(clock), 'mode': mode,
             'prepared': prepared,
+            'fixed_test_pair': user['user_id'] in week_service.fixed_test_pairs.configured(),
             'prepare_request': {'method': 'POST', 'path': '/api/v1/week/prepare', 'body': {}}
                 if mode == 'dating' and not prepared and (async_rehearsal.enabled() or clock_module.phase(clock) != 'before_week_start') else None,
             'schedule': {'grid': week_map.grid(clock, personal_debrief=personal_debrief,

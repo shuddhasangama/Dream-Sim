@@ -8,6 +8,7 @@ import clock as clock_module
 import db
 import lockin
 import signup_verification
+import fixed_test_pairs
 from api_contract import ApiError
 from generate_users import from_user_row
 
@@ -48,6 +49,12 @@ def prepare(conn, uid, clock):
         user = eligible_user(conn, uid)
         if active_for(conn, uid):
             raise ApiError('reach_locked', 'You are already locked in.', 409)
+        if uid in fixed_test_pairs.configured():
+            assigned = db.fetch_all(conn, 'Match', user_id=uid, week=clock.week)
+            if not (len(assigned) == 1 and assigned[0]['id'].startswith('fixed:')
+                    and assigned[0]['candidate_id'] == fixed_test_pairs.configured()[uid]):
+                raise ApiError('test_pair_setup_required',
+                               'Your assigned test pair needs operator setup. Run test_pairs_admin.py.', 409)
         existing = db.fetch_all(conn, 'Match', user_id=uid, week=clock.week)
         batch = db.fetch_one(conn, 'MatchBatch', user_id=uid, week=clock.week)
         if batch:
@@ -55,7 +62,8 @@ def prepare(conn, uid, clock):
         if clock_module.phase(clock) == 'before_week_start' and not async_rehearsal.enabled():
             raise ApiError('week_not_started', 'The matching week has not opened.', 409)
         if not existing:
-            pool = [from_user_row(r) for r in db.fetch_all(conn, 'User', journey_state='dating')]
+            reserved = fixed_test_pairs.configured()
+            pool = [from_user_row(r) for r in db.fetch_all(conn, 'User', journey_state='dating') if r['id'] not in reserved]
             active = db.fetch_all(conn, 'LockIn', status='active')
             locked = {uid for r in active for uid in (r['user_a'], r['user_b'])}
             recent = {r['candidate_id'] for r in db.fetch_all(conn, 'Match', user_id=uid)
@@ -95,7 +103,14 @@ def decide(conn, uid, match_id, action, pass_reason, clock):
         if active_for(conn, uid):
             raise ApiError('reach_locked', 'You are already locked in.', 409)
         if action == 'interest':
-            if not signup_verification.is_satisfied(db.fetch_one(conn, 'Account', user_id=uid)):
+            if not fixed_test_pairs.permits(uid, row['candidate_id']):
+                raise ApiError('match_unavailable', 'This test profile has an assigned partner.', 409)
+            if uid in fixed_test_pairs.configured():
+                try:
+                    fixed_test_pairs.validate_accounts(conn, (uid, row['candidate_id']))
+                except ValueError as exc:
+                    raise ApiError('match_unavailable', str(exc), 409)
+            if not signup_verification.matching_satisfied(db.fetch_one(conn, 'Account', user_id=uid)):
                 raise ApiError('contact_verification_required', 'Verify your email or phone first.', 403)
             eligible_user(conn, row['candidate_id'])
             if active_for(conn, row['candidate_id']):
@@ -106,7 +121,7 @@ def decide(conn, uid, match_id, action, pass_reason, clock):
         if action == 'interest' and their and their['action'] == 'interest':
             # Both approvals were checked when submitted; also check the other
             # side now in case their contact approval has since been revoked.
-            if not signup_verification.is_satisfied(db.fetch_one(conn, 'Account', user_id=row['candidate_id'])):
+            if not signup_verification.matching_satisfied(db.fetch_one(conn, 'Account', user_id=row['candidate_id'])):
                 raise ApiError('match_unavailable', 'This match is no longer available.', 409)
             pair = lockin.on_mutual_interest(uid, row['candidate_id'], row['week'], clock)
             lid = f'lockin:{"|".join(sorted([uid, row["candidate_id"]]))}:{row["week"]}'

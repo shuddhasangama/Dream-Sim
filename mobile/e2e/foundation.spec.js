@@ -121,6 +121,14 @@ test('mutual interest locks in and REACH disappears from the tab bar live, not j
   await eventCard(page,'Match 1').click();
   await expect(page.locator('.candidate-name')).toHaveText('Priya Sharma');
 
+  // Actions and the reason field must not be nested inside the accordion button.
+  const candidate = page.locator('.candidate-card');
+  await expect(candidate.getByRole('button',{name:'Pass',exact:true})).toBeVisible();
+  await expect(candidate.getByRole('button',{name:'Express interest'})).toBeVisible();
+  await expect(page.locator('button .candidate-card')).toHaveCount(0);
+  await candidate.locator('.pass-reason').fill('Draft only — interest is still available');
+  await expect(candidate.getByRole('button',{name:'Express interest'})).toBeVisible();
+
   await page.getByRole('button',{name:'Express interest'}).click();
   await expect(page.getByText('WEEK · LOCKED IN')).toBeVisible();
   await expect(page.getByText('Status')).toBeVisible();

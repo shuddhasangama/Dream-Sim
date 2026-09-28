@@ -31,13 +31,14 @@ test('rehearsal waits, notices partner actions on an unchanged clock, and preser
   await expect(page.locator('.rehearsal-banner')).toContainText('at your own pace');
   await page.getByRole('button',{name:'Ready for simulated date',exact:true}).click();
   await expect(page.locator('.rehearsal-banner')).toContainText('Waiting for your partner');
-  await page.locator('.topnav').getByRole('button',{name:'Week',exact:true}).click();
+  await page.locator('.p-tabbar').getByRole('button',{name:'Week',exact:true}).click();
   await expect(page.locator('[data-advance]')).toHaveCount(0);
   await page.evaluate(()=>{window.__peer=true;});
   await page.clock.fastForward(15000);
   await expect(page.locator('.rehearsal-banner')).toContainText('Your partner is ready');
-  await page.locator('.topnav').getByRole('button',{name:'Dashboard',exact:true}).click();
-  await page.getByRole('button',{name:'Edit stats',exact:true}).click();
+  await page.locator('.p-tabbar').getByRole('button',{name:'Home',exact:true}).click();
+  await page.locator('[data-ring="stats"]').click();
+  await page.locator('[data-open-editor]').click();
   await page.locator('input[name=weight_kg]').fill('69');
   await page.evaluate(()=>{window.__peer=false;});
   await page.clock.fastForward(15000);

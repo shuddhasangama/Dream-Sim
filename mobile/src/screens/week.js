@@ -209,7 +209,7 @@ function weekHeader(ctx) {
   const rehearsalCopy = journey?.async_rehearsal?.enabled
     ? '<p class="hint" style="margin-top:8px;">Test clock: 3-minute steps until Wednesday 18:00, then partner actions. Revealed matches stay open.</p>' : '';
 
-  return `${simClock}${rehearsalCopy}
+  return `${simClock}${data.fixed_test_pair ? '<p class="hint">One assigned partner for this test. Both choose Express interest to open availability; otherwise your introduction continues to minute 12.</p>' : rehearsalCopy}
     <div class="p-week-header">
       <span class="p-week-title">This week</span>
       <span class="p-now-pill">NOW · ${safe(String(data.clock?.day || '').toUpperCase())} ${String(data.clock?.hour ?? 0).padStart(2, '0')}:00</span>
@@ -257,7 +257,7 @@ function eventCard(m, day, matchBySlot, ctx) {
     </div>` : '';
 
   return hasDetail
-    ? `<button type="button" class="p-event-card" data-event="${safe(key)}" data-tone="${safe(m.tone)}">${row}${detail}</button>`
+    ? `<div class="p-event-card" data-tone="${safe(m.tone)}"><button type="button" class="p-event-toggle" data-event="${safe(key)}" aria-expanded="${open}">${row}</button>${detail}</div>`
     : `<div class="p-event-card" data-tone="${safe(m.tone)}" style="cursor:default;">${row}</div>`;
 }
 

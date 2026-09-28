@@ -207,6 +207,16 @@ def is_satisfied(account: dict[str, Any] | None) -> bool:
     return bool(account.get("verified_email") or account.get("verified_phone"))
 
 
+def matching_satisfied(account: dict[str, Any] | None) -> bool:
+    """Test-only matching waiver, without claiming contact ownership verified."""
+    import auth_sessions
+    import async_rehearsal
+    if (account and account.get('auth_enabled') and async_rehearsal.enabled()
+            and auth_sessions.tester_allowed(account.get('user_id'))):
+        return True
+    return is_satisfied(account)
+
+
 def pending_channels(account: dict[str, Any] | None) -> list[str]:
     """Channels this account gave us that are still unconfirmed."""
     if not account:

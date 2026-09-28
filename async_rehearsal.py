@@ -32,6 +32,9 @@ def intro(conn, uid):
     row = db.fetch_one(conn, 'RehearsalIntro', id=uid) if uid else None
     elapsed = max(0, time.time()-float(row['started_at'])) if row else 0
     step = min(4, int(elapsed//180))
+    import fixed_test_pairs
+    if fixed_test_pairs.mutual_pair(conn, uid):
+        step = 4
     return row, step, None if step == 4 else max(1, int((step+1)*180-elapsed))
 
 def start_intro(conn, uid):
