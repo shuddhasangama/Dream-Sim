@@ -1,3 +1,5 @@
+import * as personal from './personal.js';
+let personalData=null, personalOwner=null;
 // Home (design_handoff_app_ui_pulse/README.md, option "1a Pulse"): replaces
 // the old Dashboard screen's presentation. Same data, same edit flows —
 // Vision/Chemistry/Stats are still exactly screens/vision.js,
@@ -170,6 +172,7 @@ export function nextUpCard(journey, weekSummary) {
 }
 
 export function render(ctx) {
+  if(personalOwner!==ctx.journey?.user?.user_id){personalData=null;personalOwner=ctx.journey?.user?.user_id;}
   const { journey, folds, dashboardStats, statsSummary, weekSummary, safe, busy } = ctx;
   const user = journey.user;
   const firstName = safe((user.display_name || 'there').trim().split(/\s+/)[0]);
@@ -217,11 +220,14 @@ export function render(ctx) {
     </div>
 
     <div class="p-detail-card">
+      ${selectedRing === 'vision' ? `<p class="hint">${safe(folds.vision.data?.template_label || 'BYOB — your Vision')}</p>` : ''}
       <div class="p-detail-head"><span class="p-detail-title">${ringDef.label}</span><span class="p-detail-summary">${safe(detail.summary || '')}</span></div>
       ${detail.blocked ? `<p class="hint">${safe(detail.blocked)}</p>` : `<div class="p-fact-grid">${(detail.tiles || []).map((t) => `<div class="p-fact-tile"><div class="p-fact-key">${safe(t.key)}</div><div class="p-fact-value">${safe(t.value)}</div></div>`).join('')}</div>`}
       ${!detail.blocked ? (editorOpen ? '' : `<button type="button" class="p-outline-cta" data-open-editor="${selectedRing}">${ringDef.cta} <span aria-hidden="true">→</span></button>`) : ''}
     </div>
 
+    <section class="card"><button type="button" id="personal-open" class="secondary">Photo, ethnicity &amp; health preferences</button>
+    ${personalData ? personal.render({...ctx,data:personalData}) : ''}</section>
     ${editorOpen ? `<div class="p-editor-panel" data-editor-body="${selectedRing}">
       ${selectedRing === 'stats' ? renderStatsEditor(ctx) : renderFoldBody(selectedRing, ctx)}
       <button type="button" class="secondary" id="p-close-editor" style="margin-top:10px;">${selectedRing === 'stats' && dashboardStats?._saved ? 'Done' : 'Close'}</button>
@@ -246,6 +252,8 @@ function renderFoldBody(key, ctx) {
 export function bind(root, ctx) {
   const { run, session, navigateTo, folds, dashboardStats } = ctx;
 
+  root.querySelector('#personal-open')?.addEventListener('click',()=>run(async()=>{personalData=personalData?null:await session.get('/api/v1/profile/personal');}));
+  if(personalData) personal.bind(root,{...ctx,data:personalData,patch:next=>{personalData=next;}});
   root.querySelector('#p-avatar')?.addEventListener('click', () => ctx.openAvatarSheet());
   root.querySelector('#p-next-up')?.addEventListener('click', (e) => navigateTo(e.currentTarget.dataset.destination));
 

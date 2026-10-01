@@ -339,6 +339,10 @@ def visions_compatible(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     A pillar chosen with no stance recorded (VISION_STANCE_AT_SIGNUP)
     likewise cannot disagree with anything, so it passes.
     """
+    def intent(u):
+        return u.get('stats', {}).get('kids_intent') or ('want' if any(v['key']=='Kids' for v in u['visions']) else 'undecided')
+    if {intent(user_a),intent(user_b)} == {'want','no'}:
+        return False
     a, b = _stances(user_a), _stances(user_b)
     for key in a.keys() & b.keys():
         if not a[key] or not b[key]:
@@ -358,6 +362,9 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     Stats yet; every user is implicitly "seeking the opposite gender."
     Opening this up to other orientations later means adding that real
     field and reading it here, not deleting this check."""
+    from profile_choices import health_fits
+    if not health_fits(user_a, user_b):
+        return False
     if user_a["gender"] == user_b["gender"]:
         return False
 

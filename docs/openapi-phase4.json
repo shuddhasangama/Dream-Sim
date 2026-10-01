@@ -10193,6 +10193,241 @@
         },
         "operationId": "authTester"
       }
+    },
+    "/profile/personal": {
+      "get": {
+        "operationId": "getPersonalProfile",
+        "summary": "Read own ethnicity, optional disclosures, private openness and portrait",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped profile envelope; sensitive disclosures are opt-in."
+          },
+          "400": {
+            "description": "Invalid fields or values."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "409": {
+            "description": "Current match or relationship holds matching preferences."
+          },
+          "415": {
+            "description": "JSON required."
+          }
+        }
+      },
+      "put": {
+        "operationId": "putPersonalProfile",
+        "summary": "Save consented disclosures and private matching preferences",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped profile envelope; sensitive disclosures are opt-in."
+          },
+          "400": {
+            "description": "Invalid fields or values."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "409": {
+            "description": "Current match or relationship holds matching preferences."
+          },
+          "415": {
+            "description": "JSON required."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "categories": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "uniqueItems": true
+                  },
+                  "share_health": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "openness": {
+                    "enum": [
+                      "any",
+                      "specific"
+                    ]
+                  },
+                  "open_categories": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "uniqueItems": true
+                  },
+                  "include_undisclosed": {
+                    "type": "boolean"
+                  },
+                  "ethnicity": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "uniqueItems": true,
+                    "maxItems": 2
+                  }
+                },
+                "required": [
+                  "categories",
+                  "share_health",
+                  "note",
+                  "openness",
+                  "open_categories",
+                  "include_undisclosed",
+                  "ethnicity"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profile/photo": {
+      "put": {
+        "operationId": "putProfilePhoto",
+        "summary": "Validate and sanitise portrait to 480x600 JPEG; null removes it",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped profile envelope; sensitive disclosures are opt-in."
+          },
+          "400": {
+            "description": "Invalid fields or values."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "409": {
+            "description": "Current match or relationship holds matching preferences."
+          },
+          "415": {
+            "description": "JSON required."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "photo": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 2800000
+                  }
+                },
+                "required": [
+                  "photo"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profile/vision/template": {
+      "put": {
+        "operationId": "putVisionTemplate",
+        "summary": "Save real template pillars before a match is live",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped profile envelope; sensitive disclosures are opt-in."
+          },
+          "400": {
+            "description": "Invalid fields or values."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "409": {
+            "description": "Current match or relationship holds matching preferences."
+          },
+          "415": {
+            "description": "JSON required."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "template": {
+                    "enum": [
+                      "grow",
+                      "two",
+                      "explore",
+                      "custom"
+                    ]
+                  },
+                  "pillars": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "uniqueItems": true
+                    }
+                  },
+                  "kids_intent": {
+                    "enum": [
+                      "want",
+                      "open",
+                      "no",
+                      "undecided"
+                    ]
+                  }
+                },
+                "required": [
+                  "template"
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

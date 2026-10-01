@@ -4461,6 +4461,9 @@ def _api_match_view(user, row):
         'bgv_status': shown['bgv_status'],
         'stats': {k: shown['stats'][k] for k in ('age', 'height_cm', 'profession', 'income_band',
                    'education', 'diet', 'nationality') if k in shown['stats']}}
+    import profile_choices
+    result['candidate'].update(profile_choices.public_profile(get_db(), candidate))
+    result['candidate']['verified_fields'] = sorted(stats_edit.verified_field_set(db.fetch_all(get_db(), 'Verification', user_id=candidate['user_id'])))
     result['their_interest'] = candidate['user_id'] in _interested_in_me(user['user_id'], row['week'])
     if row['week'] == get_clock().week and state == 'open' and not reach_locked(user):
         result['allowed_actions'] = ['pass']

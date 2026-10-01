@@ -38,9 +38,16 @@ export function render(ctx) {
     <section class="card"><h2>Your Vision</h2>
     <div class="chips">${goals.map((g) => `<span>${safe(g.key)}${stanceOf(g).length ? ' · ' + safe(stanceOf(g).join(', ')) : ''}</span>`).join('') || '<p class="hint">Nothing chosen yet.</p>'}</div>
     <p class="hint" style="margin-top:10px;">${safe(detail_explanation)}</p></section>
-    ${(data.presets || []).some(p=>p.key==='marriage') ? `<section class="card"><h2>Marriage</h2>
-      <p class="hint">A Vision shortcut: all four pillars and their choices, with Kids set to Naturally. Adoption and Surrogacy are not added. Existing choices are kept; use Declare a change to remove them. This does not change your journey stage or anyone's consent.</p>
-      <button id="marriage-preset" type="button" class="secondary">Choose Marriage</button></section>` : ''}
+    <section class="card"><h2>${safe(data.template_label || 'Choose your starting point')}</h2>
+      <p>Templates set your pillars. Review the choices before saving. These preferences never imply consent to an activity.</p>
+      <form id="vision-template-form">
+      <label>Starting point<select name="template">${(data.presets || []).filter(p=>p.key!=='marriage').map(p=>`<option value="${safe(p.key)}" ${p.key===(data.template_key||'custom')?'selected':''}>${safe(p.label)} — ${safe(p.description)}</option>`).join('')}</select></label>
+      <div id="template-preview"></div>
+      <div id="custom-pillars" hidden>
+      ${element_keys.map(k=>`<fieldset><legend><label><input type="checkbox" name="pillar" value="${safe(k)}" ${byKey.has(k)?'checked':''}> ${safe(k)}</label></legend>${(pillar_options[k]||[]).map(o=>`<label class="checkbox-row"><input type="checkbox" data-pillar-choice="${safe(k)}" value="${safe(o)}" ${stanceOf(byKey.get(k)||{}).includes(o)?'checked':''}> ${safe(o)}</label>`).join('')}</fieldset>`).join('')}
+      <label>Future children<select name="kids_intent">${[['undecided','Undecided'],['open','Open to children'],['want','Want children'],['no','Do not want additional children']].map(([k,l])=>`<option value="${k}" ${data.kids_intent===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
+      <button class="primary" type="submit">Save Vision</button></form>
+    </section>
 
     <details class="card vision-editor" data-vision-panel="add" ${ctx.onboarding || data._panels?.add ? 'open' : ''}><summary><strong>Add detail</strong></summary>
     <p class="hint">A pillar or choice you haven't set yet. This only ever adds — it never removes anything.</p>
@@ -76,12 +83,20 @@ export function bind(root, ctx) {
   root.querySelectorAll('[data-vision-panel]').forEach(panel=>panel.addEventListener('toggle',()=>{
     data._panels={...data._panels,[panel.dataset.visionPanel]:panel.open};
   }));
-  root.querySelector('#marriage-preset')?.addEventListener('click',()=>run(async()=>{
-    try {
-      await session.post('/api/v1/profile/vision/presets',{request_id:crypto.randomUUID(),preset:'marriage'});
-      patch({...await reload(session),_saved:true});
-    } catch(e) { patch({...data,_saved:false,_error:e.message}); }
-  }));
+  const templateForm=root.querySelector('#vision-template-form');
+  const showTemplate=()=>{
+    const item=(data.presets||[]).find(p=>p.key===templateForm.elements.template.value);
+    root.querySelector('#custom-pillars').hidden=item?.key!=='custom';
+    root.querySelector('#template-preview').textContent=item?.choices ? Object.entries(item.choices).map(([k,v])=>k+(v.length?': '+v.join(', '):'')).join(' · ') : 'Customise your pillars below.';
+  };
+  templateForm?.elements.template.addEventListener('change',showTemplate);
+  if(templateForm) showTemplate();
+  templateForm?.addEventListener('submit',e=>{e.preventDefault();run(async()=>{
+    const form=new FormData(templateForm), pillars={};
+    for(const k of form.getAll('pillar')) pillars[k]=[...templateForm.querySelectorAll('[data-pillar-choice]')].filter(el=>el.dataset.pillarChoice===k&&el.checked).map(el=>el.value);
+    try { patch({...await session.put('/api/v1/profile/vision/template',{template:form.get('template'),pillars,kids_intent:form.get('kids_intent')}),_saved:true}); }
+    catch(e){patch({...data,_error:e.message,_saved:false});}
+  });});
 
   root.querySelector('#detail-form')?.addEventListener('submit', (e) => {
     e.preventDefault();

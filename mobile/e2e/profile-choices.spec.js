@@ -1,0 +1,37 @@
+import {test,expect} from '@playwright/test';
+test('new Vision templates and optional personal profile persist in preview',async({page})=>{
+ await page.goto('/');
+ await page.getByLabel('Phone number').fill('+15550001111');
+ await page.getByRole('button',{name:'Send SMS code'}).click();
+ await page.getByLabel('Verification code').fill('123456');
+ await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await page.locator('[data-open-editor=vision]').click();
+ await page.locator('#vision-template-form select[name=template]').selectOption('two');
+ await page.getByRole('button',{name:'Save Vision',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Two Together',exact:true})).toBeVisible();
+ await page.locator('#p-close-editor').click();
+ await page.locator('#personal-open').click();
+ await page.locator('input[name=ethnicity]').first().check();
+ await page.locator('input[name=categories][value=diabetes]').check();
+ await page.locator('input[name=share_health]').check();
+ await page.locator('textarea[name=note]').fill('Happy to discuss what helps.');
+ await page.getByRole('button',{name:'Save profile preferences'}).click();
+ await expect(page.getByRole('status').filter({hasText:'Saved ✓'})).toHaveText('Saved ✓');
+ await page.locator('#personal-open').click();await page.locator('#personal-open').click();
+ await expect(page.locator('input[name=categories][value=diabetes]')).toBeChecked();
+ // Exercise the actual image decode/crop/encode path with a tiny generated PNG.
+ const bytes=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=600;c.height=800;c.getContext('2d').fillRect(0,0,600,800);return c.toDataURL().split(',')[1];});
+ await page.locator('#portrait-file').setInputFiles({name:'portrait.png',mimeType:'image/png',buffer:Buffer.from(bytes,'base64')});
+ await expect(page.locator('#portrait-editor')).toBeVisible();
+ await page.locator('#portrait-zoom').fill('1.2');
+ await page.locator('textarea[name=note]').fill('Updated note');
+ await page.getByRole('button',{name:'Save portrait'}).click();
+ await expect(page.locator('#personal-photo-note')).toContainText('Save your profile preferences');
+ await page.getByRole('button',{name:'Save profile preferences'}).click();
+ await page.locator('#portrait-file').setInputFiles({name:'portrait.png',mimeType:'image/png',buffer:Buffer.from(bytes,'base64')});
+ await expect(page.locator('#portrait-editor')).toBeVisible();
+ await page.getByRole('button',{name:'Save portrait'}).click();
+ await expect(page.getByAltText('Your profile portrait')).toHaveAttribute('src',/^data:image\/jpeg/);
+ await page.getByRole('button',{name:'Remove photo'}).click();
+ await expect(page.getByAltText('Your profile portrait')).toHaveCount(0);
+});

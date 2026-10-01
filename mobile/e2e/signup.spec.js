@@ -9,11 +9,11 @@ async function enter(page, signup=true) {
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
 }
 
-test('guided sign up verifies first, prefills and persists edits through all three steps', async({page})=>{
+test('guided sign up verifies first, prefills and persists edits through all four steps', async({page})=>{
   const external=[];
   page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:5173')) external.push(r.url());});
   await enter(page);
-  await expect(page.getByRole('heading',{name:'Step 1 of 3 · Vision'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Step 1 of 4 · Vision'})).toBeVisible();
   await expect(page.getByText('Intimacy · Emotional, Physical')).toBeVisible();
   await page.locator('#detail-choice').selectOption({index:0});
   await page.getByRole('button',{name:'Add',exact:true}).click();
@@ -26,20 +26,22 @@ test('guided sign up verifies first, prefills and persists edits through all thr
   await page.getByRole('button',{name:'Save changes'}).click();
   await expect(page.getByText('Saved.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Continue to Chemistry'}).click();
-  await expect(page.getByRole('heading',{name:'Step 3 of 3 · Chemistry'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Step 3 of 4 · Chemistry'})).toBeVisible();
   await expect(page.locator('input[type=radio]:checked').first()).toBeChecked();
   await page.getByRole('button',{name:'Save chemistry'}).click();
   await expect(page.getByText('Saved.',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Continue to Profile'}).click();
+  await expect(page.getByRole('heading',{name:'Your profile portrait'})).toBeVisible();
   await page.getByRole('button',{name:'Finish sign up'}).click();
-  await expect(page.getByRole('heading',{name:'Preview profile'})).toBeVisible();
-  await expect(page.getByText('68 kg',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Hi, Preview'})).toBeVisible();
+  await page.locator('[data-ring=stats]').click();
+  await page.locator('[data-open-editor=stats]').click();
+  await expect(page.locator('input[name=weight_kg]')).toHaveValue('68');
   expect(external).toEqual([]);
 });
 
-test('login goes directly to dashboard; video and timetable work on Home',async({page})=>{
-  await enter(page,false);
-  await expect(page.getByRole('heading',{name:'Preview profile'})).toBeVisible();
-  await expect(page.locator('.signup-intro')).toHaveCount(0);
+test('walkthrough is available before login; login goes directly to dashboard',async({page})=>{
+  await page.goto('/');
   await page.locator('.how-it-works summary').click();
   await expect(page.locator('.test-timetable tbody tr')).toHaveCount(11);
   const video=page.locator('.how-it-works video');
@@ -47,6 +49,9 @@ test('login goes directly to dashboard; video and timetable work on Home',async(
   await video.evaluate(async v=>{await v.play();});
   await expect.poll(()=>video.evaluate(v=>v.currentTime)).toBeGreaterThan(0);
   await video.evaluate(v=>v.pause());
+  await enter(page,false);
+  await expect(page.getByRole('heading',{name:'Hi, Preview'})).toBeVisible();
+  await expect(page.locator('.signup-intro')).toHaveCount(0);
 });
 
 test('invalid stats stay on the step and preserve the entered value for correction',async({page})=>{
@@ -57,9 +62,9 @@ test('invalid stats stay on the step and preserve the entered value for correcti
   await expect(page.locator('[data-error-for="age"]')).toBeVisible();
   await expect(page.locator('input[name="age"]')).toHaveValue('200');
   await page.getByRole('button',{name:'Continue to Chemistry'}).click();
-  await expect(page.getByRole('heading',{name:'Step 2 of 3 · Stats'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Step 2 of 4 · Stats'})).toBeVisible();
   await page.getByRole('button',{name:'Discard unsaved edits and reload this step'}).click();
   await expect(page.locator('input[name="age"]')).toHaveValue('30');
   await page.getByRole('button',{name:'Previous step'}).click();
-  await expect(page.getByRole('heading',{name:'Step 1 of 3 · Vision'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Step 1 of 4 · Vision'})).toBeVisible();
 });

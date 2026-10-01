@@ -232,7 +232,10 @@ export function previewTransport() {
   let visionEntries = [];
   let visionChanges = [];
   const visionRcOpen = () => { const c = week.clock; return (c.day === 'Sun' && c.hour >= 21) || (c.day === 'Mon' && c.hour < 11); };
-  const visionRead = () => ({ goals: visionGoals, presets: [{key:'marriage',label:'Marriage'}], element_keys: visionElementKeys, pillar_options: PILLAR_OPTIONS, detail_explanation: VISION_EXPLANATION, rc_open: visionRcOpen(), entries: visionEntries, changes: visionChanges });
+  const templates = [{"key": "grow", "label": "Grow Together", "description": "Build a shared life with children in the picture.", "choices": {"Intimacy": ["Emotional", "Physical"], "Kids": ["Naturally"], "Cohabitate": ["Chores split", "Expenses sharing"]}, "kids_intent": "want"}, {"key": "two", "label": "Two Together", "description": "Build a shared life without having additional children.", "choices": {"Intimacy": ["Emotional"], "Cohabitate": ["Chores split", "Expenses sharing"], "Travel together": []}, "kids_intent": "no"}, {"key": "explore", "label": "Explore Together", "description": "Connection and travel; children and cohabitation remain undecided.", "choices": {"Intimacy": ["Emotional"], "Travel together": []}, "kids_intent": "undecided"}, {"key": "custom", "label": "BYOB \u2014 Build Your Own Base", "description": "Choose your own pillars and preferences.", "choices": null, "kids_intent": "undecided"}];
+  let selectedTemplate="custom", kidsIntent="undecided";
+  let personalProfile={health:{},openness:{},categories:{"mobility": "Mobility disability / wheelchair use", "physical": "Other physical disability", "sensory": "Sensory disability", "non_visible": "Non-visible disability", "diabetes": "Diabetes", "cancer": "Cancer / cancer history", "trauma": "Trauma / mental health history", "other": "Other health or accessibility needs"},ethnicity:[],ethnicity_options:["South Asian","East Asian","Mixed","Other"],photo:null};
+  const visionRead = () => ({ goals: visionGoals, presets: templates, template_key:selectedTemplate, template_label:templates.find(t=>t.key===selectedTemplate).label, kids_intent:kidsIntent, element_keys: visionElementKeys, pillar_options: PILLAR_OPTIONS, detail_explanation: VISION_EXPLANATION, rc_open: visionRcOpen(), entries: visionEntries, changes: visionChanges });
   function visionValidate(map) {
     if (!(map.Intimacy || []).length) return 'Intimacy is mandatory — pick Emotional, Physical, or both.';
     const others = [];
@@ -398,6 +401,16 @@ export function previewTransport() {
       },
     });
 
+    if(path.endsWith('/profile/personal')) {
+      if(method==='PUT') personalProfile={...personalProfile,ethnicity:body.ethnicity,health:{consent:body.share_health,categories:body.categories,note:body.note},openness:{mode:body.openness,categories:body.open_categories,include_undisclosed:body.include_undisclosed}};
+      return ok(personalProfile);
+    }
+    if(path.endsWith('/profile/photo')) {personalProfile.photo=body.photo;return ok(personalProfile);}
+    if(path.endsWith('/profile/vision/template')) {
+      const item=templates.find(t=>t.key===body.template);if(!item)return err('Unknown template',400);
+      const map=item.choices||body.pillars, bad=visionValidate(map);if(bad)return err(bad,400);
+      selectedTemplate=item.key;kidsIntent=item.choices?item.kids_intent:body.kids_intent;visionCommit(map);return ok(visionRead());
+    }
     if (path.endsWith('/profile/vision') && method === 'GET') return ok(visionRead());
     if (path.endsWith('/profile/vision/presets')) {
       if (body.preset !== 'marriage') return err('Unknown preset.',400);

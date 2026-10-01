@@ -392,7 +392,9 @@ WITH expected(table_name, column_name) AS (VALUES
   ('RehearsalIntro','user_id'),
   ('RehearsalIntro','week'),
   ('RehearsalIntro','started_at'),
-  ('RehearsalIntro','slots_json')
+  ('RehearsalIntro','slots_json'),
+  ('ProfilePhoto','id'),
+  ('ProfilePhoto','data_url')
 )
 SELECT e.table_name, e.column_name,
        CASE WHEN t.table_name IS NULL THEN 'TABLE MISSING' ELSE 'COLUMN MISSING' END AS problem

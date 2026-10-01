@@ -262,7 +262,7 @@ function eventCard(m, day, matchBySlot, ctx) {
     </div>`;
   const detail = open ? `<div class="p-event-detail">
       ${m.means ? `<p class="hint" style="margin:0 0 10px;">${safe(m.means)}</p>` : ''}
-      ${match && match.status !== 'not_yet_revealed' ? matchSlot(match, safe, ctx.journey?.async_rehearsal?.enabled) : ''}
+      ${match && match.status !== 'not_yet_revealed' ? matchSlot(match, safe, ctx.journey?.async_rehearsal?.enabled, ctx.folds?.chemistry?.data?.activities) : ''}
       ${navEligible ? `<button type="button" class="p-outline-cta" data-week-nav="${safe(navHere.surface)}">${safe(navHere.label)} <span aria-hidden="true">→</span></button>` : ''}
     </div>` : '';
 
@@ -271,7 +271,7 @@ function eventCard(m, day, matchBySlot, ctx) {
     : `<div class="p-event-card" data-tone="${safe(m.tone)}" style="cursor:default;">${row}</div>`;
 }
 
-function matchSlot(m, safe, rehearsal = false) {
+function matchSlot(m, safe, rehearsal = false, myActivities = {}) {
   if (m.status === 'acted') return `<p class="hint" style="margin:0;">${m.candidate ? safe(m.candidate.display_name) + ' — ' : ''}You said: ${safe(m.action)}</p>`;
   if (m.status === 'no_response') return '<p class="hint" style="margin:0;">Window closed with no response.</p>';
   if (m.status === 'closed') return '<p class="hint" style="margin:0;">This window has closed.</p>';
@@ -279,8 +279,16 @@ function matchSlot(m, safe, rehearsal = false) {
   return `<div class="candidate-card" data-match="${safe(m.id)}" style="margin-top:0;">
     <div class="muted">${rehearsal ? 'Stays open during this test journey' : `Window closes ${safe(m.window_closes_at)}`}</div>
     ${c ? `<div class="candidate-name">${safe(c.display_name)}</div><div class="muted">${safe(c.city)}${c.bgv_status ? ' · ' + safe(c.bgv_status) : ''}</div>
-    <div class="chips">${(c.visions || []).map((v) => `<span>${safe(v.key)}${v.stance ? ' · ' + safe(Array.isArray(v.stance) ? v.stance.join(', ') : v.stance) : ''}</span>`).join('')}</div>
-    <div class="stat-grid">${Object.entries(c.stats || {}).filter(([, v]) => v != null).map(([k, v]) => `<div>${safe(k.replace(/_/g, ' '))}: ${safe(v)}</div>`).join('')}</div>` : ''}
+    ${c.photo ? `<img class="profile-portrait" src="${safe(c.photo)}" alt="Profile portrait">` : ''}
+    <div class="match-panels">
+    <details><summary>Vision</summary><p>${safe(c.vision_template||'Individual Vision')}</p>
+    <div class="chips">${(c.visions || []).map(v=>`<span>${safe(v.key)} · ${safe(Array.isArray(v.stance)?v.stance.join(', '):v.stance||'')}</span>`).join('')}</div>
+    <p>Future children: ${safe(({want:'Want children',no:'Do not want additional children',open:'Open to children',undecided:'Undecided'})[c.kids_intent]||'Undecided')}</p></details>
+    <details><summary>Stats</summary><div class="stat-grid">${Object.entries(c.stats || {}).filter(([,v])=>v!=null).map(([k,v])=>`<div>${safe(k.replaceAll('_',' '))}: ${safe(v)} <small>${c.verified_fields?.includes(k)?'✓ Verified':'Self-declared'}</small></div>`).join('')}</div>
+    <p>Ethnicity: ${safe((c.ethnicity||[]).join(', ')||'Not shared')} · self-declared</p>
+    ${c.health?.consent ? `<h3>Shared health &amp; accessibility</h3><p>${safe((c.health.categories||[]).map(k=>c.health_labels?.[k]||k).join(', '))}</p><p>${safe(c.health.note||'')}</p><p class="hint">Self-declared; not medically verified.</p>` : '<p class="hint">Health/accessibility not shared. This does not indicate absence of a condition.</p>'}</details>
+    <details><summary>Chemistry</summary><p>Shared interests: ${safe(Object.entries(c.activities||{}).filter(([k,v])=>['good','improve'].includes(v)&&['good','improve'].includes(myActivities[k])).map(([k])=>k).join(', ')||'None recorded yet')}</p>${Object.entries(c.activities||{}).filter(([,v])=>v!=='no').map(([k,v])=>`<p>${safe(k)} · ${safe(({good:'Enjoys / skilled',improve:'Developing',maybe:'Open to trying'})[v]||v)}</p>`).join('')||'<p>Interests not shared yet.</p>'}
+    <details><summary>Not for me</summary>${Object.entries(c.activities||{}).filter(([,v])=>v==='no').map(([k])=>`<p>${safe(k)}</p>`).join('')||'<p>None shared.</p>'}</details></details></div>` : ''}
     ${m.their_interest ? '<p class="hint">They already expressed interest in you — expressing interest back will match you.</p>' : ''}
     ${m.allowed_actions?.includes('pass') ? '<textarea class="pass-reason" placeholder="Optional — why you\'re passing" maxlength="1000"></textarea>' : ''}
     <div class="action-row">

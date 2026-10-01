@@ -177,6 +177,11 @@ def add_vision_detail(conn,uid,body,clock):
         result=vision.add_detail(vision_json,pillar,sub_selection)
         if not result['ok']:
             raise ApiError('validation_error',result['error'])
+        stats=db.load_json_field(row['stats_json'],{})
+        if 'vision_template' in stats:
+            stats['vision_template']='custom'
+            stats['kids_intent']='want' if any(v['key']=='Kids' for v in result['vision_json']) else ('no' if stats.get('kids_intent')=='no' else 'undecided')
+            row['stats_json']=json.dumps(stats)
         row['vision_json']=json.dumps(result['vision_json'],ensure_ascii=False)
         db.insert_row(conn,'User',row)
         db.insert_row(conn,'VisionEntry',{'id':rid,'user_id':uid,'element_key':pillar,
@@ -198,6 +203,11 @@ def apply_vision_preset(conn,uid,body,clock):
         result=vision.marriage_preset(db.load_json_field(row['vision_json'],[]))
         if not result['ok']:
             raise ApiError('validation_error',result['error'])
+        stats=db.load_json_field(row['stats_json'],{})
+        if 'vision_template' in stats:
+            stats['vision_template']='custom'
+            stats['kids_intent']='want' if any(v['key']=='Kids' for v in result['vision_json']) else ('no' if stats.get('kids_intent')=='no' else 'undecided')
+            row['stats_json']=json.dumps(stats)
         row['vision_json']=json.dumps(result['vision_json'],ensure_ascii=False)
         db.insert_row(conn,'User',row)
         db.insert_row(conn,'VisionEntry',{'id':rid,'user_id':uid,**content,'added_at':str(clock),'parent_id':None})
@@ -236,6 +246,11 @@ def declare_vision_change(conn,uid,body,clock):
             {'element_key':pillar,'from_value':from_value,'to_value':to_value})
         if old is not None:
             return old
+        stats=db.load_json_field(row['stats_json'],{})
+        if 'vision_template' in stats:
+            stats['vision_template']='custom'
+            stats['kids_intent']='want' if any(v['key']=='Kids' for v in result['vision_json']) else ('no' if stats.get('kids_intent')=='no' else 'undecided')
+            row['stats_json']=json.dumps(stats)
         row['vision_json']=json.dumps(result['vision_json'],ensure_ascii=False)
         db.insert_row(conn,'User',row)
         db.insert_row(conn,'VisionChange',{'id':rid,'user_id':uid,'element_key':pillar,

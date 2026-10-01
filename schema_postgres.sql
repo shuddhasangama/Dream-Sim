@@ -868,3 +868,7 @@ CREATE TABLE IF NOT EXISTS "RehearsalIntro" (
  started_at TEXT NOT NULL,
  slots_json TEXT NOT NULL DEFAULT '[]'
 );
+CREATE TABLE IF NOT EXISTS "ProfilePhoto" (
+    id TEXT PRIMARY KEY REFERENCES "User"(id),
+    data_url TEXT NOT NULL
+);

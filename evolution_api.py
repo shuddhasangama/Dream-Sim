@@ -6,6 +6,8 @@ import expectations
 import onboarding
 import stats_edit
 import vision
+import profile_choices
+import json
 import evolution_service as service
 from api_contract import ApiError, json_object, allowlist
 
@@ -63,7 +65,10 @@ def register(api,get_db,get_clock,stats_situation,milestones):
         # (declare_change()'s own gate — surfaced ahead of time so the
         # UI can show why it's locked rather than just disabling it).
         return jsonify(goals=g.api_user['visions'],element_keys=vision.VISION_ELEMENT_KEYS,
-            presets=[{'key':'marriage','label':'Marriage','choices':vision.marriage_choices()}],
+            presets=profile_choices.TEMPLATES,
+            template_key=g.api_user['stats'].get('vision_template','custom'),
+            template_label=profile_choices.template_label(g.api_user['stats'],g.api_user['visions']),
+            kids_intent=g.api_user['stats'].get('kids_intent','undecided'),
             pillar_options={k:list(v) for k,v in vision.PILLAR_OPTIONS.items()},
             detail_explanation=vision.VISION_DETAIL_EXPLANATION,
             rc_open=vision.rc_open(get_clock()),
@@ -112,3 +117,71 @@ def register(api,get_db,get_clock,stats_situation,milestones):
     def entry_update(key):
         service.save_entry(get_db(),uid(),key,json_object(required={'value'})['value'],get_clock(),guard)
         return chemistry_read()
+
+    @api.get('/profile/personal')
+    def personal_read():
+        row=db.fetch_one(get_db(),'User',id=uid())
+        stats=db.load_json_field(row['stats_json'],{})
+        prefs=db.load_json_field(row['preferences_json'],{})
+        pic=db.fetch_one(get_db(),'ProfilePhoto',id=uid())
+        return jsonify(health=stats.get('health_shared',{}), openness=prefs.get('health_openness',{}),
+            ethnicity=stats.get('ethnicity',[]), ethnicity_options=onboarding.STAT_OPTIONS['ethnicity'],
+            categories=profile_choices.HEALTH, photo=pic['data_url'] if pic else None)
+
+    @api.put('/profile/personal')
+    def personal_write():
+        body=json_object(required={'categories','share_health','note','openness','open_categories','include_undisclosed','ethnicity'})
+        shared,prefs=profile_choices.validate(body)
+        ethnic=body['ethnicity']
+        if type(ethnic) is not list or len(ethnic)>2 or any(type(v) is not str or v not in onboarding.STAT_OPTIONS['ethnicity'] for v in ethnic) or len(set(ethnic))!=len(ethnic):
+            raise ApiError('validation_error','Choose up to two listed ethnicities.')
+        with service.transaction(get_db()):
+            row=db.fetch_one(get_db(),'User',id=uid())
+            stats=db.load_json_field(row['stats_json'],{})
+            preferences=db.load_json_field(row['preferences_json'],{})
+            # Withdrawal is always possible; changing matching preferences while a pair is active is not.
+            state=stats_situation(g.api_user)
+            if (state.get('keenness') or state.get('live_match')) and prefs!=preferences.get('health_openness',{'mode':'any','categories':[],'include_undisclosed':True}):
+                raise ApiError('profile_locked','Matching preferences can change after the current match/date window.',409)
+            stats.update(health_shared=shared,ethnicity=ethnic)
+            preferences['health_openness']=prefs
+            row.update(stats_json=json.dumps(stats),preferences_json=json.dumps(preferences))
+            db.insert_row(get_db(),'User',row)
+        return personal_read()
+
+    @api.put('/profile/photo')
+    def photo_write():
+        data=profile_choices.photo(json_object(required={'photo'})['photo'])
+        with service.transaction(get_db()):
+            if data is None:
+                service.auth_sessions.sql(get_db(),'DELETE FROM "ProfilePhoto" WHERE id=?',(uid(),))
+            else:
+                db.insert_row(get_db(),'ProfilePhoto',{'id':uid(),'data_url':data})
+        return personal_read()
+
+    @api.put('/profile/vision/template')
+    def vision_template_write():
+        body=json_object(required={'template'},optional={'pillars','kids_intent'})
+        item=next((t for t in profile_choices.TEMPLATES if t['key']==body['template']),None)
+        if not item: raise ApiError('validation_error','Choose a listed Vision template.')
+        with service.transaction(get_db()):
+            state=stats_situation(g.api_user)
+            if state.get('keenness') or state.get('live_match') or state.get('in_relationship'):
+                raise ApiError('profile_locked','Your current match or relationship holds this Vision. Use the disclosed-change flow or return after the match window.',409)
+            row=db.fetch_one(get_db(),'User',id=uid())
+            pillars=item['choices'] if item['choices'] is not None else body.get('pillars')
+            if type(pillars) is not dict or any(type(v) is not list or any(type(x) is not str for x in v) for v in pillars.values()):
+                raise ApiError('validation_error','Provide your selected pillars and their choices.')
+            result=vision.validate_pillars(pillars)
+            if not result['ok']: raise ApiError('validation_error',result['error'])
+            intent=item['kids_intent'] if item['choices'] is not None else body.get('kids_intent','undecided')
+            if intent not in ('want','open','no','undecided') or (intent=='no' and 'Kids' in pillars) or (intent=='want' and 'Kids' not in pillars):
+                raise ApiError('validation_error','Children intention must agree with your Kids pillar.')
+            stats=db.load_json_field(row['stats_json'],{})
+            stats.update(vision_template=item['key'],kids_intent=intent)
+            row.update(stats_json=json.dumps(stats),vision_json=json.dumps(vision._as_vision_json(pillars)))
+            db.insert_row(get_db(),'User',row)
+        # g.api_user is a request snapshot; return fresh data after the mutation.
+        g.api_user['visions']=vision._as_vision_json(pillars)
+        g.api_user['stats']=stats
+        return vision_read()

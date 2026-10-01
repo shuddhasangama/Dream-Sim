@@ -11,7 +11,7 @@ for (const signup of [false,true]) {
     await page.getByLabel('Phone number').fill('+15550001111');
     await page.getByRole('button',{name:'Continue as tester without SMS'}).click();
     await expect(page.getByLabel('Verification code')).toHaveCount(0);
-    if(signup) await expect(page.getByRole('heading',{name:'Step 1 of 3 · Vision'})).toBeVisible();
+    if(signup) await expect(page.getByRole('heading',{name:'Step 1 of 4 · Vision'})).toBeVisible();
     else await expect(page.locator('.p-tabbar').getByRole('button',{name:'Home',exact:true})).toBeVisible();
   });
 }
