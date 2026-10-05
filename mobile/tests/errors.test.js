@@ -12,11 +12,11 @@ test('401 classifies as auth, never a retry', () => {
   assert.match(c.message, /sign in again/);
 });
 
-test('409 classifies as conflict with fixed copy, not the server message, and never a retry', () => {
+test('409 preserves the actionable server reason and never retries', () => {
   const c = classify(new ApiError('duplicate submission', 409));
   assert.equal(c.kind, 'conflict');
   assert.equal(c.retry, false);
-  assert.equal(c.message, 'This has already been handled.');
+  assert.equal(c.message, 'duplicate submission');
 });
 
 test('400 classifies as validation and surfaces the server message verbatim', () => {

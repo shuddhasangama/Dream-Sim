@@ -8,12 +8,23 @@ import stats_edit
 import vision
 import profile_choices
 import json
+import async_rehearsal
+import after_date_service
 import evolution_service as service
 from api_contract import ApiError, json_object, allowlist
 
 
 def register(api,get_db,get_clock,stats_situation,milestones):
     def uid(): return g.api_user['user_id']
+    def expectation_hours(pace):
+        now=service.hours(get_clock())
+        if async_rehearsal.enabled() and after_date_service.simulation_allowed(get_db(),uid()):
+            for pair in db.fetch_all(get_db(),'LockIn'):
+                if pair['status']=='active' and uid() in (pair['user_a'],pair['user_b']):
+                    gate=db.fetch_one(get_db(),'StageGate',pair_id=pair['id']) or {}
+                    if gate.get('reflection_ready_a') and gate.get('reflection_ready_b') and pace.get('updated_at_hours') is not None:
+                        now=max(now,pace['updated_at_hours']+expectations.HEALTH_OPENS_AFTER_HOURS)
+        return now
     def guard(key):
         reached=milestones(g.api_user)
         if key=='physical_boundary':
@@ -28,7 +39,7 @@ def register(api,get_db,get_clock,stats_situation,milestones):
             rows=db.fetch_all(get_db(),'ChemistryEntry',user_id=uid())
             answers={r['key']:r['value'] for r in rows}
             pace=next((r for r in rows if r['key']==expectations.PACE),{})
-            if key not in expectations.visible_keys(answers,pace.get('updated_at_hours'),service.hours(get_clock())):
+            if key not in expectations.visible_keys(answers,pace.get('updated_at_hours'),expectation_hours(pace)):
                 raise ApiError('question_not_open','Answer pace first and allow the reflection interval.',409)
 
     @api.get('/profile/stats')
@@ -106,7 +117,7 @@ def register(api,get_db,get_clock,stats_situation,milestones):
             activity_options=onboarding.ACTIVITIES,buckets=onboarding.BUCKETS,
             answers=answers,entry_keys=(*chemistry.MANDATORY_KEYS,*chemistry.INTIMACY_MANDATORY_KEYS),
             options={'physical_boundary':chemistry.PHYSICAL_BOUNDARY_OPTIONS,'intimacy_pace':chemistry.INTIMACY_PACE_OPTIONS,'health_openness':chemistry.HEALTH_OPENNESS_OPTIONS},
-            pacing=expectations.state(answers,pace.get('updated_at_hours'),service.hours(get_clock())))
+            pacing=expectations.state(answers,pace.get('updated_at_hours'),expectation_hours(pace)))
 
     @api.put('/profile/chemistry/activities')
     def activities_update():

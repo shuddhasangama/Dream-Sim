@@ -17,7 +17,7 @@ export function classify(e) {
   const message = e?.message || 'Something went wrong. Please try again.';
   const status = e?.status ?? 0;
   if (status === 401) return { kind: 'auth', message, retry: false };
-  if (status === 409) return { kind: 'conflict', message: 'This has already been handled.', retry: false };
+  if (status === 409) return { kind: 'conflict', message: message || 'The state has changed. Review the refreshed screen.', retry: false };
   if (status === 400) return { kind: 'validation', message, retry: false };
   if (status === 0) return { kind: 'network', message, retry: true };
   return { kind: 'error', message, retry: false };

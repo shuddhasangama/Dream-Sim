@@ -238,7 +238,7 @@ test('Week: the fixed weekend meal-slot template never reads as real bookings �
   expect(confirmedDays).toBe(1);
   await page.locator('.p-day-btn').nth(dayWithDate).click();
   await page.locator('.p-event-card[data-tone="date"]').click();
-  await expect(page.getByText('Your confirmed date.')).toBeVisible();
+  await expect(page.getByText(/— pending signatures/)).toBeVisible();
   await page.getByRole('button',{name:'View date plan'}).click();
   await expect(page.getByRole('heading',{name:'Pending signatures'})).toBeVisible();
 });
@@ -268,7 +268,7 @@ test('Guru: quick replies answer from the same guidance response the dashboard r
   await tabbar(page).getByRole('button',{name:'Guru'}).click();
 
   await expect(page.locator('.guru-avatar').first()).toHaveText('G');
-  await expect(page.getByText("Hi Preview. What's on your mind?")).toBeVisible();
+  await expect(page.getByText("Hi Preview. Choose a topic below. These are stage-based explanations, not a live AI chat.")).toBeVisible();
   // Nothing is answered until a chip is tapped — a clean chat, not a wall
   // of paragraphs.
   await expect(page.locator('.p-bubble-user')).toHaveCount(0);
@@ -286,7 +286,7 @@ test('Guru: quick replies answer from the same guidance response the dashboard r
   await expect(page.locator('.p-guru-thread')).not.toContainText([/invite|share your (number|contact)|go steady/i]);
 
   await page.getByRole('button',{name:'Why so few matches?'}).click();
-  await expect(page.getByText('1 of 6 who fit you are open to you. Loosen one filter.')).toBeVisible();
+  await expect(page.getByText('1 of 6 who fit you are open to you. These are reciprocal filter counts, not guaranteed matches. Review your preferences only if you want to.')).toBeVisible();
   await page.getByRole('button',{name:'Open Reach'}).click();
   await expect(page.getByText('REACH · THIS WEEK')).toBeVisible();
 

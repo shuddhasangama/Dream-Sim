@@ -96,7 +96,7 @@ def relay(question_key: str) -> dict[str, str]:
     both in the same place on this" is an invitation, and both of them
     answer it.
     """
-    question = _BY_KEY[question_key]
+    question = _BY_KEY.get(question_key, {"kind": "text", "text": "Your shared question"})
     return {
         "key": question_key,
         "prompt": question["text"],
@@ -123,7 +123,7 @@ def compare(question_key: str, a: str | None, b: str | None) -> dict[str, Any]:
     is telling one person the other is the problem, which ends the
     conversation this feature exists to start.
     """
-    question = _BY_KEY[question_key]
+    question = _BY_KEY.get(question_key, {"kind": "text", "text": "Your shared question"})
     if question["kind"] != "scale":
         both_in = bool(a) and bool(b)
         return {
@@ -157,10 +157,12 @@ def report(asked: list[str], answers_a: dict[str, str], answers_b: dict[str, str
     waiting = [line for line in lines if line["state"] == "waiting"]
     return {
         "lines": lines,
-        "complete": not waiting,
+        "complete": bool(lines) and not waiting,
         "apart_count": len(apart),
         "headline": (
+            "Choose the topics you want to discuss." if not lines else
             "Still waiting on both of you." if waiting else
+            "Both responses are saved. Written answers are private; agreement has not been inferred." if any(line["state"] == "answered" for line in lines) and not apart else
             "You are in the same place on all of this." if not apart else
             f"{len(apart)} thing{'' if len(apart) == 1 else 's'} you see differently."
         ),

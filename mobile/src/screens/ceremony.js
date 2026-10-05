@@ -1,3 +1,4 @@
+import { pairContext } from './pairContext.js';
 // Agreement ceremony (§2.4): playbook → sign → face, order-enforced. No
 // journey/status surface exists for this screen (its path always needs a
 // specific plan id), so it defines its own load() — main.js's loadScreen()
@@ -19,8 +20,11 @@ export function legalAction(step) {
   return STEP_ORDER.includes(step) && step !== 'done' ? step : null;
 }
 
+export function agreementPath(params) {
+ return params.lockInId ? `/api/v1/lock-ins/${encodeURIComponent(params.lockInId)}/agreements/${encodeURIComponent(params.kind)}` : `/api/v1/date-plans/${encodeURIComponent(params.planId)}/agreement`;
+}
 export async function load(session, params) {
-  return session.get(`/api/v1/date-plans/${encodeURIComponent(params.planId)}/agreement`);
+  return session.get(agreementPath(params));
 }
 
 export function render(ctx) {
@@ -30,17 +34,17 @@ export function render(ctx) {
   const track = `<div class="step-track">${STEP_ORDER.map((s, i) => `<div class="step-node ${i < stepIndex || data.complete ? 'done' : i === stepIndex ? 'current' : ''}">${safe(s)}</div>`).join('')}</div>`;
 
   if (data.complete || data.step === 'done') {
-    return `<section class="intro"><span class="eyebrow">AGREEMENT</span><h1>All set</h1></section>${track}
-      <section class="card guidance"><p>Both signatures and verification are complete. This plan is confirmed.</p>
-      <button id="to-debrief" class="primary" type="button">After the date <span aria-hidden="true">→</span></button></section>`;
+    return `<section class="intro"><span class="eyebrow">AGREEMENT</span><h1>All set</h1></section>${pairContext(ctx)}${track}
+      <section class="card guidance"><p>Your steps are complete. Your partner completes their own agreement separately.</p>
+      <button id="to-debrief" class="primary" type="button">Return to your journey <span aria-hidden="true">→</span></button></section>`;
   }
   if (data.step === 'playbook') {
-    return `<section class="intro"><span class="eyebrow">AGREEMENT · 1 of 3</span><h1>Rules of engagement</h1></section>${track}
-      <section class="card">${(data.clauses || []).map((c) => `<div class="clause">${safe(c.text || c.label || c.term || JSON.stringify(c))}</div>`).join('') || '<p class="hint">Nothing further to review — continue when ready.</p>'}</section>
+    return `<section class="intro"><span class="eyebrow">AGREEMENT · 1 of 3</span><h1>Rules of engagement</h1></section>${pairContext(ctx)}${track}
+      <section class="card">${(data.clauses || []).map((c) => `<div class="clause">${safe(typeof c === 'string' ? c : c.text || c.label || c.term || [c.title,c.body].filter(Boolean).join(' — '))}</div>`).join('') || '<p class="hint">Nothing further to review — continue when ready.</p>'}</section>
       <button id="do-playbook" class="primary" type="button">I've read this <span aria-hidden="true">→</span></button>`;
   }
   if (data.step === 'sign') {
-    return `<section class="intro"><span class="eyebrow">AGREEMENT · 2 of 3</span><h1>Sign</h1></section>${track}
+    return `<section class="intro"><span class="eyebrow">AGREEMENT · 2 of 3</span><h1>Sign</h1></section>${pairContext(ctx)}${track}
       <section class="card"><form id="sign-form">
         <div class="field"><label for="signed_name">Your name</label><input id="signed_name" name="signed_name" required maxlength="200"></div>
         ${(data.acknowledgements || []).map((a) => `<label class="checkbox-row"><input type="checkbox" name="ack" value="${safe(a.key)}" required> ${safe(a.label)}</label><p class="hint" style="margin:-6px 0 10px 26px;">${safe(a.term)}</p>`).join('')}
@@ -48,22 +52,22 @@ export function render(ctx) {
       </form></section>`;
   }
   if (data.step === 'face') {
-    return `<section class="intro"><span class="eyebrow">AGREEMENT · 3 of 3</span><h1>Verify it's you</h1></section>${track}
+    return `<section class="intro"><span class="eyebrow">AGREEMENT · 3 of 3</span><h1>Verify it's you</h1></section>${pairContext(ctx)}${track}
       <section class="card"><p>${data.face_simulation_available ? "This is a beta simulation — it doesn't run a real biometric check." : 'Verification is not available in this build yet.'}</p>
       <button id="do-face" class="primary" type="button" ${data.face_simulation_available ? '' : 'disabled'}>Verify <span aria-hidden="true">→</span></button></section>`;
   }
-  return `<section class="intro"><h1>Agreement</h1></section>${track}`;
+  return `<section class="intro"><h1>Agreement</h1></section>${pairContext(ctx)}${track}`;
 }
 
 export function bind(root, ctx) {
   const { session, run, patch, params, navigateTo } = ctx;
-  const planId = encodeURIComponent(params.planId);
-  const reload = async () => patch(await session.get(`/api/v1/date-plans/${planId}/agreement`));
+  const base = agreementPath(params);
+  const reload = async () => patch(await session.get(base));
 
-  root.querySelector('#to-debrief')?.addEventListener('click', () => navigateTo('debrief'));
+  root.querySelector('#to-debrief')?.addEventListener('click', () => navigateTo(params.returnTo || 'plan'));
 
   root.querySelector('#do-playbook')?.addEventListener('click', () => run(async () => {
-    await session.post(`/api/v1/date-plans/${planId}/agreement/steps`, { step: 'playbook' });
+    await session.post(`${base}/steps`, { step: 'playbook' });
     await reload();
   }));
 
@@ -71,7 +75,7 @@ export function bind(root, ctx) {
     e.preventDefault();
     run(async () => {
       const form = new FormData(e.target);
-      await session.post(`/api/v1/date-plans/${planId}/agreement/steps`, {
+      await session.post(`${base}/steps`, {
         step: 'sign', signed_name: form.get('signed_name').trim(), acks: form.getAll('ack'),
       });
       await reload();
@@ -79,7 +83,7 @@ export function bind(root, ctx) {
   });
 
   root.querySelector('#do-face')?.addEventListener('click', () => run(async () => {
-    await session.post(`/api/v1/date-plans/${planId}/agreement/steps`, { step: 'face' });
+    await session.post(`${base}/steps`, { step: 'face' });
     await reload();
   }));
 }

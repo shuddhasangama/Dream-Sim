@@ -1,0 +1,5 @@
+// Shared owned-pair context. Never infer identity from a device or another account.
+export function pairContext(ctx) {
+  const pair=ctx.journey?.current_lock_in, plan=ctx.journey?.current_date_plan;
+  return `<section class="card pair-context"><h2>${ctx.safe(pair?.partner_name || 'Your current match')}</h2><p>${ctx.safe([pair?.partner_summary?.city,pair?.partner_summary?.age,pair?.partner_summary?.profession].filter(Boolean).join(' · '))}</p>${pair?.name_hidden?'<p class="hint">Names are revealed after meeting. This is the partner with whom you expressed mutual interest.</p>':''}<p>${plan ? `${ctx.safe(plan.datetime)} · ${ctx.safe(plan.status?.replaceAll('_',' '))}` : 'No date confirmed yet.'}</p><details><summary>Your partner’s Vision</summary>${(pair?.partner_summary?.visions||[]).map(v=>`<p>${ctx.safe(v.key)} · ${ctx.safe(Array.isArray(v.stance)?v.stance.join(', '):v.stance||'')}</p>`).join('')||'<p>No Vision summary available.</p>'}</details><p class="hint">You and your partner make the decisions. Guru explains the next step; it does not consent or sign for either of you.</p></section>`;
+}

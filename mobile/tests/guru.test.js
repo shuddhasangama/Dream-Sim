@@ -31,7 +31,7 @@ test('"Why so few matches?" states the real counts and fetches reach exactly onc
   const fetchReach = async () => { calls += 1; return { counts: { mutual_open: 2, fits_user_filters: 9 } }; };
   const data = {};
   const first = await answerFor('why_few_matches', data, surfaces, fetchReach);
-  assert.equal(first.answer, '2 of 9 who fit you are open to you. Loosen one filter.');
+  assert.equal(first.answer, '2 of 9 who fit you are open to you. These are reciprocal filter counts, not guaranteed matches. Review your preferences only if you want to.');
   assert.deepEqual([first.actionLabel, first.actionKey], ['Open Reach', 'reach']);
   await answerFor('why_few_matches', data, surfaces, fetchReach);
   assert.equal(calls, 1, 'memoized — one Guru visit, one /reach read');

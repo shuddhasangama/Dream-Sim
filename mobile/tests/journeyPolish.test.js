@@ -14,8 +14,8 @@ test('Confirm Date is unavailable after Thursday, after plan creation, or while 
 
 test('Boundaries shows selectable greeting preferences rather than a raw plan', () => {
   const html=boundary({safe:String,data:{answers:{physical_boundary:'namaste'},options:{physical_boundary:['namaste','handshake']}}});
-  assert.match(html,/value="namaste" checked/);
-  assert.match(html,/Save greeting preference/);
+  assert.match(html,/value="namaste" selected/);
+  assert.match(html,/Update saved preference/);
   assert.doesNotMatch(html,/lockin_id|<pre/);
 });
 

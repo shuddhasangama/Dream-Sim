@@ -8,19 +8,20 @@ async function login(page) {
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
 }
 
-test('Marriage adds all pillars; editors start collapsed; Week video plays',async({page})=>{
+test('Grow Together selects family pillars; editors start collapsed; Week video plays',async({page})=>{
   await login(page);
-  await page.locator('summary',{hasText:'Vision'}).click();
+  await page.locator('[data-open-editor=vision]').click();
   await expect(page.locator('#detail-form')).toBeHidden();
   await expect(page.locator('#change-form')).toBeHidden();
-  await page.getByRole('button',{name:'Choose Marriage'}).click();
+  await page.locator('#vision-template-form select[name=template]').selectOption('grow');
+  await page.getByRole('button',{name:'Save Vision',exact:true}).click();
   const chips=page.locator('.chips');
   await expect(chips).toContainText('Kids · Naturally');
-  await expect(chips).toContainText('Travel together');
+  await expect(chips).not.toContainText('Travel together');
   await expect(chips).toContainText('Cohabitate');
   await expect(chips).not.toContainText('Adoption');
   await expect(chips).not.toContainText('Surrogacy');
-  await page.locator('.topnav').getByRole('button',{name:'Week',exact:true}).click();
+  await page.locator('.p-tabbar').getByRole('button',{name:'Week',exact:true}).click();
   await page.locator('details.tw-video summary').click();
   const video=page.locator('.tw-video-player');
   await expect(video).toHaveAttribute('src','/media/calendar-explainer.mp4');
@@ -35,11 +36,12 @@ test('all four scales align labels, track and own-value marker under strict styl
     meta.httpEquiv='Content-Security-Policy';meta.content="style-src 'self'";
     document.head.append(meta);
   });
-  await page.locator('.topnav').getByRole('button',{name:'REACH',exact:true}).click();
-  await page.locator('details.more-filters').evaluate(el=>el.open=true);
+  await page.locator('.p-tabbar').getByRole('button',{name:'Reach',exact:true}).click();
+
   for(const width of [375,430]) {
     await page.setViewportSize({width,height:900});
     for(const [key,value] of [['age',38],['height_cm',169],['weight_kg',66],['waist_in',31]]) {
+      await page.locator(`[data-chip="${key}"] .chip-more`).click();
       const result=await page.locator(`[data-lever="${key}"]`).evaluate((card,value)=>{
         const track=card.querySelector('.slider-track').getBoundingClientRect();
         const marker=card.querySelector('.slider-self').getBoundingClientRect();
@@ -51,6 +53,7 @@ test('all four scales align labels, track and own-value marker under strict styl
           vertical:Math.abs(marker.y+marker.height/2-(track.y+track.height/2))};
       },value);
       for(const error of Object.values(result)) expect(error,`${key} at ${width}`).toBeLessThan(1);
+      await page.locator('[data-close-sheet]').first().click();
     }
   }
   await page.screenshot({path:'test-results/reach-scales.png',fullPage:true});

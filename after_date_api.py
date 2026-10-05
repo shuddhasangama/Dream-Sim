@@ -14,11 +14,11 @@ def register(api,get_db,get_clock,week_to_date):
     def gate_handler(action):
         def handle(lid):
             fields={'raise':set(),'ask':{'round','question_keys'},'answer':{'round','question_key','value'},
-                'confirm':{'round'},'decline':{'round'},'exclusivity-ack':{'round','acknowledged'},'enter-relationship':{'round'}}[action]
-            result=gate_service.action(get_db(),uid(),lid,action,json_object(required=fields),get_clock(),week_to_date(get_clock().week))
+                'reflection-ready':{'round'},'confirm':{'round'},'decline':{'round'},'exclusivity-ack':{'round','acknowledged'},'enter-relationship':{'round'}}[action]
+            result=gate_service.action(get_db(),uid(),lid,action,json_object(required=fields,optional={'custom_question'} if action=='ask' else set()),get_clock(),week_to_date(get_clock().week))
             return jsonify(result or gate_service.state(get_db(),uid(),lid,get_clock()))
         return handle
-    for action in ('raise','ask','answer','confirm','decline','exclusivity-ack','enter-relationship'):
+    for action in ('raise','ask','answer','reflection-ready','confirm','decline','exclusivity-ack','enter-relationship'):
         api.add_url_rule('/lock-ins/<lid>/gate/'+action,endpoint='gate_'+action,view_func=gate_handler(action),methods=['POST'])
     def view(lid):
         active=service.pair(get_db(),uid(),lid)
@@ -33,6 +33,9 @@ def register(api,get_db,get_clock,week_to_date):
             if mine and row['status']=='accepted' and all(service.complete(get_db(),u,lid,ceremony.CONTACT_SHARE) for u in (uid(),other)):
                 account=db.fetch_one(get_db(),'Account',user_id=other) or {}
                 if row['channel'] in ('phone','whatsapp'):shown['contact']=account.get('phone')
+                else:shown['contact']=row.get('shared_contact')
+            if mine and row['status']=='accepted' and shown['contact'] is None:
+                shown['status']='accepted; contact not released yet'
             requests.append(shown)
         invites=[]
         for row in db.fetch_all(get_db(),'HomeInvite',pair_id=lid):
@@ -41,7 +44,9 @@ def register(api,get_db,get_clock,week_to_date):
                 'status':invite_home.status_for_requester(row) if row['requester_id']==uid() else row['status'],
                 'my_acknowledged':bool(row['ack_signed_'+role]),'both_acknowledged':invite_home.both_acknowledged(row)})
         return {'lock_in_id':lid,'dates_completed':active['dates_completed'],'contact_requests':requests,'home_invites':invites,
-            'contact_channels':escalations.CONTACT_CHANNELS,'expectation_flags':invite_home.EXPECTATION_FLAGS,
+            'contact_channels':escalations.CONTACT_CHANNELS,
+            'agreements':{kind:{'mine':service.complete(get_db(),uid(),lid,kind),'partner':service.complete(get_db(),other,lid,kind)} for kind in (ceremony.CONTACT_SHARE,ceremony.HOME_INVITE,ceremony.RELATIONSHIP_ENTRY)},
+            'expectation_labels':invite_home.EXPECTATION_FLAG_COPY,'expectation_flags':invite_home.EXPECTATION_FLAGS,
             'invite_acknowledgement':invite_home.IMMUTABLE_ACKNOWLEDGEMENT_TEXT,
             'invite_acknowledgement_version':invite_home.ACKNOWLEDGEMENT_VERSION,
             'guidance':invite_home.INTIMACY_EXPECTED_GUIDANCE,'trusted_contact_delivery_available':False,
@@ -58,7 +63,8 @@ def register(api,get_db,get_clock,week_to_date):
 
     @api.post('/lock-ins/<lid>/contact-requests/<rid>/response')
     def contact_response(lid,rid):
-        service.contact_respond(get_db(),uid(),lid,rid,json_object(required={'response'})['response'],get_clock())
+        body=json_object(required={'response'},optional={'contact_value'})
+        service.contact_respond(get_db(),uid(),lid,rid,body['response'],get_clock(),body.get('contact_value'))
         return jsonify(view(lid))
 
     @api.post('/lock-ins/<lid>/home-invites')
@@ -69,7 +75,7 @@ def register(api,get_db,get_clock,week_to_date):
     def invite_handler(action):
         def handle(lid,rid):
             fields={'response'} if action=='respond' else {'acknowledgement_version','acknowledged'} if action=='acknowledge' else set()
-            service.invite_action(get_db(),uid(),lid,rid,action,json_object(required=fields),get_clock())
+            service.invite_action(get_db(),uid(),lid,rid,action,json_object(required=fields,optional={'custom_question'} if action=='ask' else set()),get_clock())
             return jsonify(view(lid))
         return handle
     for action in ('see-flag','respond','guidance','acknowledge','revoke'):
@@ -95,7 +101,7 @@ def register(api,get_db,get_clock,week_to_date):
         other=active['user_b'] if active['user_a']==uid() else active['user_a']
         return {'kind':kind,'step':ceremony.next_step(state),'complete':ceremony.is_complete(state),
             'partner_complete':service.complete(get_db(),other,lid,kind),'my_signed_name':state['signed_name'],
-            'acks':ceremony.acks_for(kind),'clauses':ceremony.clauses_for(kind),
+            'acknowledgements':ceremony.acks_for(kind),'acks':ceremony.acks_for(kind),'clauses':ceremony.clauses_for(kind),
             'face_mode':'simulation','face_simulation_available':service.simulation_allowed(get_db(),uid())}
 
     @api.get('/lock-ins/<lid>/agreements/<kind>')

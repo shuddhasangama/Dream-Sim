@@ -567,3 +567,21 @@ main.container.has-tabbar{padding:14px 20px 120px}
 .match-panels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .match-panels details{min-width:0}.match-panels summary{font-weight:700;cursor:pointer;padding:12px 2px}
 .match-panels details[open]{grid-column:1/-1}.match-panels .stat-grid{padding:8px}
+/* Accessibility: safe areas, keyboard scrolling and zoom without a trapped viewport. */
+#app {padding-top:env(safe-area-inset-top);}
+body {overscroll-behavior-y:auto;}
+.container {min-width:0;}
+.card,.p-card,.pair-context,form {min-width:0;overflow-wrap:anywhere;}
+input,select,textarea {max-width:100%;min-width:0;font-size:16px;}
+.card form {margin-bottom:20px;}
+.card form label {display:block;margin:12px 0;}
+.card form .checkbox-row {display:flex;}
+.card button {margin:6px 4px 6px 0;white-space:normal;min-height:44px;}
+.p-event-row,.stat-row,.action-row {flex-wrap:wrap;}
+.p-event-title {white-space:normal;overflow:visible;}
+.p-next-up-title {white-space:normal;}
+.p-tabbar {height:auto;min-height:66px;flex-wrap:wrap;}
+.p-tab {padding:10px 8px;white-space:normal;}
+.has-tabbar {padding-bottom:calc(140px + env(safe-area-inset-bottom));}
+.p-chip-sheet {max-height:75dvh;overscroll-behavior:contain;}
+@media (max-width:360px) {.step-track{flex-wrap:wrap}.p-tabbar{left:6px;right:6px}.p-tab-dot{display:none}}

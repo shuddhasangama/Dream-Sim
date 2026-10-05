@@ -10,6 +10,8 @@ import * as calendarScreen from './screens/calendar.js';
 import * as planScreen from './screens/plan.js';
 import * as ceremonyScreen from './screens/ceremony.js';
 import * as debriefScreen from './screens/debrief.js';
+import * as gateScreen from './screens/gate.js';
+import * as afterDateScreen from './screens/afterDate.js';
 import * as guruScreen from './screens/guru.js';
 import * as visionScreen from './screens/vision.js';
 import * as chemistryScreen from './screens/chemistry.js';
@@ -86,11 +88,14 @@ const statsFields = { editableFieldsForm, changedFields, fieldErrorsFromServer, 
 const nav = createNav(render);
 
 // ── screen registry (§1) ───────────────────────────────────────────────
-// Every surface key not listed here still works via the generic fallback —
-// it shows exactly what the server's read model returned, so nothing is
-// ever a blank screen even before its bespoke UI exists. Bespoke screens are
+// Unimplemented surfaces show an honest availability message, never raw API data. Bespoke screens are
 // pure functions of ctx (below) — no import of main.js, so no import cycle.
 const screens = {
+  gate: gateScreen,
+  after_date: afterDateScreen,
+  escalations: afterDateScreen,
+  next_level: afterDateScreen,
+  expectations: boundariesScreen,
   dashboard: homeScreen,
   reach: reachScreen,
   week: weekScreen,
@@ -211,7 +216,7 @@ function renderChrome(current, tabs) {
     : genericScreen(current.key);
   return `<main class="container ${tabs.length ? 'has-tabbar' : ''}">
       ${renderRehearsal(journey.async_rehearsal, safe, journey.clock)}
-      ${journey.accelerated_test?.enabled ? `<aside class="card accelerated-banner"><strong>Accelerated test · shared clock</strong><p>${safe(journey.clock.day)} ${String(journey.clock.hour).padStart(2,'0')}:00 · Week ${safe(journey.clock.week)} · ${journey.accelerated_test.finished?'30-minute run complete': '3 real minutes per checkpoint'}</p><p class="hint">${clockPending?'Time has advanced. Your unsaved screen is preserved. Save your edits, then refresh.':'Make your own choices at each step. Both partners must respond.'}</p><button id="refresh-clock" class="secondary" type="button">Refresh current step</button></aside>` : ''}
+      ${journey.accelerated_test?.enabled ? `<aside class="card accelerated-banner"><strong>Accelerated test · shared clock</strong><p>${safe(journey.clock.day)} ${String(journey.clock.hour).padStart(2,'0')}:00 · Week ${safe(journey.clock.week)} · ${journey.accelerated_test.finished?'30-minute run complete': '3 real minutes per checkpoint'}</p><p class="hint">${clockPending?'Your journey has changed. Your unsaved screen is preserved. Save your edits, then refresh.':'Make your own choices at each step. Both partners must respond.'}</p><button id="refresh-clock" class="secondary" type="button">Refresh current step</button></aside>` : ''}
       <div class="toolbar">
         ${nav.depth>1?'<button id="back" class="text-button">← Back</button>':'<span></span>'}
       </div>
@@ -296,7 +301,7 @@ function unavailableScreen(key) {
   return `<section class="intro"><h1>${safe(labelFor(key))}</h1></section><section class="card"><p>This isn't part of this beta build yet.</p></section>`;
 }
 function genericScreen(key) {
-  return `<section class="intro"><h1>${safe(labelFor(key))}</h1></section><section class="card"><pre class="raw">${safe(JSON.stringify(screenData, null, 2))}</pre></section>`;
+  return `<section class="intro"><h1>${safe(labelFor(key))}</h1></section><section class="card"><p>This activity does not yet have a mobile screen. Your progress is saved. Return Home or open Guru for available next steps.</p></section>`;
 }
 
 // ── navigation + loading ───────────────────────────────────────────────
@@ -398,7 +403,7 @@ async function refreshAcceleratedClock() {
     if (screenDirty || root.querySelector('video') && [...root.querySelectorAll('video')].some(v=>!v.paused)) {
       clockPending=true;
       const hint=root.querySelector('.accelerated-banner .hint, .rehearsal-banner .hint');
-      if(hint) hint.textContent='Time has advanced. Your unsaved screen is preserved. Save your edits, then refresh.';
+      if(hint) hint.textContent='Your journey has changed. Your unsaved screen is preserved. Save your edits, then refresh.';
       return;
     }
     await run(async()=>{await reloadCurrent();clockPending=false;});

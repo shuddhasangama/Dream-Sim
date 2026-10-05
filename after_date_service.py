@@ -111,7 +111,7 @@ def contact_request(conn,uid,lid,channel,clock):
         return rid
 
 
-def contact_respond(conn,uid,lid,rid,response,clock):
+def contact_respond(conn,uid,lid,rid,response,clock,contact_value=None):
     if response not in ('accepted','declined','ignored'):
         raise ApiError('validation_error','Unknown response.')
     with transaction(conn):
@@ -123,6 +123,8 @@ def contact_respond(conn,uid,lid,rid,response,clock):
             raise ApiError('response_final','Request already resolved.',409)
         if response=='accepted':
             require_agreement(conn,active,uid,ceremony.CONTACT_SHARE)
+            if row['channel'] in ('instagram','linkedin'):
+                row['shared_contact']=text(contact_value,'contact_value',200)
         db.insert_row(conn,'ContactRequest',escalations.respond_to_contact_request(row,response,str(clock)))
 
 

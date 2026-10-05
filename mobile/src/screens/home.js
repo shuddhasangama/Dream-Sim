@@ -165,6 +165,7 @@ export function nextUpCard(journey, weekSummary) {
   const dest = action.destination;
   return {
     title: action.headline || action.body,
+    body: action.body || '',
     eyebrowTime,
     actionable: !!(dest && dest.eligible && dest.request),
     destinationKey: dest?.key,
@@ -204,10 +205,10 @@ export function render(ctx) {
     </div>` : ''}
 
     ${nextUp ? (nextUp.actionable ? `<button type="button" id="p-next-up" class="p-next-up" data-destination="${safe(nextUp.destinationKey || '')}">
-        <div><div class="p-next-up-eyebrow">NEXT UP${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div></div>
+        <div><div class="p-next-up-eyebrow">NEXT UP${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div><p>${safe(nextUp.body)}</p></div>
         <span aria-hidden="true" class="p-next-up-arrow">→</span>
       </button>` : `<div class="p-next-up p-next-up-static">
-        <div><div class="p-next-up-eyebrow">NEXT UP${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div></div>
+        <div><div class="p-next-up-eyebrow">NEXT UP${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div><p>${safe(nextUp.body)}</p></div>
       </div>`) : '<div class="p-card p-next-up-empty">Nothing due — enjoy your week</div>'}
 
     <div class="p-rings-row">

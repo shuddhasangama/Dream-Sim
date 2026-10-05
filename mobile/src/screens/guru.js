@@ -29,6 +29,7 @@ let qa = null; // { question, answer, actionLabel, actionKey }
 // "Why so few matches?" is tapped — reach.js's own screen is the real
 // source of truth; this is only ever read here for one sentence.
 let reachCache = null;
+let contextKey = null;
 
 export function _resetForTest() { qa = null; reachCache = null; }
 
@@ -40,9 +41,8 @@ const STAGE_CHIPS = [
 ];
 
 function chipsFor(data) {
-  if (data.dating_context) return STAGE_CHIPS;
   return [
-    { id: 'what_now', label: 'What now?' },
+    ...(data.dating_context ? STAGE_CHIPS : [{ id: 'what_now', label: 'What now?' }]),
     ...(data.also_open || []).map((c, i) => ({ id: `also_${i}`, label: c.title, card: c })),
   ];
 }
@@ -50,6 +50,8 @@ function chipsFor(data) {
 export function render(ctx) {
   const { data, safe, journey } = ctx;
   if (!data) return '<section class="intro"><h1>Guru</h1></section><section class="card"><p>Loading…</p></section>';
+  const nextKey=JSON.stringify([journey?.user?.user_id,journey?.clock,data]);
+  if(nextKey!==contextKey){qa=null;reachCache=null;contextKey=nextKey;}
   const firstName = safe((journey?.user?.display_name || 'there').trim().split(/\s+/)[0]);
   const chips = chipsFor(data);
 
@@ -58,7 +60,7 @@ export function render(ctx) {
       <div><div style="font-weight:800;">Guru</div><div class="p-guru-role">Relationship navigator</div></div>
     </section>
     <div class="p-guru-thread">
-      <div class="p-bubble-guru"><span>Hi ${firstName}. What's on your mind?</span></div>
+      <div class="p-bubble-guru"><span>Hi ${firstName}. Choose a topic below. These are stage-based explanations, not a live AI chat.</span></div>
       ${qa ? `<div class="p-bubble-user">${safe(qa.question)}</div>
         <div class="p-bubble-guru"><span>${safe(qa.answer)}</span>
           ${qa.actionLabel ? `<button type="button" class="p-bubble-action" data-goto>${safe(qa.actionLabel)} <span aria-hidden="true">→</span></button>` : ''}
@@ -81,12 +83,12 @@ export async function answerFor(id, data, journeySurfaces, fetchReach) {
   if (id === 'why_few_matches') {
     if (!reachCache) reachCache = await fetchReach();
     const mutual = reachCache?.counts?.mutual_open ?? 0, fit = reachCache?.counts?.fits_user_filters ?? 0;
-    return { question: 'Why so few matches?', answer: `${mutual} of ${fit} who fit you are open to you. Loosen one filter.`,
+    return { question: 'Why so few matches?', answer: `${mutual} of ${fit} who fit you are open to you. These are reciprocal filter counts, not guaranteed matches. Review your preferences only if you want to.`,
       actionLabel: eligible('reach') ? 'Open Reach' : null, actionKey: 'reach' };
   }
   const dc = data.dating_context;
   if (id === 'how_dating_works' && dc) {
-    return { question: 'How Dating works', answer: [dc.consent, dc.playbook?.[0]].filter(Boolean).join(' '),
+    return { question: 'How Dating works', answer: [...(Array.isArray(dc.consent)?dc.consent:[dc.consent]),dc.playbook?.[0]].filter(Boolean).join(' '),
       actionLabel: eligible('week') ? 'See the week' : null, actionKey: 'week' };
   }
   if (id === 'before_we_meet' && dc?.date_prep) {

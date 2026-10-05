@@ -3699,6 +3699,10 @@
                       "declined",
                       "ignored"
                     ]
+                  },
+                  "contact_value": {
+                    "type": "string",
+                    "maxLength": 200
                   }
                 },
                 "required": [
@@ -4736,6 +4740,10 @@
                       "maxLength": 4000
                     },
                     "uniqueItems": true
+                  },
+                  "custom_question": {
+                    "type": "string",
+                    "maxLength": 300
                   }
                 },
                 "required": [
@@ -10423,6 +10431,105 @@
                 "required": [
                   "template"
                 ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lock-ins/{lid}/gate/reflection-ready": {
+      "post": {
+        "operationId": "gateReflectionReady",
+        "summary": "Explicit per-partner reflection completion in enabled asynchronous beta only",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped result in the data/error envelope. Private partner answers are excluded."
+          },
+          "400": {
+            "description": "Invalid strict JSON body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Disclosure or ownership restriction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Owned resource not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Current-state, consent, retry or prerequisite conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "lid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "round": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "round"
+                ],
+                "additionalProperties": false
               }
             }
           }

@@ -1,27 +1,11 @@
-// Greeting preferences use the existing stage-gated own-profile API.
-export async function load(session) {
-  return session.get('/api/v1/profile/chemistry');
+// Own-profile expectations; server visibility rules remain authoritative.
+export async function load(session) {return session.get('/api/v1/profile/chemistry');}
+const labels={physical_boundary:'How would you like to be greeted?',intimacy_pace:'Your comfortable pace',intimacy_importance:'How important is physical intimacy to you?',intimacy_notes:'Anything else about your boundaries?',health_openness:'Openness to discussing sexual health and contraception',intimacy_goals:'What does intimacy mean to you?',vibes_to_keep_alive:'What would you like to keep alive together?',love_language:'How do you show affection?',communication_preference:'How do you prefer to communicate?',appreciation_style:'What helps you feel appreciated?'};
+export function render({data:d,safe:s,journey}) {
+ if(!d)return '<h1>Boundaries &amp; expectations</h1><p>Loading…</p>';
+ const after=journey?.milestones?.some(k=>['first_date','relationship'].includes(k));
+ const keys=after?(d.entry_keys||[]):['physical_boundary'];
+ const visible=keys.filter(k=>!['intimacy_pace','intimacy_importance','intimacy_notes','health_openness'].includes(k)||d.pacing?.visible?.includes(k));
+ return `<h1>Boundaries &amp; expectations</h1><p>Your preferences are not permission. You can change your mind. Write “Prefer not to discuss yet” where appropriate.</p>${visible.map(k=>`<section class="card"><form data-entry="${s(k)}"><label>${s(labels[k]||k)}${d.options?.[k]?`<select name="value" required><option value="">Choose…</option>${d.options[k].map(v=>`<option value="${s(v)}" ${d.answers?.[k]===v?'selected':''}>${s(v.replaceAll('_',' ').replaceAll('-',' '))}</option>`).join('')}</select>`:`<textarea name="value" maxlength="4000" required>${s(d.answers?.[k]||'')}</textarea>`}</label><button class="secondary">${d.answers?.[k]?'Update saved preference':'Save preference'}</button></form></section>`).join('')}${after&&!d.pacing?.health_open?`<p>Health discussion opens after pace and its reflection interval. ${journey?.async_rehearsal?.enabled?'In the beta, both partners can complete the test reflection in the Relationship conversation.':s(d.pacing?.hours_until_health??24)+' hours remain.'}</p>`:''}${d.saved?'<p role="status">✓ Preference saved.</p>':''}`;
 }
-
-export function render({data, safe}) {
-  if (!data) return '<section class="intro"><h1>Boundaries</h1><p>Loading…</p></section>';
-  const selected = data.answers?.physical_boundary;
-  return `<section class="intro"><h1>How would you like to be greeted?</h1>
-    <p>A preference, not permission. You can change your mind at any time.</p></section>
-    <section class="card"><form id="boundary-form">
-    ${(data.options?.physical_boundary || []).map(value => `<label class="checkbox-row"><input type="radio" name="greeting" value="${safe(value)}" ${selected === value ? 'checked' : ''} required> ${safe(value.replaceAll('-', ' '))}</label>`).join('')}
-    <button type="submit" class="primary">Save greeting preference</button>
-    ${data.saved ? '<p role="status">Saved.</p>' : ''}</form></section>`;
-}
-
-export function bind(root, ctx) {
-  root.querySelector('#boundary-form')?.addEventListener('submit', e => {
-    e.preventDefault();
-    const value = new FormData(e.target).get('greeting');
-    ctx.run(async () => {
-      const data = await ctx.session.put('/api/v1/profile/chemistry/entries/physical_boundary', {value});
-      ctx.patch({...data, saved:true});
-      await ctx.refreshJourney();
-    });
-  });
-}
+export function bind(root,ctx){root.querySelectorAll('[data-entry]').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();const value=new FormData(f).get('value').trim();ctx.run(async()=>{const data=await ctx.session.put(`/api/v1/profile/chemistry/entries/${encodeURIComponent(f.dataset.entry)}`,{value});ctx.patch({...data,saved:true});await ctx.refreshJourney();});}));}

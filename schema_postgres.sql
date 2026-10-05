@@ -417,7 +417,8 @@ CREATE TABLE IF NOT EXISTS "ContactRequest" (
     week          INTEGER NOT NULL,
     status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'ignored')),
     requested_at  TEXT NOT NULL,
-    responded_at  TEXT
+    responded_at  TEXT,
+    shared_contact TEXT
 );
 
 --  Dating exit / Relationship entry gate (docs/relationship-stage-spec.md
@@ -454,6 +455,8 @@ CREATE TABLE IF NOT EXISTS "StageGate" (
     -- (a new round) restarts the pause, which is the point.
     round_no              INTEGER NOT NULL DEFAULT 1,
     answers_closed_at     INTEGER,
+    reflection_ready_a    INTEGER NOT NULL DEFAULT 0,
+    reflection_ready_b    INTEGER NOT NULL DEFAULT 0,
     -- 2026-09-04, user's rule: "If one of them expressed moving to next
     -- stage it should be visible or first thing someone wants to see."
     -- Guru cannot put the right name on that sentence without knowing
@@ -477,6 +480,7 @@ CREATE TABLE IF NOT EXISTS "GateAsk" (
     asked_by      TEXT NOT NULL REFERENCES "User"(id),
     question_key  TEXT NOT NULL,
     asked_at      TEXT NOT NULL,
+    custom_question TEXT,
     UNIQUE (pair_id, round_no, question_key)
 );
 CREATE INDEX IF NOT EXISTS idx_gateask_pair ON "GateAsk" (pair_id, round_no);

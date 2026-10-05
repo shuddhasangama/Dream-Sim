@@ -65,7 +65,7 @@ class JourneyApiTests(RouteTestCase):
         self.make_lockin('stranger', 'partner', lockin_id='private-foreign-pair')
         self.make_plan('private-foreign-pair', plan_id='private-foreign-plan')
         state = self.get().json['data']
-        self.assertEqual(set(state['current_lock_in']), {'id', 'status', 'week', 'dates_completed'})
+        self.assertEqual(set(state['current_lock_in']), {'id', 'status', 'week', 'dates_completed', 'partner_name', 'partner_summary', 'name_hidden'})
         self.assertEqual(set(state['current_date_plan']), {'id', 'status', 'datetime'})
         body = json.dumps(state)
         for private in ('private-foreign', '@private.test', '+919999999999',

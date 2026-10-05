@@ -1,3 +1,4 @@
+import { pairContext } from './pairContext.js';
 // Date plan (§2.4). Reached generically via journey/status's own "plan"
 // surface — once a date exists, journey_api.py already routes it here, so
 // no custom loader is needed, unlike ceremony.js.
@@ -7,6 +8,7 @@ export function render(ctx) {
   if (!data) return '<section class="intro"><h1>Date plan</h1></section><section class="card"><p>Loading…</p></section>';
   const sel = data.my_selections || {};
   return `<section class="intro"><span class="eyebrow">DATE PLAN</span><h1>${safe(data.status === 'confirmed' ? 'Confirmed' : 'Pending signatures')}</h1></section>
+    ${pairContext(ctx)}
     <section class="card">
       <div class="stat-row"><span>When</span><strong>${safe(data.datetime)}</strong></div>
       <div class="stat-row"><span>Meal</span><strong>${safe(data.meal)}</strong></div>

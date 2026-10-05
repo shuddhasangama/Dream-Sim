@@ -1,3 +1,4 @@
+import { pairContext } from './pairContext.js';
 // Week & Match (§2.2) and Lock-in (§2.3) — presentation redesigned per
 // design_handoff_app_ui_pulse/README.md ("Pulse", option 1a): a day strip
 // plus one day's events at a time, instead of the full 7×4 grid. The DATA
@@ -45,6 +46,7 @@ export function render(ctx) {
 
 function postDating(ctx) {
   return `<section class="intro"><span class="p-eyebrow">WEEK</span></section>
+    ${pairContext(ctx)}
     ${weekHeader(ctx)}
     <section class="p-card" style="margin-top:20px;"><p style="margin:0;">REACH and the weekly matches have sunset for you — Guru and Journey are where things continue from here.</p></section>`;
 }
@@ -54,6 +56,7 @@ function lockedIn(ctx) {
   const li = data.lock_in;
   return `<section class="intro"><span class="p-eyebrow">WEEK · LOCKED IN</span></section>
     ${confirmDateAvailable(ctx) ? '<section class="p-card guidance"><h2>Confirm Date</h2><p>Save your availability, then confirm a slot when you are both free.</p><button id="to-calendar" class="primary" type="button">Confirm Date →</button></section>' : ''}
+    ${pairContext(ctx)}
     ${weekHeader(ctx)}
     <section class="p-card" style="margin-top:20px;">
       <div class="stat-row"><span>Status</span><strong>${safe(li?.status)}</strong></div>
@@ -140,7 +143,7 @@ export function withRealDateOnly(byDay, datePlan) {
   const out = {};
   for (const [day, moments] of Object.entries(byDay)) {
     out[day] = moments
-      .filter((m) => m.tone !== 'date' || (real && real.day === day && real.hour === m.hour))
+      .filter((m) => (m.key !== 'sign' || !!datePlan) && (m.tone !== 'debrief' || (!!datePlan && m.personal)) && (m.tone !== 'date' || (real && real.day === day && real.hour === m.hour)))
       .map((m) => (m.tone === 'date' ? { ...m, personal: true, means: m.means || 'Your confirmed date.' } : m));
   }
   return out;
@@ -151,6 +154,7 @@ const MATCH_KEY_TO_SLOT = { match_1: 1, match_2: 2, match_3: 3 };
 // the surface key it maps to, and the label that screen's own tab already
 // uses for its CTA (calendar.js/plan.js), so nothing new is invented.
 const NAV_FOR_MOMENT = {
+  actual_date: {surface:'plan',label:'View date plan'},
   slots: { surface: 'calendar', label: 'Confirm Date' },
   calendar_closes: { surface: 'plan', label: 'View plan' },
   sign: { surface: 'plan', label: 'Review & sign' },
@@ -187,6 +191,12 @@ function weekHeader(ctx) {
   if (!schedule?.grid) return '';
   const { grid } = schedule;
   const byDay = withRealDateOnly(momentsByDay(grid), data.date_plan);
+  const real=confirmedDateMoment(data.date_plan);
+  if(real && byDay[real.day]) {
+    byDay[real.day]=byDay[real.day].filter(m=>m.tone!=='date');
+    byDay[real.day].push({key:'actual_date',label:data.date_plan.status==='confirmed'?'Your confirmed date':'Date awaiting signatures',tone:'date',hour:real.hour,time:data.date_plan.datetime.split('T')[1].slice(0,5),personal:true,means:`${data.date_plan.datetime} — ${data.date_plan.status?.replaceAll('_',' ')||'Saved plan'}`});
+    byDay[real.day].sort((a,b)=>a.hour-b.hour);
+  }
   const todayIdx = grid.days.findIndex((d) => d.is_today);
   const matchBySlot = Object.fromEntries((data.matches || []).map((m) => [m.slot, m]));
   // A currently-open match's own reveal day can be a day BEHIND today's
@@ -216,7 +226,7 @@ function weekHeader(ctx) {
   const rehearsalCopy = journey?.async_rehearsal?.enabled
     ? '<p class="hint" style="margin-top:8px;">Test clock: 3-minute steps until Wednesday 18:00, then partner actions. Revealed matches stay open.</p>' : '';
 
-  return `${simClock}${data.fixed_test_pair ? '<p class="hint">One assigned partner for this test. Both choose Express interest to open availability; otherwise your introduction continues to minute 12.</p>' : rehearsalCopy}
+  return `<section class="card"><h2>What happens next?</h2><p>${safe(journey?.next_action?.body || journey?.next_action?.headline || 'Open a revealed match and choose Express interest or Pass.')}</p><details><summary>How decisions are made</summary><p>Matches use reciprocal REACH preferences and Vision compatibility. A suggestion is not a decision: you choose interest or pass. Mutual interest creates a pair; you both offer slots and sign your own agreement.</p>${data.fixed_test_pair?'<p>This test uses your assigned partner instead of normal candidate selection.</p>':''}</details></section>${simClock}${data.fixed_test_pair ? '<p class="hint">One assigned partner for this test. Both choose Express interest to open availability; otherwise your introduction continues to minute 12.</p>' : rehearsalCopy}
     <div class="p-week-header">
       <span class="p-week-title">This week</span>
       <span class="p-now-pill">NOW · ${safe(String(data.clock?.day || '').toUpperCase())} ${String(data.clock?.hour ?? 0).padStart(2, '0')}:00</span>
@@ -258,7 +268,7 @@ function eventCard(m, day, matchBySlot, ctx) {
       <span class="p-event-dot" style="background:${CATEGORY_COLOR[m.tone] || CATEGORY_COLOR.muted}"></span>
       <span class="p-event-title">${safe(m.full_label || m.label)}</span>
       ${ctx.data.activity_status?.[m.key] ? `<span class="activity-complete">✓ ${safe(ctx.data.activity_status[m.key])}</span>` : ''}
-      <span class="p-event-time">${String(m.hour).padStart(2, '0')}:00</span>
+      <span class="p-event-time">${safe(m.time || String(m.hour).padStart(2, '0')+':00')}</span>
     </div>`;
   const detail = open ? `<div class="p-event-detail">
       ${m.means ? `<p class="hint" style="margin:0 0 10px;">${safe(m.means)}</p>` : ''}
@@ -272,7 +282,7 @@ function eventCard(m, day, matchBySlot, ctx) {
 }
 
 function matchSlot(m, safe, rehearsal = false, myActivities = {}) {
-  if (m.status === 'acted') return `<p class="hint" style="margin:0;">${m.candidate ? safe(m.candidate.display_name) + ' — ' : ''}You said: ${safe(m.action)}</p>`;
+  if (m.status === 'acted') return `<p class="hint" style="margin:0;">${m.candidate ? safe(m.candidate.display_name) + ' — ' : ''}✓ Your decision: ${safe(m.action)}. ${m.action==='interest'?'Next: wait for mutual interest, then save availability. Your choice is preserved while your partner is away.':'Next: review another revealed match when available.'}</p>`;
   if (m.status === 'no_response') return '<p class="hint" style="margin:0;">Window closed with no response.</p>';
   if (m.status === 'closed') return '<p class="hint" style="margin:0;">This window has closed.</p>';
   const c = m.candidate;

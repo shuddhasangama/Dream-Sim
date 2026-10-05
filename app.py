@@ -4540,6 +4540,12 @@ def _api_journey_state(user):
         clock=get_clock(), reach_is_locked=reach_locked(user), facts=_guru_facts(user),
         display_name=display_name(user['user_id'], user['gender']), simulated=clock_module.simulated(),
         partner_greeting=partner_greeting)
+    if active:
+        partner=named_for(user['user_id'],load_user(_partner_id_in_lockin(active,user['user_id'])))
+        result['current_lock_in']['partner_name']=(partner or {}).get('name',MASKED_NAME)
+        result['current_lock_in']['partner_summary']={k:(partner or {}).get('stats',{}).get(k) for k in ('city','age','profession')}
+        result['current_lock_in']['partner_summary']['visions']=(partner or {}).get('visions',[])
+        result['current_lock_in']['name_hidden']=(partner or {}).get('name')==MASKED_NAME
     result['accelerated_test'] = getattr(g, 'accelerated_test_metadata', None) if accelerated_clock.enabled() and not async_rehearsal.enabled() else None
     result['async_rehearsal'] = async_rehearsal.snapshot(get_db(), user['user_id'])[1] if async_rehearsal.enabled() else None
     return result
