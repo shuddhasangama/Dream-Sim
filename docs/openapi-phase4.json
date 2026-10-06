@@ -5368,6 +5368,9 @@
                           "playbook",
                           "face"
                         ]
+                      },
+                      "document_sha256": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -5394,6 +5397,9 @@
                           "maxLength": 4000
                         },
                         "uniqueItems": true
+                      },
+                      "document_sha256": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -6338,6 +6344,9 @@
                           "playbook",
                           "face"
                         ]
+                      },
+                      "document_sha256": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -6364,6 +6373,9 @@
                           "maxLength": 4000
                         },
                         "uniqueItems": true
+                      },
+                      "document_sha256": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -10535,6 +10547,162 @@
           }
         }
       }
+    },
+    "/identity-capture": {
+      "get": {
+        "operationId": "getIdentityCapture",
+        "summary": "Read own private identity status",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read own private identity status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityCaptureResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Capture disabled."
+          },
+          "409": {
+            "description": "Existing capture must be deleted first."
+          },
+          "413": {
+            "description": "Image request too large."
+          },
+          "429": {
+            "description": "Too many uploads."
+          },
+          "503": {
+            "description": "Encryption key missing or invalid."
+          }
+        }
+      },
+      "post": {
+        "operationId": "postIdentityCapture",
+        "summary": "Capture a consented identity image",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capture a consented identity image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityCaptureResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Capture disabled."
+          },
+          "409": {
+            "description": "Existing capture must be deleted first."
+          },
+          "413": {
+            "description": "Image request too large."
+          },
+          "429": {
+            "description": "Too many uploads."
+          },
+          "503": {
+            "description": "Encryption key missing or invalid."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "maxLength": 2800000
+                  },
+                  "consent": {
+                    "const": true
+                  },
+                  "consent_version": {
+                    "const": "identity-image-v1"
+                  }
+                },
+                "required": [
+                  "image",
+                  "consent",
+                  "consent_version"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteIdentityCapture",
+        "summary": "Delete own image and revoke reuse",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delete own image and revoke reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityCaptureResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Capture disabled."
+          },
+          "409": {
+            "description": "Existing capture must be deleted first."
+          },
+          "413": {
+            "description": "Image request too large."
+          },
+          "429": {
+            "description": "Too many uploads."
+          },
+          "503": {
+            "description": "Encryption key missing or invalid."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11947,7 +12115,10 @@
             "$ref": "#/components/schemas/PlanningEntitlement"
           },
           "face_mode": {
-            "const": "simulation"
+            "enum": [
+              "simulation",
+              "provider_result"
+            ]
           },
           "face_simulation_available": {
             "type": "boolean"
@@ -12033,13 +12204,28 @@
             }
           },
           "face_mode": {
-            "const": "simulation"
+            "enum": [
+              "simulation",
+              "provider_result"
+            ]
           },
           "face_simulation_available": {
             "type": "boolean"
           },
           "payment": {
             "$ref": "#/components/schemas/PlanningEntitlement"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/IdentityCaptureStatus"
+          },
+          "document_sha256": {
+            "type": "string"
+          },
+          "signature_receipt": {
+            "type": [
+              "object",
+              "null"
+            ]
           }
         },
         "required": [
@@ -12113,6 +12299,9 @@
                   "playbook",
                   "face"
                 ]
+              },
+              "document_sha256": {
+                "type": "string"
               }
             },
             "required": [
@@ -12144,6 +12333,9 @@
                 "minItems": 4,
                 "maxItems": 4,
                 "uniqueItems": true
+              },
+              "document_sha256": {
+                "type": "string"
               }
             },
             "required": [
@@ -13105,6 +13297,94 @@
           "message",
           "request",
           "decisions_automated"
+        ],
+        "additionalProperties": false
+      },
+      "IdentityCaptureStatus": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "not_captured",
+              "captured",
+              "submitted",
+              "verified",
+              "rejected",
+              "expired",
+              "deleted"
+            ]
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "capture_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captured_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valid_until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "consent_version": {
+            "type": "string"
+          },
+          "consent_text": {
+            "type": "string"
+          },
+          "provider_connected": {
+            "const": false
+          },
+          "liveness_checked": {
+            "const": false
+          }
+        },
+        "required": [
+          "enabled",
+          "status",
+          "verified",
+          "capture_id",
+          "captured_at",
+          "image_expires_at",
+          "valid_until",
+          "consent_version",
+          "consent_text",
+          "provider_connected",
+          "liveness_checked"
+        ],
+        "additionalProperties": false
+      },
+      "IdentityCaptureResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/IdentityCaptureStatus"
+          },
+          "error": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "data",
+          "error"
         ],
         "additionalProperties": false
       }

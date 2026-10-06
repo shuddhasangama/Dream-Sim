@@ -9,6 +9,7 @@ import * as weekScreen from './screens/week.js';
 import * as calendarScreen from './screens/calendar.js';
 import * as planScreen from './screens/plan.js';
 import * as ceremonyScreen from './screens/ceremony.js';
+import * as identityScreen from './screens/identity.js';
 import * as debriefScreen from './screens/debrief.js';
 import * as gateScreen from './screens/gate.js';
 import * as afterDateScreen from './screens/afterDate.js';
@@ -103,6 +104,7 @@ const screens = {
   boundaries: boundariesScreen,
   plan: planScreen,
   ceremony: ceremonyScreen,
+  identity: identityScreen,
   debrief: debriefScreen,
   guru: guruScreen,
   vision: visionScreen,

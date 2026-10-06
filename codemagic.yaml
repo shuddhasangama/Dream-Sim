@@ -107,6 +107,7 @@ workflows:
           rm -rf ios
           npx cap add ios
           npx cap sync ios
+          python3 scripts/configure-ios-privacy.py
 
       - name: Generate iOS assets
         script: cd $CM_BUILD_DIR/mobile && npx capacitor-assets generate --ios

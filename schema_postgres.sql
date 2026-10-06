@@ -714,6 +714,11 @@ CREATE TABLE IF NOT EXISTS "Ceremony" (
                       'relationship_entry', 'stage_gate'
                   )),
     scope_id      TEXT NOT NULL,
+    document_json TEXT,
+    document_sha256 TEXT,
+    signature_evidence_json TEXT,
+    identity_capture_id TEXT,
+    face_method TEXT,
     playbook_ack  INTEGER NOT NULL DEFAULT 0 CHECK (playbook_ack IN (0, 1)),
     signed_name   TEXT,
     signed_at     TEXT,
@@ -875,4 +880,31 @@ CREATE TABLE IF NOT EXISTS "RehearsalIntro" (
 CREATE TABLE IF NOT EXISTS "ProfilePhoto" (
     id TEXT PRIMARY KEY REFERENCES "User"(id),
     data_url TEXT NOT NULL
+);
+
+-- Private identity images: never join into public profiles or partner views.
+CREATE TABLE IF NOT EXISTS "IdentityCapture" (
+    id TEXT PRIMARY KEY REFERENCES "User"(id),
+    capture_id TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL CHECK (status IN ('captured','submitted','verified','rejected','deleted')),
+    authentication TEXT NOT NULL DEFAULT 'unspecified',
+    account_binding_sha256 TEXT NOT NULL DEFAULT '',
+    image_ciphertext TEXT,
+    image_sha256 TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    image_expires_at TEXT NOT NULL,
+    consent_version TEXT NOT NULL,
+    consent_text TEXT NOT NULL,
+    provider TEXT,
+    provider_reference TEXT,
+    reviewed_at TEXT,
+    valid_until TEXT
+);
+CREATE TABLE IF NOT EXISTS "IdentityEvent" (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    capture_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    details TEXT NOT NULL DEFAULT ''
 );

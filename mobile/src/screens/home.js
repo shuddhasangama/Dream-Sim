@@ -227,7 +227,8 @@ export function render(ctx) {
       ${!detail.blocked ? (editorOpen ? '' : `<button type="button" class="p-outline-cta" data-open-editor="${selectedRing}">${ringDef.cta} <span aria-hidden="true">→</span></button>`) : ''}
     </div>
 
-    <section class="card"><button type="button" id="personal-open" class="secondary">Photo, ethnicity &amp; health preferences</button>
+    <section class="card"><button type="button" id="identity-open" class="secondary">Private identity check</button>
+    <button type="button" id="personal-open" class="secondary">Photo, ethnicity &amp; health preferences</button>
     ${personalData ? personal.render({...ctx,data:personalData}) : ''}</section>
     ${editorOpen ? `<div class="p-editor-panel" data-editor-body="${selectedRing}">
       ${selectedRing === 'stats' ? renderStatsEditor(ctx) : renderFoldBody(selectedRing, ctx)}
@@ -254,6 +255,7 @@ export function bind(root, ctx) {
   const { run, session, navigateTo, folds, dashboardStats } = ctx;
 
   root.querySelector('#personal-open')?.addEventListener('click',()=>run(async()=>{personalData=personalData?null:await session.get('/api/v1/profile/personal');}));
+  root.querySelector('#identity-open')?.addEventListener('click',()=>ctx.navigateTo('identity'));
   if(personalData) personal.bind(root,{...ctx,data:personalData,patch:next=>{personalData=next;}});
   root.querySelector('#p-avatar')?.addEventListener('click', () => ctx.openAvatarSheet());
   root.querySelector('#p-next-up')?.addEventListener('click', (e) => navigateTo(e.currentTarget.dataset.destination));

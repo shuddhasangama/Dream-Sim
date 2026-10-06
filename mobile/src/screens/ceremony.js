@@ -1,4 +1,5 @@
 import { pairContext } from './pairContext.js';
+import { panel as identityPanel, bindPanel as bindIdentity } from './identity.js';
 // Agreement ceremony (§2.4): playbook → sign → face, order-enforced. No
 // journey/status surface exists for this screen (its path always needs a
 // specific plan id), so it defines its own load() — main.js's loadScreen()
@@ -36,6 +37,7 @@ export function render(ctx) {
   if (data.complete || data.step === 'done') {
     return `<section class="intro"><span class="eyebrow">AGREEMENT</span><h1>All set</h1></section>${pairContext(ctx)}${track}
       <section class="card guidance"><p>Your steps are complete. Your partner completes their own agreement separately.</p>
+      ${data.signature_receipt ? `<p>Signed on ${safe(data.signature_receipt.signed_at_utc)}. Your signature and agreed terms are recorded.</p>` : ''}
       <button id="to-debrief" class="primary" type="button">Return to your journey <span aria-hidden="true">→</span></button></section>`;
   }
   if (data.step === 'playbook') {
@@ -46,12 +48,16 @@ export function render(ctx) {
   if (data.step === 'sign') {
     return `<section class="intro"><span class="eyebrow">AGREEMENT · 2 of 3</span><h1>Sign</h1></section>${pairContext(ctx)}${track}
       <section class="card"><form id="sign-form">
-        <div class="field"><label for="signed_name">Your name</label><input id="signed_name" name="signed_name" required maxlength="200"></div>
+        <p>Typing your name and selecting Sign records your agreement to these terms, with the current date and time. This is an electronic acknowledgement, not a certificate-based digital signature.</p>
+        <div class="field"><label for="signed_name">Your name</label><input id="signed_name" name="signed_name" required maxlength="160"></div>
         ${(data.acknowledgements || []).map((a) => `<label class="checkbox-row"><input type="checkbox" name="ack" value="${safe(a.key)}" required> ${safe(a.label)}</label><p class="hint" style="margin:-6px 0 10px 26px;">${safe(a.term)}</p>`).join('')}
         <button class="primary" type="submit">Sign</button>
       </form></section>`;
   }
   if (data.step === 'face') {
+    if (data.identity?.enabled) return `<section class="intro"><span class="eyebrow">AGREEMENT · 3 of 3</span><h1>Identity check</h1></section>${pairContext(ctx)}${track}
+      ${identityPanel(data.identity,safe)}
+      ${data.identity.verified ? '<button id="do-face" class="primary" type="button">Use my approved identity check</button>' : '<p>Your signature is saved. Return here once your identity check is approved.</p>'}`;
     return `<section class="intro"><span class="eyebrow">AGREEMENT · 3 of 3</span><h1>Verify it's you</h1></section>${pairContext(ctx)}${track}
       <section class="card"><p>${data.face_simulation_available ? "This is a beta simulation — it doesn't run a real biometric check." : 'Verification is not available in this build yet.'}</p>
       <button id="do-face" class="primary" type="button" ${data.face_simulation_available ? '' : 'disabled'}>Verify <span aria-hidden="true">→</span></button></section>`;
@@ -63,21 +69,22 @@ export function bind(root, ctx) {
   const { session, run, patch, params, navigateTo } = ctx;
   const base = agreementPath(params);
   const reload = async () => patch(await session.get(base));
+  if(ctx.data?.identity?.enabled) bindIdentity(root,ctx,ctx.data.identity,reload);
 
   root.querySelector('#to-debrief')?.addEventListener('click', () => navigateTo(params.returnTo || 'plan'));
 
   root.querySelector('#do-playbook')?.addEventListener('click', () => run(async () => {
-    await session.post(`${base}/steps`, { step: 'playbook' });
+    await session.post(`${base}/steps`, { step: 'playbook', ...(ctx.data.document_sha256 ? {document_sha256:ctx.data.document_sha256} : {}) });
     await reload();
   }));
 
   root.querySelector('#sign-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
+    const form = new FormData(e.target);
+    const payload = {step: 'sign', signed_name: form.get('signed_name').trim(), acks: form.getAll('ack'),
+      ...(ctx.data.document_sha256 ? {document_sha256:ctx.data.document_sha256} : {})};
     run(async () => {
-      const form = new FormData(e.target);
-      await session.post(`${base}/steps`, {
-        step: 'sign', signed_name: form.get('signed_name').trim(), acks: form.getAll('ack'),
-      });
+      await session.post(`${base}/steps`, payload);
       await reload();
     });
   });

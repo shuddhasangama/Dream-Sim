@@ -27,6 +27,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
     if evolution is not None:
         import evolution_api
         evolution_api.register(api, **evolution)
+        import identity_capture
+        identity_capture.register(api, evolution['get_db'])
     if planning is not None:
         import planning_api
         planning_api.register(api, **planning)

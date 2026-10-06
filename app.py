@@ -1805,7 +1805,8 @@ def escalations_invite_acknowledge():
     if invite is None or active is None:
         return redirect(url_for("escalations_view"))
     party = _my_role_in_lockin(active, user["user_id"])
-    face_verified = dateplan.verify_face(user["user_id"], seed=uuid.uuid4().hex)
+    import identity_capture
+    face_verified = identity_capture.verified(get_db(), user['user_id']) if identity_capture.enabled() else dateplan.verify_face(user["user_id"], seed=uuid.uuid4().hex)
     try:
         updated = invite_home.acknowledge(invite, party, face_verified)
     except ValueError:
@@ -3778,9 +3779,9 @@ def _date_ceremony_context(scope_id: str) -> dict:
     """Fill the seven clauses from what both people already told us.
     Nothing here is typed by hand — the agreement is a readback."""
     user = current_user()
-    active = _my_active_lockin(user["user_id"])
-    plan = _dateplan_for_lockin(active["id"]) if active else None
-    if plan is None:
+    plan = db.fetch_one(get_db(), 'DatePlan', id=scope_id)
+    active = db.fetch_one(get_db(), 'LockIn', id=plan['lockin_id']) if plan else None
+    if plan is None or active is None or user['user_id'] not in (active['user_a'], active['user_b']):
         return {}
     entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
     greeting = {e["key"]: e["value"] for e in entries}.get("physical_boundary")
@@ -3862,6 +3863,9 @@ def ceremony_step(kind):
     """One route for all three actions. Which step runs is decided by
     ceremony.next_step(), never by which form was posted — you cannot sign
     a playbook you have not opened, whatever the request body says."""
+    import identity_capture
+    if identity_capture.enabled():
+        abort(409, description='Use the updated mobile app for identity capture and agreement signing.')
     if kind not in ceremony.KINDS:
         abort(404)
     guard = unlocked_or_redirect("ceremony")

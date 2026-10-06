@@ -401,6 +401,7 @@ export function previewTransport() {
       },
     });
 
+    if(path.endsWith('/identity-capture')) return ok({enabled:false,status:'not_captured',verified:false});
     if(path.endsWith('/profile/personal')) {
       if(method==='PUT') personalProfile={...personalProfile,ethnicity:body.ethnicity,health:{consent:body.share_health,categories:body.categories,note:body.note},openness:{mode:body.openness,categories:body.open_categories,include_undisclosed:body.include_undisclosed}};
       return ok(personalProfile);

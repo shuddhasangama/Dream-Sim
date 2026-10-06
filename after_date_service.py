@@ -63,6 +63,8 @@ def agreement(conn,uid,lid,kind,body,clock):
             if not gate or gate['status']!='open' or not (gate['confirm_a'] and gate['confirm_b']):
                 raise ApiError('gate_not_ready','Both partners must confirm the open gate first.',409)
         state=agreement_state(conn,uid,lid,kind)
+        if 'document_sha256' in body and body['document_sha256']!=ceremony.freeze_document(state,ceremony.clauses_for(kind))['document_sha256']:
+            raise ApiError('agreement_changed','Refresh and read the agreement again before signing.',409)
         step=body.get('step')
         if step not in ('playbook','sign','face'):
             raise ApiError('validation_error','Unknown agreement step.')
@@ -80,12 +82,18 @@ def agreement(conn,uid,lid,kind,body,clock):
             return
         if ceremony.next_step(state)!=step:
             raise ApiError('step_order','Complete agreement steps in order.',409)
-        if step=='playbook': state=ceremony.ack_playbook(state)
+        if step=='playbook': state=ceremony.ack_playbook(ceremony.freeze_document(state,ceremony.clauses_for(kind)))
         elif step=='sign': state=ceremony.sign(state,name,acks,str(clock))
         else:
-            if not simulation_allowed(conn,uid):
+            import identity_capture
+            identity_ok=identity_capture.enabled() and identity_capture.verified(conn,uid)
+            if identity_capture.enabled() and not identity_ok:
+                raise ApiError('identity_pending','Your identity check must be approved before completing this agreement.',409)
+            if not identity_ok and not simulation_allowed(conn,uid):
                 raise ApiError('verification_unavailable','Face verification is only an explicitly enabled beta simulation.',409)
             state=ceremony.capture_face(state)
+            state['face_method']='provider_result' if identity_ok else 'beta_simulation'
+            state['identity_capture_id']=db.fetch_one(conn,'IdentityCapture',id=uid)['capture_id'] if identity_ok else None
         state=ceremony.complete(state,str(clock))
         state['created_at']=state['created_at'] or str(clock)
         db.insert_row(conn,'Ceremony',state)

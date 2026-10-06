@@ -259,7 +259,7 @@ class DriftCheckIsItselfChecked(unittest.TestCase):
         text = pathlib.Path("drift-check.sql").read_text(encoding="utf-8")
         start = text.index("WITH expected(table_name, column_name) AS (VALUES")
         end = text.index("\n)", start)
-        return set(re.findall(r"\('([A-Za-z_]+)','([A-Za-z_]+)'\)", text[start:end]))
+        return set(re.findall(r"\('([A-Za-z_][A-Za-z0-9_]*)','([A-Za-z_][A-Za-z0-9_]*)'\)", text[start:end]))
 
     def rows_in_schema(self):
         schema = pathlib.Path("schema_postgres.sql").read_text(encoding="utf-8")

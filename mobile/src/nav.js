@@ -16,7 +16,7 @@ export const SURFACE_LABELS = {
   stats: 'Stats', reach: 'REACH', week: 'Week', guru: 'Guru',
   relationship: 'Relationship', journey: 'Journey', married: 'Journey',
   align: 'Before the date', calendar: 'Calendar', plan: 'Date plan',
-  boundaries: 'Boundaries', debrief: 'Debrief', ceremony: 'Ceremony',
+  boundaries: 'Boundaries', debrief: 'Debrief', ceremony: 'Ceremony', identity: 'Identity check',
   after_date: 'After the date', expectations: 'Expectations', escalations: 'Sharing',
   next_level: 'Next level', gate: 'Relationship gate', vibes: 'Vibes', road: 'ROAD',
 };

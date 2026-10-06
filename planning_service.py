@@ -211,6 +211,9 @@ def persist_signature(conn, active, pid, uid, flags, now, verified):
 def legacy_sign(conn, uid, pid, flags, now, verify_face):
     """Preserve the older HTML checkbox flow, with the same atomic mirror."""
     with transition(conn):
+        import identity_capture
+        if identity_capture.enabled():
+            raise ApiError('agreement_required', 'Use the agreement signing flow in the updated app.', 409)
         active, plan = owned_plan(conn, uid, pid)
         require_paid(conn, uid, payments.AGREEMENT, pid)
         existing = db.fetch_one(conn, 'Signature', dateplan_id=pid, user_id=uid)
@@ -219,11 +222,13 @@ def legacy_sign(conn, uid, pid, flags, now, verify_face):
         persist_signature(conn, active, pid, uid, flags, now, verify_face(uid, bool(existing)))
 
 
-def agreement(conn, uid, pid, body, now, verify_face):
+def agreement(conn, uid, pid, body, now, verify_face, clauses=None):
     with transition(conn):
         active, plan = owned_plan(conn, uid, pid)
         require_paid(conn, uid, payments.AGREEMENT, pid)
         state = agreement_state(conn, uid, pid, now)
+        if 'document_sha256' in body and body['document_sha256'] != ceremony.freeze_document(state, clauses or ceremony.clauses_for(ceremony.DATE_AGREEMENT))['document_sha256']:
+            raise ApiError('agreement_changed', 'Refresh and read the agreement again before signing.', 409)
         step = body['step']
         current = ceremony.next_step(state)
         if step not in (ceremony.PLAYBOOK, ceremony.SIGN, ceremony.FACE):
@@ -239,13 +244,19 @@ def agreement(conn, uid, pid, body, now, verify_face):
         if step != current:
             raise ApiError('state_conflict', 'Complete the preceding agreement step first.', 409)
         if step == ceremony.PLAYBOOK:
-            state = ceremony.ack_playbook(state)
+            state = ceremony.ack_playbook(ceremony.freeze_document(state, clauses or ceremony.clauses_for(ceremony.DATE_AGREEMENT)))
         elif step == ceremony.SIGN:
             state = ceremony.sign(state, body['signed_name'], body['acks'], now)
         else:
-            if not verify_face(uid):
+            import identity_capture
+            identity_ok = identity_capture.enabled() and identity_capture.verified(conn, uid)
+            if identity_capture.enabled() and not identity_ok:
+                raise ApiError('identity_pending', 'Your identity check must be approved before completing this agreement.', 409)
+            if not identity_ok and not verify_face(uid):
                 raise ApiError('face_simulation_failed', 'The simulated face step failed; you may retry.', 409)
             state = ceremony.capture_face(state)
+            state['face_method'] = 'provider_result' if identity_ok else 'beta_simulation'
+            state['identity_capture_id'] = db.fetch_one(conn, 'IdentityCapture', id=uid)['capture_id'] if identity_ok else None
         if ceremony.is_complete(state):
             state = ceremony.complete(state, now)
         save(conn, 'Ceremony', state)

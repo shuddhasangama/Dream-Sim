@@ -10,6 +10,7 @@ import db
 import payments
 import planning_service as service
 import async_rehearsal
+import identity_capture
 from api_contract import ApiError, allowlist, json_object
 
 
@@ -72,8 +73,8 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
                 'my_selections': db.load_json_field(plan['selections_'+role+'_json'], {}),
                 'my_signed': any(s['user_id'] == uid() and dateplan.is_fully_acknowledged(s) for s in sigs),
                 'partner_signed': any(s['user_id'] != uid() and dateplan.is_fully_acknowledged(s) for s in sigs),
-                'payment': entitlement(payments.AGREEMENT, pid), 'face_mode': 'simulation',
-                'face_simulation_available': simulation_enabled()}
+                'payment': entitlement(payments.AGREEMENT, pid), 'face_mode': 'provider_result' if identity_capture.enabled() else 'simulation',
+                'face_simulation_available': simulation_enabled() and not identity_capture.enabled()}
 
     def agreement_view(pid):
         service.owned_plan(get_db(), uid(), pid)
@@ -86,8 +87,11 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
                 # clients, and add readable text for those existing builds.
                 'clauses': [{**c, 'text': f"{c['n']}. {c['title']} — {c['body']}"}
                             for c in ceremony.clauses_for(ceremony.DATE_AGREEMENT, agreement_context(pid))],
-                'face_mode': 'simulation', 'face_simulation_available': simulation_enabled(),
-                'payment': entitlement(payments.AGREEMENT, pid)}
+                'face_mode': 'provider_result' if identity_capture.enabled() else 'simulation', 'face_simulation_available': simulation_enabled() and not identity_capture.enabled(),
+                'payment': entitlement(payments.AGREEMENT, pid),
+                **ceremony.document_view(state, [{**c, 'text': f"{c['n']}. {c['title']} — {c['body']}"}
+                    for c in ceremony.clauses_for(ceremony.DATE_AGREEMENT, agreement_context(pid))]),
+                'identity': identity_capture.view(get_db(), uid())}
 
     @api.get('/lock-ins/<lid>/calendar')
     def get_calendar(lid):
@@ -133,11 +137,14 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
 
     @api.post('/date-plans/<pid>/agreement/steps')
     def agreement_step(pid):
-        body = json_object(required={'step'}, optional={'signed_name', 'acks'})
-        if body['step'] != 'sign' and set(body) != {'step'}:
+        body = json_object(required={'step'}, optional={'signed_name', 'acks', 'document_sha256'})
+        if body['step'] != 'sign' and set(body) - {'step', 'document_sha256'}:
             raise ApiError('validation_error', 'Only the sign step accepts name and acknowledgements.')
         service.owned_plan(get_db(), uid(), pid)
-        if body['step'] == 'face' and not simulation_enabled():
+        document = agreement_view(pid)
+        if 'document_sha256' in body and body['document_sha256'] != document['document_sha256']:
+            raise ApiError('agreement_changed', 'The agreement changed. Refresh and read it again before signing.', 409)
+        if body['step'] == 'face' and not identity_capture.enabled() and not simulation_enabled():
             raise ApiError('simulation_disabled', 'A real face provider is not configured; the beta simulation is disabled.', 403)
-        service.agreement(get_db(), uid(), pid, body, str(get_clock()), lambda who: dateplan.verify_face(who, seed=uuid.uuid4().hex))
+        service.agreement(get_db(), uid(), pid, body, str(get_clock()), lambda who: dateplan.verify_face(who, seed=uuid.uuid4().hex), document['clauses'])
         return jsonify(agreement_view(pid))

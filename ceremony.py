@@ -265,6 +265,34 @@ def missing_acks(state: dict[str, Any], ticked: list[str] | None = None) -> list
     return [k for k in ack_keys(state["kind"]) if k not in given]
 
 
+def freeze_document(state, clauses):
+    """Freeze displayed terms at acknowledgement, once per agreement."""
+    import hashlib
+    if state.get('document_json'):
+        return state
+    document = json.dumps({'kind': state['kind'], 'scope_id': state['scope_id'],
+        'clauses': clauses, 'acknowledgements': acks_for(state['kind'])},
+        sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+    return {**state, 'document_json': document,
+            'document_sha256': hashlib.sha256(document.encode('utf-8')).hexdigest()}
+
+
+def document_view(state, clauses):
+    frozen = freeze_document(state, clauses)
+    return {'clauses': json.loads(frozen['document_json'])['clauses'],
+            'document_sha256': frozen['document_sha256'],
+            'signature_receipt': json.loads(state['signature_evidence_json']) if state.get('signature_evidence_json') else None}
+
+
+def authentication_evidence():
+    """Record tester entry honestly; never represent it as verified ownership."""
+    from flask import g, has_request_context
+    session = getattr(g, 'auth_session', None) if has_request_context() else None
+    sid = session.get('id', '') if session else ''
+    return {'session_id': sid or None,
+            'authentication': 'tester_without_otp' if sid.startswith('tester_') else 'authenticated_session' if sid else 'unspecified'}
+
+
 def sign(state: dict[str, Any], typed_name: str, acks: list[str], signed_at: str) -> dict[str, Any]:
     """Record the typed signature and the terms it agreed to.
 
@@ -288,8 +316,22 @@ def sign(state: dict[str, Any], typed_name: str, acks: list[str], signed_at: str
     given = [k for k in ack_keys(state["kind"]) if k in set(acks or [])]
     if missing_acks(state, given):
         return state
-    return {**state, "signed_name": name, "signed_at": signed_at,
-            "acks_json": json.dumps(given)}
+    if state.get('signed_name'):
+        return state  # A second submission must never rewrite the evidence.
+    signed = {**state, "signed_name": name, "signed_at": signed_at,
+              "acks_json": json.dumps(given)}
+    if state.get('document_json'):
+        from datetime import datetime, timezone
+        import hashlib
+        evidence = {'version': 'typed-signature-v1', 'user_id': state['user_id'],
+            'kind': state['kind'], 'scope_id': state['scope_id'], 'typed_name': name,
+            'acknowledged_keys': given, 'document_sha256': state['document_sha256'],
+            'signed_at_utc': datetime.now(timezone.utc).isoformat(),
+            'method': 'typed_name_and_explicit_acknowledgements', **authentication_evidence()}
+        canonical = json.dumps(evidence, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        evidence['evidence_sha256'] = hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+        signed['signature_evidence_json'] = json.dumps(evidence, ensure_ascii=False)
+    return signed
 
 
 def signature_display(signed_name: str | None, revealed: bool) -> str | None:

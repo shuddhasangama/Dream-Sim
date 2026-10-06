@@ -2,6 +2,7 @@
 from flask import g,jsonify
 import db,ceremony,escalations,invite_home,next_level,gate_service
 import after_date_service as service
+import identity_capture
 from api_contract import ApiError,json_object,allowlist
 
 
@@ -102,15 +103,19 @@ def register(api,get_db,get_clock,week_to_date):
         return {'kind':kind,'step':ceremony.next_step(state),'complete':ceremony.is_complete(state),
             'partner_complete':service.complete(get_db(),other,lid,kind),'my_signed_name':state['signed_name'],
             'acknowledgements':ceremony.acks_for(kind),'acks':ceremony.acks_for(kind),'clauses':ceremony.clauses_for(kind),
-            'face_mode':'simulation','face_simulation_available':service.simulation_allowed(get_db(),uid())}
+            'face_mode':'provider_result' if identity_capture.enabled() else 'simulation','face_simulation_available':service.simulation_allowed(get_db(),uid()) and not identity_capture.enabled(),
+            **ceremony.document_view(state,ceremony.clauses_for(kind)),
+            'identity':identity_capture.view(get_db(),uid())}
 
     @api.get('/lock-ins/<lid>/agreements/<kind>')
     def agreement_read(lid,kind):return jsonify(agreement_view(lid,kind))
 
     @api.post('/lock-ins/<lid>/agreements/<kind>/steps')
     def after_date_agreement_step(lid,kind):
-        body=json_object(required={'step'},optional={'signed_name','acks'})
-        if body['step']!='sign' and set(body)!={'step'}:
+        body=json_object(required={'step'},optional={'signed_name','acks','document_sha256'})
+        if body['step']!='sign' and set(body)-{'step','document_sha256'}:
             raise ApiError('validation_error','Signature fields belong only to the sign step.')
+        if 'document_sha256' in body and body['document_sha256']!=agreement_view(lid,kind)['document_sha256']:
+            raise ApiError('agreement_changed','The agreement changed. Refresh and read it again before signing.',409)
         service.agreement(get_db(),uid(),lid,kind,body,get_clock())
         return jsonify(agreement_view(lid,kind))
