@@ -57,7 +57,7 @@ export function render(ctx) {
   if (data.step === 'face') {
     if (data.identity?.enabled) return `<section class="intro"><span class="eyebrow">AGREEMENT · 3 of 3</span><h1>Identity check</h1></section>${pairContext(ctx)}${track}
       ${identityPanel(data.identity,safe)}
-      ${data.identity.verified ? '<button id="do-face" class="primary" type="button">Use my approved identity check</button>' : '<p>Your signature is saved. Return here once your identity check is approved.</p>'}`;
+      ${(data.identity.verified || data.identity.can_complete) ? '<button id="do-face" class="primary" type="button">Continue</button>' : '<p>Your signature is saved. Return here once your identity check is approved.</p>'}`;
     return `<section class="intro"><span class="eyebrow">AGREEMENT · 3 of 3</span><h1>Verify it's you</h1></section>${pairContext(ctx)}${track}
       <section class="card"><p>${data.face_simulation_available ? "This is a beta simulation — it doesn't run a real biometric check." : 'Verification is not available in this build yet.'}</p>
       <button id="do-face" class="primary" type="button" ${data.face_simulation_available ? '' : 'disabled'}>Verify <span aria-hidden="true">→</span></button></section>`;

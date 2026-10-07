@@ -249,13 +249,13 @@ def agreement(conn, uid, pid, body, now, verify_face, clauses=None):
             state = ceremony.sign(state, body['signed_name'], body['acks'], now)
         else:
             import identity_capture
-            identity_ok = identity_capture.enabled() and identity_capture.verified(conn, uid)
+            identity_ok = identity_capture.completion_method(conn, uid)
             if identity_capture.enabled() and not identity_ok:
                 raise ApiError('identity_pending', 'Your identity check must be approved before completing this agreement.', 409)
             if not identity_ok and not verify_face(uid):
                 raise ApiError('face_simulation_failed', 'The simulated face step failed; you may retry.', 409)
             state = ceremony.capture_face(state)
-            state['face_method'] = 'provider_result' if identity_ok else 'beta_simulation'
+            state['face_method'] = identity_ok if identity_ok else 'beta_simulation'
             state['identity_capture_id'] = db.fetch_one(conn, 'IdentityCapture', id=uid)['capture_id'] if identity_ok else None
         if ceremony.is_complete(state):
             state = ceremony.complete(state, now)

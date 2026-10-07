@@ -11,7 +11,7 @@ test('a pending identity image cannot be used as an approved face step',()=>{
 });
 test('approved identity is reusable but each agreement still needs consent',()=>{
   const html=ceremony({safe,data:{step:'face',identity:{enabled:true,status:'verified',verified:true,capture_id:'c'}}});
-  assert.match(html,/Use my approved identity check/);
+  assert.match(html,/id="do-face"/);
   assert.match(html,/Each agreement still needs your own signature/);
   assert.doesNotMatch(html,/identity-camera/);
 });
@@ -23,4 +23,12 @@ test('capture requires review and explicit consent and does not save to gallery'
   assert.equal(captureOptions.saveToGallery,false);
   assert.equal(captureOptions.allowEditing,false);
   assert.equal(captureOptions.source,'CAMERA');
+});
+
+test('test-approved capture offers Continue without claiming BGV verification',()=>{
+  const html=ceremony({safe,data:{step:'face',identity:{enabled:true,status:'captured',verified:false,test_approved:true,can_complete:true,capture_id:'c'}}});
+  assert.match(html,/id="do-face"/);
+  assert.match(html,/Continue/);
+  assert.match(html,/BGV authentication is still pending/);
+  assert.doesNotMatch(html,/Return here once/);
 });

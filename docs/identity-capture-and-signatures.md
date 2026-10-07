@@ -125,3 +125,20 @@ Automated tests cover the API, SQLite/schema parity, signature snapshots, provid
 The existing asset-generation development dependency tree reports npm audit findings; the camera plugin is not listed among them. No unrelated dependency upgrades are included here.
 
 Native permission reference: [Capacitor Camera documentation](https://github.com/ionic-team/capacitor-plugins/tree/main/camera).
+
+
+## Temporary capture-only tester approval
+
+Set `DHASHU_IDENTITY_TEST_AUTO_APPROVE=1` alongside
+`DHASHU_IDENTITY_CAPTURE_ENABLED=1`. This requires a simulated clock, an enabled
+account, and the existing OTP-free tester allowlist (`DHASHU_TESTER_NO_OTP=true`
+and `DHASHU_TESTER_USER_IDS`). After consenting and saving a valid private image,
+the Face tab offers Continue without provider approval. Existing unexpired
+captures also qualify. Install the updated Android/iOS build to see this button.
+
+The image remains captured/submitted, not provider-verified. Agreement evidence
+records `face_method=test_capture` and its capture ID; BGV flags are unchanged.
+Deletion, expiry, rejection, contact reassignment or disabling the flag prevents
+reuse for new agreements. Completed agreements remain historical records.
+Set the new flag to `0` to restore provider approval requirements. No schema
+migration or journey reset is necessary.

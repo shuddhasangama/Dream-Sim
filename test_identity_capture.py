@@ -53,6 +53,49 @@ class IdentityCaptureTests(RouteTestCase):
         self.assertEqual(response.status_code,200,response.json)
         return response.json['data']
 
+    def test_capture_only_approval_is_scoped_and_records_honest_evidence(self):
+        with mock.patch.dict(os.environ, {'DHASHU_IDENTITY_TEST_AUTO_APPROVE':'1',
+                'DHASHU_SIMULATED_CLOCK':'true', 'DHASHU_TESTER_NO_OTP':'true',
+                'DHASHU_TESTER_USER_IDS':'owner'}):
+            self.assertFalse(identity.test_approved(self.conn,'owner'))
+            cid=self.upload(); self.sign()
+            view=identity.view(self.conn,'owner')
+            self.assertTrue(view['can_complete'])
+            self.assertTrue(view['test_approved'])
+            self.assertFalse(view['verified'])
+            self.assertEqual(view['status'],'captured')
+            for changes in ({'DHASHU_IDENTITY_TEST_AUTO_APPROVE':'0'},
+                            {'DHASHU_SIMULATED_CLOCK':'false'},
+                            {'DHASHU_TESTER_USER_IDS':''}):
+                with mock.patch.dict(os.environ,changes):
+                    self.assertFalse(identity.test_approved(self.conn,'owner'))
+                    self.assertEqual(self.post(self.agreement+'/steps',{'step':'face'}).status_code,409)
+            response=self.post(self.agreement+'/steps',{'step':'face'})
+            self.assertEqual(response.status_code,200,response.json)
+            self.assertTrue(response.json['data']['complete'])
+            state=db.fetch_one(self.conn,'Ceremony',user_id='owner',kind='contact_share')
+            self.assertEqual(state['face_method'],'test_capture')
+            self.assertEqual(state['identity_capture_id'],cid)
+            self.assertTrue(db.fetch_one(self.conn,'IdentityCapture',id='owner')['image_ciphertext'])
+            self.request('/identity-capture',method='DELETE')
+            self.assertFalse(identity.test_approved(self.conn,'owner'))
+
+    def test_test_approval_rejects_expired_rejected_and_reassigned_capture(self):
+        with mock.patch.dict(os.environ, {'DHASHU_IDENTITY_TEST_AUTO_APPROVE':'1',
+                'DHASHU_SIMULATED_CLOCK':'true', 'DHASHU_TESTER_NO_OTP':'true',
+                'DHASHU_TESTER_USER_IDS':'owner'}):
+            self.upload()
+            row=db.fetch_one(self.conn,'IdentityCapture',id='owner')
+            for changes in ({'status':'rejected'}, {'image_ciphertext':None},
+                            {'image_expires_at':'2000-01-01T00:00:00+00:00'},
+                            {'account_binding_sha256':'different'}):
+                db.insert_row(self.conn,'IdentityCapture',{**row,**changes})
+                self.assertFalse(identity.view(self.conn,'owner')['can_complete'])
+            db.insert_row(self.conn,'IdentityCapture',row)
+            account=db.fetch_one(self.conn,'Account',user_id='owner')
+            db.insert_row(self.conn,'Account',{**account,'auth_enabled':0})
+            self.assertFalse(identity.test_approved(self.conn,'owner'))
+
     def test_private_encrypted_upload_and_idempotence(self):
         cid=self.upload()
         row=db.fetch_one(self.conn,'IdentityCapture',id='owner')

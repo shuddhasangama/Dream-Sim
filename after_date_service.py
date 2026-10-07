@@ -86,13 +86,13 @@ def agreement(conn,uid,lid,kind,body,clock):
         elif step=='sign': state=ceremony.sign(state,name,acks,str(clock))
         else:
             import identity_capture
-            identity_ok=identity_capture.enabled() and identity_capture.verified(conn,uid)
+            identity_ok=identity_capture.completion_method(conn,uid)
             if identity_capture.enabled() and not identity_ok:
                 raise ApiError('identity_pending','Your identity check must be approved before completing this agreement.',409)
             if not identity_ok and not simulation_allowed(conn,uid):
                 raise ApiError('verification_unavailable','Face verification is only an explicitly enabled beta simulation.',409)
             state=ceremony.capture_face(state)
-            state['face_method']='provider_result' if identity_ok else 'beta_simulation'
+            state['face_method']=identity_ok if identity_ok else 'beta_simulation'
             state['identity_capture_id']=db.fetch_one(conn,'IdentityCapture',id=uid)['capture_id'] if identity_ok else None
         state=ceremony.complete(state,str(clock))
         state['created_at']=state['created_at'] or str(clock)

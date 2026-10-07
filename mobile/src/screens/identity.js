@@ -16,7 +16,7 @@ export function panel(data, safe) {
   if (!data?.enabled) return '<p>Identity-image capture is not enabled yet.</p>';
   const canCapture = ['not_captured','deleted','rejected','expired'].includes(data.status);
   return `<section class="card"><h2>Private identity image</h2>
-    <p role="status">${safe(labels[data.status] || 'Check status')}</p>
+    <p role="status">${safe(data.test_approved ? 'Capture complete — approved for testing' : labels[data.status] || 'Check status')}</p>
     <p>This image is separate from your profile portrait. A photo alone is not a liveness or identity check.</p>
     ${canCapture ? `<p>Face the camera in good light, with your full face visible. On Android, switch to the front camera if needed.</p>
       <button id="identity-camera" type="button">Take a face photo</button>
@@ -24,7 +24,8 @@ export function panel(data, safe) {
       <p id="identity-note" role="status"></p>
       <form id="identity-form"><label class="checkbox-row"><input type="checkbox" name="consent" required> ${safe(data.consent_text)}</label>
       <button id="identity-upload" class="primary" type="submit" disabled>Save private image</button></form>` : ''}
-    ${data.status === 'captured' ? '<p>Your image has not been sent automatically. DhaShu must submit it to the verification provider.</p>' : ''}
+    ${data.test_approved ? '<p>You can continue testing now. BGV authentication is still pending.</p>' : ''}
+    ${data.status === 'captured' && !data.test_approved ? '<p>Your image has not been sent automatically. DhaShu must submit it to the verification provider.</p>' : ''}
     ${data.verified ? '<p>Your approved check can be reused for later agreements while it remains valid. Each agreement still needs your own signature.</p>' : ''}
     <button id="identity-refresh" type="button">Refresh verification status</button>
     ${data.capture_id && data.status !== 'deleted' ? `<details><summary>Delete identity image</summary>

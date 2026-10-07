@@ -82,6 +82,30 @@ def verified(conn, uid):
                 and row['account_binding_sha256'] == account_binding(conn, uid))
 
 
+def test_approved(conn, uid):
+    """Temporary capture-only permission; never a provider verification."""
+    import clock
+    import auth_sessions
+    account = db.fetch_one(conn, 'Account', user_id=uid)
+    row = db.fetch_one(conn, 'IdentityCapture', id=uid)
+    return bool(enabled() and os.environ.get('DHASHU_IDENTITY_TEST_AUTO_APPROVE', '0') == '1'
+                and clock.simulated() and auth_sessions.tester_allowed(uid)
+                and account and account['auth_enabled'] and row
+                and row['status'] in ('captured', 'submitted') and row['image_ciphertext']
+                and row['image_expires_at'] > stamp()
+                and row['account_binding_sha256'] == account_binding(conn, uid))
+
+
+def completion_method(conn, uid):
+    if not enabled():
+        return None
+    if verified(conn, uid):
+        return 'provider_result'
+    if test_approved(conn, uid):
+        return 'test_capture'
+    return None
+
+
 def view(conn, uid):
     row = db.fetch_one(conn, 'IdentityCapture', id=uid)
     status = row['status'] if row else 'not_captured'
@@ -92,6 +116,8 @@ def view(conn, uid):
     elif row and status in ('captured', 'submitted') and row['image_expires_at'] <= stamp():
         status = 'expired'
     return {'enabled': enabled(), 'status': status, 'verified': verified(conn, uid),
+            'test_approved': test_approved(conn, uid),
+            'can_complete': bool(completion_method(conn, uid)),
             'capture_id': row['capture_id'] if row else None,
             'captured_at': row['captured_at'] if row else None,
             'image_expires_at': row['image_expires_at'] if row else None,
