@@ -41,7 +41,7 @@ from typing import Any
 # lives in invite_home.py, but shares this same threshold conceptually.)
 WEEK_2_DATES_REQUIRED = 2
 
-CONTACT_CHANNELS = ("phone", "whatsapp", "instagram", "linkedin")
+CONTACT_CHANNELS = ("phone", "whatsapp", "instagram", "linkedin", "facebook", "snapchat")
 
 
 def unlocks_available(dates_completed: int) -> bool:

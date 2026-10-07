@@ -23,7 +23,7 @@ export function render(ctx) {
     return `<section class="intro"><span class="eyebrow">DEBRIEF</span><h1>Not open yet</h1></section><section class="card"><p>Feedback opens ${safe(data.opens_at)}.</p></section>`;
   }
   if (needsFlags) {
-    return `<section class="intro"><span class="eyebrow">DEBRIEF</span><h1>How did it go?</h1></section>
+    return `<section class="intro"><span class="eyebrow">DEBRIEF</span><h1>How did it go?</h1><p>Guru · Save what you noticed, then choose your next step.</p></section>
       <section class="card"><form id="flags-form">
         <div class="field"><label>Pick exactly 2 green flags</label><div class="flag-grid" data-max="2">${(data.green_flag_options || []).map((g) => `<button type="button" class="flag" data-group="green" data-value="${safe(g)}">${safe(g)}</button>`).join('')}</div></div>
         <div class="field"><label>Up to 2 red flags — optional</label><div class="flag-grid red" data-max="2">${(data.red_flag_options || []).map((r) => `<button type="button" class="flag" data-group="red" data-value="${safe(r)}">${safe(r)}</button>`).join('')}</div></div>
@@ -73,6 +73,7 @@ export function bind(root, ctx) {
         green_flags: [...picked.green], red_flags: [...picked.red],
         together_photo: form.has('together_photo'), bill_photo: form.has('bill_photo'),
       }));
+      await refreshJourney();
     });
   });
 

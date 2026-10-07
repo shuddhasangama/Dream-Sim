@@ -1,3 +1,4 @@
+import { slotPicker } from './slotPicker.js';
 // Date calendar (§2.4). Structured {day, meal_slot} objects throughout, per
 // the spec's explicit instruction — never the old web app's "day|meal" form
 // string. Every option list (valid_slots, alignment.options.*) comes from
@@ -9,30 +10,28 @@ export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Calendar</h1></section><section class="card"><p>Loading…</p></section>';
   const { alignment, overlap = [], valid_slots = [], my_slots = [], payment } = data;
-  const mySet = new Set(my_slots.map((s) => `${s.day}|${s.meal_slot}`));
 
-  return `<section class="intro"><span class="eyebrow">CALENDAR</span><h1>When to meet</h1></section>
+  return `<section class="intro"><span class="eyebrow">CALENDAR</span><h1>Confirm Date</h1><p>Set preferences, select slots, then confirm an overlap.</p></section>
 
-    <section class="card">
-      <h2>Budget, diet &amp; cuisine</h2>
+    <details class="card" ${alignment.my_missing.length ? 'open' : ''}><summary><strong>${alignment.my_missing.length ? 'Date preferences' : '✓ Date preferences saved'}</strong></summary>
       ${alignment.my_missing.length ? `<p class="warn">Still needed: ${alignment.my_missing.map(safe).join(', ')}</p>` : ''}
       ${alignment.partner_missing.length ? `<p class="hint">Waiting on your match for: ${alignment.partner_missing.map(safe).join(', ')}</p>` : ''}
-      <form id="alignment-form">
+      <form id="alignment-form"><fieldset ${!data.editable ? 'disabled' : ''}>
         <div class="field"><label>Diet</label>
           <select name="diet">${alignment.options.diet.map((d) => `<option value="${safe(d)}" ${d === alignment.mine.diet ? 'selected' : ''}>${safe(d)}</option>`).join('')}</select>
         </div>
         <div class="field"><label>Budget</label><div class="chips">${alignment.options.budget.map((b) => `<label class="checkbox-row"><input type="checkbox" name="budget" value="${safe(b)}" ${asArray(alignment.mine.budget).includes(b) ? 'checked' : ''}> ${safe(b)}</label>`).join('')}</div></div>
         <div class="field"><label>Cuisine</label><div class="chips">${alignment.options.cuisine.map((c) => `<label class="checkbox-row"><input type="checkbox" name="cuisine" value="${safe(c)}" ${asArray(alignment.mine.cuisine).includes(c) ? 'checked' : ''}> ${safe(c)}</label>`).join('')}</div></div>
-        <button class="secondary" type="submit">Save</button>
+        <button class="secondary" type="submit">Save preferences</button></fieldset>
       </form>
-    </section>
+    </details>
 
     <section class="card">
-      <h2>Your availability</h2>
+      <h2>${my_slots.length ? '✓ Your availability saved' : 'Your weekend availability'}</h2>
       <p class="hint">${data.partner_submitted ? 'Your match has submitted theirs too.' : "Waiting on your match to submit theirs."}</p>
       <form id="availability-form">
-        ${valid_slots.map((s) => `<label class="checkbox-row"><input type="checkbox" name="slot" value="${safe(s.day)}|${safe(s.meal_slot)}" ${mySet.has(`${s.day}|${s.meal_slot}`) ? 'checked' : ''}> ${safe(s.day)} · ${safe(MEAL_LABELS[s.meal_slot] || s.meal_slot)}</label>`).join('')}
-        <button class="secondary" type="submit">Save availability</button>
+        ${slotPicker(valid_slots, my_slots, safe, !data.editable)}
+        <button class="secondary" type="submit" ${!data.editable?'disabled':''}>Save availability</button>
       </form>
     </section>
 
@@ -58,6 +57,7 @@ export function bind(root, ctx) {
         cuisine: form.getAll('cuisine'),
       };
       patch(await session.put(`/api/v1/lock-ins/${lockInId}/alignment`, body));
+      await ctx.refreshJourney();
     });
   });
 
@@ -67,6 +67,7 @@ export function bind(root, ctx) {
       const form = new FormData(e.target);
       const slots = form.getAll('slot').map((v) => { const [day, meal_slot] = v.split('|'); return { day, meal_slot }; });
       patch(await session.put(`/api/v1/lock-ins/${lockInId}/availability`, { slots }));
+      await ctx.refreshJourney();
     });
   });
 

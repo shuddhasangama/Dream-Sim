@@ -149,24 +149,15 @@ function ringTiles(key, ctx) {
   return { tiles, summary: answered === total ? 'All verified' : `${answered}/${total} verified` };
 }
 
-// The "Next up" card's real content: journey.next_action (guru.next_action())
-// is already the app's one true "what's actually next for this person" —
-// state-aware, including a waiting-on-partner state that has no clock time
-// attached at all (e.g. signed but the other side hasn't yet). A schedule
-// moment is only ever layered on for the eyebrow's small time hint, and
-// only when it is honestly TODAY's — never a fabricated deadline for
-// something that isn't actually clock-driven right now.
+// Home follows the server action, not a schedule timestamp that may belong to another task.
 export function nextUpCard(journey, weekSummary) {
   const action = journey?.next_action;
   if (!action || (!action.headline && !action.body)) return null;
-  const moment = nextUpcoming(weekSummary);
-  const today = weekSummary?.clock?.day;
-  const eyebrowTime = moment && (!today || moment.day === today) ? `${String(moment.hour).padStart(2, '0')}:00` : null;
   const dest = action.destination;
   return {
     title: action.headline || action.body,
     body: action.body || '',
-    eyebrowTime,
+    eyebrowTime: null,
     actionable: !!(dest && dest.eligible && dest.request),
     destinationKey: dest?.key,
   };

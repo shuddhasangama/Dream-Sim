@@ -117,7 +117,7 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
         routes.update(relationship=base, journey=base)
         if user['journey_state'] == 'married':
             routes['married'] = base
-    for item in [*result['surfaces'], result['next_action'].get('destination')]:
+    for item in [*result['surfaces'], result['next_action'].get('destination'), *[c.get('destination') for c in result['next_action']['also_open']]]:
         if item and item['key'] == 'calendar' and (plan or clock.day_index > 3):
             item.update(eligible=False, request=None, blocked_reason='Date planning is complete or closed for this week.')
         if item and item['key'] in routes:

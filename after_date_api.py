@@ -16,7 +16,7 @@ def register(api,get_db,get_clock,week_to_date):
         def handle(lid):
             fields={'raise':set(),'ask':{'round','question_keys'},'answer':{'round','question_key','value'},
                 'reflection-ready':{'round'},'confirm':{'round'},'decline':{'round'},'exclusivity-ack':{'round','acknowledged'},'enter-relationship':{'round'}}[action]
-            result=gate_service.action(get_db(),uid(),lid,action,json_object(required=fields,optional={'custom_question'} if action=='ask' else set()),get_clock(),week_to_date(get_clock().week))
+            result=gate_service.action(get_db(),uid(),lid,action,json_object(required=fields,optional={'custom_question'} if action=='ask' else {'share_with_partner'} if action=='answer' else set()),get_clock(),week_to_date(get_clock().week))
             return jsonify(result or gate_service.state(get_db(),uid(),lid,get_clock()))
         return handle
     for action in ('raise','ask','answer','reflection-ready','confirm','decline','exclusivity-ack','enter-relationship'):

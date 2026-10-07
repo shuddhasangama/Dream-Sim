@@ -4184,12 +4184,13 @@ def _guru_facts(user: dict) -> dict:
     gate_facts = _gate_facts(user, active)
     plan = _dateplan_for_lockin(active["id"])
     if plan is None:
-        return {"aligned": aligned, "married": married, **gate_facts}
+        return {"aligned": aligned, "married": married, "has_current_plan": False, "dates_completed": active.get("dates_completed",0), **gate_facts}
     signature = db.fetch_one(get_db(), "Signature", dateplan_id=plan["id"], user_id=user["user_id"])
     entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
     row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
     outcome = _outcome_from_row(row) if row else {}
     role = _my_role_in_lockin(active, user["user_id"])
+    timing = date_cycle_service.timing(plan, get_clock(), WEEK_ONE_MONDAY)
     return {
         "agreement_signed": signature is not None and dateplan.is_fully_acknowledged(dict(signature)),
         "boundary_set": any(e["key"] == "physical_boundary" and e["value"] for e in entries),
@@ -4197,7 +4198,12 @@ def _guru_facts(user: dict) -> dict:
         # thing to chase — the evening is over. Guru asked for it anyway,
         # which pushed the debrief down the list on the one night the
         # debrief is the whole point.
-        "date_done": row is not None,
+        "date_done": row is not None or (plan["status"] == "confirmed" and timing["open"]),
+        "debrief_open": plan["status"] == "confirmed" and timing["open"] and not timing["closed"],
+        "has_current_plan": True,
+        "date_confirmed": plan["status"] == "confirmed",
+        "partner_decision_made": outcome.get("b_decision" if role == "a" else "a_decision") is not None,
+        "dates_completed": active.get("dates_completed",0),
         "flags_given": len(outcome.get(f"{role}_green_flags") or []) >= guru_dating.MIN_GREEN_FLAGS,
         "decision_made": outcome.get(f"{role}_decision") is not None,
         "aligned": aligned,
@@ -4549,7 +4555,13 @@ def _api_journey_state(user):
         result['current_lock_in']['partner_name']=(partner or {}).get('name',MASKED_NAME)
         result['current_lock_in']['partner_summary']={k:(partner or {}).get('stats',{}).get(k) for k in ('city','age','profession')}
         result['current_lock_in']['partner_summary']['visions']=(partner or {}).get('visions',[])
+        result['current_lock_in']['my_visions']=user.get('visions',[])
+        import profile_choices
+        result['current_lock_in']['my_vision_label']=profile_choices.template_label(user['stats'],user.get('visions',[]))
+        result['current_lock_in']['partner_vision_label']=profile_choices.template_label((partner or {}).get('stats',{}),(partner or {}).get('visions',[]))
         result['current_lock_in']['name_hidden']=(partner or {}).get('name')==MASKED_NAME
+    import dating_guidance
+    result['next_action']['date_context']=dating_guidance.context(get_db(),user['user_id'],active,plan,get_clock(),WEEK_ONE_MONDAY) if active else None
     result['accelerated_test'] = getattr(g, 'accelerated_test_metadata', None) if accelerated_clock.enabled() and not async_rehearsal.enabled() else None
     result['async_rehearsal'] = async_rehearsal.snapshot(get_db(), user['user_id'])[1] if async_rehearsal.enabled() else None
     return result

@@ -191,6 +191,8 @@ function weekHeader(ctx) {
   if (!schedule?.grid) return '';
   const { grid } = schedule;
   const byDay = withRealDateOnly(momentsByDay(grid), data.date_plan);
+  const repeat=(data.lock_in?.dates_completed||0)>0;
+  for(const day of Object.keys(byDay)) byDay[day]=byDay[day].filter(m=>m.key!=='rank' && !(repeat && (m.tone==='match'||m.tone==='reality')));
   const real=confirmedDateMoment(data.date_plan);
   if(real && byDay[real.day]) {
     byDay[real.day]=byDay[real.day].filter(m=>m.tone!=='date');
@@ -226,7 +228,7 @@ function weekHeader(ctx) {
   const rehearsalCopy = journey?.async_rehearsal?.enabled
     ? '<p class="hint" style="margin-top:8px;">Test clock: 3-minute steps until Wednesday 18:00, then partner actions. Revealed matches stay open.</p>' : '';
 
-  return `<section class="card"><h2>What happens next?</h2><p>${safe(journey?.next_action?.body || journey?.next_action?.headline || 'Open a revealed match and choose Express interest or Pass.')}</p><details><summary>How decisions are made</summary><p>Matches use reciprocal REACH preferences and Vision compatibility. A suggestion is not a decision: you choose interest or pass. Mutual interest creates a pair; you both offer slots and sign your own agreement.</p>${data.fixed_test_pair?'<p>This test uses your assigned partner instead of normal candidate selection.</p>':''}</details></section>${simClock}${data.fixed_test_pair ? '<p class="hint">One assigned partner for this test. Both choose Express interest to open availability; otherwise your introduction continues to minute 12.</p>' : rehearsalCopy}
+  return `<section class="card"><h2>Next step</h2><p>${safe(journey?.next_action?.body || 'Open a match and choose Like or Pass.')}</p><details><summary>How decisions are made</summary><ul><li><strong>Suggestions:</strong> REACH and Vision must work both ways.</li><li><strong>Your choice:</strong> Like or Pass; nothing is chosen for you.</li><li><strong>Mutual Like:</strong> you become a pair.</li><li><strong>Your date:</strong> choose a shared time and both sign.</li></ul>${data.fixed_test_pair?'<p><strong>Test mode:</strong> you have an assigned partner.</p>':''}</details></section>${simClock}${rehearsalCopy}
     <div class="p-week-header">
       <span class="p-week-title">This week</span>
       <span class="p-now-pill">NOW · ${safe(String(data.clock?.day || '').toUpperCase())} ${String(data.clock?.hour ?? 0).padStart(2, '0')}:00</span>
@@ -282,7 +284,7 @@ function eventCard(m, day, matchBySlot, ctx) {
 }
 
 function matchSlot(m, safe, rehearsal = false, myActivities = {}) {
-  if (m.status === 'acted') return `<p class="hint" style="margin:0;">${m.candidate ? safe(m.candidate.display_name) + ' — ' : ''}✓ Your decision: ${safe(m.action)}. ${m.action==='interest'?'Next: wait for mutual interest, then save availability. Your choice is preserved while your partner is away.':'Next: review another revealed match when available.'}</p>`;
+  if (m.status === 'acted') return `<p class="hint" style="margin:0;">${m.candidate ? safe(m.candidate.display_name) + ' — ' : ''}✓ Your decision: ${safe(m.action==='interest'?'Like':'Pass')}. ${m.action==='interest'?'Next: wait for mutual interest, then save availability. Your choice is preserved while your partner is away.':'Next: review another revealed match when available.'}</p>`;
   if (m.status === 'no_response') return '<p class="hint" style="margin:0;">Window closed with no response.</p>';
   if (m.status === 'closed') return '<p class="hint" style="margin:0;">This window has closed.</p>';
   const c = m.candidate;
@@ -299,11 +301,11 @@ function matchSlot(m, safe, rehearsal = false, myActivities = {}) {
     ${c.health?.consent ? `<h3>Shared health &amp; accessibility</h3><p>${safe((c.health.categories||[]).map(k=>c.health_labels?.[k]||k).join(', '))}</p><p>${safe(c.health.note||'')}</p><p class="hint">Self-declared; not medically verified.</p>` : '<p class="hint">Health/accessibility not shared. This does not indicate absence of a condition.</p>'}</details>
     <details><summary>Chemistry</summary><p>Shared interests: ${safe(Object.entries(c.activities||{}).filter(([k,v])=>['good','improve'].includes(v)&&['good','improve'].includes(myActivities[k])).map(([k])=>k).join(', ')||'None recorded yet')}</p>${Object.entries(c.activities||{}).filter(([,v])=>v!=='no').map(([k,v])=>`<p>${safe(k)} · ${safe(({good:'Enjoys / skilled',improve:'Developing',maybe:'Open to trying'})[v]||v)}</p>`).join('')||'<p>Interests not shared yet.</p>'}
     <details><summary>Not for me</summary>${Object.entries(c.activities||{}).filter(([,v])=>v==='no').map(([k])=>`<p>${safe(k)}</p>`).join('')||'<p>None shared.</p>'}</details></details></div>` : ''}
-    ${m.their_interest ? '<p class="hint">They already expressed interest in you — expressing interest back will match you.</p>' : ''}
+    ${m.their_interest ? '<p class="hint">They already Liked in you — Liking back will match you.</p>' : ''}
     ${m.allowed_actions?.includes('pass') ? '<textarea class="pass-reason" placeholder="Optional — why you\'re passing" maxlength="1000"></textarea>' : ''}
     <div class="action-row">
       ${m.allowed_actions?.includes('pass') ? `<button class="secondary act" data-match="${safe(m.id)}" data-action="pass" type="button">Pass</button>` : ''}
-      ${m.allowed_actions?.includes('interest') ? `<button class="primary act" data-match="${safe(m.id)}" data-action="interest" type="button">Express interest</button>` : ''}
+      ${m.allowed_actions?.includes('interest') ? `<button class="primary act" data-match="${safe(m.id)}" data-action="interest" type="button">Like</button>` : ''}
     </div>
   </div>`;
 }

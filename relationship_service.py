@@ -94,10 +94,12 @@ def checkpoint_state(conn,uid,cid,source):
     mine=db.fetch_one(conn,'Ceremony',user_id=uid,kind=ceremony.STAGE_GATE,scope_id=scope) or ceremony.new_state(uid,ceremony.STAGE_GATE,scope,'')
     other=row['partner_b_id'] if row['partner_a_id']==uid else row['partner_a_id']
     theirs=db.fetch_one(conn,'Ceremony',user_id=other,kind=ceremony.STAGE_GATE,scope_id=scope)
-    return {'from_stage':source,'to_stage':target,'scope':scope,'step':ceremony.next_step(mine),'my_complete':ceremony.is_complete(mine),
+    import identity_capture
+    identity=identity_capture.view(conn,uid)
+    return {'identity':identity,'from_stage':source,'to_stage':target,'scope':scope,'step':ceremony.next_step(mine),'my_complete':ceremony.is_complete(mine),
         'partner_complete':bool(theirs and ceremony.is_complete(theirs)),'my_signed_name':mine['signed_name'],
-        'acks':ceremony.acks_for(ceremony.STAGE_GATE),'clauses':ceremony.clauses_for(ceremony.STAGE_GATE),
-        'face_mode':'simulation','face_simulation_available':after_date_service.simulation_allowed(conn,uid),
+        'acks':ceremony.acks_for(ceremony.STAGE_GATE), **ceremony.document_view(mine,ceremony.clauses_for(ceremony.STAGE_GATE)),
+        'face_mode':'capture' if identity['enabled'] else 'simulation','face_simulation_available':not identity['enabled'] and after_date_service.simulation_allowed(conn,uid),
         'payment':{'enforced':payments.is_enabled(),'satisfied':not payments.is_enabled() or payments.has_paid(db.fetch_all(conn,'Payment',user_id=uid),uid,payments.STAGE_GATE,scope),
             'purpose':payments.STAGE_GATE,'scope_id':scope,'amount_inr':payments.fee(payments.STAGE_GATE)['amount_inr'],'provider_mode':'simulation','api_payment_available':False}}
 
@@ -107,6 +109,8 @@ def checkpoint_step(conn,uid,cid,source,body,clock):
         info=checkpoint_state(conn,uid,cid,source)
         if not info['payment']['satisfied']:raise ApiError('payment_required','Checkpoint payment prerequisite is not satisfied.',409)
         mine=db.fetch_one(conn,'Ceremony',user_id=uid,kind=ceremony.STAGE_GATE,scope_id=info['scope']) or ceremony.new_state(uid,ceremony.STAGE_GATE,info['scope'],str(clock))
+        if body.get('document_sha256') and body['document_sha256']!=info['document_sha256']:
+            raise ApiError('terms_changed','Review the current agreement before signing.',409)
         step=body.get('step')
         if step not in ('playbook','sign','face'):raise ApiError('validation_error','Unknown agreement step.')
         if step=='sign':
@@ -118,11 +122,18 @@ def checkpoint_step(conn,uid,cid,source,body,clock):
                 return
         if (step=='playbook' and mine['playbook_ack']) or (step=='face' and mine['face_verified']):return
         if ceremony.next_step(mine)!=step:raise ApiError('step_order','Complete the agreement in order.',409)
-        if step=='playbook':mine=ceremony.ack_playbook(mine)
+        if step=='playbook':mine=ceremony.ack_playbook(ceremony.freeze_document(mine,info['clauses']))
         elif step=='sign':mine=ceremony.sign(mine,name,acks,str(clock))
         else:
-            if not info['face_simulation_available']:raise ApiError('verification_unavailable','Explicit approved-beta simulation is required.',409)
+            import identity_capture
+            method=identity_capture.completion_method(conn,uid)
+            if identity_capture.enabled() and not method:
+                raise ApiError('identity_pending','Complete your identity check first.',409)
+            if not method and not info['face_simulation_available']:
+                raise ApiError('verification_unavailable','Explicit approved-beta simulation is required.',409)
             mine=ceremony.capture_face(mine)
+            mine['face_method']=method or 'beta_simulation'
+            mine['identity_capture_id']=db.fetch_one(conn,'IdentityCapture',id=uid)['capture_id'] if method else None
         db.insert_row(conn,'Ceremony',ceremony.complete(mine,str(clock)))
 
 

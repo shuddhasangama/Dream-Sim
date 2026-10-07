@@ -82,7 +82,7 @@ test('nextUpCard only shows a time when the next schedule moment is honestly tod
   const grid = { days: [{ day: 'Mon' }], rows: [{ days: [{ day: 'Mon', moments: [{ day: 'Mon', hour: 18, label: 'Match 3 closes', past: false }] }] }] };
   const journey = { next_action: { headline: 'x', destination: {} } };
   const todaySame = nextUpCard(journey, { clock: { day: 'Mon' }, schedule: { grid } });
-  assert.equal(todaySame.eyebrowTime, '18:00');
+  assert.equal(todaySame.eyebrowTime, null);
   const todayDifferent = nextUpCard(journey, { clock: { day: 'Tue' }, schedule: { grid } });
   assert.equal(todayDifferent.eyebrowTime, null);
 });

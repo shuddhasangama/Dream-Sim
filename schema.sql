@@ -419,7 +419,7 @@ CREATE TABLE IF NOT EXISTS "ContactRequest" (
     id            TEXT PRIMARY KEY,
     pair_id       TEXT NOT NULL REFERENCES "LockIn"(id),
     requester_id  TEXT NOT NULL REFERENCES "User"(id),
-    channel       TEXT NOT NULL CHECK (channel IN ('phone', 'whatsapp', 'instagram', 'linkedin')),
+    channel       TEXT NOT NULL CHECK (channel IN ('phone', 'whatsapp', 'instagram', 'linkedin', 'facebook', 'snapchat')),
     week          INTEGER NOT NULL,
     status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'ignored')),
     requested_at  TEXT NOT NULL,
@@ -487,6 +487,7 @@ CREATE TABLE IF NOT EXISTS "GateAsk" (
     question_key  TEXT NOT NULL,
     asked_at      TEXT NOT NULL,
     custom_question TEXT,
+    also_asked_by TEXT,
     UNIQUE (pair_id, round_no, question_key)
 );
 CREATE INDEX IF NOT EXISTS idx_gateask_pair ON "GateAsk" (pair_id, round_no);
@@ -498,6 +499,7 @@ CREATE TABLE IF NOT EXISTS "GateResponse" (
     question_key     TEXT NOT NULL,
     answer_text      TEXT,
     readiness_scale  TEXT,
+    share_with_partner INTEGER NOT NULL DEFAULT 0 CHECK (share_with_partner IN (0, 1)),
     UNIQUE (pair_id, user_id, question_key)
 );
 

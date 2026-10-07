@@ -8,19 +8,13 @@ async function login(page) {
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
 }
 
-test('Grow Together selects family pillars; editors start collapsed; Week video plays',async({page})=>{
+test('Current Vision is read-only; editors start collapsed; Week video plays',async({page})=>{
   await login(page);
   await page.locator('[data-open-editor=vision]').click();
   await expect(page.locator('#detail-form')).toBeHidden();
   await expect(page.locator('#change-form')).toBeHidden();
-  await page.locator('#vision-template-form select[name=template]').selectOption('grow');
-  await page.getByRole('button',{name:'Save Vision',exact:true}).click();
-  const chips=page.locator('.chips');
-  await expect(chips).toContainText('Kids · Naturally');
-  await expect(chips).not.toContainText('Travel together');
-  await expect(chips).toContainText('Cohabitate');
-  await expect(chips).not.toContainText('Adoption');
-  await expect(chips).not.toContainText('Surrogacy');
+  await expect(page.locator('#vision-template-form')).toHaveCount(0);
+  await expect(page.locator('fieldset[disabled] input').first()).toBeDisabled();
   await page.locator('.p-tabbar').getByRole('button',{name:'Week',exact:true}).click();
   await page.locator('details.tw-video summary').click();
   const video=page.locator('.tw-video-player');

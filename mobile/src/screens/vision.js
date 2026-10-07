@@ -38,7 +38,7 @@ export function render(ctx) {
     <section class="card"><h2>Your Vision</h2>
     <div class="chips">${goals.map((g) => `<span>${safe(g.key)}${stanceOf(g).length ? ' · ' + safe(stanceOf(g).join(', ')) : ''}</span>`).join('') || '<p class="hint">Nothing chosen yet.</p>'}</div>
     <p class="hint" style="margin-top:10px;">${safe(detail_explanation)}</p></section>
-    <section class="card"><h2>${safe(data.template_label || 'Choose your starting point')}</h2>
+    ${ctx.onboarding ? `    <section class="card"><h2>${safe(data.template_label || 'Choose your starting point')}</h2>
       <p>Templates set your pillars. Review the choices before saving. These preferences never imply consent to an activity.</p>
       <form id="vision-template-form">
       <label>Starting point<select name="template">${(data.presets || []).filter(p=>p.key!=='marriage').map(p=>`<option value="${safe(p.key)}" ${p.key===(data.template_key||'custom')?'selected':''}>${safe(p.label)} — ${safe(p.description)}</option>`).join('')}</select></label>
@@ -47,7 +47,7 @@ export function render(ctx) {
       ${element_keys.map(k=>`<fieldset><legend><label><input type="checkbox" name="pillar" value="${safe(k)}" ${byKey.has(k)?'checked':''}> ${safe(k)}</label></legend>${(pillar_options[k]||[]).map(o=>`<label class="checkbox-row"><input type="checkbox" data-pillar-choice="${safe(k)}" value="${safe(o)}" ${stanceOf(byKey.get(k)||{}).includes(o)?'checked':''}> ${safe(o)}</label>`).join('')}</fieldset>`).join('')}
       <label>Future children<select name="kids_intent">${[['undecided','Undecided'],['open','Open to children'],['want','Want children'],['no','Do not want additional children']].map(([k,l])=>`<option value="${k}" ${data.kids_intent===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
       <button class="primary" type="submit">Save Vision</button></form>
-    </section>
+    </section>` : `<section class="card"><h2>${safe(data.template_label || 'Your current Vision')}</h2><p>Current choices. Use Add detail or Declare a change below.</p><fieldset disabled>${element_keys.map(k=>`<label class="checkbox-row"><input type="checkbox" ${byKey.has(k)?'checked':''}>${safe(k)}${byKey.has(k)?' · '+safe(stanceOf(byKey.get(k)).join(', ')):''}</label>`).join('')}</fieldset></section>`}
 
     <details class="card vision-editor" data-vision-panel="add" ${ctx.onboarding || data._panels?.add ? 'open' : ''}><summary><strong>Add detail</strong></summary>
     <p class="hint">A pillar or choice you haven't set yet. This only ever adds — it never removes anything.</p>

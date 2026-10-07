@@ -43,6 +43,7 @@ const STAGE_CHIPS = [
 function chipsFor(data) {
   return [
     ...(data.dating_context ? STAGE_CHIPS : [{ id: 'what_now', label: 'What now?' }]),
+    ...(data.date_context ? [{id:'date_prep',label:'Prepare for this date'}, {id:'date_debrief',label:'Date Debrief'}, {id:'sharing',label:'Phone & socials'}] : []),
     ...(data.also_open || []).map((c, i) => ({ id: `also_${i}`, label: c.title, card: c })),
   ];
 }
@@ -60,12 +61,13 @@ export function render(ctx) {
       <div><div style="font-weight:800;">Guru</div><div class="p-guru-role">Relationship navigator</div></div>
     </section>
     <div class="p-guru-thread">
-      <div class="p-bubble-guru"><span>Hi ${firstName}. Choose a topic below. These are stage-based explanations, not a live AI chat.</span></div>
+      ${!qa ? `<div class="p-bubble-guru"><span>${safe(data.headline || 'Your next step')} · ${safe(data.body || 'Choose a topic below.')}</span></div>` : ''}
       ${qa ? `<div class="p-bubble-user">${safe(qa.question)}</div>
         <div class="p-bubble-guru"><span>${safe(qa.answer)}</span>
           ${qa.actionLabel ? `<button type="button" class="p-bubble-action" data-goto>${safe(qa.actionLabel)} <span aria-hidden="true">→</span></button>` : ''}
         </div>` : ''}
     </div>
+    ${data.date_context ? `<section class="card"><h2>${data.date_context.date_number>1?'Your next date':'Your first date'}</h2><p>${safe(data.date_context.focus||'')}</p><p>${safe(data.date_context.when||'Choose a shared time when you are both ready.')}</p>${(data.date_context.prompts||[]).map(p=>`<details><summary>${safe(p.title)}</summary><p>${safe(p.body)}</p></details>`).join('')}</section>`:''}
     <div class="p-quick-replies">${chips.map((c) => `<button type="button" class="p-quick-reply" data-chip="${safe(c.id)}">${safe(c.label)}</button>`).join('')}</div>`;
 }
 
@@ -85,6 +87,11 @@ export async function answerFor(id, data, journeySurfaces, fetchReach) {
     const mutual = reachCache?.counts?.mutual_open ?? 0, fit = reachCache?.counts?.fits_user_filters ?? 0;
     return { question: 'Why so few matches?', answer: `${mutual} of ${fit} who fit you are open to you. These are reciprocal filter counts, not guaranteed matches. Review your preferences only if you want to.`,
       actionLabel: eligible('reach') ? 'Open Reach' : null, actionKey: 'reach' };
+  }
+  if(data.date_context && ['date_prep','date_debrief','sharing'].includes(id)) {
+    const item={date_prep:['Prepare for this date',data.date_context.prep,'calendar'],date_debrief:['Date Debrief',data.date_context.debrief||'Share what went well and any concerns, then choose what happens next.','debrief'],sharing:['Phone & socials',data.date_context.sharing,'after_date']}[id];
+    const key=id==='date_prep'&&eligible('plan')?'plan':item[2];
+    return {question:item[0],answer:item[1],actionLabel:eligible(key)&&journeySurfaces?.find(s=>s.key===key)?.request&&(id!=='date_debrief'||data.date_context.phase==='debrief')?'Open':null,actionKey:key};
   }
   const dc = data.dating_context;
   if (id === 'how_dating_works' && dc) {

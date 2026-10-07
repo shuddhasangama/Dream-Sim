@@ -131,7 +131,7 @@ def contact_respond(conn,uid,lid,rid,response,clock,contact_value=None):
             raise ApiError('response_final','Request already resolved.',409)
         if response=='accepted':
             require_agreement(conn,active,uid,ceremony.CONTACT_SHARE)
-            if row['channel'] in ('instagram','linkedin'):
+            if row['channel'] in ('instagram','linkedin','facebook','snapchat'):
                 row['shared_contact']=text(contact_value,'contact_value',200)
         db.insert_row(conn,'ContactRequest',escalations.respond_to_contact_request(row,response,str(clock)))
 

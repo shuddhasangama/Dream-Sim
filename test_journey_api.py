@@ -30,6 +30,34 @@ class JourneyApiTests(RouteTestCase):
     def get(self, path='/journey/status', **kwargs):
         return self.client.get('/api/v1' + path, headers=self.headers, **kwargs)
 
+    def test_home_offers_debrief_at_opening_without_any_feedback_row(self):
+        self.make_lockin('owner','partner')
+        self.make_plan('lock-1',status='confirmed')
+        self.set_clock(day='Sat',hour=21)
+        self.assertIsNone(db.fetch_one(self.conn,'DateOutcome',dateplan_id='plan-1'))
+        action=self.get().json['data']['next_action']
+        self.assertEqual(action['headline'],'Date Debrief')
+        self.assertEqual(action['destination']['key'],'debrief')
+        self.assertTrue(action['destination']['eligible'])
+        self.assertEqual(self.client.get(action['destination']['request']['path'],headers=self.headers).status_code,200)
+
+    def test_repeat_date_home_offers_planning_not_previous_debrief(self):
+        self.make_lockin('owner','partner')
+        pair=db.fetch_one(self.conn,'LockIn',id='lock-1')
+        db.insert_row(self.conn,'LockIn',{**pair,'dates_completed':1})
+        self.make_plan('lock-1',status='completed')
+        # Alignment completed as it would be after a previous date.
+        user=db.fetch_one(self.conn,'User',id='owner')
+        stats=db.load_json_field(user['stats_json'],{})
+        import date_alignment
+        with mock.patch.object(date_alignment,'is_complete',return_value=True):
+            self.set_clock(day='Wed',hour=18)
+            action=self.get().json['data']['next_action']
+        self.assertEqual(action['headline'],'Confirm Date')
+        self.assertEqual(action['destination']['key'],'calendar')
+        self.assertTrue(action['destination']['eligible'])
+        self.assertIsNotNone(action['destination']['request'])
+
     def test_dashboard_and_status_are_same_own_read_model(self):
         response = self.get()
         self.assertEqual(response.status_code, 200)
@@ -65,7 +93,7 @@ class JourneyApiTests(RouteTestCase):
         self.make_lockin('stranger', 'partner', lockin_id='private-foreign-pair')
         self.make_plan('private-foreign-pair', plan_id='private-foreign-plan')
         state = self.get().json['data']
-        self.assertEqual(set(state['current_lock_in']), {'id', 'status', 'week', 'dates_completed', 'partner_name', 'partner_summary', 'name_hidden'})
+        self.assertEqual(set(state['current_lock_in']), {'id', 'status', 'week', 'dates_completed', 'partner_name', 'partner_summary', 'name_hidden', 'my_vision_label', 'partner_vision_label', 'my_visions'})
         self.assertEqual(set(state['current_date_plan']), {'id', 'status', 'datetime'})
         body = json.dumps(state)
         for private in ('private-foreign', '@private.test', '+919999999999',

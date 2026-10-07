@@ -398,7 +398,7 @@ wireKeyboardScroll();
 // Poll server time on both native platforms. Never advance time from a device,
 // overwrite an edited form, or interrupt a playing walkthrough.
 async function refreshAcceleratedClock() {
-  if (busy || !(journey?.accelerated_test?.enabled || journey?.async_rehearsal?.enabled) || signupActive || document.hidden) return;
+  if (busy || !journey || signupActive || document.hidden) return;
   try {
     const next = await session.get('/api/v1/journey/status');
     if (progressKey(next) === progressKey(journey)) return;

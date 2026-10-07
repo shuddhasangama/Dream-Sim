@@ -77,9 +77,11 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
                 'face_simulation_available': simulation_enabled() and not identity_capture.enabled()}
 
     def agreement_view(pid):
-        service.owned_plan(get_db(), uid(), pid)
+        active, _ = service.owned_plan(get_db(), uid(), pid)
+        other = active['user_b'] if active['user_a'] == uid() else active['user_a']
+        partner_state = service.agreement_state(get_db(), other, pid, str(get_clock()))
         state = service.agreement_state(get_db(), uid(), pid, str(get_clock()))
-        return {'plan_id': pid, 'step': ceremony.next_step(state), 'complete': ceremony.is_complete(state),
+        return {'partner_complete': ceremony.is_complete(partner_state), 'plan_id': pid, 'step': ceremony.next_step(state), 'complete': ceremony.is_complete(state),
                 'my_signed_name': state.get('signed_name'), 'my_signed_at': state.get('signed_at'),
                 'acknowledgements': ceremony.acks_for(ceremony.DATE_AGREEMENT),
                 # Older installed apps read text/label/term and otherwise render

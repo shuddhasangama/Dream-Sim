@@ -98,3 +98,75 @@ class AfterDateExperienceTests(RouteTestCase):
             self.assertEqual(r.status_code,200,r.json)
             self.assertTrue(r.json['data']['advanced'])
             self.assertEqual(len(db.fetch_all(self.conn,'Couple')),1)
+
+    def test_shared_topics_and_opt_in_answers_preserve_old_privacy(self):
+        self.post(self.base+'/gate/raise')
+        body={'round':1,'question_keys':['relationship_meaning']}
+        self.assertEqual(self.post(self.base+'/gate/ask',body).status_code,200)
+        r=self.post(self.base+'/gate/ask',body,'partner')
+        self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(r.json['data']['asked'][0]['origin'],'both')
+        self.assertEqual(len(db.fetch_all(self.conn,'GateAsk')),1)
+        answer={'round':1,'question_key':'relationship_meaning','value':'My private answer'}
+        self.post(self.base+'/gate/answer',answer)
+        self.post(self.base+'/gate/answer',{**answer,'value':'Partner answer','share_with_partner':True},'partner')
+        self.assertNotIn('My private answer',self.request(self.base+'/gate',uid='partner').get_data(as_text=True))
+        own=self.request(self.base+'/gate').json['data']
+        self.assertEqual(own['partner_answers'],{'relationship_meaning':'Partner answer'})
+        self.post(self.base+'/gate/answer',{**answer,'share_with_partner':True})
+        partner=self.request(self.base+'/gate',uid='partner').json['data']
+        self.assertEqual(partner['partner_answers'],{'relationship_meaning':'My private answer'})
+        self.post(self.base+'/gate/answer',answer)
+        self.assertEqual(self.request(self.base+'/gate',uid='partner').json['data']['partner_answers'],{})
+        self.assertEqual(self.request(self.base+'/gate',uid='stranger').status_code,404)
+
+    def test_shared_answer_waits_for_other_answer(self):
+        self.post(self.base+'/gate/raise')
+        self.post(self.base+'/gate/ask',{'round':1,'question_keys':['relationship_meaning']})
+        self.post(self.base+'/gate/answer',{'round':1,'question_key':'relationship_meaning','value':'Hidden until answered','share_with_partner':True})
+        self.assertNotIn('Hidden until answered',self.request(self.base+'/gate',uid='partner').get_data(as_text=True))
+
+    def test_new_social_channels_use_the_same_explicit_release_gates(self):
+        for channel in ('facebook','snapchat'):
+            response=self.post(self.base+'/contact-requests',{'channel':channel})
+            self.assertEqual(response.status_code,200,response.json)
+            rid=next(r['id'] for r in response.json['data']['contact_requests'] if r['channel']==channel)
+            self.sign(ceremony.CONTACT_SHARE,'partner')
+            path=self.base+'/contact-requests/'+rid+'/response'
+            self.assertEqual(self.post(path,{'response':'accepted'},'partner').status_code,400)
+            self.assertEqual(self.post(path,{'response':'accepted','contact_value':'@private_'+channel},'partner').status_code,200)
+        self.assertNotIn('@private_',self.request(self.base+'/after-date').get_data(as_text=True))
+        self.sign(ceremony.CONTACT_SHARE,'owner')
+        result=self.request(self.base+'/after-date').get_data(as_text=True)
+        self.assertIn('@private_facebook',result)
+        self.assertIn('@private_snapchat',result)
+
+    def test_existing_contact_requests_survive_channel_schema_upgrade(self):
+        # Emulate the old deployed constraint with a real accepted request.
+        self.conn.execute('DROP TABLE ContactRequest')
+        sql=db.SQLITE_SCHEMA_PATH.read_text(encoding='utf-8')
+        start=sql.index('CREATE TABLE IF NOT EXISTS "ContactRequest"')
+        statement=sql[start:sql.index(';',start)+1].replace(", 'facebook', 'snapchat'",'')
+        self.conn.execute(statement)
+        db.insert_row(self.conn,'ContactRequest',{'id':'old','pair_id':'lock-1','requester_id':'owner','channel':'instagram','week':1,'status':'accepted','requested_at':'test','shared_contact':'@preserve'})
+        before=db.fetch_one(self.conn,'ContactRequest',id='old')
+        db.init_db(self.conn)
+        db.init_db(self.conn)
+        self.assertEqual(db.fetch_one(self.conn,'ContactRequest',id='old'),before)
+        r=self.post(self.base+'/contact-requests',{'channel':'facebook'})
+        self.assertEqual(r.status_code,200,r.json)
+
+    def test_guru_uses_only_own_debrief_and_all_chemistry_buckets(self):
+        import dating_guidance
+        from clock import SimulationClock
+        for uid in ('owner','partner'):
+            row=db.fetch_one(self.conn,'User',id=uid)
+            db.insert_row(self.conn,'User',{**row,'skills_json':db.json_field({'activities':{'Music':'good','Cooking':'improve','Hiking':'maybe','Dancing':'no'}})})
+        self.make_plan('lock-1',status='completed')
+        for uid in ('owner','partner'):
+            db.insert_row(self.conn,'DateFeedback',{'id':uid,'dateplan_id':'plan-1','user_id':uid,'payload_json':db.json_field({'flags':{'green_flags':[uid+' memory'],'red_flags':[]}})})
+        result=dating_guidance.context(self.conn,'owner',db.fetch_one(self.conn,'LockIn',id='lock-1'),None,SimulationClock.at(1,'Wed',18))
+        self.assertEqual(len(result['prompts']),5)
+        self.assertIn('owner memory',str(result))
+        self.assertNotIn('partner memory',str(result))
+        self.assertEqual(result['date_number'],2)

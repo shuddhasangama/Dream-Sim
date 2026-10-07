@@ -13,15 +13,15 @@ async function mount(page,module,data){
 for(const width of [375,414,430])test(`relationship questions usable at ${width}px and enlarged layout`,async({page})=>{
  await page.setViewportSize({width,height:896});await mount(page,'gate',base);
  await page.getByLabel('What does a relationship mean to you?').check();
- await page.getByLabel('Add your own question').fill('How do we balance family time?');
- await page.getByRole('button',{name:'Send topics to Guru'}).click();
+ await page.getByLabel('Your own question').fill('How do we balance family time?');
+ await page.getByRole('button',{name:'Save topics'}).click();
  expect(await page.evaluate(()=>window.sent[0])).toEqual({path:'/api/v1/lock-ins/pair%2Fone/gate/ask',body:{round:1,question_keys:['relationship_meaning'],custom_question:'How do we balance family time?'}});
- await expect(page.getByRole('button',{name:'I have reflected (test)'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Finish reflection (test)'})).toBeDisabled();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
  if(width===414)await page.screenshot({path:'test-results/relationship-414.png',fullPage:true});
  await page.evaluate(()=>document.body.style.zoom='2');
- await page.getByRole('button',{name:'Review profile',exact:true}).scrollIntoViewIfNeeded();
- await page.getByRole('button',{name:'Review profile',exact:true}).click();
+ await page.getByRole('button',{name:'Complete profile',exact:true}).scrollIntoViewIfNeeded();
+ await page.getByRole('button',{name:'Complete profile',exact:true}).click();
  expect(await page.evaluate(()=>window.sent.at(-1))).toEqual({navigation:['dashboard']});
 });
 test('contact acceptance sends chosen handle to owned request',async({page})=>{
@@ -30,4 +30,26 @@ test('contact acceptance sends chosen handle to owned request',async({page})=>{
  await page.getByRole('button',{name:'Accept sharing',exact:true}).click();
  expect(await page.evaluate(()=>window.sent[0])).toEqual({path:'/api/v1/lock-ins/pair%2Fone/contact-requests/r%2Fone/response',body:{response:'accepted',contact_value:'@myprofile'}});
  await expect(page.getByRole('button',{name:'Propose visit'})).toBeDisabled();
+});
+
+for(const width of [320,414])test(`adjacent answers and compact calendar at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:896});
+ await mount(page,'gate',{...base,my_questions_submitted:true,asked:[{key:'relationship_meaning',prompt:'What does a relationship mean to you?',kind:'text',origin:'both'}],my_answers:{relationship_meaning:'Time together'},my_sharing:{relationship_meaning:true},partner_answers:{relationship_meaning:'Being considerate'},partner_answered:['relationship_meaning'],report:{complete:true},reflection:{test_mode:true,my_ready:false}});
+ await expect(page.getByText('Chosen by both',{exact:true})).toBeVisible();
+ await expect(page.getByText('Being considerate',{exact:true})).toBeVisible();
+ const columns=page.locator('.answer-columns');
+ const left=await columns.locator('form').boundingBox(),right=await columns.locator(':scope > div').boundingBox();
+ expect(right.x).toBeGreaterThan(left.x);
+ expect(Math.abs(left.y-right.y)).toBeLessThan(3);
+ await page.getByRole('button',{name:'Save answer',exact:true}).click();
+ expect(await page.evaluate(()=>window.sent[0].body)).toMatchObject({share_with_partner:true,value:'Time together'});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
+ if(width===414)await page.screenshot({path:'test-results/adjacent-answers-414.png',fullPage:true});
+ await mount(page,'calendar',{lock_in_id:'p',editable:true,alignment:{my_missing:[],partner_missing:[],mine:{},options:{diet:[],budget:[],cuisine:[]}},valid_slots:[{day:'Fri',meal_slot:'dinner'},{day:'Sat',meal_slot:'lunch'},{day:'Sun',meal_slot:'coffee'}],my_slots:[]});
+ await expect(page.getByRole('group',{name:'Your weekend availability'})).toBeVisible();
+ await page.getByLabel('Sat Lunch',{exact:true}).check();
+ await expect(page.getByLabel('Sat Lunch',{exact:true})).toBeChecked();
+ expect((await page.locator('.weekend-grid').boundingBox()).height).toBeLessThan(300);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
+ if(width===414)await page.screenshot({path:'test-results/calendar-414.png',fullPage:true});
 });

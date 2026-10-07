@@ -8,6 +8,9 @@ import planning_service
 
 def completed(conn, uid, pair, plan, matches):
     result = {f'match_{m["slot"]}': 'Done' for m in matches if m['action'] in ('interest', 'pass')}
+    for m in matches:
+        if m['action'] in ('interest','pass'):
+            result[f'match_{m["slot"]}_closes']='Done'
     if not pair:
         return result
     pair = db.fetch_one(conn, 'LockIn', id=pair['id'])
@@ -20,7 +23,15 @@ def completed(conn, uid, pair, plan, matches):
              and (not async_rehearsal.enabled() or all(async_rehearsal.intro_complete(conn, u) for u in members)))
     if ready or plan:
         result.update(slots='Completed', calendar_closes='Completed')
-    if plan and plan['status'] == 'confirmed':
+    if plan and plan['status'] in ('confirmed','completed'):
         result['sign'] = 'Completed'
+    if plan:
+        if db.fetch_one(conn,'DateFeedback',dateplan_id=plan['id'],user_id=uid):
+            feedback=db.fetch_one(conn,'DateFeedback',dateplan_id=plan['id'],user_id=uid)
+            if db.load_json_field(feedback['payload_json'],{}).get('decision'):
+                result['debrief']='Completed'
+        resolution = db.fetch_one(conn,'DateResolution',dateplan_id=plan['id'])
+        if resolution and resolution['kind'] in ('keep_dating', 'both_relationship'):
+            result['actual_date']='Completed'
     # Do not mark a date or Debrief completed merely because time has passed.
     return result

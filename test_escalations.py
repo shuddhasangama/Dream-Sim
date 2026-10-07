@@ -126,7 +126,7 @@ class ContactStatusForRequesterTests(unittest.TestCase):
         self.assertEqual(pending, ignored)
 
     def test_all_channels_are_the_expected_set(self) -> None:
-        self.assertEqual(set(CONTACT_CHANNELS), {"phone", "whatsapp", "instagram", "linkedin"})
+        self.assertEqual(set(CONTACT_CHANNELS), {"phone", "whatsapp", "instagram", "linkedin", "facebook", "snapchat"})
 
 
 if __name__ == "__main__":

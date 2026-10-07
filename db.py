@@ -273,6 +273,7 @@ def init_db(
         _commit(conn)
         reconcile_columns(conn, schema_path)
         enforce_unique_indexes(conn)
+        widen_contact_channels(conn)
         return
 
     path = Path(schema_path) if schema_path else SQLITE_SCHEMA_PATH
@@ -281,6 +282,7 @@ def init_db(
     _commit(conn)
     reconcile_columns(conn, schema_path)
     enforce_unique_indexes(conn)
+    widen_contact_channels(conn)
 
 
 # ── keeping an existing database level with the schema file ───────────────
@@ -525,3 +527,55 @@ def load_json_field(value: str | None, default: Any = None) -> Any:
     if value is None:
         return default
     return json.loads(value)
+
+
+def widen_contact_channels(conn):
+    """Add Facebook/Snapchat to the existing channel check without losing rows.
+
+    Run once at startup, idempotently. This does not approve any request or
+    change the mutual agreement/recipient consent requirements.
+    """
+    if _is_postgres_connection(conn):
+        query="SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid=to_regclass('\"ContactRequest\"') AND contype='c'"
+        def old_checks():
+            return [r for r in conn.execute(query).fetchall() if 'channel' in r['definition'] and "'phone'" in r['definition'] and "'facebook'" not in r['definition']]
+        # init_db is called per request; already upgraded databases must not
+        # acquire an exclusive table lock just to read a screen.
+        if not old_checks():
+            _commit(conn)
+            return
+        with conn.transaction():
+            conn.execute('LOCK TABLE "ContactRequest" IN ACCESS EXCLUSIVE MODE')
+            for row in old_checks():
+                name='"'+row['conname'].replace('"','""')+'"'
+                conn.execute('ALTER TABLE "ContactRequest" DROP CONSTRAINT '+name)
+                conn.execute('ALTER TABLE "ContactRequest" ADD CONSTRAINT '+name+" CHECK (channel IN ('phone','whatsapp','instagram','linkedin','facebook','snapchat'))")
+        _commit(conn)
+        return
+    row=conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='ContactRequest'").fetchone()
+    if not row or "'facebook'" in row['sql']:
+        return
+    import re
+    sql=re.sub(r"channel IN \([^)]*\)", "channel IN ('phone','whatsapp','instagram','linkedin','facebook','snapchat')",row['sql'])
+    if sql==row['sql']:
+        raise RuntimeError('Unrecognised ContactRequest channel constraint; no changes made.')
+    sql=sql.replace('"ContactRequest"','"ContactRequest_channels_new"',1)
+    if 'ContactRequest_channels_new' not in sql:
+        raise RuntimeError('Unrecognised ContactRequest table declaration; no changes made.')
+    # No table references ContactRequest; retain all columns, indexes and triggers.
+    columns=','.join('"'+c['name'].replace('"','""')+'"' for c in conn.execute('PRAGMA table_info("ContactRequest")'))
+    extras=[r['sql'] for r in conn.execute("SELECT sql FROM sqlite_master WHERE tbl_name='ContactRequest' AND type IN ('index','trigger') AND sql IS NOT NULL")]
+    with conn:
+        conn.execute('SAVEPOINT contact_channels')
+        try:
+            conn.execute(sql)
+            conn.execute(f'INSERT INTO "ContactRequest_channels_new" ({columns}) SELECT {columns} FROM "ContactRequest"')
+            conn.execute('DROP TABLE "ContactRequest"')
+            conn.execute('ALTER TABLE "ContactRequest_channels_new" RENAME TO "ContactRequest"')
+            for statement in extras:
+                conn.execute(statement)
+            conn.execute('RELEASE contact_channels')
+        except Exception:
+            conn.execute('ROLLBACK TO contact_channels')
+            conn.execute('RELEASE contact_channels')
+            raise

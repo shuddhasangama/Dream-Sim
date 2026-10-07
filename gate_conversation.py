@@ -24,19 +24,11 @@ GURU BROKERS EVERY WORD
 totally avoided as we need to be sure about the messaging and the tone
 aspects of it so that it is very conducive and collaborative."
 
-So nothing either person writes reaches the other. Not their reasons, not
-their notes, not the wording of what they asked. What crosses is:
-
-  * WHICH question was asked — relayed in Guru's words, never "Rahul asks",
-    because attributing a question turns it into an accusation; and
-  * a comparison of two SCALE answers, phrased as a shared position rather
-    than a verdict on either person.
-
-Free text stays private to Guru. It is collected because writing it is
-what makes someone think, not because anyone else will read it. When Guru
-becomes a real agent it can summarise that text into the relay; until
-then, passing it through unedited is the one thing this module must not
-do, so it cannot.
+The comparison engine does not relay raw answers. The mobile conversation
+now labels who chose each topic, and gate_service separately releases an
+answer only after its author opts in and both partners have answered.
+Existing responses remain private by default. Free-text reports describe
+completion, not inferred compatibility.
 
 Pure functions. The caller persists.
 """
@@ -130,15 +122,14 @@ def compare(question_key: str, a: str | None, b: str | None) -> dict[str, Any]:
             "key": question_key,
             "prompt": question["text"],
             "state": "answered" if both_in else "waiting",
-            "note": ("You have both written something here. It stays between each of you and "
-                     "Guru — neither of you sees the other's words."
-                     if both_in else "Waiting on both of you."),
+            "note": ("Both answers saved."
+                     if both_in else "Waiting for answers."),
         }
 
     gap = _scale_gap(question_key, a, b)
     if gap is None:
         return {"key": question_key, "prompt": question["text"], "state": "waiting",
-                "note": "Waiting on both of you."}
+                "note": "Waiting for answers."}
     if gap == 0:
         return {"key": question_key, "prompt": question["text"], "state": "aligned",
                 "note": "You are in the same place on this."}
@@ -162,7 +153,7 @@ def report(asked: list[str], answers_a: dict[str, str], answers_b: dict[str, str
         "headline": (
             "Choose the topics you want to discuss." if not lines else
             "Still waiting on both of you." if waiting else
-            "Both responses are saved. Written answers are private; agreement has not been inferred." if any(line["state"] == "answered" for line in lines) and not apart else
+            "Both answers saved; review your responses." if any(line["state"] == "answered" for line in lines) and not apart else
             "You are in the same place on all of this." if not apart else
             f"{len(apart)} thing{'' if len(apart) == 1 else 's'} you see differently."
         ),

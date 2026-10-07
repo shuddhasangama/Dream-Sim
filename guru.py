@@ -120,6 +120,16 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
     f = facts or {}
 
     def action(headline, body, endpoint=None, cta=None):
+        copy = {
+            'week': ('Review your matches', 'Choose Like or Pass when a match opens.'),
+            'align_view': ('Date preferences', 'Save your budget, diet and cuisines.'),
+            'calendar_view': ('Confirm Date', 'Choose your slots, then confirm a shared time.'),
+            'plan_view': ('Review your agreement', 'Read the terms and sign for this date.'),
+            'boundaries_view': ('Choose your greeting', 'Let your partner know what feels comfortable.'),
+
+        }
+        if endpoint in copy and headline not in ('Your date is confirmed', 'Waiting for your partner'):
+            headline, body = copy[endpoint]
         return {"headline": headline, "body": body, "endpoint": endpoint, "cta": cta}
 
     if d.VERIFIED not in milestones:
@@ -134,6 +144,12 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
     # It sits above everything below it deliberately — an unsigned
     # agreement or a missing green flag can wait a day; someone asking
     # whether this becomes exclusive cannot be the ninth tile down.
+    if d.RELATIONSHIP in milestones and f.get('married'):
+        return action('Nothing needs you', 'Revisit your shared routines when you need to.', 'married_view', 'Open')
+    if d.RELATIONSHIP in milestones:
+        return action('Your relationship', 'Open your shared routines and next steps.',
+                      'relationship_view', 'Open your relationship')
+
     if f.get("gate_open"):
         who = "%s has raised the next stage" % f["partner_name"] if (
             f.get("gate_raised_by_partner") and f.get("partner_name")
@@ -141,21 +157,16 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
         if f.get("gate_nothing_asked_yet"):
             return action(
                 who,
-                "Nothing is decided and nothing is signed. Guru will put whatever you want to "
-                "know to both of you — you each answer it, and neither of you sees the other's "
-                "answer until you have both given yours.",
+                "Choose up to three topics to discuss together.",
                 "gate_view", "Open it with Guru")
         if f.get("gate_waiting_on_me"):
             return action(
                 who,
-                "Questions are on the table and yours are still open. There is no rush on the "
-                "answer — there is a deliberate pause afterwards precisely so neither of you "
-                "commits on the night you were asked.",
+                "Answer your open questions, then take time to reflect.",
                 "gate_view", "Answer with Guru")
         return action(
             who,
-            "You have answered everything asked so far. Ask something else, or sit with it — "
-            "nothing can be committed until the pause has run.",
+            "Your answers are saved. Review your reflection and next step.",
             "gate_view", "Back to the checkpoint")
 
     if d.MATCHED not in milestones:
@@ -165,14 +176,14 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             "though REACH will tell you how far your filters actually go.",
             "week", "Open your week")
 
-    if d.DATE_SET not in milestones and not f.get("aligned", True):
+    if (d.DATE_SET not in milestones or f.get("has_current_plan") is False) and not f.get("aligned", True):
         return action(
             "Three things before the slot",
             "Budget, what you eat, and the cuisines you enjoy. They were not asked at sign-up "
             "because they mean nothing until there is a bill and a table.",
             "align_view", "Answer them")
 
-    if d.DATE_SET not in milestones:
+    if d.DATE_SET not in milestones or f.get("has_current_plan") is False:
         return action(
             "Confirm Date",
             "You have locked in with someone. Give at least two slots so a date can be found "
@@ -192,37 +203,29 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             "It goes into the agreement, so neither of you has to guess at the door.",
             "boundaries_view", "Set your boundary")
 
-    if d.FIRST_DATE not in milestones:
+    if not f.get('date_done') and f.get('date_confirmed') is False:
+        return action('Waiting for your partner', 'Your steps are saved. Your partner still needs to complete the agreement.', 'plan_view', 'Review playbook')
+
+    if not f.get("debrief_open") and not f.get("date_done", d.FIRST_DATE in milestones):
         return action(
-            "Enjoy it",
-            "Nothing to do until afterwards. The debrief opens once the date has happened.",
-            "week", "Back to your week")
+            "Your date is confirmed",
+            "Review the plan before you meet. Debrief opens after your date.",
+            "plan_view", "View date plan")
 
     if not f.get("flags_given"):
         return action(
-            "Two green flags",
-            "Write it tonight. Tomorrow you will remember the ending, not the evening.",
+            "Date Debrief",
+            "Share two green flags and any concerns.",
             "debrief_view", "Open the debrief")
 
     if not f.get("decision_made"):
         return action(
             "Decide what happens next",
-            "See them again, go back to the pool, or agree to be exclusive. Nothing moves until "
-            "you choose.",
+            "Choose another date, end the match, or discuss a relationship.",
             "debrief_view", "Make your call")
 
-    if d.RELATIONSHIP in milestones and f.get("married"):
-        return action(
-            "Nothing needs you",
-            "You went the whole way. The four pillars keep running underneath, and that is the "
-            "only thing left to do.",
-            "married_view", "Happily married")
-
-    if d.RELATIONSHIP in milestones:
-        return action(
-            "Keep the rhythm",
-            "The four pillars run every week. Open whichever one is sitting with you.",
-            "relationship_view", "Open the pillars")
+    if f.get('decision_made') and f.get('partner_decision_made') is False:
+        return action('Waiting for your partner', 'Your Debrief is saved. Your partner will choose their next step.', 'debrief_view', 'View your Debrief')
 
     return action(
         "Nothing needs you",

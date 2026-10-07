@@ -16,9 +16,17 @@ test('after date requires own agreement to accept contact and both to propose ho
 test('ceremony routes pair agreements and never claims partner has signed from own completion',()=>{
  assert.equal(agreementPath({lockInId:'a/b',kind:'contact_share'}),'/api/v1/lock-ins/a%2Fb/agreements/contact_share');
  const html=ceremony({safe,data:{complete:true,step:'done'}});
- assert.doesNotMatch(html,/Both signatures/);assert.match(html,/partner completes/);
+ assert.doesNotMatch(html,/Both signatures/);assert.match(html,/Waiting for your partner/);
 });
 test('week never invents sign or debrief without a saved plan',()=>{
  const result=withRealDateOnly({Thu:[{key:'sign'}],Sat:[{key:'debrief',tone:'debrief'}]},null);
  assert.deepEqual(result,{Thu:[],Sat:[]});
+});
+
+test('later checkpoints use the shared agreement screen and require partner completion',()=>{
+ assert.equal(agreementPath({coupleId:'p/1',source:'relationship'}),'/api/v1/couples/p%2F1/checkpoints/relationship');
+ const ctx={safe,params:{coupleId:'p'},data:{step:'done',my_complete:true,partner_complete:false,to_stage:'engaged',clauses:[]}};
+ assert.match(ceremony(ctx),/id="advance-stage" class="primary" disabled/);
+ assert.doesNotMatch(ceremony(ctx),/Both partners have completed/);
+ assert.match(ceremony({...ctx,data:{...ctx.data,partner_complete:true}}),/Both partners have completed/);
 });

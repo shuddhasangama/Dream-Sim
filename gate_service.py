@@ -56,9 +56,14 @@ def state(conn,uid,lid,clock):
         'my_entry_complete':after_date_service.complete(conn,uid,lid,ceremony.RELATIONSHIP_ENTRY),
         'partner_entry_complete':after_date_service.complete(conn,pair['user_'+other],lid,ceremony.RELATIONSHIP_ENTRY),
         'my_exclusivity_ack':bool(gate['exclusivity_ack_'+role]),'partner_exclusivity_ack':bool(gate['exclusivity_ack_'+other])},
-        'questions':questions,'asked':[{'key':k,'prompt':lookup[k]['text'],'kind':lookup[k]['kind'],'options':lookup[k].get('options',[])} for k in keys],
-        'my_questions_submitted':any(a['asked_by']==uid and a['round_no']==(gate.get('round_no') or 1) for a in asks),
-        'my_answers':answers[role],'report':report,
+        'questions':questions,'asked':[{'key':k,'prompt':lookup[k]['text'],'kind':lookup[k]['kind'],'options':lookup[k].get('options',[]),
+            'origin':next(('both' if a.get('also_asked_by') else 'you' if a['asked_by']==uid else 'partner') for a in asks if a['question_key']==k and a['round_no']==(gate.get('round_no') or 1))} for k in keys],
+        'my_questions_submitted':any(uid in (a['asked_by'],a.get('also_asked_by')) and a['round_no']==(gate.get('round_no') or 1) for a in asks),
+        'my_answers':answers[role],
+        'my_sharing':{r['question_key']:bool(r.get('share_with_partner')) for r in rows[role]},
+        'partner_answers':{r['question_key']:(r['readiness_scale'] or r['answer_text']) for r in rows[other]
+            if r.get('share_with_partner') and answers[role].get(r['question_key']) and answers[other].get(r['question_key'])},
+        'partner_answered':[k for k,v in answers[other].items() if v], 'report':report,
         'analysis':analysis,'reflection':reflection,
         'may_confirm':report['complete'] and reflection['may_commit'],
         'my_prerequisites':mine,'partner_prerequisites_met':prerequisites(other)['met']}
@@ -93,13 +98,17 @@ def action(conn,uid,lid,action,body,clock,today):
             if type(keys) is not list or any(not isinstance(k,str) or k not in known for k in keys) or len(set(keys))!=len(keys):
                 raise ApiError('validation_error','Choose unique known questions.')
             asks=db.fetch_all(conn,'GateAsk',pair_id=lid)
-            own=[a['question_key'] for a in asks if a['asked_by']==uid and a['round_no']==body['round']]
+            own=[a['question_key'] for a in asks if uid in (a['asked_by'],a.get('also_asked_by')) and a['round_no']==body['round']]
             if own and set(keys+([custom_key] if custom_key else []))==set(own):return
             if own or gate['confirm_a'] or gate['confirm_b']:raise ApiError('round_started','Questions in this round are already recorded.',409)
             if not 1 <= len(keys)+bool(custom) <= 3:raise ApiError('validation_error','Choose one to three topics, including your custom question.')
-            result=gate_conversation.validate_asks(keys,[a['question_key'] for a in asks]) if keys else {'ok':True,'keys':[]}
+            result=gate_conversation.validate_asks(keys,[a['question_key'] for a in asks if a['round_no']!=body['round']]) if keys else {'ok':True,'keys':[]}
             if not result['ok'] or len(result['keys'])!=len(keys):raise ApiError('validation_error',result.get('error') or 'Question already asked.')
             for key in keys:
+                existing=next((a for a in asks if a['question_key']==key and a['round_no']==body['round']),None)
+                if existing:
+                    db.insert_row(conn,'GateAsk',{**existing,'also_asked_by':uid})
+                    continue
                 db.insert_row(conn,'GateAsk',{'id':f'{lid}:{body["round"]}:{key}','pair_id':lid,'round_no':body['round'],'asked_by':uid,'question_key':key,'asked_at':str(clock)})
             if custom_key:
                 db.insert_row(conn,'GateAsk',{'id':f'{lid}:{body["round"]}:{custom_key}','pair_id':lid,'round_no':body['round'],'asked_by':uid,'question_key':custom_key,'custom_question':custom,'asked_at':str(clock)})
@@ -109,15 +118,18 @@ def action(conn,uid,lid,action,body,clock,today):
             key=body.get('question_key')
             question=next((q for q in questions_for(conn,lid) if q['key']==key),None)
             if not question or key not in [q['key'] for q in view['asked']]:raise ApiError('validation_error','Answer a question asked in this round.')
+            share=body.get('share_with_partner',False)
+            if type(share) is not bool:raise ApiError('validation_error','Choose whether to share your answer.')
             value=body.get('value')
             if value is not None:
                 value=text(value,'value')
                 if question['kind']=='scale' and value not in question['options']:raise ApiError('validation_error','Choose a listed scale option.')
             old=db.fetch_one(conn,'GateResponse',pair_id=lid,user_id=uid,question_key=key)
-            if old and (old['readiness_scale'] or old['answer_text'])==value:return
+            if old and (old['readiness_scale'] or old['answer_text'])==value and bool(old.get('share_with_partner'))==share:return
             if gate['confirm_a'] or gate['confirm_b']:raise ApiError('confirmation_frozen','Answers cannot change after confirmation.',409)
             row=stage_gate.submit_gate_response(lid,uid,'open_question' if key.startswith('custom_') else key,readiness_scale=value if question['kind']=='scale' else None,answer_text=value if question['kind']=='text' else None)
             row['question_key']=key
+            row['share_with_partner']=int(share)
             db.insert_row(conn,'GateResponse',{'id':f'{lid}:{uid}:{key}',**row})
             gate['reflection_ready_a']=gate['reflection_ready_b']=0
             gate['answers_closed_at']=hours(clock) if state(conn,uid,lid,clock)['report']['complete'] else None

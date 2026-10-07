@@ -46,7 +46,7 @@ test('rehearsal waits, notices partner actions on an unchanged clock, and preser
   await expect(page.locator('input[name=weight_kg]')).toHaveValue('69');
 });
 
-test('personal intro starts once, advances to minute twelve and saves pre-match slots',async({page})=>{
+test('personal intro starts once and reaches minute twelve without offering slots before pairing',async({page})=>{
   await page.route('**/src/preview.js',async route=>{
     const response=await route.fetch();
     const source=(await response.text()).replace('export function previewTransport()', 'function baseTransport()');
@@ -87,14 +87,8 @@ test('personal intro starts once, advances to minute twelve and saves pre-match 
   await expect(page.locator('.rehearsal-banner')).toContainText('Next checkpoint');
   await expect(page.locator('#rehearsal-slots')).toHaveCount(0);
   await page.clock.fastForward(720000);
-  await expect(page.locator('#rehearsal-slots')).toBeVisible();
-  await page.getByLabel('Sat · dinner').check();
-  await page.clock.fastForward(15000);
-  await expect(page.getByLabel('Sat · dinner')).toBeChecked();
-  await page.getByRole('button',{name:'Save availability',exact:true}).click();
-  await expect(page.getByLabel('Sat · dinner')).toBeChecked();
-  await page.getByRole('button',{name:'Refresh progress'}).click();
-  await expect(page.getByLabel('Sat · dinner')).toBeChecked();
+  await expect(page.locator('.rehearsal-banner')).toContainText('Wed 18:00');
+  await expect(page.locator('#rehearsal-slots')).toHaveCount(0);
   expect(await page.evaluate(()=>window.__starts)).toBe(1);
-  expect(await page.evaluate(()=>window.__slots)).toEqual([{day:'Sat',meal_slot:'dinner'}]);
+  expect(await page.evaluate(()=>window.__slots)).toBeUndefined();
 });

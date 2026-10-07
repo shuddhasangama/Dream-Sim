@@ -22,6 +22,7 @@ export function legalAction(step) {
 }
 
 export function agreementPath(params) {
+ if(params.coupleId)return `/api/v1/couples/${encodeURIComponent(params.coupleId)}/checkpoints/${encodeURIComponent(params.source)}`;
  return params.lockInId ? `/api/v1/lock-ins/${encodeURIComponent(params.lockInId)}/agreements/${encodeURIComponent(params.kind)}` : `/api/v1/date-plans/${encodeURIComponent(params.planId)}/agreement`;
 }
 export async function load(session, params) {
@@ -36,8 +37,10 @@ export function render(ctx) {
 
   if (data.complete || data.step === 'done') {
     return `<section class="intro"><span class="eyebrow">AGREEMENT</span><h1>All set</h1></section>${pairContext(ctx)}${track}
-      <section class="card guidance"><p>Your steps are complete. Your partner completes their own agreement separately.</p>
+      <section class="card guidance"><p>${data.partner_complete ? '✓ Both partners have completed this agreement.' : '✓ Your steps are complete. Waiting for your partner.'}</p>
+      <details><summary>Read your signed playbook</summary>${(data.clauses||[]).map(c=>`<p>${safe(typeof c==='string'?c:c.text||[c.title,c.body].filter(Boolean).join(' — '))}</p>`).join('')}</details>
       ${data.signature_receipt ? `<p>Signed on ${safe(data.signature_receipt.signed_at_utc)}. Your signature and agreed terms are recorded.</p>` : ''}
+      ${ctx.params?.coupleId ? `<button id="advance-stage" class="primary" ${data.partner_complete?'':'disabled'}>Continue to ${safe(data.to_stage)}</button>` : ''}
       <button id="to-debrief" class="primary" type="button">Return to your journey <span aria-hidden="true">→</span></button></section>`;
   }
   if (data.step === 'playbook') {
@@ -68,7 +71,8 @@ export function render(ctx) {
 export function bind(root, ctx) {
   const { session, run, patch, params, navigateTo } = ctx;
   const base = agreementPath(params);
-  const reload = async () => patch(await session.get(base));
+  const reload = async () => { patch(await session.get(base)); await ctx.refreshJourney(); };
+  root.querySelector('#advance-stage')?.addEventListener('click',()=>run(async()=>{await session.post(`${base}/advance`,{});await ctx.refreshJourney();navigateTo('relationship');}));
   if(ctx.data?.identity?.enabled) bindIdentity(root,ctx,ctx.data.identity,reload);
 
   root.querySelector('#to-debrief')?.addEventListener('click', () => navigateTo(params.returnTo || 'plan'));

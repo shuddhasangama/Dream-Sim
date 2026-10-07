@@ -15,7 +15,7 @@ test('Confirm Date is unavailable after Thursday, after plan creation, or while 
 test('Boundaries shows selectable greeting preferences rather than a raw plan', () => {
   const html=boundary({safe:String,data:{answers:{physical_boundary:'namaste'},options:{physical_boundary:['namaste','handshake']}}});
   assert.match(html,/value="namaste" selected/);
-  assert.match(html,/Update saved preference/);
+  assert.match(html,/Save answer/);
   assert.doesNotMatch(html,/lockin_id|<pre/);
 });
 
@@ -37,4 +37,11 @@ test('Debrief distinguishes another date from a mutual Relationship choice', () 
   assert.match(html,/both partners must choose it/);
   assert.match(html,/value="continue"/);
   assert.match(html,/value="relationship"/);
+});
+
+test('repeat-date week removes new-match and Rank events',()=>{
+ const data={mode:'locked_in',clock:{day:'Mon',hour:12},lock_in:{dates_completed:1},schedule:{grid:{days:[{day:'Mon',is_today:true}],rows:[{days:[{day:'Mon',moments:[{key:'match_1',label:'Match 1',hour:12,tone:'match'},{key:'rank',label:'Rank',hour:11,tone:'muted'},{key:'slots',label:'Slots',hour:18,tone:'calendar'}]}]}]}}};
+ const html=week({safe:String,data,journey:{surfaces:[]}});
+ assert.doesNotMatch(html,/p-event-title">Match 1|p-event-title">Rank/);
+ assert.match(html,/p-event-title">Slots/);
 });

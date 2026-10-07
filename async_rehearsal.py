@@ -108,7 +108,7 @@ def snapshot(conn, uid):
         row, step, remaining = intro(conn, uid)
         metadata.update(intro_step=step, next_jump_in_seconds=remaining,
                         message=('Your test clock advances every 3 minutes until availability opens at minute 12. Revealed matches remain open.' if step < 4 else
-                                 'Availability is open. Save your weekend slots while waiting for mutual interest. The clock waits here.'))
+                                 'Choose Like on a match. Availability opens after you both Like.'))
         actor = db.fetch_one(conn, 'User', id=uid) if uid else None
         if not row and actor and actor['bgv_status']=='verified' and actor['journey_state']=='dating':
             metadata['start_request'] = {'path':'/api/v1/rehearsal/start', 'body':{}}

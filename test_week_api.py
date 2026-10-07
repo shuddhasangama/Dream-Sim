@@ -41,6 +41,26 @@ class WeekApiTests(RouteTestCase):
     def action(self, uid, mid, action, **extra):
         return self.request('/matches/'+mid+'/actions',uid=uid,method='POST',body={'action':action,**extra})
 
+    def test_week_ticks_only_saved_actions_and_does_not_count_a_no_show_as_a_date(self):
+        import week_activity
+        mid=self.match('owner','partner')
+        match=db.fetch_one(self.conn,'Match',id=mid)
+        db.insert_row(self.conn,'Match',{**match,'action':'interest'})
+        self.make_lockin('owner','partner')
+        self.make_plan('lock-1',status='confirmed')
+        pair=db.fetch_one(self.conn,'LockIn',id='lock-1')
+        plan=db.fetch_one(self.conn,'DatePlan',id='plan-1')
+        matches=db.fetch_all(self.conn,'Match',user_id='owner')
+        status=week_activity.completed(self.conn,'owner',pair,plan,matches)
+        self.assertEqual(status['match_1'],'Done')
+        self.assertEqual(status['match_1_closes'],'Done')
+        self.assertEqual(status['sign'],'Completed')
+        self.assertEqual(status['calendar_closes'],'Completed')
+        self.assertNotIn('match_2',status)
+        self.assertNotIn('debrief',status)
+        db.insert_row(self.conn,'DateResolution',{'id':'r','dateplan_id':'plan-1','kind':'no_show_reported','actor_id':'owner','created_at':'test'})
+        self.assertNotIn('actual_date',week_activity.completed(self.conn,'owner',pair,plan,matches))
+
     def test_get_is_read_only_and_prepare_is_explicit_idempotent_even_when_empty(self):
         before = list(self.conn.iterdump())
         result = self.request('/week')

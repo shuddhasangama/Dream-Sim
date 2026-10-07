@@ -63,8 +63,8 @@ def register(api,get_db,get_clock,week_to_date,derive,vision_options):
 
     @api.post('/couples/<cid>/checkpoints/<source>/steps')
     def checkpoint_step(cid,source):
-        body=json_object(required={'step'},optional={'signed_name','acks'})
-        if body['step']!='sign' and set(body)!={'step'}:raise ApiError('validation_error','Signature fields belong only to signing.')
+        body=json_object(required={'step'},optional={'signed_name','acks','document_sha256'})
+        if body['step']!='sign' and set(body)-{'step','document_sha256'}:raise ApiError('validation_error','Signature fields belong only to signing.')
         service.checkpoint_step(get_db(),uid(),cid,source,body,get_clock())
         return jsonify(service.checkpoint_state(get_db(),uid(),cid,source))
 

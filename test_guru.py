@@ -181,13 +181,13 @@ class NextActionTests(unittest.TestCase):
     def test_between_the_prep_and_the_date_there_is_nothing_to_do(self):
         action = guru.next_action(DATE_SET, facts=DONE_TO_DATE)
         self.assertIsNone(action.get("cta") and None)
-        self.assertEqual(action["headline"], "Enjoy it")
+        self.assertEqual(action["headline"], "Your date is confirmed")
 
     def test_flags_come_before_the_decision(self):
         flags_first = guru.next_action(AFTER_DATE, facts=DONE_TO_DATE)
         then_decide = guru.next_action(AFTER_DATE, facts={**DONE_TO_DATE, "flags_given": True})
         self.assertEqual(flags_first["endpoint"], "debrief_view")
-        self.assertIn("green", flags_first["headline"].lower())
+        self.assertEqual("Date Debrief", flags_first["headline"])
         self.assertEqual(then_decide["endpoint"], "debrief_view")
         self.assertIn("next", then_decide["headline"].lower())
 
@@ -319,3 +319,15 @@ class CardOrderTests(unittest.TestCase):
         self.assertIn("after_date", shown)
         self.assertIn("gate", shown)
         self.assertNotIn("plan", shown)
+
+
+class SavedProgressCopyTests(unittest.TestCase):
+    def test_own_signature_does_not_claim_date_confirmed(self):
+        action=guru.next_action(DATE_SET,facts={'date_done':False,'agreement_signed':True,'boundary_set':True,'date_confirmed':False})
+        self.assertEqual(action['headline'],'Waiting for your partner')
+        self.assertEqual(action['endpoint'],'plan_view')
+
+    def test_own_debrief_waits_for_partners_choice(self):
+        action=guru.next_action(AFTER_DATE,facts={'date_done':True,'flags_given':True,'decision_made':True,'partner_decision_made':False})
+        self.assertEqual(action['headline'],'Waiting for your partner')
+        self.assertEqual(action['endpoint'],'debrief_view')

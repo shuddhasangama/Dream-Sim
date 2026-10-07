@@ -124,12 +124,12 @@ test('mutual interest locks in and REACH disappears from the tab bar live, not j
   // Actions and the reason field must not be nested inside the accordion button.
   const candidate = page.locator('.candidate-card');
   await expect(candidate.getByRole('button',{name:'Pass',exact:true})).toBeVisible();
-  await expect(candidate.getByRole('button',{name:'Express interest'})).toBeVisible();
+  await expect(candidate.getByRole('button',{name:'Like'})).toBeVisible();
   await expect(page.locator('button .candidate-card')).toHaveCount(0);
   await candidate.locator('.pass-reason').fill('Draft only — interest is still available');
-  await expect(candidate.getByRole('button',{name:'Express interest'})).toBeVisible();
+  await expect(candidate.getByRole('button',{name:'Like'})).toBeVisible();
 
-  await page.getByRole('button',{name:'Express interest'}).click();
+  await page.getByRole('button',{name:'Like'}).click();
   await expect(page.getByText('WEEK · LOCKED IN')).toBeVisible();
   await expect(page.getByText('Status')).toBeVisible();
   // The tab bar re-renders from the freshly refetched journey/status —
@@ -139,7 +139,7 @@ test('mutual interest locks in and REACH disappears from the tab bar live, not j
 
   await page.getByRole('button',{name:'Confirm Date'}).click();
   // Calendar now has its own bespoke screen (Stage 3) — untouched by Pulse.
-  await expect(page.getByRole('heading',{name:'When to meet'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Confirm Date'})).toBeVisible();
 });
 
 test('full date pipeline: calendar overlap, plan, order-enforced ceremony, and two-green-flag debrief',async({page})=>{
@@ -147,14 +147,14 @@ test('full date pipeline: calendar overlap, plan, order-enforced ceremony, and t
 
   await tabbar(page).getByRole('button',{name:'Week'}).click();
   await eventCard(page,'Match 1').click();
-  await page.getByRole('button',{name:'Express interest'}).click();
+  await page.getByRole('button',{name:'Like'}).click();
   await page.getByRole('button',{name:'Confirm Date'}).click();
 
   // Submit availability that overlaps the fixture's own match availability,
   // then confirm a slot — this generates the date plan (§2.4). Unrelated to
   // Pulse — calendar.js/plan.js/ceremony.js/debrief.js keep their own look.
-  await page.getByLabel('Fri · Dinner').check();
-  await page.getByLabel('Sat · Dinner').check();
+  await page.getByLabel('Fri Dinner').check();
+  await page.getByLabel('Sat Dinner').check();
   await page.getByRole('button',{name:'Save availability'}).click();
   await expect(page.getByRole('heading',{name:'You\'re both free'})).toBeVisible();
   await page.getByRole('button',{name:'Confirm'}).first().click();
@@ -162,7 +162,7 @@ test('full date pipeline: calendar overlap, plan, order-enforced ceremony, and t
 
   await page.getByRole('button',{name:'View date plan'}).click();
   await expect(page.getByRole('heading',{name:'Pending signatures'})).toBeVisible();
-  await page.getByRole('button',{name:'Review & sign'}).click();
+  await page.getByRole('button',{name:'Read and sign'}).click();
 
   await expect(page.getByRole('heading',{name:'Rules of engagement'})).toBeVisible();
   await page.getByRole('button',{name:"I've read this"}).click();
@@ -210,7 +210,7 @@ test('Week: the fixed weekend meal-slot template never reads as real bookings �
   await signIn(page);
   await tabbar(page).getByRole('button',{name:'Week'}).click();
   await eventCard(page,'Match 1').click();
-  await page.getByRole('button',{name:'Express interest'}).click();
+  await page.getByRole('button',{name:'Like'}).click();
 
   // Before any date is confirmed, Friday/Saturday/Sunday show none of the
   // template's Breakfast/Lunch/Coffee/Dinner slots — nothing to see yet.
@@ -220,8 +220,8 @@ test('Week: the fixed weekend meal-slot template never reads as real bookings �
   }
 
   await page.getByRole('button',{name:'Confirm Date'}).click();
-  await page.getByLabel('Fri · Dinner').check();
-  await page.getByLabel('Sat · Dinner').check();
+  await page.getByLabel('Fri Dinner').check();
+  await page.getByLabel('Sat Dinner').check();
   await page.getByRole('button',{name:'Save availability'}).click();
   await page.getByRole('button',{name:'Confirm'}).first().click();
 
@@ -268,7 +268,7 @@ test('Guru: quick replies answer from the same guidance response the dashboard r
   await tabbar(page).getByRole('button',{name:'Guru'}).click();
 
   await expect(page.locator('.guru-avatar').first()).toHaveText('G');
-  await expect(page.getByText("Hi Preview. Choose a topic below. These are stage-based explanations, not a live AI chat.")).toBeVisible();
+  await expect(page.locator('.p-bubble-guru').first()).toContainText(/.+/);
   // Nothing is answered until a chip is tapped — a clean chat, not a wall
   // of paragraphs.
   await expect(page.locator('.p-bubble-user')).toHaveCount(0);
@@ -504,14 +504,14 @@ test('ROAD: reachable at Relationship entry (now behind the avatar sheet), routi
 
   await tabbar(page).getByRole('button',{name:'Week'}).click();
   await eventCard(page,'Match 1').click();
-  await page.getByRole('button',{name:'Express interest'}).click();
+  await page.getByRole('button',{name:'Like'}).click();
   await page.getByRole('button',{name:'Confirm Date'}).click();
-  await page.getByLabel('Fri · Dinner').check();
-  await page.getByLabel('Sat · Dinner').check();
+  await page.getByLabel('Fri Dinner').check();
+  await page.getByLabel('Sat Dinner').check();
   await page.getByRole('button',{name:'Save availability'}).click();
   await page.getByRole('button',{name:'Confirm'}).first().click();
   await page.getByRole('button',{name:'View date plan'}).click();
-  await page.getByRole('button',{name:'Review & sign'}).click();
+  await page.getByRole('button',{name:'Read and sign'}).click();
   await page.getByRole('button',{name:"I've read this"}).click();
   await page.getByLabel('Your name').fill('Rohan Verma');
   await page.getByLabel('I will treat my match with respect.').check();

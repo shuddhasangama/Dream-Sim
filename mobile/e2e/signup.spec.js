@@ -68,3 +68,12 @@ test('invalid stats stay on the step and preserve the entered value for correcti
   await page.getByRole('button',{name:'Previous step'}).click();
   await expect(page.getByRole('heading',{name:'Step 1 of 4 · Vision'})).toBeVisible();
 });
+
+for(const [key,label,kids] of [['grow','Grow Together',true],['two','Two Together',false],['explore','Explore Together',false]])test(`signup still offers ${label}`,async({page})=>{
+ await enter(page);
+ await page.locator('#vision-template-form select[name=template]').selectOption(key);
+ await page.getByRole('button',{name:'Save Vision',exact:true}).click();
+ await expect(page.getByRole('heading',{name:label,exact:true})).toBeVisible();
+ if(kids)await expect(page.locator('.chips')).toContainText('Kids');
+ else await expect(page.locator('.chips')).not.toContainText('Kids');
+});

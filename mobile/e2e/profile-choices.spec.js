@@ -6,9 +6,8 @@ test('new Vision templates and optional personal profile persist in preview',asy
  await page.getByLabel('Verification code').fill('123456');
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await page.locator('[data-open-editor=vision]').click();
- await page.locator('#vision-template-form select[name=template]').selectOption('two');
- await page.getByRole('button',{name:'Save Vision',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Two Together',exact:true})).toBeVisible();
+ await expect(page.locator('#vision-template-form')).toHaveCount(0);
+ await expect(page.locator('fieldset[disabled] input').first()).toBeDisabled();
  await page.locator('#p-close-editor').click();
  await page.locator('#personal-open').click();
  await page.locator('input[name=ethnicity]').first().check();

@@ -15,19 +15,19 @@ export async function load(session) { return session.get('/api/v1/identity-captu
 export function panel(data, safe) {
   if (!data?.enabled) return '<p>Identity-image capture is not enabled yet.</p>';
   const canCapture = ['not_captured','deleted','rejected','expired'].includes(data.status);
-  return `<section class="card"><h2>Private identity image</h2>
+  return `<section class="card"><h2>Face photo</h2>
     <p role="status">${safe(data.test_approved ? 'Capture complete — approved for testing' : labels[data.status] || 'Check status')}</p>
-    <p>This image is separate from your profile portrait. A photo alone is not a liveness or identity check.</p>
-    ${canCapture ? `<p>Face the camera in good light, with your full face visible. On Android, switch to the front camera if needed.</p>
+    <p>Private photo for your identity check.</p>
+    ${canCapture ? `<p>Face the camera in good light. Keep your full face visible.</p>
       <button id="identity-camera" type="button">Take a face photo</button>
       <img id="identity-preview" class="profile-portrait" hidden alt="Review your identity image before uploading">
       <p id="identity-note" role="status"></p>
-      <form id="identity-form"><label class="checkbox-row"><input type="checkbox" name="consent" required> ${safe(data.consent_text)}</label>
+      <form id="identity-form"><label class="checkbox-row"><input type="checkbox" name="consent" required> I agree to store this photo for BGV review.</label><details><summary>How your photo is used</summary><p>${safe(data.consent_text)}</p></details>
       <button id="identity-upload" class="primary" type="submit" disabled>Save private image</button></form>` : ''}
     ${data.test_approved ? '<p>You can continue testing now. BGV authentication is still pending.</p>' : ''}
     ${data.status === 'captured' && !data.test_approved ? '<p>Your image has not been sent automatically. DhaShu must submit it to the verification provider.</p>' : ''}
     ${data.verified ? '<p>Your approved check can be reused for later agreements while it remains valid. Each agreement still needs your own signature.</p>' : ''}
-    <button id="identity-refresh" type="button">Refresh verification status</button>
+    <button id="identity-refresh" type="button">Refresh status</button>
     ${data.capture_id && data.status !== 'deleted' ? `<details><summary>Delete identity image</summary>
       <p>This removes DhaShu’s stored image and stops reuse of this check. It does not erase existing agreements or recall provider exports.</p>
       <button id="identity-delete" type="button">Delete my identity image</button></details>` : ''}
