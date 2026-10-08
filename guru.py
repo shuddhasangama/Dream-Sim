@@ -128,7 +128,7 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             'boundaries_view': ('Choose your greeting', 'Let your partner know what feels comfortable.'),
 
         }
-        if endpoint in copy and headline not in ('Your date is confirmed', 'Waiting for your partner'):
+        if endpoint in copy and headline not in ('Your date is confirmed', 'Waiting for your partner', 'Find a shared time', 'Choose your date'):
             headline, body = copy[endpoint]
         return {"headline": headline, "body": body, "endpoint": endpoint, "cta": cta}
 
@@ -170,11 +170,11 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             "gate_view", "Back to the checkpoint")
 
     if d.MATCHED not in milestones:
-        return action(
-            "Your week is running",
-            "Matches are released through the week. Nothing needs doing until one lands — "
-            "though REACH will tell you how far your filters actually go.",
-            "week", "Open your week")
+        if f.get('available_match'):
+            return {"headline": f"Match {f['available_match']} is available", "body": "Take a look and choose Like or Pass.", "endpoint": "week", "cta": "View match"}
+        if f.get('interest_sent'):
+            return action("Like saved", "Waiting for mutual interest. You can review your week.")
+        return action("Waiting for a match", "Your next match will appear here when available.")
 
     if (d.DATE_SET not in milestones or f.get("has_current_plan") is False) and not f.get("aligned", True):
         return action(
@@ -182,6 +182,13 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             "Budget, what you eat, and the cuisines you enjoy. They were not asked at sign-up "
             "because they mean nothing until there is a bill and a table.",
             "align_view", "Answer them")
+
+    if (d.DATE_SET not in milestones or f.get("has_current_plan") is False) and f.get("my_slots_saved"):
+        if not f.get("partner_slots_saved"):
+            return action("Availability saved", "Waiting for your partner to share their slots.")
+        if not f.get("overlap"):
+            return action("Find a shared time", "Your slots do not overlap yet. Review your availability.", "calendar_view", "Review slots")
+        return action("Choose your date", "You both have a shared slot. Confirm a time.", "calendar_view", "Confirm Date")
 
     if d.DATE_SET not in milestones or f.get("has_current_plan") is False:
         return action(

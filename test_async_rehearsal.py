@@ -59,8 +59,8 @@ class AsyncRehearsalTests(RouteTestCase):
             self.assertEqual(self.state()['async_rehearsal']['stage'],'availability')
         self.assertEqual(list(self.conn.iterdump()),before)
         path=self.confirmed()
-        self.assertEqual(self.ready(path,'owner','debrief').status_code,409)
-        for stage in ('date','debrief'):
+        self.assertEqual(self.state()['async_rehearsal']['stage'],'date')
+        for stage in ('debrief',):
             self.assertEqual(self.ready(path,'owner',stage).status_code,200)
             saved=list(self.conn.iterdump())
             self.assertEqual(self.ready(path,'owner',stage).status_code,200)
@@ -93,8 +93,8 @@ class AsyncRehearsalTests(RouteTestCase):
                 self.step(next_path,who,'playbook')
                 self.step(next_path,who,'sign',signed_name=who,acks=list(ceremony.ack_keys(ceremony.DATE_AGREEMENT)))
                 self.assertEqual(self.step(next_path,who,'face').status_code,200)
-        self.assertEqual(self.state()['async_rehearsal']['stage'],'ready_for_date')
-        for stage in ('date','debrief'):
+        self.assertEqual(self.state()['async_rehearsal']['stage'],'date')
+        for stage in ('debrief',):
             for who in ('partner','owner'):
                 self.assertEqual(self.ready(next_path,who,stage).status_code,200)
         for who in ('partner','owner'):
@@ -161,7 +161,7 @@ class AsyncRehearsalTests(RouteTestCase):
         self.make_lockin('stranger','fourth','other-pair')
         other_clock=self.state('stranger')['clock']
         path=self.confirmed()
-        for stage in ('date','debrief'):
+        for stage in ('debrief',):
             for who in ('owner','partner'): self.ready(path,who,stage)
         self.assertEqual(self.state('stranger')['clock'],other_clock)
 

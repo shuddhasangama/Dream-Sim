@@ -128,7 +128,7 @@ class GuruRouteTests(RouteTestCase):
         self.login(self.make_user("u1"))
         body = self.client.get("/guru").get_data(as_text=True)
         self.assertIn("What now?", body)
-        self.assertIn("Review your matches", body)
+        self.assertIn("Waiting for a match", body)
 
     def test_the_hub_appears_in_the_navigation_once_verified(self):
         self.login(self.make_user("u1"))

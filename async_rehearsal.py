@@ -138,24 +138,21 @@ def snapshot(conn, uid):
     start = datetime.fromisoformat(plan['datetime'])
     date_week = (start.date()-clock.WEEK_ONE_MONDAY).days//7+1
     day = start.weekday()
-    ready_date = acknowledgements(conn, pid, 'date')
     ready_debrief = acknowledgements(conn, pid, 'debrief')
     if resolved or members <= ready_debrief:
         metadata.update(stage='resolved' if resolved else 'debrief', message=(
             'This date has been resolved. Continue through the available journey steps.' if resolved else
             'Debrief is open and will wait for your response. Your partner’s private answers remain private.'))
         return clock.SimulationClock(date_week, day, dateplan.debrief_opens_hour(plan['meal'])), metadata
-    step = 'debrief' if members <= ready_date else 'date'
-    mine = uid in (ready_debrief if step == 'debrief' else ready_date)
-    metadata.update(stage='date' if step == 'debrief' else 'ready_for_date',
-                    my_ready=mine, partner_ready=bool((ready_debrief if step == 'debrief' else ready_date) & (members-{uid})),
-                    message=('Your readiness is saved. Waiting for your partner; there is no time limit.' if mine else
-                             'Both partners must choose readiness to advance this rehearsal. This does not record attendance or consent.'))
+    mine = uid in ready_debrief
+    metadata.update(stage='date', my_ready=mine,
+                    partner_ready=bool(ready_debrief & (members-{uid})),
+                    message=('Your simulated date is finished. Waiting for your partner.' if mine else
+                             'Your date is confirmed. Finish the simulated date when you are ready for Debrief.'))
     if not mine:
         metadata['request'] = {'method': 'POST', 'path': '/api/v1/rehearsal/date-plans/'+quote(pid, safe='')+'/ready',
-                               'body': {'step': step}, 'label': 'Ready for Debrief' if step == 'debrief' else 'Ready for simulated date'}
-    return (clock.SimulationClock(date_week, day, start.hour) if step == 'debrief' else
-            clock.SimulationClock.at(week, 'Thu', 18)), metadata
+                               'body': {'step': 'debrief'}, 'label': 'Finish simulated date'}
+    return clock.SimulationClock(date_week, day, start.hour), metadata
 
 
 def mark_ready(conn, uid, pid, step):
@@ -170,9 +167,6 @@ def mark_ready(conn, uid, pid, step):
             raise ApiError('state_conflict', 'Both agreements must be complete on an unresolved date.', 409)
         if planning.current_plan(conn, pair['id'])['id'] != pid:
             raise ApiError('state_conflict', 'Use the current date plan.', 409)
-        members = {pair['user_a'], pair['user_b']}
-        if step == 'debrief' and not members <= acknowledgements(conn, pid, 'date'):
-            raise ApiError('state_conflict', 'Both partners must be ready for the simulated date first.', 409)
         if uid not in acknowledgements(conn, pid, step):
             planning.sql(conn, 'INSERT INTO "RehearsalReady" (id,dateplan_id,user_id,step) VALUES (?,?,?,?)',
                          (pid+':'+uid+':'+step, pid, uid, step))

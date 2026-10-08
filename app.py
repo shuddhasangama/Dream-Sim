@@ -4178,13 +4178,22 @@ def _guru_facts(user: dict) -> dict:
     someone a step is finished when it is not."""
     active = _my_active_lockin(user["user_id"])
     if active is None:
-        return {"married": user["journey_state"] == "married"}
+        matches = db.fetch_all(get_db(), 'Match', user_id=user['user_id'], week=get_clock().week)
+        open_matches = [m for m in matches if week_service.status(m, get_clock()) == 'open' and m['action'] == 'none']
+        return {"married": user["journey_state"] == "married",
+                "available_match": min((m['slot'] for m in open_matches), default=None),
+                "interest_sent": any(m['action'] == 'interest' for m in matches)}
     aligned = date_alignment.is_complete(user["stats"])
     married = user["journey_state"] == "married"
     gate_facts = _gate_facts(user, active)
     plan = _dateplan_for_lockin(active["id"])
     if plan is None:
-        return {"aligned": aligned, "married": married, "has_current_plan": False, "dates_completed": active.get("dates_completed",0), **gate_facts}
+        mine = set(planning_service.slots(get_db(), active['id'], user['user_id']))
+        theirs = set(planning_service.slots(get_db(), active['id'], _partner_id_in_lockin(active, user['user_id'])))
+        return {"aligned": aligned, "married": married, "has_current_plan": False,
+                "my_slots_saved": bool(mine), "partner_slots_saved": bool(theirs),
+                "overlap": bool(mine & theirs),
+                "dates_completed": active.get("dates_completed",0), **gate_facts}
     signature = db.fetch_one(get_db(), "Signature", dateplan_id=plan["id"], user_id=user["user_id"])
     entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user["user_id"])
     row = db.fetch_one(get_db(), "DateOutcome", dateplan_id=plan["id"])
@@ -4564,6 +4573,10 @@ def _api_journey_state(user):
     result['next_action']['date_context']=dating_guidance.context(get_db(),user['user_id'],active,plan,get_clock(),WEEK_ONE_MONDAY) if active else None
     result['accelerated_test'] = getattr(g, 'accelerated_test_metadata', None) if accelerated_clock.enabled() and not async_rehearsal.enabled() else None
     result['async_rehearsal'] = async_rehearsal.snapshot(get_db(), user['user_id'])[1] if async_rehearsal.enabled() else None
+    rehearsal = result['async_rehearsal'] or {}
+    if rehearsal.get('stage') == 'date' and rehearsal.get('my_ready'):
+        result['next_action'].update(headline='Simulated date finished',
+            body='Waiting for your partner before Debrief opens.', destination=None, cta=None)
     return result
 
 

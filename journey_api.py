@@ -39,12 +39,30 @@ def surface(key, reached, reach_is_locked):
     }
 
 
+def topic_stage(reached, facts):
+    """Derive topics from saved actions, not weekday labels."""
+    if disclosure.RELATIONSHIP in reached or facts.get('gate_open'):
+        return 'relationship'
+    if disclosure.MATCHED not in reached:
+        return 'match_available' if facts.get('available_match') else 'matching'
+    if facts.get('decision_made'):
+        return 'post_debrief'
+    if facts.get('debrief_open'):
+        return 'debrief'
+    if disclosure.DATE_SET not in reached or facts.get('has_current_plan') is False:
+        return 'repeat_planning' if facts.get('dates_completed', 0) else 'planning'
+    if facts.get('date_confirmed'):
+        return 'before_date'
+    return 'agreement'
+
+
 def guidance(reached, facts, reach_is_locked, *, in_dating=False, partner_greeting=None):
     action = guru.next_action(reached, facts=facts)
     key = disclosure.ENDPOINT_TO_KEY.get(action['endpoint'])
     open_cards = guru.cards(reached, exclude_endpoint=action['endpoint'])
     return {
         **allowlist(action, ('headline', 'body', 'cta')),
+        'topic_stage': topic_stage(reached, facts),
         'destination': surface(key, reached, reach_is_locked) if key else None,
         # round3-fixes-spec.md §6.3: "anything I can help you with?" —
         # every door currently open, not just the one next_action already

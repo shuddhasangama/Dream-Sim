@@ -167,7 +167,7 @@ class NextActionTests(unittest.TestCase):
         self.assertEqual(action["endpoint"], "verify_view")
 
     def test_a_verified_user_with_no_match_is_told_nothing_needs_doing_yet(self):
-        self.assertEqual(guru.next_action(VERIFIED)["endpoint"], "week")
+        self.assertIsNone(guru.next_action(VERIFIED)["endpoint"])
 
     def test_a_matched_user_is_asked_for_availability(self):
         self.assertEqual(guru.next_action(MATCHED)["endpoint"], "calendar_view")
@@ -331,3 +331,14 @@ class SavedProgressCopyTests(unittest.TestCase):
         action=guru.next_action(AFTER_DATE,facts={'date_done':True,'flags_given':True,'decision_made':True,'partner_decision_made':False})
         self.assertEqual(action['headline'],'Waiting for your partner')
         self.assertEqual(action['endpoint'],'debrief_view')
+
+
+def test_saved_availability_waits_without_repeat_confirm_action():
+    result = guru.next_action(VERIFIED | {d.MATCHED}, facts={'aligned': True, 'my_slots_saved': True, 'partner_slots_saved': False})
+    assert result['headline'] == 'Availability saved'
+    assert result['endpoint'] is None
+
+
+def test_available_match_takes_priority_over_previous_like():
+    result = guru.next_action(VERIFIED, facts={'available_match': 2, 'interest_sent': True})
+    assert result['headline'] == 'Match 2 is available'

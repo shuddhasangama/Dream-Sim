@@ -1,29 +1,4 @@
-// Guru — design_handoff_app_ui_pulse/README.md ("Pulse", option 1a): a
-// conversational "what now?" with quick-reply chips instead of the old
-// screen's fixed paragraphs/accordions. Every answer still comes from
-// EXACTLY the same GET /api/v1/guidance response the old screen read
-// (headline/body/cta/destination, Dating-only `dating_context`, and
-// `also_open` — see journey_api.guidance()) — nothing here invents new
-// server content, it only decides which quick reply surfaces which part
-// of that same response, and in what order.
-//
-// §4 hard constraint 5 still holds structurally: Guru reflects and
-// structures, never nudges escalation. Every answer below is either the
-// server's own copy verbatim (dc.consent, dc.playbook, prep.*, a card's
-// own subtitle) or a plain factual sentence built from counts already on
-// the wire (`{mutual} of {fit} who fit...`) — nothing here suggests
-// progressing a stage, inviting someone home, or sharing contacts.
-//
-// Non-Dating stages have no guru_dating.py content of their own (it is
-// deliberately Dating-only) — so outside Dating the quick replies are
-// "What now?" plus one chip per `also_open` entry, which is already
-// whatever the server's own guru.cards() considers relevant at THIS
-// stage. That is what makes the chip set "stage-aware" without this file
-// hardcoding Relationship/Engaged/Married copy that doesn't exist yet.
-
-// Which reflection is showing — module-level, like reach.js's sheet key:
-// every mutation re-renders the whole app, and this is purely a client-
-// side selection, never server state.
+// Short, stage-specific guidance. Navigation always respects API eligibility.
 let qa = null; // { question, answer, actionLabel, actionKey }
 // GET /api/v1/reach's counts, fetched once per Guru visit the first time
 // "Why so few matches?" is tapped — reach.js's own screen is the real
@@ -31,21 +6,36 @@ let qa = null; // { question, answer, actionLabel, actionKey }
 let reachCache = null;
 let contextKey = null;
 
-export function _resetForTest() { qa = null; reachCache = null; }
+export function _resetForTest() { qa = null; reachCache = null; contextKey = null; }
 
-const STAGE_CHIPS = [
-  { id: 'what_now', label: 'What now?' },
-  { id: 'why_few_matches', label: 'Why so few matches?' },
-  { id: 'how_dating_works', label: 'How Dating works' },
-  { id: 'before_we_meet', label: 'Before we meet' },
-];
-
-function chipsFor(data) {
-  return [
-    ...(data.dating_context ? STAGE_CHIPS : [{ id: 'what_now', label: 'What now?' }]),
-    ...(data.date_context ? [{id:'date_prep',label:'Prepare for this date'}, {id:'date_debrief',label:'Date Debrief'}, {id:'sharing',label:'Phone & socials'}] : []),
-    ...(data.also_open || []).map((c, i) => ({ id: `also_${i}`, label: c.title, card: c })),
-  ];
+const TOPICS = {
+  values: ['What matters to you?', 'Review your Vision and the interests you would like to share. Your preferences are yours to choose.', 'vision'],
+  matching: ['How matching works', 'Matching considers both people’s preferences. A Like expresses interest; only mutual interest creates a pair.', 'week'],
+  match: ['Get to know this match', 'Compare your Vision, Stats and Chemistry. Look for what fits and what you would like to ask. You choose Like or Pass.', 'week'],
+  planning: ['Plan your date together', 'Share your preferences and availability, then choose an overlapping slot. Your saved work stays while your partner responds.', 'calendar'],
+  agreement: ['Know what you’re agreeing to', 'Read the date plan and terms before signing. Both partners must complete their own agreement. Signing does not imply consent to contact sharing or intimacy.', 'plan'],
+  prepare: ['Prepare for your date', 'Check the time and public venue. Arrive on time, respect each other’s boundaries and choose something you both enjoy.', 'plan'],
+  reflect: ['Reflect on your date', 'What felt good? What concerned you? Save your Debrief and choose what you want next. You do not need to decide together.', 'debrief'],
+  build: ['Build on your last date', 'Think about what you enjoyed and what you would change. Ask your partner what they would enjoy next; another date is a choice for both of you.', null],
+  next: ['Talk about what matters next', 'Choose the questions that matter to you, add your own and answer independently. Share answers only when you want to.', 'gate'],
+  pace: ['Take your next step at your pace', 'You can take time, stay at this stage or decide not to continue. A next stage needs both people’s agreement.', 'gate'],
+  sharing: ['Share at your pace', 'Phone, socials and home invitations are separate choices. Each request needs explicit consent. Accepting one never means accepting another; you can decline.', 'after_date'],
+  support: ['Something doesn’t feel right?', 'You can decline a request, pause or end the connection. Use the reporting option where available. If you feel unsafe, leave and contact someone you trust.', null],
+};
+export function chipsFor(data) {
+  const stage = data.topic_stage || (data.date_context?.phase === 'debrief' ? 'debrief' : data.date_context?.phase === 'before_date' ? 'before_date' : data.date_context ? 'planning' : 'matching');
+  const ids = {
+    matching: ['values', 'matching'],
+    match_available: ['match', 'matching'],
+    planning: ['planning', 'agreement', 'sharing'],
+    repeat_planning: ['build', 'planning', 'sharing'],
+    agreement: ['agreement', 'prepare', 'sharing'],
+    before_date: ['prepare', 'agreement', 'sharing'],
+    debrief: ['reflect', 'sharing'],
+    post_debrief: ['build', 'pace', 'sharing'],
+    relationship: ['next', 'pace', 'sharing'],
+  }[stage] || ['values', 'pace'];
+  return ids.map(id => ({id, label: TOPICS[id][0]}));
 }
 
 export function render(ctx) {
@@ -67,8 +57,9 @@ export function render(ctx) {
           ${qa.actionLabel ? `<button type="button" class="p-bubble-action" data-goto>${safe(qa.actionLabel)} <span aria-hidden="true">→</span></button>` : ''}
         </div>` : ''}
     </div>
-    ${data.date_context ? `<section class="card"><h2>${data.date_context.date_number>1?'Your next date':'Your first date'}</h2><p>${safe(data.date_context.focus||'')}</p><p>${safe(data.date_context.when||'Choose a shared time when you are both ready.')}</p>${(data.date_context.prompts||[]).map(p=>`<details><summary>${safe(p.title)}</summary><p>${safe(p.body)}</p></details>`).join('')}</section>`:''}
-    <div class="p-quick-replies">${chips.map((c) => `<button type="button" class="p-quick-reply" data-chip="${safe(c.id)}">${safe(c.label)}</button>`).join('')}</div>`;
+    <div class="p-quick-replies">${chips.map((c) => `<button type="button" class="p-quick-reply" data-chip="${safe(c.id)}">${safe(c.label)}</button>`).join('')}</div>
+    <button type="button" class="secondary" data-chip="support">Something doesn’t feel right?</button>`;
+
 }
 
 // The one place every chip's question+answer+action gets decided — a plain
@@ -77,6 +68,15 @@ export function render(ctx) {
 // reach-counts fetcher) so it's testable without a DOM.
 export async function answerFor(id, data, journeySurfaces, fetchReach) {
   const eligible = (key) => journeySurfaces?.find((s) => s.key === key)?.eligible;
+  if (TOPICS[id]) {
+    const [question, text, key] = TOPICS[id];
+    const prompt = (data.date_context?.prompts || []).find(p =>
+      id === 'build' ? p.title === 'Your last Debrief' : id === 'prepare' && p.title === 'Enjoy together');
+    const target = journeySurfaces?.find(s => s.key === key);
+    return {question, answer: text + (prompt ? ' ' + prompt.body : ''),
+      actionLabel: target?.eligible && target?.request ? 'Open' : null, actionKey: key};
+  }
+
   if (id === 'what_now') {
     const dest = data.destination;
     return { question: 'What now?', answer: data.body || data.headline || '',

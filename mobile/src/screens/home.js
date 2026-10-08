@@ -99,9 +99,9 @@ export function nextUpcoming(weekSummary) {
 // ── rendering ──────────────────────────────────────────────────────────
 
 const RING_DEFS = [
-  { key: 'vision', label: 'Vision', color: 'var(--p-vision)', cta: 'Finish vision' },
+  { key: 'vision', label: 'Vision', color: 'var(--p-vision)', cta: 'Review Vision' },
   { key: 'stats', label: 'Stats', color: 'var(--p-success)', cta: 'Edit stats' },
-  { key: 'chemistry', label: 'Chemistry', color: 'var(--p-grad2)', cta: 'Answer next' },
+  { key: 'chemistry', label: 'Chemistry', color: 'var(--p-grad2)', cta: 'Review Chemistry' },
 ];
 
 // Which ring's detail card is showing — module-level like reach.js's
@@ -130,7 +130,7 @@ function ringTiles(key, ctx) {
     // "2 of 4" is a real, complete Vision, not an unfinished one, so the
     // summary never frames the other two as owed ("of 4 possible", never
     // "of 4 set" or a bare fraction that reads like a completion score).
-    return { tiles, summary: `${answered} of ${total} possible pillars` };
+    return { tiles, summary: f.data.template_label || 'Your own Vision' };
   }
   if (key === 'chemistry') {
     const f = folds.chemistry;
@@ -138,7 +138,7 @@ function ringTiles(key, ctx) {
     if (!f.data) return { blocked: 'This isn’t available right now.' };
     const { answered, total } = chemistryProgress(f.data);
     const tiles = (f.data.activity_options || []).slice(0, 4).map((a) => ({ key: a, value: f.data.activities?.[a] || 'Not answered' }));
-    return { tiles, summary: `${total - answered} prompts left` };
+    return { tiles, summary: 'Interests & openness' };
   }
   // stats
   const rows = statsSummary?.rows || [];
@@ -146,7 +146,7 @@ function ringTiles(key, ctx) {
   const verified = DASHBOARD_STAT_ROWS.filter(([k]) => byKey.get(k)?.group === 'verified').slice(0, 4);
   const tiles = verified.map(([k, label]) => ({ key: label, value: byKey.get(k)?.check === 'verified' ? `✓ ${safe(byKey.get(k).value ?? '')}` : String(byKey.get(k)?.value ?? '—') }));
   const { answered, total } = statsProgress(statsSummary);
-  return { tiles, summary: answered === total ? 'All verified' : `${answered}/${total} verified` };
+  return { tiles, summary: 'About you' };
 }
 
 // Home follows the server action, not a schedule timestamp that may belong to another task.
@@ -156,7 +156,7 @@ export function nextUpCard(journey, weekSummary) {
   const dest = action.destination;
   return {
     title: action.headline || action.body,
-    body: action.body || '',
+    body: action.body === action.headline ? '' : action.body || '',
     eyebrowTime: null,
     actionable: !!(dest && dest.eligible && dest.request),
     destinationKey: dest?.key,
@@ -171,11 +171,6 @@ export function render(ctx) {
   const indicator = journey.stage_indicator;
   const nextUp = nextUpCard(journey, weekSummary);
 
-  const ringProgress = {
-    vision: visionProgress(folds.vision.data),
-    stats: statsProgress(statsSummary),
-    chemistry: chemistryProgress(folds.chemistry.data),
-  };
   const detail = ringTiles(selectedRing, ctx);
   const ringDef = RING_DEFS.find((r) => r.key === selectedRing);
   const editorOpen = selectedRing === 'stats' ? !!dashboardStats : !!folds[selectedRing]?.open;
@@ -196,23 +191,23 @@ export function render(ctx) {
     </div>` : ''}
 
     ${nextUp ? (nextUp.actionable ? `<button type="button" id="p-next-up" class="p-next-up" data-destination="${safe(nextUp.destinationKey || '')}">
-        <div><div class="p-next-up-eyebrow">NEXT UP${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div><p>${safe(nextUp.body)}</p></div>
+        <div><div class="p-next-up-eyebrow">YOUR STATUS${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div><p>${safe(nextUp.body)}</p></div>
         <span aria-hidden="true" class="p-next-up-arrow">→</span>
       </button>` : `<div class="p-next-up p-next-up-static">
-        <div><div class="p-next-up-eyebrow">NEXT UP${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div><p>${safe(nextUp.body)}</p></div>
+        <div><div class="p-next-up-eyebrow">YOUR STATUS${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div><p>${safe(nextUp.body)}</p></div>
       </div>`) : '<div class="p-card p-next-up-empty">Nothing due — enjoy your week</div>'}
 
+    <button type="button" class="secondary" id="home-guru">Explore with Guru</button>
     <div class="p-rings-row">
       ${RING_DEFS.map((r) => `<button type="button" class="p-ring-btn ${selectedRing === r.key ? 'is-selected' : ''}" data-ring="${r.key}">
-        <div class="p-ring" style="background:${ringGradient(ringProgress[r.key].pct, r.color, 'var(--p-track)')}">
-          <div class="p-ring-inner">${r.key === 'chemistry' ? safe(`${ringProgress[r.key].pct}%`) : safe(`${ringProgress[r.key].answered}/${ringProgress[r.key].total}`)}</div>
+        <div class="p-ring" style="background:${r.color}">
+          <div class="p-ring-inner">${r.label[0]}</div>
         </div>
         <span class="p-ring-label">${r.label}</span>
       </button>`).join('')}
     </div>
 
     <div class="p-detail-card">
-      ${selectedRing === 'vision' ? `<p class="hint">${safe(folds.vision.data?.template_label || 'BYOB — your Vision')}</p>` : ''}
       <div class="p-detail-head"><span class="p-detail-title">${ringDef.label}</span><span class="p-detail-summary">${safe(detail.summary || '')}</span></div>
       ${detail.blocked ? `<p class="hint">${safe(detail.blocked)}</p>` : `<div class="p-fact-grid">${(detail.tiles || []).map((t) => `<div class="p-fact-tile"><div class="p-fact-key">${safe(t.key)}</div><div class="p-fact-value">${safe(t.value)}</div></div>`).join('')}</div>`}
       ${!detail.blocked ? (editorOpen ? '' : `<button type="button" class="p-outline-cta" data-open-editor="${selectedRing}">${ringDef.cta} <span aria-hidden="true">→</span></button>`) : ''}
@@ -245,6 +240,7 @@ function renderFoldBody(key, ctx) {
 export function bind(root, ctx) {
   const { run, session, navigateTo, folds, dashboardStats } = ctx;
 
+  root.querySelector('#home-guru')?.addEventListener('click', () => navigateTo('guru'));
   root.querySelector('#personal-open')?.addEventListener('click',()=>run(async()=>{personalData=personalData?null:await session.get('/api/v1/profile/personal');}));
   root.querySelector('#identity-open')?.addEventListener('click',()=>ctx.navigateTo('identity'));
   if(personalData) personal.bind(root,{...ctx,data:personalData,patch:next=>{personalData=next;}});

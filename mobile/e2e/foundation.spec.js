@@ -273,26 +273,13 @@ test('Guru: quick replies answer from the same guidance response the dashboard r
   // of paragraphs.
   await expect(page.locator('.p-bubble-user')).toHaveCount(0);
 
-  await page.getByRole('button',{name:'What now?'}).click();
-  await expect(page.locator('.p-bubble-user')).toHaveText('What now?');
-  await expect(page.getByText('Take a moment to review your profile')).toBeVisible();
-  await page.getByRole('button',{name:/See this week|Continue/}).click();
-  await expect(page.getByText('This week',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'How matching works',exact:true}).click();
+  await expect(page.locator('.p-bubble-user')).toHaveText('How matching works');
+  await expect(page.locator('.p-bubble-guru')).toContainText('both people');
+  await expect(page.getByRole('button',{name:'Reflect on your date',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Something doesn’t feel right?',exact:true}).click();
+  await expect(page.locator('.p-bubble-guru')).toContainText('decline');
 
-  await tabbar(page).getByRole('button',{name:'Guru'}).click();
-  await page.getByRole('button',{name:'How Dating works'}).click();
-  await expect(page.getByText(/Every yes here is a real yes\..*there is no searching or swiping\./)).toBeVisible();
-  // §10/§4 hard constraint 5: never an escalation suggestion.
-  await expect(page.locator('.p-guru-thread')).not.toContainText([/invite|share your (number|contact)|go steady/i]);
-
-  await page.getByRole('button',{name:'Why so few matches?'}).click();
-  await expect(page.getByText('1 of 6 who fit you are open to you. These are reciprocal filter counts, not guaranteed matches. Review your preferences only if you want to.')).toBeVisible();
-  await page.getByRole('button',{name:'Open Reach'}).click();
-  await expect(page.getByText('REACH · THIS WEEK')).toBeVisible();
-
-  await tabbar(page).getByRole('button',{name:'Guru'}).click();
-  await page.getByRole('button',{name:'Before we meet'}).click();
-  await expect(page.getByText('Arrive on time')).toBeVisible();
 });
 
 test('Home: three rings reflect real Vision/Stats/Chemistry progress, and each opens its own existing edit flow',async({page})=>{
@@ -307,8 +294,8 @@ test('Home: three rings reflect real Vision/Stats/Chemistry progress, and each o
   // A fraction, not a percentage — Vision has no "100%" target (Intimacy
   // plus any ONE more already satisfies every rule), so a smaller valid
   // choice must never read as an unfinished profile.
-  await expect(page.locator('[data-ring="vision"] .p-ring-inner')).toHaveText('3/4');
-  await expect(page.locator('.p-detail-summary')).toContainText('3 of 4 possible pillars');
+  await expect(page.locator('[data-ring="vision"] .p-ring-inner')).toHaveText('V');
+  await expect(page.locator('.p-detail-summary')).toContainText('BYOB');
   await expect(page.locator('.p-detail-title')).toHaveText('Vision');
   await expect(page.locator('.p-fact-tile',{hasText:'Intimacy'})).toContainText('Emotional');
   await page.locator('[data-open-editor]').click(); // "Finish vision →"
@@ -319,7 +306,7 @@ test('Home: three rings reflect real Vision/Stats/Chemistry progress, and each o
   // Stats ring: the same inline stats editor as before, just reached here.
   await page.locator('[data-ring="stats"]').click();
   await expect(page.locator('.p-detail-title')).toHaveText('Stats');
-  await expect(page.locator('[data-ring="stats"] .p-ring-inner')).toHaveText('5/5');
+  await expect(page.locator('[data-ring="stats"] .p-ring-inner')).toHaveText('S');
   await expect(page.locator('.p-fact-tile',{hasText:'Age'})).toContainText('✓');
   await page.locator('[data-open-editor]').click(); // "Edit stats →"
   await expect(page.locator('#dashboard-stats-form')).toBeVisible();
@@ -332,7 +319,7 @@ test('Home: three rings reflect real Vision/Stats/Chemistry progress, and each o
   // Chemistry ring.
   await page.locator('[data-ring="chemistry"]').click();
   await expect(page.locator('.p-detail-title')).toHaveText('Chemistry');
-  await expect(page.locator('[data-ring="chemistry"] .p-ring-inner')).toHaveText('50%');
+  await expect(page.locator('[data-ring="chemistry"] .p-ring-inner')).toHaveText('C');
   await page.locator('[data-open-editor]').click(); // "Answer next →"
   await expect(page.getByRole('button',{name:'Save chemistry'})).toBeVisible();
   // "Board games" has no pick yet in the fixture — answering it is a NEW
@@ -349,7 +336,7 @@ test('Home: three rings reflect real Vision/Stats/Chemistry progress, and each o
   await tabbar(page).getByRole('button',{name:'Week'}).click();
   await tabbar(page).getByRole('button',{name:'Home'}).click();
   await page.locator('[data-ring="chemistry"]').click();
-  await expect(page.locator('[data-ring="chemistry"] .p-ring-inner')).toHaveText('58%');
+  await expect(page.locator('[data-ring="chemistry"] .p-ring-inner')).toHaveText('C');
 });
 
 test('REACH: hero ring, filter chips, and the picker sheet for a slider (road-fixes-clock-spec.md §3, §5; round4-fixes-spec.md §3)',async({page})=>{
