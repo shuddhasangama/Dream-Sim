@@ -1,3 +1,13 @@
+import { renderNavigator, bindNavigator } from './guruNavigator.js';
+
+export async function load(session) {
+  const guidance = await session.get('/api/v1/guidance');
+  let navigator;
+  try { navigator = await session.get('/api/v1/guru/state'); }
+  catch (error) { if (![404,503].includes(error.status)) throw error; }
+  return {...guidance, navigator};
+}
+
 // Short, stage-specific guidance. Navigation always respects API eligibility.
 let qa = null; // { question, answer, actionLabel, actionKey }
 // GET /api/v1/reach's counts, fetched once per Guru visit the first time
@@ -58,7 +68,7 @@ export function render(ctx) {
         </div>` : ''}
     </div>
     <div class="p-quick-replies">${chips.map((c) => `<button type="button" class="p-quick-reply" data-chip="${safe(c.id)}">${safe(c.label)}</button>`).join('')}</div>
-    <button type="button" class="secondary" data-chip="support">Something doesn’t feel right?</button>`;
+    <button type="button" class="secondary" data-chip="support">Something doesn’t feel right?</button>${renderNavigator(data.navigator, safe)}`;
 
 }
 
@@ -113,6 +123,7 @@ export async function answerFor(id, data, journeySurfaces, fetchReach) {
 }
 
 export function bind(root, ctx) {
+  bindNavigator(root, ctx);
   const { data, navigateTo, run, session, journey } = ctx;
   root.querySelectorAll('[data-chip]').forEach((btn) => btn.addEventListener('click', () => run(async () => {
     const next = await answerFor(btn.dataset.chip, data, journey?.surfaces, () => session.get('/api/v1/reach'));

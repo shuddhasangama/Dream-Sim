@@ -1,10 +1,10 @@
 // Date feedback (§2.5). Flag/decision options come from DateDebrief's own
 // green_flag_options/red_flag_options/decision_options — never a hardcoded
 // list. flagsValid() is the one bit of this screen worth unit-testing on
-// its own (exactly two green flags, up to two red).
+// its own (at least two green flags, up to two red).
 
 export function flagsValid(green, red) {
-  return Array.isArray(green) && green.length === 2 && Array.isArray(red) && red.length <= 2;
+  return Array.isArray(green) && green.length >= 2 && green.length <= 20 && Array.isArray(red) && red.length <= 2;
 }
 
 const DECISION_COPY = {
@@ -19,14 +19,15 @@ export function render(ctx) {
   const f = data.my_feedback;
   const needsFlags = !flagsValid(f.green_flags, f.red_flags);
 
-  if (!data.feedback_open) {
+  if (!data.feedback_open && !f.decision) {
     return `<section class="intro"><span class="eyebrow">DEBRIEF</span><h1>Not open yet</h1></section><section class="card"><p>Feedback opens ${safe(data.opens_at)}.</p></section>`;
   }
   if (needsFlags) {
     return `<section class="intro"><span class="eyebrow">DEBRIEF</span><h1>How did it go?</h1><p>Guru · Save what you noticed, then choose your next step.</p></section>
       <section class="card"><form id="flags-form">
-        <div class="field"><label>Pick exactly 2 green flags</label><div class="flag-grid" data-max="2">${(data.green_flag_options || []).map((g) => `<button type="button" class="flag" data-group="green" data-value="${safe(g)}">${safe(g)}</button>`).join('')}</div></div>
+        <div class="field"><label>Pick at least 2 green flags</label><div class="flag-grid" data-max="20">${(data.green_flag_options || []).map((g) => `<button type="button" class="flag" data-group="green" data-value="${safe(g)}">${safe(g)}</button>`).join('')}</div></div>
         <div class="field"><label>Up to 2 red flags — optional</label><div class="flag-grid red" data-max="2">${(data.red_flag_options || []).map((r) => `<button type="button" class="flag" data-group="red" data-value="${safe(r)}">${safe(r)}</button>`).join('')}</div></div>
+        ${['green','red'].map(group => `<div class="field"><label for="custom-${group}">Add a ${group} flag</label><input id="custom-${group}" maxlength="16" placeholder="Up to 16 characters"><button type="button" class="secondary" data-add-flag="${group}">Add</button></div>`).join('')}
         <label class="checkbox-row"><input type="checkbox" name="together_photo"> We took a selfie together</label>
         <label class="checkbox-row"><input type="checkbox" name="bill_photo"> We photographed the bill</label>
         <button class="primary" type="submit" disabled>Save feedback</button>
@@ -56,12 +57,28 @@ export function bind(root, ctx) {
   const picked = { green: new Set(), red: new Set() };
   const submitBtn = root.querySelector('#flags-form button[type="submit"]');
   const syncEnabled = () => { if (submitBtn) submitBtn.disabled = !flagsValid([...picked.green], [...picked.red]); };
-  root.querySelectorAll('.flag').forEach((btn) => btn.addEventListener('click', () => {
+  const bindFlag = (btn) => btn.addEventListener('click', () => {
     const group = picked[btn.dataset.group];
     const max = Number(btn.closest('.flag-grid').dataset.max);
     if (group.has(btn.dataset.value)) { group.delete(btn.dataset.value); btn.classList.remove('picked'); }
     else if (group.size < max) { group.add(btn.dataset.value); btn.classList.add('picked'); if (btn.dataset.group === 'red') btn.classList.add('red'); }
     syncEnabled();
+  });
+  root.querySelectorAll('.flag').forEach(bindFlag);
+  root.querySelectorAll('[data-add-flag]').forEach(btn => btn.addEventListener('click', () => {
+    const group = btn.dataset.addFlag;
+    const input = root.querySelector(`#custom-${group}`);
+    const value = input.value.trim();
+    const grid = root.querySelector(group === 'red' ? '.flag-grid.red' : '.flag-grid');
+    if (!value || [...value].length > 16 || picked[group].size >= Number(grid.dataset.max)) return;
+    let chip = [...grid.querySelectorAll('.flag')].find(x => x.dataset.value === value);
+    if (!chip) {
+      chip = document.createElement('button'); chip.type = 'button'; chip.className = 'flag';
+      chip.dataset.group = group; chip.dataset.value = value; chip.textContent = value;
+      grid.appendChild(chip); bindFlag(chip);
+    }
+    if (!picked[group].has(value)) chip.click();
+    input.value = '';
   }));
 
   root.querySelector('#flags-form')?.addEventListener('submit', (e) => {

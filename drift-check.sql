@@ -426,7 +426,18 @@ WITH expected(table_name, column_name) AS (VALUES
   ('IdentityEvent','capture_id'),
   ('IdentityEvent','action'),
   ('IdentityEvent','created_at'),
-  ('IdentityEvent','details')
+  ('IdentityEvent','details'),
+  ('GuruPrivate','id'),
+  ('GuruPrivate','binding'),
+  ('GuruPrivate','payload'),
+  ('GuruDiscussion','id'),
+  ('GuruDiscussion','scope_id'),
+  ('GuruDiscussion','scope_kind'),
+  ('GuruDiscussion','user_a'),
+  ('GuruDiscussion','user_b'),
+  ('GuruDiscussion','binding_a'),
+  ('GuruDiscussion','binding_b'),
+  ('GuruDiscussion','payload')
 )
 SELECT e.table_name, e.column_name,
        CASE WHEN t.table_name IS NULL THEN 'TABLE MISSING' ELSE 'COLUMN MISSING' END AS problem

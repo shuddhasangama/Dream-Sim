@@ -105,9 +105,9 @@ def finish(conn, pair, plan, kind, uid, clock, *, count=False):
 
 def flags(conn, uid, pid, body, clock, epoch):
     green, red = body.get('green_flags'), body.get('red_flags')
-    for values, options, lower, upper in ((green,guru_dating.GREEN_FLAGS,2,2),(red,guru_dating.RED_FLAGS,0,2)):
-        if not isinstance(values,list) or any(not isinstance(v,str) for v in values) or len(values)!=len(set(values)) or not lower<=len(values)<=upper or any(v not in options for v in values):
-            raise ApiError('validation_error', 'Select two valid green flags and up to two distinct red flags.')
+    for values, options, lower, upper in ((green,guru_dating.GREEN_FLAGS,2,guru_dating.MAX_GREEN_FLAGS),(red,guru_dating.RED_FLAGS,0,2)):
+        if not isinstance(values,list) or any(not isinstance(v,str) for v in values) or len(values)!=len(set(values)) or not lower<=len(values)<=upper or any(not guru_dating.valid_flag(v, options) for v in values):
+            raise ApiError('validation_error', 'Select at least two green flags and up to two red flags. Custom flags: 16 characters maximum.')
     if any(type(body.get(key,False)) is not bool for key in ('together_photo','bill_photo')):
         raise ApiError('validation_error', 'Photo consent values must be booleans.')
     captured = guru_dating.capture_flags(green,red)

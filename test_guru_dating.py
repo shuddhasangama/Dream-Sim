@@ -92,9 +92,9 @@ class CaptureFlagsTests(unittest.TestCase):
         result = capture_flags([], [])
         self.assertFalse(result["meets_minimum"])
 
-    def test_green_flags_capped_at_two(self) -> None:
+    def test_green_flags_allow_more_than_two(self) -> None:
         result = capture_flags(list(GREEN_FLAGS), [])
-        self.assertEqual(len(result["green"]), 2)
+        self.assertEqual(len(result["green"]), len(GREEN_FLAGS))
 
     def test_red_flags_optional_and_capped_at_two(self) -> None:
         result = capture_flags(GREEN_FLAGS[:2], list(RED_FLAGS))
@@ -103,10 +103,10 @@ class CaptureFlagsTests(unittest.TestCase):
         self.assertEqual(empty_red["red"], [])
         self.assertTrue(empty_red["meets_minimum"])  # red is never required
 
-    def test_unknown_labels_are_dropped(self) -> None:
+    def test_short_custom_labels_are_retained(self) -> None:
         result = capture_flags(["Not a real flag", GREEN_FLAGS[0]], ["Also not real"])
-        self.assertEqual(result["green"], [GREEN_FLAGS[0]])
-        self.assertEqual(result["red"], [])
+        self.assertEqual(result["green"], ["Not a real flag", GREEN_FLAGS[0]])
+        self.assertEqual(result["red"], ["Also not real"])
 
 
 class CapturePassReasonTests(unittest.TestCase):

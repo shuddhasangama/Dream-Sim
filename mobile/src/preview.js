@@ -373,6 +373,7 @@ export function previewTransport() {
     // pre_date_briefing() and journey_api.guidance()'s `also_open` — real
     // server content, not invented copy, so the mobile screen has something
     // faithful to render in preview.
+    if (path === '/api/v1/guru/state') return ok({enabled:false});
     if (path.endsWith('/guidance')) return ok({headline:'Your next chapter starts here',body:'Take a moment to review your profile before meeting someone new.',cta:'See this week',
       destination:{key:'week',eligible:true,blocked_reason:null,api_available:true,request:{method:'GET',path:'/api/v1/week'}},
       also_open: [

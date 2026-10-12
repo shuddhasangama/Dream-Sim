@@ -117,21 +117,21 @@ RED_FLAGS = [
 ]
 
 MIN_GREEN_FLAGS = 2
-MAX_GREEN_FLAGS = 2
+MAX_GREEN_FLAGS = 20
+CUSTOM_FLAG_LIMIT = 16
 MAX_RED_FLAGS = 2
 
 
+def valid_flag(value, options):
+    return isinstance(value, str) and (value in options or (
+        0 < len(value) <= CUSTOM_FLAG_LIMIT and value == value.strip()
+        and all(ch.isprintable() for ch in value)))
+
+
 def capture_flags(green: list[str], red: list[str]) -> dict[str, Any]:
-    """Validates and caps one partner's flag picks. Green: exactly
-    MIN_GREEN_FLAGS-MAX_GREEN_FLAGS valid entries (both currently 2 — see
-    the module comment above for why it's mandatory). Red: up to
-    MAX_RED_FLAGS, always optional. Unknown labels and anything past the
-    cap are silently dropped rather than raising — app.py is responsible
-    for gating the actual submit button on `meets_minimum` in the UI,
-    this just guarantees the stored data is never malformed even if that
-    gate is somehow bypassed."""
-    green_valid = [g for g in green if g in GREEN_FLAGS][:MAX_GREEN_FLAGS]
-    red_valid = [r for r in red if r in RED_FLAGS][:MAX_RED_FLAGS]
+    """Keep distinct known flags or short custom observations; red is optional."""
+    green_valid = list(dict.fromkeys(g for g in green if valid_flag(g, GREEN_FLAGS)))[:MAX_GREEN_FLAGS]
+    red_valid = list(dict.fromkeys(r for r in red if valid_flag(r, RED_FLAGS)))[:MAX_RED_FLAGS]
     return {"green": green_valid, "red": red_valid, "meets_minimum": len(green_valid) >= MIN_GREEN_FLAGS}
 
 

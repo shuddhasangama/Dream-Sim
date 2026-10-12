@@ -5,11 +5,11 @@ import { legalAction } from '../src/screens/ceremony.js';
 
 // §2.5: "Exactly two green flags and up to two red flags required before
 // submitting."
-test('flagsValid requires exactly two green flags', () => {
+test('flagsValid requires at least two green flags', () => {
   assert.equal(flagsValid([], []), false);
   assert.equal(flagsValid(['a'], []), false);
   assert.equal(flagsValid(['a', 'b'], []), true);
-  assert.equal(flagsValid(['a', 'b', 'c'], []), false);
+  assert.equal(flagsValid(['a', 'b', 'c'], []), true);
 });
 
 test('flagsValid allows zero, one, or two red flags but never three', () => {

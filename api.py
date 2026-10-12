@@ -29,6 +29,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         evolution_api.register(api, **evolution)
         import identity_capture
         identity_capture.register(api, evolution['get_db'])
+        import guru_navigator
+        guru_navigator.register(api, evolution['get_db'], journey_state)
     if planning is not None:
         import planning_api
         planning_api.register(api, **planning)

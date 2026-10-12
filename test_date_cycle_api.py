@@ -32,6 +32,17 @@ class DateCycleApiTests(RouteTestCase):
     def decision(self,who,choice='continue',path=None):
         return self.request((path or self.path)+'/feedback/decision',uid=who,method='POST',body={'decision':choice})
 
+    def test_custom_flags_limits_and_private_storage(self):
+        greens=guru_dating.GREEN_FLAGS[:3]+['Thoughtful']
+        r=self.flags('owner',green_flags=greens,red_flags=['Interrupts'])
+        self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(r.json['data']['my_feedback']['green_flags'],greens)
+        self.assertNotIn('Thoughtful',self.request(self.path+'/feedback',uid='partner').get_data(as_text=True))
+        self.assertEqual(self.flags('owner',green_flags=['x'*17,'Kind']).status_code,400)
+        self.assertEqual(self.flags('owner',red_flags=['A','B','C']).status_code,400)
+        self.assertEqual(self.flags('owner',green_flags=['One']).status_code,400)
+        self.assertEqual(self.flags('owner',green_flags=['A','A']).status_code,400)
+
     def test_two_dates_preserve_history_and_stale_retries_do_not_touch_new_cycle(self):
         for who in ('owner','partner'):
             self.assertEqual(self.flags(who).status_code,200)

@@ -70,10 +70,10 @@
 {% set my_green = outcome[my_role + "_green_flags"] if outcome else [] %}
 {% if my_green|length < 2 %}
 <div class="card">
-  <div class="micro">How was the date? Pick exactly 2 green flags — this comes first, whatever you end up deciding.</div>
+  <div class="micro">How was the date? Pick at least 2 green flags — this comes first, whatever you end up deciding.</div>
   <form method="post" action="{{ url_for('plan_feedback_flags') }}">
 <input type="hidden" name="plan_id" value="{{ plan.id }}">
-    <div class="micro section-label" style="margin-top:10px;color:var(--mint);">Green flags — pick 2</div>
+    <div class="micro section-label" style="margin-top:10px;color:var(--mint);">Green flags — pick at least 2</div>
     <div class="day-picker">
       {% for f in green_flags %}
       <label class="day-check"><input type="checkbox" name="green_flags" value="{{ f }}">{{ f }}</label>
@@ -85,6 +85,8 @@
       <label class="day-check"><input type="checkbox" name="red_flags" value="{{ f }}">{{ f }}</label>
       {% endfor %}
     </div>
+    <label>Other green flag <input name="custom_green_flag" maxlength="16" placeholder="Up to 16 characters"></label>
+    <label>Other red flag <input name="custom_red_flag" maxlength="16" placeholder="Up to 16 characters"></label>
     <div class="micro section-label" style="margin-top:10px;">Proof of date — optional</div>
     <label class="checkbox-row"><input type="checkbox" name="together_photo"> We took a selfie together</label>
     <label class="checkbox-row"><input type="checkbox" name="bill_photo"> We photographed the bill</label>

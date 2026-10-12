@@ -1640,7 +1640,8 @@ def plan_feedback_flags():
     pid = _feedback_plan_id()
     if not pid:
         return redirect(url_for(_feedback_back()))
-    body = {'green_flags':request.form.getlist('green_flags'),'red_flags':request.form.getlist('red_flags'),
+    body = {'green_flags':request.form.getlist('green_flags') + ([request.form['custom_green_flag'].strip()] if request.form.get('custom_green_flag','').strip() else []),
+            'red_flags':request.form.getlist('red_flags') + ([request.form['custom_red_flag'].strip()] if request.form.get('custom_red_flag','').strip() else []),
             'together_photo':'together_photo' in request.form,'bill_photo':'bill_photo' in request.form}
     try:
         date_cycle_service.flags(get_db(),current_user()['user_id'],pid,body,get_clock(),WEEK_ONE_MONDAY)

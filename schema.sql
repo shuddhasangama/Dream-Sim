@@ -916,3 +916,21 @@ CREATE TABLE IF NOT EXISTS "IdentityEvent" (
     created_at TEXT NOT NULL,
     details TEXT NOT NULL DEFAULT ''
 );
+
+-- Guru stores encrypted private notes and explicitly shared discussions separately.
+CREATE TABLE IF NOT EXISTS "GuruPrivate" (
+    id TEXT PRIMARY KEY REFERENCES "User"(id),
+    binding TEXT NOT NULL,
+    payload TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "GuruDiscussion" (
+    id TEXT PRIMARY KEY,
+    scope_id TEXT NOT NULL,
+    scope_kind TEXT NOT NULL,
+    user_a TEXT NOT NULL REFERENCES "User"(id),
+    user_b TEXT NOT NULL REFERENCES "User"(id),
+    binding_a TEXT NOT NULL,
+    binding_b TEXT NOT NULL,
+    payload TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS guru_discussion_members ON "GuruDiscussion"(user_a, user_b);
