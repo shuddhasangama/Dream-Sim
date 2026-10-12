@@ -8,20 +8,32 @@ import vision
 from api_contract import ApiError
 
 TEMPLATES = [
- {'key':'grow','label':'Grow Together','description':'Build a shared life with children in the picture.','choices':{'Intimacy':['Emotional','Physical'],'Kids':['Naturally'],'Cohabitate':['Chores split','Expenses sharing']},'kids_intent':'want'},
- {'key':'two','label':'Two Together','description':'Build a shared life without having additional children.','choices':{'Intimacy':['Emotional'],'Cohabitate':['Chores split','Expenses sharing'],'Travel together':[]},'kids_intent':'no'},
- {'key':'explore','label':'Explore Together','description':'Connection and travel; children and cohabitation remain undecided.','choices':{'Intimacy':['Emotional'],'Travel together':[]},'kids_intent':'undecided'},
- {'key':'custom','label':'BYOB — Build Your Own Base','description':'Choose your own pillars and preferences.','choices':None,'kids_intent':'undecided'},
+ {'key':'grow','label':'Family Together','description':'Build a shared life with children in the picture.','choices':{'Intimacy':['Emotional','Physical'],'Kids':['Naturally'],'Cohabitate':['Chores split','Expenses sharing']},'kids_intent':'want'},
+ {'key':'two','label':'Two Together','description':'Build a shared life without having children.','choices':{'Intimacy':['Emotional','Physical'],'Cohabitate':['Chores split','Expenses sharing']},'kids_intent':'no'},
+ {'key':'explore','label':'Travel Together','description':'Connection and travel; children and cohabitation remain undecided.','choices':{'Intimacy':['Emotional'],'Travel together':[]},'kids_intent':'undecided'},
+ {'key':'custom','label':'Custom Together','description':'Choose your own pillars and preferences.','choices':None,'kids_intent':'undecided'},
 ]
 HEALTH = {'mobility':'Mobility disability / wheelchair use','physical':'Other physical disability','sensory':'Sensory disability','non_visible':'Non-visible disability','diabetes':'Diabetes','cancer':'Cancer / cancer history','trauma':'Trauma / mental health history','other':'Other health or accessibility needs'}
 
 def template_label(stats, goals):
     key=stats.get('vision_template','custom')
     item=next((t for t in TEMPLATES if t['key']==key),TEMPLATES[-1])
-    current={g['key']:sorted(g.get('stance') or []) for g in goals}
-    if item['choices'] is not None and current!={k:sorted(v) for k,v in item['choices'].items()}:
-        return 'BYOB — customised Vision'
-    return item['label']
+    current={g['key']:set(g.get('stance') or []) for g in goals}
+    intent=stats.get('kids_intent','undecided')
+    keys=set(current)
+    intimacy=current.get('Intimacy',set())
+    if key in ('grow','two'):
+        required={'Intimacy','Cohabitate'} | ({'Kids'} if key=='grow' else set())
+        fits=(required <= keys <= required | {'Travel together'}
+              and intimacy == {'Emotional','Physical'}
+              and intent == ('want' if key=='grow' else 'no'))
+    elif key=='explore':
+        fits=(keys=={'Intimacy','Travel together'} and intimacy=={'Emotional'}
+              and intent=='undecided')
+    else:
+        fits=True
+    return item['label'] if fits else 'Custom Together'
+
 
 def health_fits(a,b):
     """Only consented disclosures are considered; missing is explicitly unknown."""

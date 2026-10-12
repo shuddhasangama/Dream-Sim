@@ -7,6 +7,21 @@ import profile_choices as choices
 from test_week_api import WeekApiTests
 
 class ProfileChoicesTests(WeekApiTests):
+    def test_agreed_template_combinations_and_optional_travel(self):
+        for key in ('grow','two'):
+            response=self.request('/profile/vision/template',method='PUT',body={'template':key,'travel':True})
+            self.assertEqual(response.status_code,200,response.json)
+            row=db.fetch_one(self.conn,'User',id='owner')
+            goals=json.loads(row['vision_json'])
+            mapped={g['key']:g['stance'] for g in goals}
+            self.assertEqual(set(mapped['Intimacy']),{'Emotional','Physical'})
+            self.assertIn('Travel together',mapped)
+            self.assertEqual(choices.template_label(json.loads(row['stats_json']),goals),
+                             'Family Together' if key=='grow' else 'Two Together')
+        self.assertNotIn('Travel together',choices.TEMPLATES[1]['choices'])
+        self.assertEqual(choices.template_label({'vision_template':'two','kids_intent':'no'},
+                          [{'key':'Intimacy','stance':['Emotional']}]),'Custom Together')
+
     def personal(self,**kw):
         return dict(categories=[],share_health=False,note='',openness='any',open_categories=[],include_undisclosed=True,ethnicity=[],**kw)
 

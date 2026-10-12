@@ -42,7 +42,7 @@ export function render(ctx) {
       <p>Templates set your pillars. Review the choices before saving. These preferences never imply consent to an activity.</p>
       <form id="vision-template-form">
       <label>Starting point<select name="template">${(data.presets || []).filter(p=>p.key!=='marriage').map(p=>`<option value="${safe(p.key)}" ${p.key===(data.template_key||'custom')?'selected':''}>${safe(p.label)} — ${safe(p.description)}</option>`).join('')}</select></label>
-      <div id="template-preview"></div>
+      <div id="template-preview"></div><label id="optional-travel" hidden><input type="checkbox" name="travel"> Travel together (optional)</label>
       <div id="custom-pillars" hidden>
       ${element_keys.map(k=>`<fieldset><legend><label><input type="checkbox" name="pillar" value="${safe(k)}" ${byKey.has(k)?'checked':''}> ${safe(k)}</label></legend>${(pillar_options[k]||[]).map(o=>`<label class="checkbox-row"><input type="checkbox" data-pillar-choice="${safe(k)}" value="${safe(o)}" ${stanceOf(byKey.get(k)||{}).includes(o)?'checked':''}> ${safe(o)}</label>`).join('')}</fieldset>`).join('')}
       <label>Future children<select name="kids_intent">${[['undecided','Undecided'],['open','Open to children'],['want','Want children'],['no','Do not want additional children']].map(([k,l])=>`<option value="${k}" ${data.kids_intent===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
@@ -86,6 +86,7 @@ export function bind(root, ctx) {
   const templateForm=root.querySelector('#vision-template-form');
   const showTemplate=()=>{
     const item=(data.presets||[]).find(p=>p.key===templateForm.elements.template.value);
+    root.querySelector('#optional-travel').hidden=!['grow','two'].includes(item?.key);
     root.querySelector('#custom-pillars').hidden=item?.key!=='custom';
     root.querySelector('#template-preview').textContent=item?.choices ? Object.entries(item.choices).map(([k,v])=>k+(v.length?': '+v.join(', '):'')).join(' · ') : 'Customise your pillars below.';
   };
@@ -94,7 +95,7 @@ export function bind(root, ctx) {
   templateForm?.addEventListener('submit',e=>{e.preventDefault();run(async()=>{
     const form=new FormData(templateForm), pillars={};
     for(const k of form.getAll('pillar')) pillars[k]=[...templateForm.querySelectorAll('[data-pillar-choice]')].filter(el=>el.dataset.pillarChoice===k&&el.checked).map(el=>el.value);
-    try { patch({...await session.put('/api/v1/profile/vision/template',{template:form.get('template'),pillars,kids_intent:form.get('kids_intent')}),_saved:true}); }
+    try { patch({...await session.put('/api/v1/profile/vision/template',{template:form.get('template'),pillars,kids_intent:form.get('kids_intent'),travel:form.has('travel')}),_saved:true}); }
     catch(e){patch({...data,_error:e.message,_saved:false});}
   });});
 

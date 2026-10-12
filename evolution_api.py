@@ -172,7 +172,7 @@ def register(api,get_db,get_clock,stats_situation,milestones):
 
     @api.put('/profile/vision/template')
     def vision_template_write():
-        body=json_object(required={'template'},optional={'pillars','kids_intent'})
+        body=json_object(required={'template'},optional={'pillars','kids_intent','travel'})
         item=next((t for t in profile_choices.TEMPLATES if t['key']==body['template']),None)
         if not item: raise ApiError('validation_error','Choose a listed Vision template.')
         with service.transaction(get_db()):
@@ -183,6 +183,10 @@ def register(api,get_db,get_clock,stats_situation,milestones):
             pillars=item['choices'] if item['choices'] is not None else body.get('pillars')
             if type(pillars) is not dict or any(type(v) is not list or any(type(x) is not str for x in v) for v in pillars.values()):
                 raise ApiError('validation_error','Provide your selected pillars and their choices.')
+            if 'travel' in body and type(body['travel']) is not bool:
+                raise ApiError('validation_error','Travel must be true or false.')
+            if item['key'] in ('grow','two') and body.get('travel',False):
+                pillars={**pillars,'Travel together':[]}
             result=vision.validate_pillars(pillars)
             if not result['ok']: raise ApiError('validation_error',result['error'])
             intent=item['kids_intent'] if item['choices'] is not None else body.get('kids_intent','undecided')

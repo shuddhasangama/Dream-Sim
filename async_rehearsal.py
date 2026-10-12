@@ -103,6 +103,13 @@ def snapshot(conn, uid):
     metadata = {'enabled': True, 'scope': 'pair', 'stage': 'matching',
                 'message': 'Test mode: match choices stay open. Mutual interest is required before planning.',
                 'request': None, 'decisions_automated': False}
+    # A finished pairing must not masquerade as an unfinished introduction.
+    ended = [r for r in db.fetch_all(conn, 'LockIn')
+             if uid in (r['user_a'], r['user_b']) and r['status']=='released']
+    if not active and ended:
+        latest=max(ended,key=lambda r:r['week'])
+        metadata.update(stage='ended', message='This pairing has ended. Ask the test organiser to reset your journey before testing again.')
+        return clock.SimulationClock.at(latest['week'], 'Sun', 21), metadata
     intro_row, intro_step, _ = intro(conn, uid)
     if not active or (intro_row and intro_step < 4 and not db.fetch_all(conn, 'DatePlan', lockin_id=active['id'])):
         row, step, remaining = intro(conn, uid)

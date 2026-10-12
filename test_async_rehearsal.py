@@ -34,6 +34,17 @@ class AsyncRehearsalTests(RouteTestCase):
             'BETA_DATE_SIMULATION_ENABLED':'1'})
         patch.start(); self.addCleanup(patch.stop)
 
+    def test_released_pair_does_not_return_to_like_or_availability(self):
+        auth_sessions.sql(self.conn, 'UPDATE "LockIn" SET status=?, release_reason=? WHERE id=?',
+                          ('released','rejected','lock-1'))
+        self.conn.commit()
+        point,meta=service.snapshot(self.conn,'owner')
+        self.assertEqual(meta['stage'],'ended')
+        self.assertIn('pairing has ended',meta['message'])
+        self.assertNotIn('draft_availability',meta)
+        self.assertNotIn('start_request',meta)
+        self.assertIsNone(meta['request'])
+
     def state(self, who='owner'):
         r=self.request('/journey/status',uid=who)
         self.assertEqual(r.status_code,200,r.json)
