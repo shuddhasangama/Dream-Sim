@@ -22,6 +22,18 @@
   </div>
 </div>
 
+{% elif next_step %}
+<section class="card">
+  <h2>{{ 'Choose your next step' if next_step.needs_response else 'Waiting for your partner' }}</h2>
+  <p>Date completed. {{ next_step.message }}</p>
+  <p>Discussion does not accept another date. Your choices stay saved while you take time.</p>
+  <form method="post" action="{{ url_for('debrief_next_step') }}">
+    <input type="hidden" name="plan_id" value="{{ plan.id }}">
+    {% for choice in next_step.options %}
+    <button type="submit" name="choice" value="{{ choice }}">{{ {'continue':'Yes, another date','discuss':'Discuss with Guru','end':'End this pairing'}[choice] }}</button>
+    {% endfor %}
+  </form>
+</section>
 {% elif not is_open %}
 <div class="card guru-card">
   <div class="guru-avatar">G</div>

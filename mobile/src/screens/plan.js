@@ -6,7 +6,7 @@ import { pairContext } from './pairContext.js';
 export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Date plan</h1></section><section class="card"><p>Loading…</p></section>';
-  return `<section class="intro"><span class="eyebrow">DATE PLAN</span><h1>${safe(data.status === 'confirmed' ? 'Confirmed' : 'Pending signatures')}</h1></section>
+  return `<section class="intro"><span class="eyebrow">DATE PLAN</span><h1>${safe((ctx.journey?.current_date_plan?.id === data.id && ctx.journey.current_date_plan.display_status === 'completed_awaiting_agreement') || data.status === 'completed' ? 'Date completed' : data.status === 'cancelled' ? 'Date cancelled' : data.status === 'confirmed' ? 'Confirmed' : 'Pending signatures')}</h1></section>
     ${pairContext(ctx)}
     <section class="card">
       <div class="stat-row"><span>When</span><strong>${safe(data.datetime)}</strong></div>

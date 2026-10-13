@@ -150,6 +150,11 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
         return action('Your relationship', 'Open your shared routines and next steps.',
                       'relationship_view', 'Open your relationship')
 
+    if f.get('next_step_agreement'):
+        state=f['next_step_agreement']
+        return action('Choose your next step' if state['needs_response'] else 'Waiting for your partner',
+                      state['message'], 'debrief_view', 'Review with Guru')
+
     if f.get("gate_open"):
         who = "%s has raised the next stage" % f["partner_name"] if (
             f.get("gate_raised_by_partner") and f.get("partner_name")

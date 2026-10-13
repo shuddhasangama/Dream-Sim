@@ -21,6 +21,21 @@ class GuruNavigatorTests(DateCycleApiTests):
     def topic(self):
         return self.req('state').json['data']['topics'][0]['id']
 
+    def test_mixed_intentions_shared_discussion_does_not_accept_date(self):
+        self.mixed()
+        state=self.req('state').json['data']
+        self.assertIn('intentions',[t['id'] for t in state['shared_topics']])
+        d=self.req('discussions',{'topic':'intentions'}).json['data']['discussions'][0]
+        d=self.change(d,'accept','partner').json['data']['discussions'][0]
+        d=self.change(d,'perspective',text='I want to understand our pace').json['data']['discussions'][0]
+        d=self.change(d,'perspective','partner','I would like more time').json['data']['discussions'][0]
+        d=self.change(d,'propose',text='Let us consider another date').json['data']['discussions'][0]
+        d=self.change(d,'confirm').json['data']['discussions'][0]
+        d=self.change(d,'confirm','partner').json['data']['discussions'][0]
+        self.assertEqual(d['status'],'agreed')
+        self.assertEqual(db.fetch_all(self.conn,'DateResolution'),[])
+        self.assertEqual(db.fetch_one(self.conn,'LockIn',id='lock-1')['week'],1)
+
     def test_private_encryption_memory_and_partner_isolation(self):
         topic=self.topic()
         r=self.req('private',{'action':'message','topic':topic,'text':'private concern','request_id':'once'})

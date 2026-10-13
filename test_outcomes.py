@@ -46,11 +46,11 @@ class ResolutionTests(unittest.TestCase):
     def test_both_continue_is_keep_dating(self) -> None:
         self.assertEqual(resolution(_outcome("continue", "continue")), "keep_dating")
 
-    def test_one_relationship_one_continue_is_keep_dating_not_forced(self) -> None:
+    def test_mixed_intentions_wait_for_agreement(self) -> None:
         # Only BOTH picking 'relationship' advances the stage — one side
         # wanting more dates first must not be overridden.
-        self.assertEqual(resolution(_outcome("relationship", "continue")), "keep_dating")
-        self.assertEqual(resolution(_outcome("continue", "relationship")), "keep_dating")
+        self.assertEqual(resolution(_outcome("relationship", "continue")), "awaiting_agreement")
+        self.assertEqual(resolution(_outcome("continue", "relationship")), "awaiting_agreement")
 
     def test_either_pass_is_rejected_regardless_of_the_other_side(self) -> None:
         self.assertEqual(resolution(_outcome("pass", "pass")), "rejected")
@@ -78,10 +78,11 @@ class ApplyResolutionTests(unittest.TestCase):
         self.assertFalse(result["release_lockin"])
         self.assertTrue(result["continue_dating"])
 
-    def test_mismatched_accept_also_keeps_dating(self) -> None:
+    def test_mismatched_accept_does_not_advance(self) -> None:
         result = apply_resolution(_outcome("relationship", "continue"))
         self.assertFalse(result["advance_to_relationship"])
-        self.assertTrue(result["continue_dating"])
+        self.assertFalse(result["continue_dating"])
+        self.assertFalse(result["release_lockin"])
 
     def test_pending_does_nothing(self) -> None:
         result = apply_resolution(_outcome("continue", None))

@@ -108,11 +108,12 @@ def flags(conn, uid, pid, body, clock, epoch):
     for values, options, lower, upper in ((green,guru_dating.GREEN_FLAGS,2,guru_dating.MAX_GREEN_FLAGS),(red,guru_dating.RED_FLAGS,0,2)):
         if not isinstance(values,list) or any(not isinstance(v,str) for v in values) or len(values)!=len(set(values)) or not lower<=len(values)<=upper or any(not guru_dating.valid_flag(v, options) for v in values):
             raise ApiError('validation_error', 'Select at least two green flags and up to two red flags. Custom flags: 16 characters maximum.')
-    if any(type(body.get(key,False)) is not bool for key in ('together_photo','bill_photo')):
+    if any(type(body.get(key,False)) is not bool for key in ('together_photo','bill_photo','share_feedback')):
         raise ApiError('validation_error', 'Photo consent values must be booleans.')
     captured = guru_dating.capture_flags(green,red)
     value = {'green_flags':captured['green'], 'red_flags':captured['red'],
-        'together_photo':body.get('together_photo',False),'bill_photo':body.get('bill_photo',False)}
+        'together_photo':body.get('together_photo',False),'bill_photo':body.get('bill_photo',False),
+        'share_feedback':body.get('share_feedback',False)}
     with planning.transition(conn):
         pair, plan = owned(conn,uid,pid)
         mine = submission(conn,uid,pid)
@@ -160,7 +161,7 @@ def decide(conn,uid,pid,body,clock,epoch):
         save_outcome(conn,row)
         result=outcomes.apply_resolution(row)
         kind='rejected' if choice=='pass' else result['resolution']
-        if kind!='pending':
+        if kind not in ('pending','awaiting_agreement'):
             count=all(row.get(k) in ('continue','relationship','pass') for k in ('a_decision','b_decision'))
             finish(conn,pair,plan,kind,uid,clock,count=count)
 
@@ -205,6 +206,8 @@ def reconcile(conn,uid,pid,clock,epoch):
         pair,plan=owned(conn,uid,pid)
         if receipt(conn,pid):
             return
+        if next_step_state(conn,uid,pid):
+            raise ApiError('agreement_pending','Agree on your next step; no automatic timeout applies.',409)
         mutable(conn,uid,pair,plan,clock,epoch,allow_closed=True)
         stamp=datetime.fromisoformat(plan['datetime']).date()
         date_week=(stamp-epoch).days//7+1
@@ -216,3 +219,41 @@ def reconcile(conn,uid,pid,clock,epoch):
                 row[role+'_decision']='ghosted'
         save_outcome(conn,row)
         finish(conn,pair,plan,outcomes.resolution(row),uid,clock)
+
+
+def next_step_state(conn, uid, pid):
+    pair, plan = owned(conn, uid, pid)
+    if receipt(conn,pid) or pair['status']!='active' or plan['status']!='confirmed':
+        return None
+    row=outcome(conn,pid)
+    if outcomes.resolution(row)!='awaiting_agreement':
+        return None
+    role='a' if pair['user_a']==uid else 'b'
+    needs_response=row[role+'_decision']=='relationship'
+    return {'needs_response':needs_response,
+            'message':('Your match would like another date before moving forward. Would you like another date too?'
+                       if needs_response else 'Your match asked for a relationship. Waiting for their agreement to another date.'),
+            'my_response':submission(conn,uid,pid).get('next_step'),
+            'options':['continue','discuss','end'] if needs_response else ['discuss','end']}
+
+
+def agree_next_step(conn,uid,pid,choice,clock):
+    if choice not in ('continue','discuss','end'):
+        raise ApiError('validation_error','Choose another date, discuss, or end the pairing.')
+    with planning.transition(conn):
+        pair,plan=owned(conn,uid,pid)
+        mine=submission(conn,uid,pid)
+        if receipt(conn,pid):
+            if mine.get('next_step')==choice:
+                return
+            raise ApiError('state_conflict','This next step has already been resolved.',409)
+        actor=db.fetch_one(conn,'User',id=uid)
+        if not actor or actor['journey_state']!='dating' or actor['bgv_status']!='verified':
+            raise ApiError('feedback_unavailable','A verified Dating profile is required.',403)
+        state=next_step_state(conn,uid,pid)
+        if not state or choice not in state['options']:
+            raise ApiError('state_conflict','This response is not available.',409)
+        mine['next_step']=choice
+        save_submission(conn,uid,pid,mine)
+        if choice!='discuss':
+            finish(conn,pair,plan,'keep_dating' if choice=='continue' else 'rejected',uid,clock,count=True)

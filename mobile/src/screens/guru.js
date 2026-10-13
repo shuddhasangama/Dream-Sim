@@ -19,6 +19,7 @@ let contextKey = null;
 export function _resetForTest() { qa = null; reachCache = null; contextKey = null; }
 
 const TOPICS = {
+  intentions: ['Agree on your next step', 'You want different next steps, and neither person is wrong. Ask: what would another date help us understand? What pace feels comfortable? Share only what you choose through a shared Guru conversation, if available. Discussion does not accept another date. Return to Debrief to confirm your choice or end the pairing.', 'debrief'],
   values: ['What matters to you?', 'Review your Vision and the interests you would like to share. Your preferences are yours to choose.', 'vision'],
   matching: ['How matching works', 'Matching considers both people’s preferences. A Like expresses interest; only mutual interest creates a pair.', 'week'],
   match: ['Get to know this match', 'Compare your Vision, Stats and Chemistry. Look for what fits and what you would like to ask. You choose Like or Pass.', 'week'],
@@ -43,6 +44,7 @@ export function chipsFor(data) {
     before_date: ['prepare', 'agreement', 'sharing'],
     debrief: ['reflect', 'sharing'],
     post_debrief: ['build', 'pace', 'sharing'],
+    next_step_agreement: ['intentions', 'sharing'],
     relationship: ['next', 'pace', 'sharing'],
   }[stage] || ['values', 'pace'];
   return ids.map(id => ({id, label: TOPICS[id][0]}));
@@ -67,6 +69,7 @@ export function render(ctx) {
           ${qa.actionLabel ? `<button type="button" class="p-bubble-action" data-goto>${safe(qa.actionLabel)} <span aria-hidden="true">→</span></button>` : ''}
         </div>` : ''}
     </div>
+    ${(data.date_context?.prompts||[]).filter(p=>['Your partner appreciated','Something to reflect on'].includes(p.title)).map(p=>`<section class="card"><h3>${safe(p.title)}</h3><p>${safe(p.body)}</p></section>`).join('')}
     <div class="p-quick-replies">${chips.map((c) => `<button type="button" class="p-quick-reply" data-chip="${safe(c.id)}">${safe(c.label)}</button>`).join('')}</div>
     <button type="button" class="secondary" data-chip="support">Something doesn’t feel right?</button>${renderNavigator(data.navigator, safe)}`;
 

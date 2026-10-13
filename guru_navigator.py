@@ -18,6 +18,7 @@ from identity_capture import account_binding
 from api_contract import ApiError, json_object
 
 TOPICS = {
+    'intentions': ('Agree on your next step', ['What would another date help you understand?', 'What pace feels comfortable to each of you?', 'Discussing is not acceptance. Return to Debrief to choose another date or end the pairing.']),
     'values': ('What matters to you?', ['Which value matters most to you?', 'What would that look like in everyday life?', 'What would you like to ask a potential match?']),
     'matching': ('How matching works', ['Matching uses reciprocal preferences. Only mutual interest creates a pair. What would you like to understand?', 'Which preference would you like to review?']),
     'match': ('Get to know this match', ['What would you like to learn about this person?', 'How could you ask that without assuming their answer?']),
@@ -39,10 +40,11 @@ STAGES = {
     'planning': ['planning', 'sharing'], 'repeat_planning': ['build', 'planning', 'sharing'],
     'agreement': ['agreement', 'sharing'], 'before_date': ['prepare', 'agreement', 'sharing'],
     'debrief': ['reflect', 'sharing'], 'post_debrief': ['build', 'pace', 'sharing'],
+    'next_step_agreement': ['intentions','sharing'],
     'gate': ['next','pace','sharing'],
     'relationship': ['differences', 'mediate', 'expenses', 'romance', 'next', 'sharing'],
 }
-SHARED_TOPICS = {'planning', 'sharing', 'build', 'next', 'differences', 'mediate', 'expenses', 'romance'}
+SHARED_TOPICS = {'intentions', 'planning', 'sharing', 'build', 'next', 'differences', 'mediate', 'expenses', 'romance'}
 
 
 def cipher():

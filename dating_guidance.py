@@ -42,6 +42,16 @@ def context(conn, uid, pair, plan, clock, epoch=None):
             if flags.get('red_flags'):
                 prompts.append({'title':'Your concerns', 'body':'Revisit your saved concerns before another date. You can pause or end the match.'})
             break
+    # Share only the flags explicitly released by their author, never private notes.
+    for dated in sorted(plans,key=lambda p:p['datetime'],reverse=True):
+        row=db.fetch_one(conn,'DateFeedback',user_id=other,dateplan_id=dated['id'])
+        flags=db.load_json_field(row['payload_json'],{}).get('flags',{}) if row else {}
+        if flags.get('share_feedback'):
+            if flags.get('green_flags'):
+                prompts.append({'title':'Your partner appreciated', 'body':', '.join(flags['green_flags'])})
+            if flags.get('red_flags'):
+                prompts.append({'title':'Something to reflect on', 'body':'Your partner shared these observations: '+', '.join(flags['red_flags'])+'. Consider discussing them with care; they are personal impressions.'})
+            break
     phase = 'planning' if not plan else 'agreement' if plan['status'] != 'confirmed' else 'before_date'
     focus = 'Choose preferences and a shared time.' if not plan else 'Review your agreement and greeting preference.'
     debrief = 'Debrief opens after your confirmed date.'
@@ -53,6 +63,13 @@ def context(conn, uid, pair, plan, clock, epoch=None):
             debrief = 'Debrief is open. Save your flags, then choose what happens next.'
         else:
             debrief = 'Debrief opens '+timing['opens_at'].replace('T',' at ')+'.' if not timing['closed'] else 'This date’s Debrief window has closed.'
+    if plan:
+        import date_cycle_service
+        pending=date_cycle_service.next_step_state(conn,uid,plan['id'])
+        if pending:
+            phase='next_step_agreement'
+            focus=pending['message']
+            debrief='Your date is complete. Agree on your next step with Guru.'
     return {'phase':phase,'focus':focus,'debrief':debrief,'date_number': completed + 1, 'day':clock.day,
             'when': plan.get('datetime') if plan else None,
             'prompts':prompts,

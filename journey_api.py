@@ -41,6 +41,8 @@ def surface(key, reached, reach_is_locked):
 
 def topic_stage(reached, facts):
     """Derive topics from saved actions, not weekday labels."""
+    if facts.get('next_step_agreement'):
+        return 'next_step_agreement'
     if disclosure.RELATIONSHIP in reached or facts.get('gate_open'):
         return 'relationship'
     if disclosure.MATCHED not in reached:
@@ -118,6 +120,8 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
                                  in_dating=(user['journey_state'] == 'dating'),
                                  partner_greeting=partner_greeting),
     }
+    if result['current_date_plan'] and facts.get('next_step_agreement'):
+        result['current_date_plan']['display_status']='completed_awaiting_agreement'
     routes = {}
     if active and active['status'] == 'active' and user['journey_state'] == 'dating' and user['bgv_status'] == 'verified':
         calendar = '/api/v1/lock-ins/'+quote(active['id'], safe='')+'/calendar'

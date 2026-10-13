@@ -30,6 +30,8 @@ def completed(conn, uid, pair, plan, matches):
             feedback=db.fetch_one(conn,'DateFeedback',dateplan_id=plan['id'],user_id=uid)
             if db.load_json_field(feedback['payload_json'],{}).get('decision'):
                 result['debrief']='Completed'
+        if plan.get('display_status') == 'completed_awaiting_agreement':
+            result['actual_date']='Completed'
         resolution = db.fetch_one(conn,'DateResolution',dateplan_id=plan['id'])
         if resolution and resolution['kind'] in ('keep_dating', 'both_relationship'):
             result['actual_date']='Completed'

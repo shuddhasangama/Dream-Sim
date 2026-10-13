@@ -30,7 +30,8 @@ def register(api,get_db,get_clock,epoch):
                 'no_show_reported':mine.get('no_show_reported',False)},
             'partner_submitted':bool(row.get(peer+'_decision')),
             'mutual_photo_consent':{k:bool(mine.get('flags',{}).get(k,False) and their.get('flags',{}).get(k,False)) for k in ('together_photo','bill_photo')},
-            'resolution':done['kind'] if done else 'pending',
+            'resolution':done['kind'] if done else ('awaiting_agreement' if service.next_step_state(get_db(),uid,pid) else 'pending'),
+            'next_step':service.next_step_state(get_db(),uid,pid),
             'no_show_is_confirmed':False,
             'green_flag_options':guru_dating.GREEN_FLAGS,'red_flag_options':guru_dating.RED_FLAGS,
             'decision_options':['continue','relationship','pass']}
@@ -41,7 +42,7 @@ def register(api,get_db,get_clock,epoch):
 
     @api.put('/date-plans/<pid>/feedback/flags')
     def flags(pid):
-        body=json_object(required={'green_flags','red_flags'},optional={'together_photo','bill_photo'})
+        body=json_object(required={'green_flags','red_flags'},optional={'together_photo','bill_photo','share_feedback'})
         service.flags(get_db(),g.api_user['user_id'],pid,body,get_clock(),epoch)
         return jsonify(view(pid))
 
@@ -49,6 +50,12 @@ def register(api,get_db,get_clock,epoch):
     def decision(pid):
         body=json_object(required={'decision'},optional={'reason'})
         service.decide(get_db(),g.api_user['user_id'],pid,body,get_clock(),epoch)
+        return jsonify(view(pid))
+
+    @api.post('/date-plans/<pid>/feedback/next-step')
+    def next_step(pid):
+        body=json_object(required={'choice'})
+        service.agree_next_step(get_db(),g.api_user['user_id'],pid,body['choice'],get_clock())
         return jsonify(view(pid))
 
     @api.post('/date-plans/<pid>/cancel')

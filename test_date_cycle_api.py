@@ -32,6 +32,89 @@ class DateCycleApiTests(RouteTestCase):
     def decision(self,who,choice='continue',path=None):
         return self.request((path or self.path)+'/feedback/decision',uid=who,method='POST',body={'decision':choice})
 
+    def test_flags_are_shared_with_guru_only_after_explicit_consent(self):
+        import dating_guidance
+        pair=db.fetch_one(self.conn,'LockIn',id='lock-1')
+        plan=db.fetch_one(self.conn,'DatePlan',id='plan:lock-1')
+        def prompts():
+            return dating_guidance.context(self.conn,'partner',pair,plan,app_module.get_clock())['prompts']
+        self.flags('owner',red_flags=['Interrupts'])
+        self.assertFalse(any(p['title']=='Your partner appreciated' for p in prompts()))
+        self.flags('owner',red_flags=['Interrupts'],share_feedback=True)
+        self.assertTrue(any(p['title']=='Your partner appreciated' for p in prompts()))
+        self.assertTrue(any(p['title']=='Something to reflect on' for p in prompts()))
+        self.flags('owner',share_feedback=False)
+        self.assertFalse(any(p['title']=='Your partner appreciated' for p in prompts()))
+
+    def test_reverse_roles_wait_and_both_relationship_opens_gate(self):
+        for who in ('owner','partner'):
+            self.flags(who)
+        self.decision('owner','continue')
+        self.decision('partner','relationship')
+        self.assertTrue(self.request(self.path+'/debrief',uid='partner').json['data']['next_step']['needs_response'])
+        self.assertEqual(self.respond('partner','continue').status_code,200)
+        self.assertEqual(db.fetch_all(self.conn,'StageGate'),[])
+
+    def test_both_relationship_still_opens_gate_without_changing_stage(self):
+        for who in ('owner','partner'):
+            self.flags(who)
+            self.decision(who,'relationship')
+        self.assertEqual(len(db.fetch_all(self.conn,'StageGate')),1)
+        self.assertEqual(db.fetch_one(self.conn,'User',id='owner')['journey_state'],'dating')
+
+    def mixed(self):
+        for who in ('owner','partner'):
+            self.assertEqual(self.flags(who).status_code,200)
+        self.assertEqual(self.decision('owner','relationship').status_code,200)
+        r=self.decision('partner','continue')
+        self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(r.json['data']['resolution'],'awaiting_agreement')
+
+    def respond(self,who,choice):
+        return self.request(self.path+'/feedback/next-step',uid=who,method='POST',body={'choice':choice})
+
+    def test_mixed_waits_then_explicit_acceptance_is_idempotent(self):
+        self.mixed()
+        self.assertEqual(db.fetch_all(self.conn,'DateResolution'),[])
+        self.assertEqual(db.fetch_one(self.conn,'LockIn',id='lock-1')['week'],1)
+        self.assertEqual(self.respond('partner','continue').status_code,409)
+        self.assertEqual(self.respond('stranger','continue').status_code,404)
+        self.assertEqual(self.respond('owner','discuss').status_code,200)
+        self.assertEqual(db.fetch_all(self.conn,'DateResolution'),[])
+        self.set_clock(week=3,day='Mon',hour=12)
+        self.assertEqual(self.request(self.path+'/feedback/reconcile',method='POST',body={}).status_code,409)
+        r=self.respond('owner','continue')
+        self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(r.json['data']['resolution'],'keep_dating')
+        self.assertEqual(self.respond('owner','continue').status_code,200)
+        self.assertEqual(self.respond('owner','end').status_code,409)
+        self.assertEqual(db.fetch_one(self.conn,'LockIn',id='lock-1')['dates_completed'],1)
+        row=db.fetch_one(self.conn,'DateOutcome',dateplan_id='plan:lock-1')
+        self.assertEqual(row['a_decision'],'relationship')
+        self.assertEqual(row['b_decision'],'continue')
+        self.assertEqual(db.fetch_one(self.conn,'DatePlan',id='plan:lock-1')['status'],'completed')
+        self.assertEqual(len(db.fetch_all(self.conn,'DatePlan')),1)
+        self.assertEqual(db.fetch_all(self.conn,'Payment'),[])
+
+    def test_either_can_end_mixed_pair_and_partner_feedback_stays_private(self):
+        self.mixed()
+        state=self.request(self.path+'/debrief',uid='partner').json['data']
+        self.assertFalse(state['next_step']['needs_response'])
+        self.assertNotIn('partner_feedback',state)
+        r=self.respond('partner','end')
+        self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(db.fetch_one(self.conn,'LockIn',id='lock-1')['status'],'released')
+        self.assertEqual(self.respond('partner','end').status_code,200)
+
+    def test_mixed_home_and_guru_guidance(self):
+        self.mixed()
+        import journey_api
+        for who,expected in [('owner','Choose your next step'),('partner','Waiting for your partner')]:
+            data=self.request('/journey/status',uid=who).json['data']
+            self.assertEqual(data['next_action']['headline'],expected)
+            self.assertEqual(data['next_action']['topic_stage'],'next_step_agreement')
+            self.assertEqual(data['next_action']['destination']['key'],'debrief')
+
     def test_custom_flags_limits_and_private_storage(self):
         greens=guru_dating.GREEN_FLAGS[:3]+['Thoughtful']
         r=self.flags('owner',green_flags=greens,red_flags=['Interrupts'])

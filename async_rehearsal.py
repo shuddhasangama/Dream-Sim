@@ -145,6 +145,11 @@ def snapshot(conn, uid):
     start = datetime.fromisoformat(plan['datetime'])
     date_week = (start.date()-clock.WEEK_ONE_MONDAY).days//7+1
     day = start.weekday()
+    import date_cycle_service
+    agreement=date_cycle_service.next_step_state(conn,uid,pid)
+    if agreement:
+        metadata.update(stage='next_step_agreement', message=agreement['message'])
+        return clock.SimulationClock(date_week, day, dateplan.debrief_opens_hour(plan['meal'])), metadata
     ready_debrief = acknowledgements(conn, pid, 'debrief')
     if resolved or members <= ready_debrief:
         metadata.update(stage='resolved' if resolved else 'debrief', message=(

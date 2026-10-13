@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DreamContract API — Phase 4 Blocks 1–7",
+    "title": "DreamContract API \u2014 Phase 4 Blocks 1\u20137",
     "version": "0.7.0",
     "description": "Implemented journey APIs. Authentication is required. Face/payment/Guru simulations are identified explicitly; no real provider services are added by these endpoints."
   },
@@ -234,7 +234,7 @@
       "post": {
         "operationId": "stepSimulatedClock",
         "summary": "stepSimulatedClock",
-        "description": "Testing only (road-fixes-clock-spec.md §7). Advances or sets the shared simulated clock, gated entirely on the server's own DHASHU_SIMULATED_CLOCK setting — never on anything the client sends. Disabled and inert whenever that setting is off; production always derives the clock from real time. Provide exactly one of advance_hours or the week/day/hour trio.",
+        "description": "Testing only (road-fixes-clock-spec.md \u00a77). Advances or sets the shared simulated clock, gated entirely on the server's own DHASHU_SIMULATED_CLOCK setting \u2014 never on anything the client sends. Disabled and inert whenever that setting is off; production always derives the clock from real time. Provide exactly one of advance_hours or the week/day/hour trio.",
         "security": [
           {
             "bearerAuth": []
@@ -293,7 +293,7 @@
             }
           },
           "400": {
-            "description": "Invalid or ambiguous body — neither shape, both shapes, or an out-of-range value.",
+            "description": "Invalid or ambiguous body \u2014 neither shape, both shapes, or an out-of-range value.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9803,7 +9803,7 @@
     "/rehearsal/date-plans/{pid}/ready": {
       "post": {
         "operationId": "postRehearsalReadiness",
-        "summary": "Record only the authenticated partner’s readiness for a confirmed test date",
+        "summary": "Record only the authenticated partner\u2019s readiness for a confirmed test date",
         "description": "Requires DHASHU_SIMULATED_CLOCK and DHASHU_ASYNC_TEST. Both readiness submissions advance the pair checkpoint, not consent, attendance or feedback. Retries are idempotent while the date is current and unresolved. No provider bypass.",
         "security": [
           {
@@ -11264,6 +11264,136 @@
           }
         ]
       }
+    },
+    "/date-plans/{pid}/feedback/next-step": {
+      "post": {
+        "operationId": "agreeDateNextStep",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful date-planning operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateDebriefResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ineligible actor, missing payment entitlement or disabled beta face simulation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource missing or not owned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Date closed/resolved, early or late feedback, missing flags, conflicting retry, started cancellation or historical resolution requiring review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON body required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; diagnostic reference returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "choice"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "choice": {
+                    "enum": [
+                      "continue",
+                      "discuss",
+                      "end"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "Date-scoped operation. GET has no transitions. Feedback opens one hour after the stored date (rounded up to the simulator hour) and closes on the next simulation week. Only own private feedback is returned. Exact recorded retries are safe; changed/stale submissions conflict. No-show is an unverified report and releases the pair without a punitive strike. Cancellation may assess a pending fee but never collects money. Timeout reconciliation is explicit and idempotent.",
+        "summary": "Explicitly agree on different post-date intentions; discussion never advances the cycle"
+      }
     }
   },
   "components": {
@@ -11633,6 +11763,9 @@
                     "type": "string"
                   },
                   "datetime": {
+                    "type": "string"
+                  },
+                  "display_status": {
                     "type": "string"
                   }
                 },
@@ -13111,7 +13244,8 @@
               "rejected",
               "ghosted",
               "cancelled",
-              "no_show_reported"
+              "no_show_reported",
+              "awaiting_agreement"
             ]
           },
           "no_show_is_confirmed": {
@@ -13134,6 +13268,43 @@
             "items": {
               "type": "string"
             }
+          },
+          "next_step": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "needs_response": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string"
+              },
+              "my_response": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "continue",
+                    "discuss",
+                    "end"
+                  ]
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "needs_response",
+              "message",
+              "my_response",
+              "options"
+            ]
           }
         },
         "required": [
@@ -13232,6 +13403,10 @@
           },
           "bill_photo": {
             "type": "boolean"
+          },
+          "share_feedback": {
+            "type": "boolean",
+            "default": false
           }
         },
         "required": [
@@ -13517,10 +13692,10 @@
             "items": {
               "type": "string",
               "enum": [
-                "₹ · under 800",
-                "₹₹ · 800 – 2,000",
-                "₹₹₹ · 2,000 – 4,500",
-                "₹₹₹₹ · 4,500+"
+                "\u20b9 \u00b7 under 800",
+                "\u20b9\u20b9 \u00b7 800 \u2013 2,000",
+                "\u20b9\u20b9\u20b9 \u00b7 2,000 \u2013 4,500",
+                "\u20b9\u20b9\u20b9\u20b9 \u00b7 4,500+"
               ]
             }
           },

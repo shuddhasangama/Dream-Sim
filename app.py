@@ -4068,6 +4068,7 @@ def debrief_view():
         is_open=_debrief_is_open(plan, clock),
         opens_at=_debrief_opens_label(plan),
         happened=(outcome or {}).get("happened", 1),
+        next_step=date_cycle_service.next_step_state(get_db(),user['user_id'],plan['id']),
         no_show_reported=(date_cycle_service.receipt(get_db(),plan['id']) or {}).get('kind') == 'no_show_reported',
         green_flags=guru_dating.GREEN_FLAGS,
         red_flags=guru_dating.RED_FLAGS,
@@ -4154,6 +4155,17 @@ def plan_cancel():
     return redirect(url_for('week'))
 
 
+@app.route("/debrief/next-step", methods=["POST"])
+@login_required
+def debrief_next_step():
+    pid=request.form.get('plan_id')
+    try:
+        date_cycle_service.agree_next_step(get_db(),current_user()['user_id'],pid,request.form.get('choice'),get_clock())
+    except ApiError as exc:
+        abort(exc.status,description=exc.message)
+    return redirect(url_for('guru_view' if request.form.get('choice')=='discuss' else 'week'))
+
+
 @app.route("/debrief/no-show", methods=["POST"])
 @login_required
 def debrief_no_show():
@@ -4212,6 +4224,7 @@ def _guru_facts(user: dict) -> dict:
         "debrief_open": plan["status"] == "confirmed" and timing["open"] and not timing["closed"],
         "has_current_plan": True,
         "date_confirmed": plan["status"] == "confirmed",
+        "next_step_agreement": date_cycle_service.next_step_state(get_db(),user['user_id'],plan['id']),
         "partner_decision_made": outcome.get("b_decision" if role == "a" else "a_decision") is not None,
         "dates_completed": active.get("dates_completed",0),
         "flags_given": len(outcome.get(f"{role}_green_flags") or []) >= guru_dating.MIN_GREEN_FLAGS,

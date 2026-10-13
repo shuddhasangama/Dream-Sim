@@ -196,7 +196,7 @@ function weekHeader(ctx) {
   const real=confirmedDateMoment(data.date_plan);
   if(real && byDay[real.day]) {
     byDay[real.day]=byDay[real.day].filter(m=>m.tone!=='date');
-    byDay[real.day].push({key:'actual_date',label:data.date_plan.status==='confirmed'?'Your confirmed date':'Date awaiting signatures',tone:'date',hour:real.hour,time:data.date_plan.datetime.split('T')[1].slice(0,5),personal:true,means:`${data.date_plan.datetime} — ${data.date_plan.status?.replaceAll('_',' ')||'Saved plan'}`});
+    byDay[real.day].push({key:'actual_date',label:data.date_plan.display_status==='completed_awaiting_agreement'?'Date completed':data.date_plan.status==='confirmed'?'Your confirmed date':'Date awaiting signatures',tone:'date',hour:real.hour,time:data.date_plan.datetime.split('T')[1].slice(0,5),personal:true,means:`${data.date_plan.datetime} — ${data.date_plan.status?.replaceAll('_',' ')||'Saved plan'}`});
     byDay[real.day].sort((a,b)=>a.hour-b.hour);
   }
   const todayIdx = grid.days.findIndex((d) => d.is_today);

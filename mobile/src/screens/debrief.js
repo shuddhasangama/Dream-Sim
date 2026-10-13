@@ -17,6 +17,15 @@ export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Debrief</h1></section><section class="card"><p>Loading…</p></section>';
   const f = data.my_feedback;
+  if(data.next_step) {
+    const step=data.next_step;
+    return `<section class="intro"><span class="eyebrow">GURU · NEXT STEP</span><h1>${step.needs_response?'Choose your next step':'Waiting for your partner'}</h1></section>
+      <section class="card"><p><strong>Date completed</strong></p><p>${safe(step.message)}</p>
+      <p>Your original choices are saved. Another date needs agreement; there is no deadline.</p>
+      ${step.my_response==='discuss'?'<p>Discussion selected. This does not accept another date. You can take time and return here.</p>':''}
+      <div class="action-row">${step.options.map(value=>`<button type="button" class="secondary" data-next-step="${value}">${{continue:'Yes, another date',discuss:'Discuss with Guru',end:'End this pairing'}[value]}</button>`).join('')}</div>
+      <p class="hint">Ending this pairing releases both of you.</p></section>`;
+  }
   const needsFlags = !flagsValid(f.green_flags, f.red_flags);
 
   if (!data.feedback_open && !f.decision) {
@@ -28,6 +37,7 @@ export function render(ctx) {
         <div class="field"><label>Pick at least 2 green flags</label><div class="flag-grid" data-max="20">${(data.green_flag_options || []).map((g) => `<button type="button" class="flag" data-group="green" data-value="${safe(g)}">${safe(g)}</button>`).join('')}</div></div>
         <div class="field"><label>Up to 2 red flags — optional</label><div class="flag-grid red" data-max="2">${(data.red_flag_options || []).map((r) => `<button type="button" class="flag" data-group="red" data-value="${safe(r)}">${safe(r)}</button>`).join('')}</div></div>
         ${['green','red'].map(group => `<div class="field"><label for="custom-${group}">Add a ${group} flag</label><input id="custom-${group}" maxlength="16" placeholder="Up to 16 characters"><button type="button" class="secondary" data-add-flag="${group}">Add</button></div>`).join('')}
+        <label class="checkbox-row"><input type="checkbox" name="share_feedback"> Share these green and red flags with my match through Guru (optional)</label>
         <label class="checkbox-row"><input type="checkbox" name="together_photo"> We took a selfie together</label>
         <label class="checkbox-row"><input type="checkbox" name="bill_photo"> We photographed the bill</label>
         <button class="primary" type="submit" disabled>Save feedback</button>
@@ -36,7 +46,7 @@ export function render(ctx) {
   if (!f.decision) {
     return `<section class="intro"><span class="eyebrow">DEBRIEF</span><h1>What's next?</h1></section>
       <section class="card"><p>Feedback saved. Now, what's next?</p>
-        <p class="hint">Another date together keeps you in Dating with this partner. Move to Relationship requests the next stage; both partners must choose it and complete any required relationship steps. If one chooses another date, you remain in Dating.</p>
+        <p class="hint">Another date together keeps you in Dating with this partner. Move to Relationship requests the next stage; both partners must choose it and complete any required relationship steps. If your choices differ, Guru helps you agree on what happens next.</p>
         <form id="decision-form">
           <textarea name="reason" maxlength="2000" placeholder="Optional — only used if you pass"></textarea>
           <div class="action-row" style="flex-wrap:wrap;">
@@ -53,6 +63,14 @@ export function render(ctx) {
 export function bind(root, ctx) {
   const { session, run, patch, refreshJourney } = ctx;
   const planId = encodeURIComponent(ctx.data.plan_id);
+
+  root.querySelectorAll('[data-next-step]').forEach(button=>button.addEventListener('click',()=>run(async()=>{
+    const choice=button.dataset.nextStep;
+    if(choice==='end' && !window.confirm('End this pairing?')) return;
+    patch(await session.post(`/api/v1/date-plans/${planId}/feedback/next-step`,{choice}));
+    await refreshJourney();
+    if(choice==='discuss') ctx.navigateTo('guru');
+  })));
 
   const picked = { green: new Set(), red: new Set() };
   const submitBtn = root.querySelector('#flags-form button[type="submit"]');
@@ -88,7 +106,7 @@ export function bind(root, ctx) {
       const form = new FormData(e.target);
       patch(await session.put(`/api/v1/date-plans/${planId}/feedback/flags`, {
         green_flags: [...picked.green], red_flags: [...picked.red],
-        together_photo: form.has('together_photo'), bill_photo: form.has('bill_photo'),
+        together_photo: form.has('together_photo'), bill_photo: form.has('bill_photo'), share_feedback: form.has('share_feedback'),
       }));
       await refreshJourney();
     });

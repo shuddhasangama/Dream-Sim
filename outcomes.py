@@ -103,7 +103,9 @@ def resolution(outcome: dict[str, Any]) -> str:
         return "rejected"
     if a == _RELATIONSHIP and b == _RELATIONSHIP:
         return "both_relationship"
-    return "keep_dating"  # both accepted in some form, but not both 'relationship'
+    if a != b:
+        return "awaiting_agreement"
+    return "keep_dating"
 
 
 _RELEASE_REASONS = {"rejected": "one partner passed", "ghosted": "no response by close"}
@@ -131,7 +133,7 @@ def apply_resolution(outcome: dict[str, Any]) -> dict[str, Any]:
         return {"resolution": res, "advance_to_relationship": True, "release_lockin": False, "continue_dating": False, "release_reason": None}
     if res == "keep_dating":
         return {"resolution": res, "advance_to_relationship": False, "release_lockin": False, "continue_dating": True, "release_reason": None}
-    if res == "pending":
+    if res in ("pending", "awaiting_agreement"):
         return {"resolution": res, "advance_to_relationship": False, "release_lockin": False, "continue_dating": False, "release_reason": None}
     return {
         "resolution": res,
