@@ -3633,6 +3633,10 @@ def _payment_scope(user: dict, purpose: str) -> str | None:
 
 
 def _has_paid(user_id: str, purpose: str, scope_id: str) -> bool:
+    import billing_catalog
+    if billing_catalog.pilot_user(user_id):
+        import billing_service
+        return billing_service.legacy_entitled(get_db(),user_id,purpose,scope_id)
     rows = db.fetch_all(get_db(), "Payment", user_id=user_id)
     return payments.has_paid(rows, user_id, purpose, scope_id)
 
@@ -3653,6 +3657,9 @@ def _require_payment(user: dict, purpose: str):
 @app.route("/pay/<purpose>")
 @login_required
 def pay_view(purpose):
+    import billing_catalog
+    if billing_catalog.pilot_user(current_user()['user_id']):
+        return redirect('/billing')
     if purpose not in payments.PURPOSES:
         abort(404)
     user = current_user()
@@ -3675,6 +3682,9 @@ def pay_view(purpose):
 def pay_confirm(purpose):
     """The stub gateway. Writes a Payment row and marks it paid; no money
     moves and the screen says so."""
+    import billing_catalog
+    if billing_catalog.pilot_user(current_user()['user_id']):
+        abort(403, 'Simulated payment confirmation is disabled during gateway testing.')
     if purpose not in payments.PURPOSES:
         abort(404)
     user = current_user()
@@ -4604,6 +4614,8 @@ import relationship_service
 import road_service
 
 auth.register_auth(app, get_db)
+import billing_api
+billing_api.register_web(app, get_db, current_user)
 
 register_api(
     app, current_user=current_user, reach_locked=reach_locked,

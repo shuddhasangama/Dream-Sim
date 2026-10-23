@@ -34,6 +34,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
     if planning is not None:
         import planning_api
         planning_api.register(api, **planning)
+        import billing_api
+        billing_api.register(api, planning['get_db'])
     if date_cycle is not None:
         import date_cycle_api
         date_cycle_api.register(api, **date_cycle)

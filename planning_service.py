@@ -65,6 +65,10 @@ def owned_plan(conn, uid, pid):
 
 
 def paid(conn, uid, purpose, scope):
+    import billing_catalog
+    if billing_catalog.pilot_user(uid):
+        import billing_service
+        return billing_service.legacy_entitled(conn,uid,purpose,scope)
     return payments.has_paid(db.fetch_all(conn, 'Payment', user_id=uid), uid, purpose, scope)
 
 

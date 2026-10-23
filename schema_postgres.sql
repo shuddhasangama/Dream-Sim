@@ -928,3 +928,45 @@ CREATE TABLE IF NOT EXISTS "GuruDiscussion" (
     payload TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS guru_discussion_members ON "GuruDiscussion"(user_a, user_b);
+
+-- Provider billing ledger: separate from legacy simulated Payment rows.
+CREATE TABLE IF NOT EXISTS "BillingPurchase" (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    product TEXT NOT NULL,
+    scope_id TEXT NOT NULL,
+    reference_id TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    price_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    payment_status TEXT NOT NULL,
+    refund_status TEXT NOT NULL,
+    provider_id TEXT UNIQUE,
+    payment_id TEXT,
+    refund_id TEXT,
+    paid_until BIGINT,
+    cancel_requested INTEGER NOT NULL DEFAULT 0,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_billing_owner ON "BillingPurchase" (user_id, product, scope_id, mode);
+CREATE TABLE IF NOT EXISTS "BillingEvent" (
+    id TEXT PRIMARY KEY,
+    purchase_id TEXT NOT NULL REFERENCES "BillingPurchase"(id),
+    kind TEXT NOT NULL,
+    received_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "BillingEntitlement" (
+    id TEXT PRIMARY KEY,
+    purchase_id TEXT NOT NULL REFERENCES "BillingPurchase"(id),
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    product TEXT NOT NULL,
+    scope_id TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 0,
+    expires_at BIGINT
+);

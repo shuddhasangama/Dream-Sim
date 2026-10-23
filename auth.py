@@ -158,6 +158,10 @@ def register_auth(app, get_db):
 
     @app.before_request
     def secure_boundary():
+        # Exact provider webhook only: authenticated by raw-body HMAC in billing_api.
+        # Browser origin/session checks do not apply to server-to-server delivery.
+        if request.path == '/billing/webhooks/razorpay' and request.method == 'POST':
+            return None
         if not enabled():
             if request.path == '/signin':
                 return redirect('/signup')

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DhaShu · Payment pilot</title>
+<style>body{font:17px system-ui;background:#141022;color:#f7f5fb;max-width:620px;margin:40px auto;padding:24px}label{display:block;margin:20px 0}select,input,button{font:inherit;padding:12px;border-radius:8px;max-width:100%;box-sizing:border-box}button{cursor:pointer;background:#fb6377;border:0;margin:6px}input[type=text],select{width:100%}#status{white-space:pre-wrap;line-height:1.6}small{color:#ccc}</style></head>
+<body><h1>Payment pilot</h1><p id="mode">Loading…</p>
+<label>Purchase<select id="product"></select></label>
+<label>Pair or couple reference (where required)<input id="reference" type="text"></label>
+<label><input id="recurring" type="checkbox"> For Guru, I accept ₹1 monthly for up to 12 billing cycles. I can cancel future renewals.</label>
+<button id="quote">Review price</button><button id="pay" hidden>Pay ₹1</button>
+<button id="refresh" hidden>Check payment</button><button id="cancel" hidden>Cancel Guru renewal</button>
+<p id="status" role="status" aria-live="polite"></p><p><small>Cards, UPI and other available methods are supplied by the payment provider. No payment details are stored by DhaShu.</small></p>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+let csrf, purchase; const $=id=>document.getElementById(id); const show=text=>$('status').textContent=text;
+async function api(path,body){const r=await fetch('/api/v1/billing/'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Billing-CSRF':csrf||''},...(body===undefined?{}:{body:JSON.stringify(body)})});const j=await r.json();if(!r.ok)throw Error(j.error?.message||'Request failed');return j.data;}
+async function run(fn){try{await fn()}catch(e){show(e.message)}}
+function display(p){show(`${p.label}: ₹${(p.amount/100).toFixed(2)}\nPurchase: ${p.status}\nPayment: ${p.payment_status}\nRefund: ${p.refund_status}${p.paid_until?'\nAccess until: '+new Date(p.paid_until*1000).toLocaleString():''}`)}
+$('quote').onclick=()=>run(async()=>{const p=await api('quotes',{product:$('product').value,reference:$('reference').value||null});purchase=p.id;sessionStorage.setItem('billingPurchase',purchase);display(p);$('pay').hidden=false;$('refresh').hidden=false;});
+$('pay').onclick=()=>run(async()=>{ $('pay').disabled=true;try{const p=await api(`purchases/${purchase}/checkout`,{accept_recurring:$('recurring').checked});display(p);if(p.checkout){const rz=new Razorpay({...p.checkout,handler:()=>{show('Payment submitted. Checking provider confirmation…');$('refresh').click();},modal:{ondismiss:()=>show('Checkout closed. Use Check payment before trying again.')}});rz.open();}$('cancel').hidden=p.product!=='guru';}finally{$('pay').disabled=false;}});
+$('refresh').onclick=()=>run(async()=>{const p=await api(`purchases/${purchase}/refresh`,{});display(p);$('cancel').hidden=p.product!=='guru';});
+$('cancel').onclick=()=>run(async()=>{if(confirm('Stop future Guru renewals? Paid access remains until its expiry.'))display(await api(`purchases/${purchase}/cancel-subscription`,{}));});
+run(async()=>{const c=await api('config');csrf=c.csrf;$('mode').textContent=c.mode==='sandbox'?'Sandbox: no real money is charged.':'Live pilot: ₹1 is a real payment.';for(const [id,p] of Object.entries(c.products)){const o=document.createElement('option');o.value=id;o.textContent=p.label;$('product').append(o);}purchase=sessionStorage.getItem('billingPurchase');if(purchase){display(await api(`purchases/${purchase}`));$('refresh').hidden=false;}});
+</script></body></html>
