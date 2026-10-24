@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Restaurant simulation{% endblock %}
+{% block content %}
+{% macro action(key, label, quote='') %}
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="revision" value="{{ r.revision }}"><input type="hidden" name="action" value="{{ key }}"><input type="hidden" name="quote_id" value="{{ quote }}">{% if key == 'search' and r.needs_budget_cap %}<label>Maximum food spend per person ({{ r.currency }})<input name="cap" type="number" min="1" step="1" required></label><p>Both partners will review the resulting quote.</p>{% endif %}<button class="btn-secondary" type="submit">{{ label }}</button></form>
+{% endmacro %}
+<h1>Restaurant options</h1><p>Simulation only. No real reservation or payment.</p>
+<p role="status">{{ r.message }}</p>
+{% if r.selection_policy %}<p>Comparison: {{ {'lowest_total':'estimated total cost','lowest_upfront':'upfront payment','nearest':'distance'}[r.selection_policy] }}. Food prices are estimates.</p>{% endif %}
+{% if r.provider_failures %}<p>Some providers were unavailable. Showing results from those that responded.</p>{% endif %}
+{% if r.state in ['not_started','empty','expired','changed','unavailable','cancelled','budget_limit_required'] and r.refund != 'failed' and r.date_open %}{{ action('search','Find options') }}{% endif %}
+{% if r.state == 'shortlist' %}{% for q in r.options %}
+<section class="card"><h2>{{ q.name }}</h2><p>{{ q.neighbourhood }} · {{ q.distance_km }} km · {{ q.date_time }}</p>
+{% if q.provider_label %}<p>Via {{ q.provider_label }}</p>{% endif %}
+<p>{{ q.cuisines | join(', ') }} · {{ q.diets | join(', ') }}</p>
+<p>Estimated food per person: {{ q.currency }} {{ q.estimate_per_person_minor / (10 ** q.currency_exponent) }}.</p>
+{% if q.estimated_total_minor is defined %}<p>Estimated total for two: {{ q.estimated_total_minor / (10 ** q.currency_exponent) }} {{ q.currency }} · Pay upfront: {{ q.upfront_minor / (10 ** q.currency_exponent) }} {{ q.currency }}.</p>{% endif %}
+<p>Table deposit: {{ q.currency }} {{ q.deposit_minor / (10 ** q.currency_exponent) }} total; food credit: {{ q.food_credit_minor / (10 ** q.currency_exponent) }}; booking fee: {{ q.booking_fee_minor / (10 ** q.currency_exponent) }}.</p>
+<p>DhaShu stage fees are separate. {{ q.cancellation }}</p>
+{% if r.my_approval == q.quote_id %}<p>✓ You approved</p>{% endif %}
+{% if r.partner_approval == q.quote_id %}<p>Your match approved this option.</p>{% endif %}
+{% if r.date_open %}{{ action('approve','Approve this option',q.quote_id) }}{% endif %}</section>
+{% endfor %}{% endif %}
+{% if r.state in ['ready_to_pay','payment_failed'] and r.can_pay %}
+<p>One partner pays the full table deposit: {{ r.selected.currency }} {{ r.selected.deposit_minor / (10 ** r.selected.currency_exponent) }}. This test moves no money.</p>
+{{ action('pay','Simulate deposit and reserve') }}{% endif %}
+{% if r.state == 'ready_to_pay' and not r.can_pay and r.date_open %}<p>Both partners need to sign the date playbook before the deposit step.</p>{% endif %}
+{% if r.state == 'unknown' %}{{ action('reconcile','Check reservation status') }}{% endif %}
+{% if r.reference %}<p>Reference: {{ r.reference }}</p>{% endif %}
+{% if r.state in ['confirmed','ready_to_pay','payment_failed','shortlist'] %}{{ action('cancel','Cancel selection / reservation') }}{% endif %}
+{% if r.refund != 'none' %}<p>Simulated refund: {{ r.refund }}</p>{% endif %}
+{% if r.refund == 'failed' %}{{ action('retry_refund','Retry simulated refund') }}{% endif %}
+<a href="{{ url_for('plan_view') }}">Back to date plan</a>
+<a href="{{ request.path }}">Refresh restaurant status</a>
+{% endblock %}

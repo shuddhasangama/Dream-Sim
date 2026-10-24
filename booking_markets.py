@@ -20,6 +20,8 @@ def markets():
             raise ValueError('Invalid or duplicate booking market')
         seen.add(key)
         ZoneInfo(market['timezone'])
+        if type(market.get('currency_exponent', 2)) is not int or not 0 <= market.get('currency_exponent', 2) <= 3:
+            raise ValueError('Currency exponent must be 0–3')
         bands = market['budget_ranges_minor']
         if not bands:
             raise ValueError('Each market needs budget ranges in its currency minor units')

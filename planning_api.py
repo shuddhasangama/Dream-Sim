@@ -10,6 +10,7 @@ import db
 import payments
 import planning_service as service
 import booking_coordination
+import restaurant_service
 import async_rehearsal
 import identity_capture
 from api_contract import ApiError, allowlist, json_object
@@ -73,6 +74,7 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
         sigs = db.fetch_all(get_db(), 'Signature', dateplan_id=pid)
         return {**allowlist(plan, ('id', 'lockin_id', 'datetime', 'meal', 'venue', 'cuisine', 'budget_estimate', 'bill_split', 'status', 'cancel_notice_hrs', 'cancel_fee')),
                 'booking': booking_coordination.plan_summary(get_db(), pid),
+                'restaurant': restaurant_service.view(get_db(), uid(), pid),
                 'my_selections': db.load_json_field(plan['selections_'+role+'_json'], {}),
                 'my_signed': any(s['user_id'] == uid() and dateplan.is_fully_acknowledged(s) for s in sigs),
                 'partner_signed': any(s['user_id'] != uid() and dateplan.is_fully_acknowledged(s) for s in sigs),
@@ -101,6 +103,15 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
     @api.get('/lock-ins/<lid>/calendar')
     def get_calendar(lid):
         return jsonify(calendar(lid))
+
+    @api.get('/date-plans/<pid>/restaurant')
+    def restaurant_view(pid):
+        return jsonify(restaurant_service.view(get_db(), uid(), pid))
+
+    @api.post('/date-plans/<pid>/restaurant/actions')
+    def restaurant_action(pid):
+        body = json_object(required={'action', 'revision'}, optional={'quote_id', 'max_per_person_minor'})
+        return jsonify(restaurant_service.act(get_db(), uid(), pid, body))
 
     @api.put('/lock-ins/<lid>/alignment')
     def set_alignment(lid):

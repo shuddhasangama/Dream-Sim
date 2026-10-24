@@ -27,7 +27,7 @@ export function render(ctx) {
       </form>
     </details>
 
-    ${booking ? `<section class="card"><h2>Where to meet</h2><p role="status">${safe(booking.message)}</p>
+    ${booking ? `<section class="card"><h2>Where to meet · choose up to 2 areas</h2><p role="status">${safe(booking.message)}</p><p class="hint">These areas apply to all your selected time slots.</p>
       ${booking.market ? `<p class="hint">${safe(booking.market.city)} · Restaurant search will use shared neighbourhoods, within 1–3 km.</p>` : ''}
       ${booking.editable && booking.neighbourhoods.length ? `<form id="neighbourhood-form"><div class="chips">${booking.neighbourhoods.map(p => `<label class="checkbox-row"><input type="checkbox" name="neighbourhood" value="${safe(p.id)}" ${booking.mine.includes(p.id) ? 'checked' : ''}> ${safe(p.name)}</label>`).join('')}</div><p class="hint">Save the areas you are comfortable meeting in. Only shared choices are shown to your match.</p><button class="secondary" type="submit">Save neighbourhoods</button></form>` : ''}
       ${booking.shared_neighbourhoods?.length ? `<p>Shared areas: ${booking.neighbourhoods.filter(p => booking.shared_neighbourhoods.includes(p.id)).map(p => safe(p.name)).join(', ')}</p>` : ''}
@@ -54,6 +54,13 @@ function asArray(v) { return Array.isArray(v) ? v : v ? [v] : []; }
 export function bind(root, ctx) {
   const { session, run, patch, navigateTo } = ctx;
   const lockInId = encodeURIComponent(ctx.data.lock_in_id);
+  const areas = root.querySelectorAll('input[name="neighbourhood"]');
+  const limitAreas = () => {
+    const selected = [...areas].filter(input => input.checked).length;
+    areas.forEach(input => { input.disabled = !input.checked && selected >= 2; });
+  };
+  areas.forEach(input => input.addEventListener('change', limitAreas));
+  limitAreas();
 
   root.querySelector('#neighbourhood-form')?.addEventListener('submit', e => {
     e.preventDefault();

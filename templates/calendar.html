@@ -7,7 +7,8 @@
 
 {% if booking %}
 <section class="card">
-  <h2>Where to meet</h2><p role="status">{{ booking.message }}</p>
+  <h2>Where to meet · choose up to 2 areas</h2><p role="status">{{ booking.message }}</p>
+  <p>These areas apply to all your selected time slots.</p>
   {% if booking.market %}<p>{{ booking.market.city }} · Shared neighbourhoods, within 1–3 km.</p>{% endif %}
   {% if booking.editable and booking.neighbourhoods %}
   <form method="post" action="{{ url_for('calendar_neighbourhoods') }}">

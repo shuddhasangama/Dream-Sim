@@ -1569,6 +1569,7 @@ def plan_view():
 
     return render_template(
         "plan.html",
+        restaurant_enabled=restaurant_service.enabled(),
         booking=booking_coordination.plan_summary(get_db(), plan['id']),
         partner=partner,
         plan=plan,
@@ -4638,6 +4639,9 @@ import road_service
 auth.register_auth(app, get_db)
 import billing_api
 billing_api.register_web(app, get_db, current_user)
+import restaurant_service
+import restaurant_web
+restaurant_web.register(app, get_db, current_user, login_required)
 
 register_api(
     app, current_user=current_user, reach_locked=reach_locked,

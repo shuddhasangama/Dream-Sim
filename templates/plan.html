@@ -3,6 +3,7 @@
 {% block content %}
 <div class="eyebrow">Dating · Date plan</div>
 <h1>Your date with {{ partner.name }}</h1>
+{% if restaurant_enabled %}<a class="btn-secondary" href="{{ url_for('restaurant_page',pid=plan.id) }}">Restaurant simulation</a>{% endif %}
 {% if booking %}
 <section class="card"><h2>Agreed date preferences</h2>
   <p>{{ booking.neighbourhoods | map(attribute='name') | join(', ') }}</p>

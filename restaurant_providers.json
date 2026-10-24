@@ -1,0 +1,9 @@
+{
+  "selection_policy": "lowest_total",
+  "providers": [
+    {"id":"simulation","label":"Demo provider","adapter":"simulation","enabled":true,"markets":["*"],"priority":1},
+    {"id":"swiggy_dineout","label":"Swiggy Dineout","adapter":null,"enabled":false,"markets":["IN-BLR"],"priority":10},
+    {"id":"district","label":"District","adapter":null,"enabled":false,"markets":["IN-BLR"],"priority":20},
+    {"id":"eazydiner","label":"EazyDiner","adapter":null,"enabled":false,"markets":["IN-BLR"],"priority":30}
+  ]
+}

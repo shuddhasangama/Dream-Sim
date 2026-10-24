@@ -8,7 +8,7 @@
       "₹₹₹ · 2,000 – 4,500": {"min": 200000, "max": 450000},
       "₹₹₹₹ · 4,500+": {"min": 450000, "max": null}
     },
-    "providers": [{"id": "direct_venue", "status": "not_connected"}, {"id": "swiggy_dineout", "status": "not_connected"}],
+    "providers": [{"id": "swiggy_dineout", "status": "not_connected"}, {"id": "district", "status": "not_connected"}, {"id": "eazydiner", "status": "not_connected"}],
     "neighbourhoods": [
       {"id": "indiranagar", "name": "Indiranagar", "lat": 12.9784, "lon": 77.6408},
       {"id": "koramangala", "name": "Koramangala", "lat": 12.9352, "lon": 77.6245},

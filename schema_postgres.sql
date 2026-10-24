@@ -940,6 +940,17 @@ CREATE TABLE IF NOT EXISTS "BookingPreference" (
     revision INTEGER NOT NULL,
     UNIQUE(scope_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS "RestaurantBooking" (
+    id TEXT PRIMARY KEY REFERENCES "DatePlan"(id) ON DELETE CASCADE,
+    payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "RestaurantEvent" (
+    id TEXT PRIMARY KEY,
+    dateplan_id TEXT NOT NULL REFERENCES "DatePlan"(id) ON DELETE CASCADE,
+    actor_id TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    payload_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS "BookingSnapshot" (
     id TEXT PRIMARY KEY,
     dateplan_id TEXT NOT NULL UNIQUE REFERENCES "DatePlan"(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
