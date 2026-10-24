@@ -3,6 +3,13 @@
 {% block content %}
 <div class="eyebrow">Dating · Date plan</div>
 <h1>Your date with {{ partner.name }}</h1>
+{% if booking %}
+<section class="card"><h2>Agreed date preferences</h2>
+  <p>{{ booking.neighbourhoods | map(attribute='name') | join(', ') }}</p>
+  <p>{{ booking.cuisines | join(', ') }} · {{ booking.budget_bands | join(', ') }} per person</p>
+  <p>Restaurant booking is pending. No table has been reserved.</p>
+</section>
+{% endif %}
 
 <div class="card">
   <div class="plan-field-row"><span>Date &amp; time</span><span>{{ plan.datetime }}</span></div>

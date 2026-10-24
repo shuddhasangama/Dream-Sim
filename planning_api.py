@@ -9,6 +9,7 @@ import dateplan
 import db
 import payments
 import planning_service as service
+import booking_coordination
 import async_rehearsal
 import identity_capture
 from api_contract import ApiError, allowlist, json_object
@@ -61,6 +62,7 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
                 'alignment': {'mine': {k: stats.get(k) for k in date_alignment.FIELDS},
                     'my_missing': date_alignment.missing(stats), 'partner_missing': date_alignment.missing(partner_stats),
                     'options': {k: date_alignment.options_for(k, stats.get('city')) for k in date_alignment.FIELDS}},
+                'booking': booking_coordination.view(get_db(), uid(), lid),
                 'current_plan_id': plan['id'] if plan else None, 'editable': plan is None,
                 'cycle': len(db.fetch_all(get_db(), 'DatePlan', lockin_id=lid))+(0 if plan else 1),
                 'payment': entitlement(payments.AVAILABILITY, service.availability_scope(get_db(),lid))}
@@ -70,6 +72,7 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
         role = 'a' if uid() == active['user_a'] else 'b'
         sigs = db.fetch_all(get_db(), 'Signature', dateplan_id=pid)
         return {**allowlist(plan, ('id', 'lockin_id', 'datetime', 'meal', 'venue', 'cuisine', 'budget_estimate', 'bill_split', 'status', 'cancel_notice_hrs', 'cancel_fee')),
+                'booking': booking_coordination.plan_summary(get_db(), pid),
                 'my_selections': db.load_json_field(plan['selections_'+role+'_json'], {}),
                 'my_signed': any(s['user_id'] == uid() and dateplan.is_fully_acknowledged(s) for s in sigs),
                 'partner_signed': any(s['user_id'] != uid() and dateplan.is_fully_acknowledged(s) for s in sigs),
@@ -109,6 +112,12 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
         if body['diet'] not in choices['diet'] or any(len(body[k]) != len(set(body[k])) or any(v not in choices[k] for v in body[k]) for k in ('budget', 'cuisine')):
             raise ApiError('validation_error', 'Choose only the advertised alignment options.')
         service.alignment(get_db(), uid(), lid, body)
+        return jsonify(calendar(lid))
+
+    @api.put('/lock-ins/<lid>/neighbourhoods')
+    def set_neighbourhoods(lid):
+        body = json_object(required={'scope', 'revision', 'neighbourhoods'})
+        booking_coordination.update(get_db(), uid(), lid, body)
         return jsonify(calendar(lid))
 
     @api.put('/lock-ins/<lid>/availability')

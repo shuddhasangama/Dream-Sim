@@ -54,6 +54,10 @@ BLURBS = {
 def options_for(field: str, city: str | None = None) -> list[str]:
     """The choices for one field, ordered for this city where that helps."""
     if field == "budget":
+        import booking_markets
+        market = booking_markets.for_city(city) if booking_markets.enabled() else None
+        if market:
+            return list(market['budget_ranges_minor'])
         return locale_defaults.budget_bands_for(city)
     if field == "diet":
         return locale_defaults.diets_for(city)

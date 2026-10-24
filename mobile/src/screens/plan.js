@@ -8,6 +8,7 @@ export function render(ctx) {
   if (!data) return '<section class="intro"><h1>Date plan</h1></section><section class="card"><p>Loading…</p></section>';
   return `<section class="intro"><span class="eyebrow">DATE PLAN</span><h1>${safe((ctx.journey?.current_date_plan?.id === data.id && ctx.journey.current_date_plan.display_status === 'completed_awaiting_agreement') || data.status === 'completed' ? 'Date completed' : data.status === 'cancelled' ? 'Date cancelled' : data.status === 'confirmed' ? 'Confirmed' : 'Pending signatures')}</h1></section>
     ${pairContext(ctx)}
+    ${data.booking ? `<section class="card"><h2>Agreed date preferences</h2><p>${data.booking.neighbourhoods.map(p => safe(p.name)).join(', ')}</p><p>${data.booking.cuisines.map(safe).join(', ')} · ${data.booking.budget_bands.map(safe).join(', ')} per person</p><p class="hint">Restaurant booking is pending. No table has been reserved.</p></section>` : ''}
     <section class="card">
       <div class="stat-row"><span>When</span><strong>${safe(data.datetime)}</strong></div>
       <div class="stat-row"><span>Meal</span><strong>${safe(data.meal)}</strong></div>

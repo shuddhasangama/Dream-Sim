@@ -1,0 +1,21 @@
+[
+  {
+    "id": "IN-BLR", "country": "IN", "city": "Bengaluru", "aliases": ["Bangalore"],
+    "currency": "INR", "timezone": "Asia/Kolkata",
+    "budget_ranges_minor": {
+      "₹ · under 800": {"min": 0, "max": 80000},
+      "₹₹ · 800 – 2,000": {"min": 80000, "max": 200000},
+      "₹₹₹ · 2,000 – 4,500": {"min": 200000, "max": 450000},
+      "₹₹₹₹ · 4,500+": {"min": 450000, "max": null}
+    },
+    "providers": [{"id": "direct_venue", "status": "not_connected"}, {"id": "swiggy_dineout", "status": "not_connected"}],
+    "neighbourhoods": [
+      {"id": "indiranagar", "name": "Indiranagar", "lat": 12.9784, "lon": 77.6408},
+      {"id": "koramangala", "name": "Koramangala", "lat": 12.9352, "lon": 77.6245},
+      {"id": "mg-road", "name": "MG Road", "lat": 12.9756, "lon": 77.6067},
+      {"id": "jayanagar", "name": "Jayanagar", "lat": 12.9250, "lon": 77.5938},
+      {"id": "hsr-layout", "name": "HSR Layout", "lat": 12.9116, "lon": 77.6389},
+      {"id": "whitefield", "name": "Whitefield", "lat": 12.9698, "lon": 77.7500}
+    ]
+  }
+]

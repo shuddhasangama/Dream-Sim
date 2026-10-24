@@ -1447,6 +1447,7 @@ def calendar_view():
 
     return render_template(
         "calendar.html",
+        booking=booking_coordination.view(get_db(), user['user_id'], active['id']),
         cycle=len(db.fetch_all(get_db(), "DatePlan", lockin_id=active["id"]))+1,
         partner=partner,
         valid_slots=calendar_dating.valid_slots(),
@@ -1454,6 +1455,25 @@ def calendar_view():
         their_submitted=bool(their_rows),
         overlap=overlap,
     )
+
+
+@app.route('/calendar/neighbourhoods', methods=['POST'])
+@login_required
+def calendar_neighbourhoods():
+    import booking_coordination
+    user = current_user()
+    active = _my_active_lockin(user['user_id'])
+    if active is None:
+        return redirect(url_for('week'))
+    try:
+        booking_coordination.update(get_db(), user['user_id'], active['id'], {
+            'scope': request.form.get('scope'),
+            'revision': int(request.form['revision']) if request.form.get('revision', '').isdigit() else None,
+            'neighbourhoods': request.form.getlist('neighbourhood'),
+        })
+    except ApiError as exc:
+        abort(exc.status, description=exc.message)
+    return redirect(url_for('calendar_view'))
 
 
 @app.route("/calendar/submit", methods=["POST"])
@@ -1549,6 +1569,7 @@ def plan_view():
 
     return render_template(
         "plan.html",
+        booking=booking_coordination.plan_summary(get_db(), plan['id']),
         partner=partner,
         plan=plan,
         my_selections=my_selections,
@@ -4606,6 +4627,7 @@ def _api_journey_state(user):
 
 from api import register_api
 import planning_service
+import booking_coordination
 import date_cycle_service
 import evolution_service
 import after_date_service

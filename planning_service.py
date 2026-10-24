@@ -168,6 +168,13 @@ def confirm(conn, uid, lid, day, meal, slot_datetime, cycle=None):
                 raise ApiError('state_conflict', 'The previous date cycle must be resolved first.', 409)
             pid += ':'+uuid.uuid4().hex
         plan = {'id': pid, **plan}
+        import booking_coordination
+        snapshot = booking_coordination.freeze(conn, uid, lid, pid, day, meal)
+        if snapshot:
+            # Phase 3 agrees preferences, never fabricates a restaurant booking.
+            plan['venue'] = 'Restaurant booking pending'
+            plan['cuisine'] = snapshot['cuisines'][0]
+            plan['budget_estimate'] = snapshot['budget_bands'][0]
         for key in ('selections_a_json', 'selections_b_json'):
             plan[key] = json.dumps(plan[key])
         save(conn, 'DatePlan', plan)

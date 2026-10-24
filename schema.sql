@@ -936,6 +936,24 @@ CREATE TABLE IF NOT EXISTS "GuruDiscussion" (
 CREATE INDEX IF NOT EXISTS guru_discussion_members ON "GuruDiscussion"(user_a, user_b);
 
 -- Provider billing ledger: separate from legacy simulated Payment rows.
+CREATE TABLE IF NOT EXISTS "BookingPreference" (
+    id TEXT PRIMARY KEY,
+    scope_id TEXT NOT NULL,
+    lockin_id TEXT NOT NULL REFERENCES "LockIn"(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    market_id TEXT NOT NULL,
+    places_json TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    UNIQUE(scope_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS "BookingSnapshot" (
+    id TEXT PRIMARY KEY,
+    dateplan_id TEXT NOT NULL UNIQUE REFERENCES "DatePlan"(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    lockin_id TEXT NOT NULL REFERENCES "LockIn"(id) ON DELETE CASCADE,
+    scope_id TEXT NOT NULL,
+    payload_json TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "BillingPurchase" (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES "User"(id),

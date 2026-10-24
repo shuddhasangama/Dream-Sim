@@ -10,6 +10,7 @@ export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Calendar</h1></section><section class="card"><p>Loading…</p></section>';
   const { alignment, overlap = [], valid_slots = [], my_slots = [], payment } = data;
+  const booking = data.booking;
 
   return `<section class="intro"><span class="eyebrow">CALENDAR</span><h1>Confirm Date</h1><p>Set preferences, select slots, then confirm an overlap.</p></section>
 
@@ -26,6 +27,13 @@ export function render(ctx) {
       </form>
     </details>
 
+    ${booking ? `<section class="card"><h2>Where to meet</h2><p role="status">${safe(booking.message)}</p>
+      ${booking.market ? `<p class="hint">${safe(booking.market.city)} · Restaurant search will use shared neighbourhoods, within 1–3 km.</p>` : ''}
+      ${booking.editable && booking.neighbourhoods.length ? `<form id="neighbourhood-form"><div class="chips">${booking.neighbourhoods.map(p => `<label class="checkbox-row"><input type="checkbox" name="neighbourhood" value="${safe(p.id)}" ${booking.mine.includes(p.id) ? 'checked' : ''}> ${safe(p.name)}</label>`).join('')}</div><p class="hint">Save the areas you are comfortable meeting in. Only shared choices are shown to your match.</p><button class="secondary" type="submit">Save neighbourhoods</button></form>` : ''}
+      ${booking.shared_neighbourhoods?.length ? `<p>Shared areas: ${booking.neighbourhoods.filter(p => booking.shared_neighbourhoods.includes(p.id)).map(p => safe(p.name)).join(', ')}</p>` : ''}
+      ${booking.snapshot ? `<p>${booking.snapshot.neighbourhoods.map(p => safe(p.name)).join(', ')} · ${booking.snapshot.cuisines.map(safe).join(', ')} · ${booking.snapshot.budget_bands.map(safe).join(', ')}</p>` : ''}
+      <p class="hint">This saves your date preferences. It does not reserve a table or collect a restaurant deposit.</p></section>` : ''}
+
     <section class="card">
       <h2>${my_slots.length ? '✓ Your availability saved' : 'Your weekend availability'}</h2>
       <p class="hint">${data.partner_submitted ? 'Your match has submitted theirs too.' : "Waiting on your match to submit theirs."}</p>
@@ -36,7 +44,7 @@ export function render(ctx) {
     </section>
 
     ${data.current_plan_id ? `<section class="card guidance"><p>A time is already set.</p><button id="view-plan" class="primary" type="button">View date plan <span aria-hidden="true">→</span></button></section>`
-      : data.editable && overlap.length ? `<section class="card"><h2>You're both free</h2>${overlap.map((s) => `<div class="slot"><span>${safe(s.day)} · ${safe(MEAL_LABELS[s.meal_slot] || s.meal_slot)}</span><button class="primary confirm-slot" data-day="${safe(s.day)}" data-meal="${safe(s.meal_slot)}" type="button" style="width:auto;margin:0;">Confirm</button></div>`).join('')}</section>`
+      : data.editable && overlap.length ? `<section class="card"><h2>You're both free</h2>${overlap.map((s) => `<div class="slot"><span>${safe(s.day)} · ${safe(MEAL_LABELS[s.meal_slot] || s.meal_slot)}</span><button class="primary confirm-slot" data-day="${safe(s.day)}" data-meal="${safe(s.meal_slot)}" type="button" ${booking && !booking.ready ? 'disabled' : ''} style="width:auto;margin:0;">Confirm</button></div>`).join('')}</section>`
       : `<section class="card"><p class="hint">No overlap yet — once you've both submitted availability, matching times show up here.</p></section>`}
     ${payment && payment.enforced && !payment.satisfied ? `<p class="warn">This is a beta simulation — no real payment is charged.</p>` : ''}`;
 }
@@ -46,6 +54,18 @@ function asArray(v) { return Array.isArray(v) ? v : v ? [v] : []; }
 export function bind(root, ctx) {
   const { session, run, patch, navigateTo } = ctx;
   const lockInId = encodeURIComponent(ctx.data.lock_in_id);
+
+  root.querySelector('#neighbourhood-form')?.addEventListener('submit', e => {
+    e.preventDefault();
+    run(async () => {
+      const booking = ctx.data.booking;
+      patch(await session.put(`/api/v1/lock-ins/${lockInId}/neighbourhoods`, {
+        scope: booking.scope, revision: booking.revision,
+        neighbourhoods: new FormData(e.target).getAll('neighbourhood'),
+      }));
+      await ctx.refreshJourney();
+    });
+  });
 
   root.querySelector('#alignment-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
