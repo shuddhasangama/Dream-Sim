@@ -14,7 +14,7 @@ import evolution_service as service
 from api_contract import ApiError, json_object, allowlist
 
 
-def register(api,get_db,get_clock,stats_situation,milestones):
+def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
     def uid(): return g.api_user['user_id']
     def expectation_hours(pace):
         now=service.hours(get_clock())
@@ -139,6 +139,32 @@ def register(api,get_db,get_clock,stats_situation,milestones):
             ethnicity=stats.get('ethnicity',[]), ethnicity_options=onboarding.STAT_OPTIONS['ethnicity'],
             categories=profile_choices.HEALTH, photo=pic['data_url'] if pic else None)
 
+    @api.put('/profile/bio')
+    def bio_write():
+        body=json_object(required={'categories','share_health','note','ethnicity'})
+        shared,_=profile_choices.validate({**body,'openness':'any','open_categories':[], 'include_undisclosed':True})
+        ethnic=body['ethnicity']
+        if type(ethnic) is not list or len(ethnic)>2 or any(v not in onboarding.STAT_OPTIONS['ethnicity'] for v in ethnic):
+            raise ApiError('validation_error','Choose up to two listed ethnicities.')
+        with service.transaction(get_db()):
+            row=db.fetch_one(get_db(),'User',id=uid())
+            stats=db.load_json_field(row['stats_json'],{})
+            stats.update(health_shared=shared,ethnicity=list(dict.fromkeys(ethnic)))
+            row['stats_json']=json.dumps(stats)
+            db.insert_row(get_db(),'User',row)
+        return personal_read()
+
+    @api.post('/profile/bio/withdraw')
+    def bio_withdraw():
+        json_object()
+        with service.transaction(get_db()):
+            row=db.fetch_one(get_db(),'User',id=uid())
+            stats=db.load_json_field(row['stats_json'],{})
+            stats['health_shared']={'consent':False,'categories':[],'note':''}
+            row['stats_json']=json.dumps(stats)
+            db.insert_row(get_db(),'User',row)
+        return personal_read()
+
     @api.put('/profile/personal')
     def personal_write():
         body=json_object(required={'categories','share_health','note','openness','open_categories','include_undisclosed','ethnicity'})
@@ -152,7 +178,7 @@ def register(api,get_db,get_clock,stats_situation,milestones):
             preferences=db.load_json_field(row['preferences_json'],{})
             # Withdrawal is always possible; changing matching preferences while a pair is active is not.
             state=stats_situation(g.api_user)
-            if (state.get('keenness') or state.get('live_match')) and prefs!=preferences.get('health_openness',{'mode':'any','categories':[],'include_undisclosed':True}):
+            if ((reach_locked(g.api_user) if reach_locked else False) or state.get('keenness') or state.get('live_match')) and prefs!=preferences.get('health_openness',{'mode':'any','categories':[],'include_undisclosed':True}):
                 raise ApiError('profile_locked','Matching preferences can change after the current match/date window.',409)
             stats.update(health_shared=shared,ethnicity=ethnic)
             preferences['health_openness']=prefs

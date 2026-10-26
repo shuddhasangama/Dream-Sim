@@ -150,6 +150,14 @@
   {% elif s.status == "open" %}
   <div class="candidate-card" style="margin-top:8px;">
     <div class="candidate-name">{{ s.candidate.name }}</div>
+  <details><summary>Bio</summary>
+  {% set health = s.candidate.stats.get('health_shared', {}) %}
+  {% if health.get('consent') %}
+    <p>Health &amp; accessibility · self-declared, not medically verified.</p>
+    {% for category in health.get('categories', []) %}<span>{{ health_labels.get(category, category) }}</span>{% if not loop.last %}, {% endif %}{% endfor %}
+    <p>{{ health.get('note', '') }}</p>
+  {% else %}<p>Health &amp; accessibility not shared. This means unknown.</p>{% endif %}
+  </details>
     <div class="micro">Window closes {{ s.row.window_closes_at }}</div>
 
     <div class="micro section-label" style="margin-top:10px;">Vision</div>

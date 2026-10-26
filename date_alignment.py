@@ -38,14 +38,14 @@ from generate_users import CUISINES, DIETS
 FIELDS = ("budget", "diet", "cuisine")
 
 LABELS = {
-    "budget": "What you would like to spend",
+    "budget": "Food budget per person",
     "diet": "What you eat",
     "cuisine": "Cuisines you enjoy",
 }
 
 BLURBS = {
-    "budget": "Sets the band in the agreement's bill clause. The lower of the two applies, so "
-              "neither of you is committed to the other's idea of an evening.",
+    "budget": "For neighbourhood booking, choose a band you both selected. Food estimates are per person; "
+              "deposits, booking fees and DhaShu stage fees are shown separately.",
     "diet": "Decides the venue. It has to carry something you both actually eat.",
     "cuisine": "Narrows the venue to something you would both choose, not merely tolerate.",
 }

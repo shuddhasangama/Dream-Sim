@@ -214,7 +214,8 @@ export function render(ctx) {
     </div>
 
     <section class="card"><button type="button" id="identity-open" class="secondary">Private identity check</button>
-    <button type="button" id="personal-open" class="secondary">Photo, ethnicity &amp; health preferences</button>
+    ${ctx.journey?.current_date_plan?.readiness ? `<p role="status">${safe(ctx.journey.current_date_plan.readiness.label)} · ${safe(ctx.journey.current_date_plan.readiness.message)}</p>` : ''}
+    <button type="button" id="personal-open" class="secondary">Bio · photo &amp; personal details</button>
     ${personalData ? personal.render({...ctx,data:personalData}) : ''}</section>
     ${editorOpen ? `<div class="p-editor-panel" data-editor-body="${selectedRing}">
       ${selectedRing === 'stats' ? renderStatsEditor(ctx) : renderFoldBody(selectedRing, ctx)}

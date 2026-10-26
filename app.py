@@ -457,6 +457,7 @@ def inject_globals():
         "demo_clock": demo.clock_view(get_clock()) if demo.is_enabled() else None,
         "payments_enabled": payments.is_enabled(),
         "needs_verification": bool(user) and user["bgv_status"] != "verified",
+        "health_labels": __import__("profile_choices").HEALTH,
         "nav_links": disclosure.nav_for(reached, reach_locked=reach_locked(user) if user else False),
         "milestones": reached,
         # 2026-09-04: a stage, not a step count. "Step 11 of 12" invited
@@ -984,6 +985,7 @@ def reach():
     choices = [f for f in filters if f["control"] == "choice"]
     return render_template(
         "reach.html", counts=counts, deltas=deltas,
+        health_filter=__import__("profile_choices").reach_health(user),
         locked_levers=locked_lever_view(user),
         basic_sliders=[s for s in sliders if s["basic"]],
         more_sliders=[s for s in sliders if not s["basic"]],
@@ -1030,14 +1032,41 @@ def reach_show_all():
     return jsonify(_reach_state(user["user_id"]))
 
 
+@app.route('/bio')
+@login_required
+def bio_page():
+    return render_template('bio.html')
+
+
+@app.route('/reach/health', methods=['POST'])
+@login_required
+def reach_health_update():
+    import profile_choices
+    from api_contract import ApiError
+    user = current_user()
+    if reach_locked(user):
+        return jsonify(error='Health preferences are frozen with REACH for this match.'), 403
+    try:
+        prefs = profile_choices.openness(request.get_json(silent=True) or {})
+    except ApiError as exc:
+        return jsonify(error=str(exc)), 400
+    current = dict(user['preferences'])
+    current['health_openness'] = prefs
+    current['health_filter_ignored'] = False
+    save_preferences(user['user_id'], current)
+    return jsonify(_reach_state(user['user_id']))
+
+
 def _reach_state(user_id: str) -> dict:
     """The whole screen's numbers, recomputed from storage. Every REACH
     action returns this rather than a partial patch, so the counts on the
     screen can never disagree with what is saved."""
+    import profile_choices
     fresh = load_user(user_id)
     pool, counting_unverified = reach_pool(fresh)
     filters = filter_view(fresh, pool)
     return {
+        "health_filter": profile_choices.reach_health(fresh),
         "counts": matching.reciprocity_counts(fresh, pool),
         "deltas": [d for d in matching.whatif_deltas(fresh, pool)
                    if d["lever"] not in _SLIDER_KEYS],
@@ -4658,7 +4687,7 @@ register_api(
     week_prepare=lambda user: week_service.prepare(get_db(), user['user_id'], get_clock()),
     match_action=lambda user, match_id, body: week_service.decide(
         get_db(), user['user_id'], match_id, body['action'], body.get('pass_reason'), get_clock()),
-    reach_actions={"ignore": reach_ignore, "show-all": reach_show_all,
+    reach_actions={"health": reach_health_update, "ignore": reach_ignore, "show-all": reach_show_all,
                    "widen": reach_widen, "set-range": reach_set_range},
     get_clock=get_clock, set_clock=set_clock,
 )

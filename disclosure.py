@@ -47,7 +47,7 @@ MILESTONE_LABELS = {
     REGISTERED: "Signed up",
     VERIFIED: "Verified",
     MATCHED: "Locked in with someone",
-    DATE_SET: "A date is set",
+    DATE_SET: "Date plan available",
     FIRST_DATE: "First date done",
     RELATIONSHIP: "In a relationship",
 }

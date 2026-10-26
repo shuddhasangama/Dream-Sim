@@ -130,3 +130,28 @@ Validation: the combined backend run passed 58 tests and 89 subtests, including 
 PostgreSQL race checks. All 102 mobile tests and the production Vite build passed. A separate
 invalid-search regression check also covers the actionable 409 response for legacy bad dates.
 No live vendor, real reservation or payment was used in these tests.
+
+
+## Preference mapping contract
+
+Profile labels remain compatible with saved users and booking snapshots. Provider
+searches now carry stable cuisine/diet IDs from `restaurant_preferences.py`.
+Adapters must explicitly map these IDs to documented vendor categories and map
+responses back to canonical IDs. Unknown values fail closed; do not infer that
+Continental, Mediterranean and Levantine are equivalent. `provider_values` helps
+validate outbound mappings. No vendor-specific taxonomy is assumed yet.
+
+`Everything` means unrestricted and is not sent as a required venue tag. Other
+diet tags mean confirmed suitable menu options, not a dedicated vegetarian-only
+restaurant or an allergy/certification guarantee. Do not invent Jain/Halal support
+from generic vegetarian/non-vegetarian tags. Missing evidence excludes that option.
+
+Food budgets are per person. Neighbourhood booking requires a shared selected
+band; the older non-coordination path still uses the lower-budget rule.
+`per_person_minor` converts a documented party-total estimate, rounding upward.
+Adapters must establish currency units and tax/service-charge inclusions from
+the provider contract. Current screens explicitly mark those inclusions unconfirmed.
+Deposits, redeemable food credit, booking fees and DhaShu stage fees remain separate.
+
+Verification: `python -m unittest test_restaurant_preferences test_restaurant_registry test_restaurant_service -q`.
+Use `npm.cmd test` and `npm.cmd run build` on PowerShell with scripts disabled.

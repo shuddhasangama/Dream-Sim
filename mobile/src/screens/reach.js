@@ -1,3 +1,4 @@
+import {healthForm} from '../../../static/health-reach.js';
 // REACH — design_handoff_app_ui_pulse/README.md ("Pulse", option 1a):
 // the same GET /api/v1/reach shape and the same set of mutations
 // (ignore/set-range/show-all) reach.js has always used, now presented as
@@ -98,7 +99,7 @@ export function render(ctx) {
   const fit = counts?.fits_user_filters ?? 0;
   const units = chipUnits(data);
 
-  return `<section class="intro"><span class="p-eyebrow">REACH · THIS WEEK</span></section>
+  return `${healthForm(data.health_filter, safe)}<section class="intro"><span class="p-eyebrow">REACH · THIS WEEK</span></section>
     <div class="p-reach-hero">
       <div class="p-reach-ring" style="background:${reachRingGradient(mutual, fit, 'var(--p-success)', 'var(--p-track)')}">
         <div class="p-reach-ring-inner"><div><div class="p-reach-num">${safe(mutual)}</div><div class="p-reach-sub">open to you</div></div></div>
@@ -205,6 +206,11 @@ function pairedSheetBody([a, b], safe) {
 
 export function bind(root, ctx) {
   const { session, run, patch, data } = ctx;
+  root.querySelector('#health-reach-form')?.addEventListener('submit',e=>{
+    e.preventDefault(); const f=new FormData(e.target);
+    run(async()=>{try { patch(await session.post('/api/v1/reach/health',{mode:f.get('mode'),categories:f.getAll('categories'),include_undisclosed:f.has('include_undisclosed')})); }
+    catch(err){root.querySelector('#health-reach-error').textContent=err.message;}});
+  });
   const units = chipUnits(data);
   const unitByKey = new Map(units.map((u) => [u.chipKey, u]));
 

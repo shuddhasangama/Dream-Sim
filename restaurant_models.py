@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import math
+from restaurant_preferences import identifiers, CUISINES, DIETS
 
 
 @dataclass(frozen=True)
@@ -46,7 +47,8 @@ class SearchRequest:
         return {'id':self.market_id,'country':self.country,'city':self.city,'currency':self.currency,
                 'currency_exponent':self.currency_exponent,'timezone':self.timezone,'date_time':self.date_time,
                 'party_size':self.party_size,'neighbourhoods':[dict(p) for p in self.neighbourhoods],
-                'cuisines':list(self.cuisines),'dietary_requirements':list(self.dietary_requirements),
+                'cuisines':sorted(identifiers(self.cuisines, CUISINES)),
+                'dietary_requirements':sorted(identifiers(self.dietary_requirements, DIETS) - {'unrestricted'}),
                 'budget_per_person_minor':{'min':self.minimum,'max':self.maximum},'simulation':self.simulation}
 
 
@@ -75,6 +77,10 @@ def normalize_quote(raw, request, provider_id, label, adapter_key):
         raise ValueError('Quote availability or currency mismatch')
     # Strict allowlist: arbitrary provider metadata and credentials never reach clients.
     q={k:raw[k] for k in (*text,*amounts,'lat','lon','cuisines','diets','available')}
+    # Adapters return canonical IDs (legacy DhaShu labels are also accepted).
+    for key, vocabulary in (('cuisines', CUISINES), ('diets', DIETS)):
+        labels = {value: label for label, value in vocabulary.items()}
+        q[key] = [labels[value] for value in sorted(identifiers(q[key], vocabulary) - {'unrestricted'})]
     q.update(id=provider_id+':'+raw['id'],provider_venue_id=raw['id'],provider_id=provider_id,
              provider_label=label,adapter_key=adapter_key,currency_exponent=request.currency_exponent,
              upfront_minor=raw['deposit_minor']+raw['booking_fee_minor'],

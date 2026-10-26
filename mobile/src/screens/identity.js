@@ -6,7 +6,7 @@ export const captureOptions = {
   allowEditing: false, saveToGallery: false, correctOrientation: true, webUseInput: true,
 };
 
-const labels = {not_captured:'Not captured', captured:'Saved — awaiting submission',
+const labels = {not_captured:'Not captured', captured:'Photo captured — identity verification pending',
   submitted:'Awaiting provider review', verified:'Identity check approved',
   rejected:'Provider could not approve this image', expired:'A new check is needed', deleted:'Image deleted'};
 
@@ -17,7 +17,9 @@ export function panel(data, safe) {
   const canCapture = ['not_captured','deleted','rejected','expired'].includes(data.status);
   return `<section class="card"><h2>Face photo</h2>
     <p role="status">${safe(data.test_approved ? 'Capture complete — approved for testing' : labels[data.status] || 'Check status')}</p>
-    <p>Private photo for your identity check.</p>
+    <p>Private photo for your identity check. Capturing a photo does not complete BGV.</p>
+    <p>BGV: ${safe(({verified:'Completed',pending:'Pending',processing:'Processing',declared:'Not yet verified',rejected:'Review required'})[data.bgv_status] || 'Status not confirmed')}</p>
+    ${data.agreement_scope?`<p>This agreement: ${data.agreement_identity_complete?'Identity step recorded':'Identity step not yet recorded'}. Your signature and this step belong to this agreement only.</p>`:''}
     ${canCapture ? `<p>Face the camera in good light. Keep your full face visible.</p>
       <button id="identity-camera" type="button">Take a face photo</button>
       <img id="identity-preview" class="profile-portrait" hidden alt="Review your identity image before uploading">
@@ -27,6 +29,8 @@ export function panel(data, safe) {
     ${data.test_approved ? '<p>You can continue testing now. BGV authentication is still pending.</p>' : ''}
     ${data.status === 'captured' && !data.test_approved ? '<p>Your image has not been sent automatically. DhaShu must submit it to the verification provider.</p>' : ''}
     ${data.verified ? '<p>Your approved check can be reused for later agreements while it remains valid. Each agreement still needs your own signature.</p>' : ''}
+    ${data.verification?.available?`<p>Verification simulator — no image is sent and no real identity approval is granted.</p><button type="button" id="identity-simulate">Test liveness and face-match flow</button>`:''}
+    ${data.verification?.latest?`<p role="status">Simulated result: ${safe(data.verification.latest.state.replaceAll('_',' '))} · ${safe(data.verification.latest.reason.replaceAll('_',' '))}. Not a real verification.</p>`:''}
     <button id="identity-refresh" type="button">Refresh status</button>
     ${data.capture_id && data.status !== 'deleted' ? `<details><summary>Delete identity image</summary>
       <p>This removes DhaShu’s stored image and stops reuse of this check. It does not erase existing agreements or recall provider exports.</p>
@@ -39,6 +43,12 @@ export function render({data,safe}) {
 }
 
 export function bindPanel(root, {session, run}, data, reload, takePhoto = () => Camera.getPhoto(captureOptions)) {
+  let verificationRequestId=null;
+  root.querySelector('#identity-simulate')?.addEventListener('click',()=>run(async()=>{
+    verificationRequestId ||= crypto.randomUUID();
+    await session.post('/api/v1/identity-capture/verification/simulate',{request_id:verificationRequestId});
+    await reload();
+  }));
   let staged = null;
   root.querySelector('#identity-camera')?.addEventListener('click', async () => {
     const button=root.querySelector('#identity-camera');

@@ -1,3 +1,4 @@
+from restaurant_preferences import matches
 """Date-scoped booking orchestration, simulation only. No real money is moved.
 
 Serializable aggregate updates use the same lock ordering as date planning.
@@ -103,8 +104,7 @@ def search(snapshot, plan, adapter):
             distance = min(distance_km(p, option) for p in snapshot['neighbourhoods'])
             bounds = snapshot['budget_per_person_minor']
             if (not option['available'] or distance > radius or option['currency'] != snapshot['currency']
-                or not set(snapshot['cuisines']) & set(option['cuisines'])
-                or not set(snapshot['dietary_requirements']) <= set(option['diets'])
+                or not matches(snapshot['cuisines'], snapshot['dietary_requirements'], option['cuisines'], option['diets'])
                 or not bounds['min'] <= option['estimate_per_person_minor'] <= bounds['max']):
                 continue
             found[option['id']] = {**option, 'distance_km': round(distance, 2),

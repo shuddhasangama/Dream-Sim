@@ -28,7 +28,7 @@ test('capture requires review and explicit consent and does not save to gallery'
 test('test-approved capture offers Continue without claiming BGV verification',()=>{
   const html=ceremony({safe,data:{step:'face',identity:{enabled:true,status:'captured',verified:false,test_approved:true,can_complete:true,capture_id:'c'}}});
   assert.match(html,/id="do-face"/);
-  assert.match(html,/Continue/);
+  assert.match(html,/Complete this agreement/);
   assert.match(html,/BGV authentication is still pending/);
   assert.doesNotMatch(html,/Return here once/);
 });

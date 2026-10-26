@@ -94,7 +94,7 @@ class JourneyApiTests(RouteTestCase):
         self.make_plan('private-foreign-pair', plan_id='private-foreign-plan')
         state = self.get().json['data']
         self.assertEqual(set(state['current_lock_in']), {'id', 'status', 'week', 'dates_completed', 'partner_name', 'partner_summary', 'name_hidden', 'my_vision_label', 'partner_vision_label', 'my_visions'})
-        self.assertEqual(set(state['current_date_plan']), {'id', 'status', 'datetime'})
+        self.assertEqual(set(state['current_date_plan']), {'id', 'status', 'datetime', 'readiness'})
         body = json.dumps(state)
         for private in ('private-foreign', '@private.test', '+919999999999',
                         'password_hash', 'selections_a', 'selections_b', 'user_a', 'user_b'):

@@ -26,6 +26,7 @@
         <span class="verify-dot" aria-hidden="true"></span>
         {% if needs_verification %}Not verified{% else %}Verified{% endif %}
       </span>
+      <a href="{{ url_for('bio_page') }}">Bio</a>
     </header>
     {% endif %}
     {% if not secure_auth_enabled %}{% include "_demo_bar.html" %}{% endif %}

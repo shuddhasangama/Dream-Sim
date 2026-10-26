@@ -3,6 +3,18 @@
 {% block content %}
 <div class="eyebrow">REACH · Reciprocity this week</div>
 <h1>See who opens up.</h1>
+<div id="health-reach"></div><p><a href="/bio">Edit your Bio</a></p>
+<script type="module">
+import {healthForm} from '/static/health-reach.js';
+const safe=v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+document.querySelector('#health-reach').innerHTML=healthForm({{ health_filter|tojson }},safe);
+document.querySelector('#health-reach-form').addEventListener('submit',async e=>{
+ e.preventDefault();const f=new FormData(e.target);
+ try {const r=await fetch('/reach/health',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:f.get('mode'),categories:f.getAll('categories'),include_undisclosed:f.has('include_undisclosed')})});
+ if(!r.ok) throw new Error('Could not save. Choose at least one category or No filter; REACH must be open.');location.reload();}
+ catch(err){document.querySelector('#health-reach-error').textContent=err.message;}
+});
+</script>
 
 <div class="card reach-summary">
   <div>

@@ -40,7 +40,7 @@ export function chipsFor(data) {
     match_available: ['match', 'matching'],
     planning: ['planning', 'agreement', 'sharing'],
     repeat_planning: ['build', 'planning', 'sharing'],
-    agreement: ['agreement', 'prepare', 'sharing'],
+    agreement: ['agreement', 'sharing'],
     before_date: ['prepare', 'agreement', 'sharing'],
     debrief: ['reflect', 'sharing'],
     post_debrief: ['build', 'pace', 'sharing'],
@@ -60,7 +60,7 @@ export function render(ctx) {
 
   return `<section class="p-guru-header">
       <div class="guru-avatar">G</div>
-      <div><div style="font-weight:800;">Guru</div><div class="p-guru-role">Relationship navigator</div></div>
+      <div><div style="font-weight:800;">Guru</div><div class="p-guru-role">Relationship navigator · Guided actions</div></div>
     </section>
     <div class="p-guru-thread">
       ${!qa ? `<div class="p-bubble-guru"><span>${safe(data.headline || 'Your next step')} · ${safe(data.body || 'Choose a topic below.')}</span></div>` : ''}

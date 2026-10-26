@@ -196,7 +196,7 @@ function weekHeader(ctx) {
   const real=confirmedDateMoment(data.date_plan);
   if(real && byDay[real.day]) {
     byDay[real.day]=byDay[real.day].filter(m=>m.tone!=='date');
-    byDay[real.day].push({key:'actual_date',label:data.date_plan.display_status==='completed_awaiting_agreement'?'Date completed':data.date_plan.status==='confirmed'?'Your confirmed date':'Date awaiting signatures',tone:'date',hour:real.hour,time:data.date_plan.datetime.split('T')[1].slice(0,5),personal:true,means:`${data.date_plan.datetime} — ${data.date_plan.status?.replaceAll('_',' ')||'Saved plan'}`});
+    byDay[real.day].push({key:'actual_date',label:data.date_plan.readiness?.label || (data.date_plan.display_status==='completed_awaiting_agreement'?'Date completed':data.date_plan.status==='confirmed'?'Your confirmed date':'Date awaiting signatures'),tone:'date',hour:real.hour,time:data.date_plan.datetime.split('T')[1].slice(0,5),personal:true,means:`${data.date_plan.datetime} — ${data.date_plan.status?.replaceAll('_',' ')||'Saved plan'}`});
     byDay[real.day].sort((a,b)=>a.hour-b.hour);
   }
   const todayIdx = grid.days.findIndex((d) => d.is_today);
@@ -296,9 +296,9 @@ function matchSlot(m, safe, rehearsal = false, myActivities = {}) {
     <details><summary>Vision</summary><p>${safe(c.vision_template||'Individual Vision')}</p>
     <div class="chips">${(c.visions || []).map(v=>`<span>${safe(v.key)} · ${safe(Array.isArray(v.stance)?v.stance.join(', '):v.stance||'')}</span>`).join('')}</div>
     <p>Future children: ${safe(({want:'Want children',no:'Do not want additional children',open:'Open to children',undecided:'Undecided'})[c.kids_intent]||'Undecided')}</p></details>
-    <details><summary>Stats</summary><div class="stat-grid">${Object.entries(c.stats || {}).filter(([,v])=>v!=null).map(([k,v])=>`<div>${safe(k.replaceAll('_',' '))}: ${safe(v)} <small>${c.verified_fields?.includes(k)?'✓ Verified':'Self-declared'}</small></div>`).join('')}</div>
+    <details><summary>Stats</summary><div class="stat-grid">${Object.entries(c.stats || {}).filter(([k,v])=>v!=null && !['health_shared','health_openness'].includes(k)).map(([k,v])=>`<div>${safe(k.replaceAll('_',' '))}: ${safe(v)} <small>${c.verified_fields?.includes(k)?'✓ Verified':'Self-declared'}</small></div>`).join('')}</div>
     <p>Ethnicity: ${safe((c.ethnicity||[]).join(', ')||'Not shared')} · self-declared</p>
-    ${c.health?.consent ? `<h3>Shared health &amp; accessibility</h3><p>${safe((c.health.categories||[]).map(k=>c.health_labels?.[k]||k).join(', '))}</p><p>${safe(c.health.note||'')}</p><p class="hint">Self-declared; not medically verified.</p>` : '<p class="hint">Health/accessibility not shared. This does not indicate absence of a condition.</p>'}</details>
+    </details><details><summary>Bio</summary>${c.health?.consent ? `<h3>Shared health &amp; accessibility</h3><p>${safe((c.health.categories||[]).map(k=>c.health_labels?.[k]||k).join(', '))}</p><p>${safe(c.health.note||'')}</p><p class="hint">Self-declared; not medically verified.</p>` : '<p class="hint">Health/accessibility not shared. This does not indicate absence of a condition.</p>'}</details>
     <details><summary>Chemistry</summary><p>Shared interests: ${safe(Object.entries(c.activities||{}).filter(([k,v])=>['good','improve'].includes(v)&&['good','improve'].includes(myActivities[k])).map(([k])=>k).join(', ')||'None recorded yet')}</p>${Object.entries(c.activities||{}).filter(([,v])=>v!=='no').map(([k,v])=>`<p>${safe(k)} · ${safe(({good:'Enjoys / skilled',improve:'Developing',maybe:'Open to trying'})[v]||v)}</p>`).join('')||'<p>Interests not shared yet.</p>'}
     <details><summary>Not for me</summary>${Object.entries(c.activities||{}).filter(([,v])=>v==='no').map(([k])=>`<p>${safe(k)}</p>`).join('')||'<p>None shared.</p>'}</details></details></div>` : ''}
     ${m.their_interest ? '<p class="hint">They already Liked in you — Liking back will match you.</p>' : ''}

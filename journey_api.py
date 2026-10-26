@@ -120,6 +120,9 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
                                  in_dating=(user['journey_state'] == 'dating'),
                                  partner_greeting=partner_greeting),
     }
+    if result['current_date_plan']:
+        import date_readiness
+        result['current_date_plan']['readiness']=date_readiness.describe(plan, facts.get('agreement_signed',False), bool(facts.get('next_step_agreement')))
     if result['current_date_plan'] and facts.get('next_step_agreement'):
         result['current_date_plan']['display_status']='completed_awaiting_agreement'
     routes = {}

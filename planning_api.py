@@ -1,5 +1,6 @@
 """Owned date-planning JSON resources; GET never creates ceremony rows."""
 import os
+import date_readiness
 import uuid
 from flask import g, jsonify
 import calendar_dating
@@ -73,6 +74,7 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
         role = 'a' if uid() == active['user_a'] else 'b'
         sigs = db.fetch_all(get_db(), 'Signature', dateplan_id=pid)
         return {**allowlist(plan, ('id', 'lockin_id', 'datetime', 'meal', 'venue', 'cuisine', 'budget_estimate', 'bill_split', 'status', 'cancel_notice_hrs', 'cancel_fee')),
+                'readiness': date_readiness.describe(plan, any(s['user_id']==uid() and dateplan.is_fully_acknowledged(s) for s in sigs)),
                 'booking': booking_coordination.plan_summary(get_db(), pid),
                 'restaurant': restaurant_service.view(get_db(), uid(), pid),
                 'my_selections': db.load_json_field(plan['selections_'+role+'_json'], {}),
@@ -98,7 +100,9 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
                 'payment': entitlement(payments.AGREEMENT, pid),
                 **ceremony.document_view(state, [{**c, 'text': f"{c['n']}. {c['title']} — {c['body']}"}
                     for c in ceremony.clauses_for(ceremony.DATE_AGREEMENT, agreement_context(pid))]),
-                'identity': identity_capture.view(get_db(), uid())}
+                'identity': {**identity_capture.view(get_db(), uid()), 'agreement_scope': pid,
+                    'agreement_identity_complete': bool(state.get('face_method')),
+                    'agreement_identity_method': state.get('face_method')}}
 
     @api.get('/lock-ins/<lid>/calendar')
     def get_calendar(lid):

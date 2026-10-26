@@ -14,6 +14,12 @@ TEMPLATES = [
  {'key':'custom','label':'Custom Together','description':'Choose your own pillars and preferences.','choices':None,'kids_intent':'undecided'},
 ]
 HEALTH = {'mobility':'Mobility disability / wheelchair use','physical':'Other physical disability','sensory':'Sensory disability','non_visible':'Non-visible disability','diabetes':'Diabetes','cancer':'Cancer / cancer history','trauma':'Trauma / mental health history','other':'Other health or accessibility needs'}
+# Keep legacy categories readable; never infer a narrower category for saved users.
+HEALTH.update({'hearing':'Hearing / communication needs','vision':'Vision-related disability',
+               'neurodivergence':'Neurodivergence (for example ADHD or autism)',
+               'mental_health':'Mental health condition','cancer_current':'Current cancer',
+               'cancer_history':'Past cancer history'})
+
 
 def template_label(stats, goals):
     key=stats.get('vision_template','custom')
@@ -35,13 +41,23 @@ def template_label(stats, goals):
     return item['label'] if fits else 'Custom Together'
 
 
+HEALTH_GROUPS = {'sensory': {'hearing','vision'}, 'non_visible': {'neurodivergence','mental_health'},
+                 'cancer': {'cancer_current','cancer_history'}}
+
+
 def health_fits(a,b):
     """Only consented disclosures are considered; missing is explicitly unknown."""
-    prefs=a.get('preferences',{}).get('health_openness',{})
+    preferences=a.get('preferences',{})
+    if preferences.get('health_filter_ignored', False): return True
+    prefs=preferences.get('health_openness',{})
     if prefs.get('mode')!='specific': return True
     declared=b.get('stats',{}).get('health_shared',{})
     if not declared.get('consent') or not declared.get('categories'): return prefs.get('include_undisclosed',True)
-    return set(declared.get('categories',[])) <= set(prefs.get('categories',[]))
+    accepted=set(prefs.get('categories',[]))
+    # Broad, explicitly selected legacy categories include named subcategories.
+    for broad, children in HEALTH_GROUPS.items():
+        if broad in accepted: accepted.update(children)
+    return set(declared.get('categories',[])) <= accepted
 
 def validate(body):
     cats=body.get('categories',[])
@@ -53,6 +69,8 @@ def validate(body):
         if type(body.get(key)) is not bool: raise ApiError('validation_error',key+' must be true or false.')
     mode=body.get('openness','any')
     if mode not in ('any','specific'): raise ApiError('validation_error','Choose an openness option.')
+    if mode == 'specific' and not accepted:
+        raise ApiError('validation_error','Choose at least one category or select No filter.')
     note=body.get('note','')
     if type(note) is not str or len(note)>500: raise ApiError('validation_error','Use at most 500 characters for your note.')
     if not body['share_health'] and (cats or note.strip()):
@@ -85,3 +103,15 @@ def public_profile(conn, user):
       'ethnicity':stats.get('ethnicity',[]), 'health':shared if shared.get('consent') else None,
       'health_labels':HEALTH,'photo':pic['data_url'] if pic else None,
       'activities':skills}
+
+
+def openness(body):
+    _, prefs = validate(dict(categories=[], share_health=False, note='',
+                            openness=body.get('mode'), open_categories=body.get('categories'),
+                            include_undisclosed=body.get('include_undisclosed')))
+    return prefs
+
+def reach_health(user):
+    return {'categories': HEALTH, 'groups': {k: sorted(v) for k,v in HEALTH_GROUPS.items()},
+            'ignored': user.get('preferences',{}).get('health_filter_ignored',False), 'preferences': user.get('preferences', {}).get(
+        'health_openness', {'mode':'any','categories':[],'include_undisclosed':True})}

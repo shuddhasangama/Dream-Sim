@@ -221,6 +221,7 @@ def set_ignored_all(user: dict[str, Any], ignore: bool) -> dict[str, Any]:
     return {**user, "preferences": {
         **user["preferences"],
         "ignored": sorted(IGNORABLE) if ignore else [],
+        "health_filter_ignored": bool(ignore),
     }}
 
 

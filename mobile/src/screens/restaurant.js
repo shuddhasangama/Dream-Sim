@@ -5,7 +5,7 @@ export function restaurantPanel(r, safe) {
   const action = (key, text) => `<button type="button" class="secondary restaurant-action" data-action="${key}">${text}</button>`;
   const searchable = ['not_started','empty','expired','changed','unavailable','cancelled','budget_limit_required'].includes(r.state) && r.refund !== 'failed' && r.date_open;
   return `<section class="card"><h2>Restaurant options</h2><p class="hint">Simulation · No real reservation or payment.</p><p role="status">${safe(r.message)}</p>
-    ${r.selection_policy ? `<p class="hint">Compared by ${safe({lowest_total:'estimated total cost',lowest_upfront:'upfront payment',nearest:'distance'}[r.selection_policy] || r.selection_policy)}. Food prices are estimates.</p>` : ''}
+    ${r.selection_policy ? `<p class="hint">Compared by ${safe({lowest_total:'estimated total cost',lowest_upfront:'upfront payment',nearest:'distance'}[r.selection_policy] || r.selection_policy)}. Food prices are estimates. Tax and service-charge inclusion is unconfirmed.</p>` : ''}
     ${r.provider_failures && Object.keys(r.provider_failures).length ? '<p class="hint">Some providers were unavailable. Showing results from those that responded.</p>' : ''}
     ${searchable && r.needs_budget_cap ? `<label>Maximum food spend per person (${safe(r.currency)})<input id="restaurant-budget-cap" type="number" min="1" step="1"></label><p class="hint">Both partners will review the resulting quote before approval.</p>` : ''}
     ${searchable ? action('search','Find options') : ''}

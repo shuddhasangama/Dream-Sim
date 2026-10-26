@@ -3,7 +3,7 @@ export function render({data,safe}) {
  if(!data) return '<p>Loading profile…</p>';
  const h=data.health||{}, p=data.openness||{};
  const options=(name,selected)=>(Object.entries(data.categories||{}).map(([k,v])=>`<label class="checkbox-row"><input type="checkbox" name="${name}" value="${k}" ${selected.includes(k)?'checked':''}> ${safe(v)}</label>`).join(''));
- return `<h2>Your profile portrait</h2><p>Use a clear head-and-shoulders photo with simple lighting and background. No identity document is needed. Photos do not confer verification.</p>
+ return `<h1>Your Bio</h1><h2>Your profile portrait</h2><p>Use a clear head-and-shoulders photo with simple lighting and background. No identity document is needed. Photos do not confer verification.</p>
  ${data.photo?`<img class="profile-portrait" src="${safe(data.photo)}" alt="Your profile portrait">`:''}
  <label for="portrait-file">Choose a portrait</label><input id="portrait-file" type="file" accept="image/jpeg,image/png,image/webp">
  <p id="personal-photo-note" role="status"></p><div id="portrait-editor" hidden><canvas id="portrait-canvas" width="480" height="600" class="profile-portrait"></canvas>
@@ -14,26 +14,24 @@ export function render({data,safe}) {
  ${data.photo?'<button type="button" id="portrait-remove">Remove photo</button>':''}
  <form id="personal-form"><h2>Ethnicity / cultural background</h2><p>Optional, up to two. Separate from nationality; shown on your match profile.</p>
  ${(data.ethnicity_options||[]).map(v=>`<label class="checkbox-row"><input type="checkbox" name="ethnicity" value="${safe(v)}" ${(data.ethnicity||[]).includes(v)?'checked':''}> ${safe(v)}</label>`).join('')}
+ ${h.consent?'<button type="button" id="health-withdraw">Withdraw health disclosure</button>':''}
  <h2>Health &amp; accessibility</h2><p>Optional and self-declared. Share only what you are comfortable showing to potential matches. This is not a medical assessment. An unanswered profile does not mean no conditions.</p>
  ${options('categories',h.categories||[])}
  <label>What would you like a potential partner to know? <textarea name="note" maxlength="500">${safe(h.note||'')}</textarea></label>
  <label class="checkbox-row"><input name="share_health" type="checkbox" ${h.consent?'checked':''}> I consent to displaying these details to potential matches and using the selected categories for matching.</label>
- <p class="hint">To withdraw, clear the categories and note, untick consent, and save. Previously viewed information cannot be recalled.</p>
- <h2>My openness to a partner's disclosures</h2><p>These preferences are private. They apply to future matching, not existing pairs.</p>
- <label>Partner disclosure preference<select name="openness"><option value="any" ${p.mode!=='specific'?'selected':''}>Open to any / no filter</option><option value="specific" ${p.mode==='specific'?'selected':''}>Open to selected categories</option></select></label>
- ${options('open_categories',p.categories||[])}
- <label class="checkbox-row"><input type="checkbox" name="include_undisclosed" ${p.include_undisclosed!==false?'checked':''}> Include people who have not disclosed (their status is unknown)</label>
- <p class="hint">With selected categories, all categories someone shares must be included. An empty selection excludes all disclosed categories; it does not establish anyone's health status.</p>
- <button type="submit" class="primary">Save profile preferences</button></form>
+ <p class="hint">You can withdraw disclosure at any time. Previously viewed information cannot be recalled.</p>
+ <p>Partner preferences are managed privately in REACH.</p>
+ <button type="submit" class="primary">Save Bio</button></form>
  ${data._saved?'<p role="status">Saved ✓</p>':''}${data._error?`<p role="alert" class="warn">${safe(data._error)}</p>`:''}`;
 }
 export function bind(root,ctx) {
  const {session,run,patch,data}=ctx;
+ root.querySelector('#health-withdraw')?.addEventListener('click',()=>run(async()=>patch({...await session.post('/api/v1/profile/bio/withdraw',{}),_saved:true})));
  let formDirty=false;
  for(const event of ['input','change']) root.querySelector('#personal-form')?.addEventListener(event,()=>{formDirty=true;});
  root.querySelector('#personal-form')?.addEventListener('submit',e=>{e.preventDefault();const f=new FormData(e.target);run(async()=>{
- try{patch({...await session.put('/api/v1/profile/personal',{ethnicity:f.getAll('ethnicity'),categories:f.getAll('categories'),note:f.get('note'),share_health:f.has('share_health'),openness:f.get('openness'),open_categories:f.getAll('open_categories'),include_undisclosed:f.has('include_undisclosed')}),_saved:true});}
- catch(e){patch({...data,health:{consent:f.has('share_health'),categories:f.getAll('categories'),note:f.get('note')},ethnicity:f.getAll('ethnicity'),openness:{mode:f.get('openness'),categories:f.getAll('open_categories'),include_undisclosed:f.has('include_undisclosed')},_saved:false,_error:e.message});}
+ try{patch({...await session.put('/api/v1/profile/bio',{ethnicity:f.getAll('ethnicity'),categories:f.getAll('categories'),note:f.get('note'),share_health:f.has('share_health')}),_saved:true});}
+ catch(e){patch({...data,health:{consent:f.has('share_health'),categories:f.getAll('categories'),note:f.get('note')},ethnicity:f.getAll('ethnicity'),openness:data.openness,_saved:false,_error:e.message});}
  });});
  let img=null;
  const canvas=root.querySelector('#portrait-canvas');

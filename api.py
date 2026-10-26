@@ -26,7 +26,7 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         after_date_api.register(api, **after_date)
     if evolution is not None:
         import evolution_api
-        evolution_api.register(api, **evolution)
+        evolution_api.register(api, reach_locked=reach_locked, **evolution)
         import identity_capture
         identity_capture.register(api, evolution['get_db'])
         import guru_navigator
@@ -151,6 +151,7 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
     def action_view(action):
         def view():
             fields = {
+                "health": {"mode", "categories", "include_undisclosed"},
                 "ignore": {"filter", "ignore"},
                 "show-all": {"ignore"},
                 "widen": {"lever"},

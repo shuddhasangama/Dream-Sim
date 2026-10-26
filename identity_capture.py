@@ -115,7 +115,11 @@ def view(conn, uid):
         status = 'expired'
     elif row and status in ('captured', 'submitted') and row['image_expires_at'] <= stamp():
         status = 'expired'
-    return {'enabled': enabled(), 'status': status, 'verified': verified(conn, uid),
+    import identity_verification_service
+    user = db.fetch_one(conn, 'User', id=uid) or {}
+    return {'verification': identity_verification_service.view(conn,uid), 'bgv_status': user.get('bgv_status','unknown'),
+            'identity_status': 'verified' if verified(conn,uid) else 'test_capture' if test_approved(conn,uid) else status,
+            'enabled': enabled(), 'status': status, 'verified': verified(conn, uid),
             'test_approved': test_approved(conn, uid),
             'can_complete': bool(completion_method(conn, uid)),
             'capture_id': row['capture_id'] if row else None,
@@ -211,6 +215,19 @@ def register(api, get_db):
     def identity_read():
         response = jsonify(view(get_db(), uid()))
         response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    @api.post('/identity-capture/verification/simulate')
+    def identity_simulate():
+        import identity_verification_service
+        import auth_sessions
+        actor=uid()
+        body=json_object(required={'request_id'})
+        if not auth_sessions.throttle(get_db(), ['identity-rehearsal:'+actor], 30, 3600):
+            raise ApiError('rate_limited','Too many rehearsal requests.',429)
+        identity_verification_service.simulate(get_db(),actor,body['request_id'])
+        response=jsonify(view(get_db(),actor))
+        response.headers['Cache-Control']='no-store'
         return response
 
     @api.post('/identity-capture')

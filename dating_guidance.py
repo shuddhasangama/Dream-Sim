@@ -70,7 +70,16 @@ def context(conn, uid, pair, plan, clock, epoch=None):
             phase='next_step_agreement'
             focus=pending['message']
             debrief='Your date is complete. Agree on your next step with Guru.'
-    return {'phase':phase,'focus':focus,'debrief':debrief,'date_number': completed + 1, 'day':clock.day,
+    import date_readiness
+    import dateplan
+    signed = bool(plan and any(s['user_id']==uid and dateplan.is_fully_acknowledged(s) for s in db.fetch_all(conn,'Signature',dateplan_id=plan['id'])))
+    readiness=date_readiness.describe(plan,signed,phase=='next_step_agreement')
+    if plan and plan['status'] in ('completed','cancelled','no_show_reported'):
+        phase='post_debrief'
+        focus=readiness['message']
+    elif phase=='agreement':
+        focus=readiness['message']
+    return {'readiness':readiness, 'phase':phase,'focus':focus,'debrief':debrief,'date_number': completed + 1, 'day':clock.day,
             'when': plan.get('datetime') if plan else None,
             'prompts':prompts,
             'prep':'Confirm budget, diet, cuisine, a public venue and your greeting preference.',

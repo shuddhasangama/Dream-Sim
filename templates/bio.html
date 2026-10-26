@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Your Bio{% endblock %}
+{% block content %}
+<h1>Your Bio</h1><p>Health &amp; accessibility · optional, self-declared.</p>
+<p>Only share what potential matches may see. Selected categories are used for mutual matching; your note is not. Not shared means unknown.</p>
+<form id="bio-form"><div id="bio-categories"></div>
+<label>What would you like a partner to know?<textarea name="note" maxlength="500"></textarea></label>
+<label><input type="checkbox" name="share_health">I consent to displaying these details to potential matches and using the categories for matching.</label>
+<button type="submit">Save Bio</button><button type="button" id="withdraw">Withdraw health disclosure</button></form>
+<p id="bio-status" role="status"></p><p>Withdrawal removes the disclosure; previously viewed information cannot be recalled.</p>
+<a href="/reach">Partner preferences in REACH</a>
+<script>
+let bio;
+const form=document.querySelector('#bio-form'),status=document.querySelector('#bio-status');
+async function call(path,method,body){const r=await fetch('/api/v1/'+path,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const j=await r.json();if(!r.ok)throw Error(j.error?.message||'Could not save. Please sign in and try again.');return j.data||j;}
+function draw(data){bio=data;const h=data.health||{},host=document.querySelector('#bio-categories');host.replaceChildren();Object.entries(data.categories).forEach(([key,text])=>{const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.name='categories';input.value=key;input.checked=(h.categories||[]).includes(key);label.append(input,document.createTextNode(text));host.append(label,document.createElement('br'));});form.elements.note.value=h.note||'';form.elements.share_health.checked=!!h.consent;}
+call('profile/personal','GET').then(draw).catch(e=>status.textContent=e.message);
+form.addEventListener('submit',async e=>{e.preventDefault();if(!bio)return;const f=new FormData(form);try{draw(await call('profile/bio','PUT',{categories:f.getAll('categories'),note:f.get('note'),share_health:f.has('share_health'),ethnicity:bio.ethnicity||[]}));status.textContent='Saved.';}catch(e){status.textContent=e.message;}});
+document.querySelector('#withdraw').addEventListener('click',async()=>{try{draw(await call('profile/bio/withdraw','POST',{}));status.textContent='Disclosure withdrawn.';}catch(e){status.textContent=e.message;}});
+</script>
+{% endblock %}

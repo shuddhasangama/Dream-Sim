@@ -206,3 +206,31 @@ class IdentityCaptureTests(RouteTestCase):
             self.upload()
             self.assertEqual(db.fetch_one(self.conn,'IdentityCapture',id='owner')['authentication'],'tester_without_otp')
             self.assertEqual(self.sign()['signature_receipt']['authentication'],'tester_without_otp')
+
+    def test_verification_rehearsal_is_idempotent_and_never_approves_identity(self):
+        import uuid
+        with mock.patch.dict(os.environ, {'DHASHU_IDENTITY_VERIFICATION_MODE':'simulation',
+                'DHASHU_SIMULATED_CLOCK':'true','DHASHU_TESTER_NO_OTP':'true',
+                'DHASHU_TESTER_USER_IDS':'owner','DHASHU_IDENTITY_TEST_AUTO_APPROVE':'0'}):
+            self.upload()
+            rid=str(uuid.uuid4())
+            path='/identity-capture/verification/simulate'
+            for _ in range(2):
+                r=self.post(path,{'request_id':rid})
+                self.assertEqual(r.status_code,200,r.json)
+                data=r.json['data']
+                self.assertEqual(data['verification']['latest']['state'],'passed')
+                self.assertFalse(data['verified'])
+                self.assertFalse(data['can_complete'])
+                self.assertFalse(data['liveness_checked'])
+                self.assertEqual(data['status'],'captured')
+            rows=[e for e in db.fetch_all(self.conn,'IdentityEvent',user_id='owner') if e['action']=='verification_simulated']
+            self.assertEqual(len(rows),1)
+            self.assertNotIn('https:', rows[0]['details'])
+            identity.remove(self.conn,'owner')
+            self.assertEqual(self.post(path,{'request_id':str(uuid.uuid4())}).status_code,409)
+
+    def test_live_verification_is_not_enabled_by_configuration(self):
+        import uuid
+        with mock.patch.dict(os.environ, {'DHASHU_IDENTITY_VERIFICATION_MODE':'live'}):
+            self.assertEqual(self.post('/identity-capture/verification/simulate',{'request_id':str(uuid.uuid4())}).status_code,403)

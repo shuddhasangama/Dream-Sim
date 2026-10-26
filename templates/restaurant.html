@@ -6,7 +6,7 @@
 {% endmacro %}
 <h1>Restaurant options</h1><p>Simulation only. No real reservation or payment.</p>
 <p role="status">{{ r.message }}</p>
-{% if r.selection_policy %}<p>Comparison: {{ {'lowest_total':'estimated total cost','lowest_upfront':'upfront payment','nearest':'distance'}[r.selection_policy] }}. Food prices are estimates.</p>{% endif %}
+{% if r.selection_policy %}<p>Comparison: {{ {'lowest_total':'estimated total cost','lowest_upfront':'upfront payment','nearest':'distance'}[r.selection_policy] }}. Food prices are estimates. Tax and service-charge inclusion is unconfirmed.</p>{% endif %}
 {% if r.provider_failures %}<p>Some providers were unavailable. Showing results from those that responded.</p>{% endif %}
 {% if r.state in ['not_started','empty','expired','changed','unavailable','cancelled','budget_limit_required'] and r.refund != 'failed' and r.date_open %}{{ action('search','Find options') }}{% endif %}
 {% if r.state == 'shortlist' %}{% for q in r.options %}

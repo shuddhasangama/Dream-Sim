@@ -1,3 +1,4 @@
+from restaurant_preferences import matches
 """Pluggable platform registry and deterministic cost-aware selection.
 
 Vendor names in configuration are placeholders, not claims of API access.
@@ -94,8 +95,7 @@ class Router:
                     if (q['deposit_minor'] and not {'deposits','refunds'}<=capabilities) or (q['food_credit_minor'] and 'food_credit' not in capabilities):
                         raise ValueError('Provider does not support these payment terms')
                     distance=min(distance_km(p,q) for p in request.neighbourhoods)
-                    if (not q['available'] or distance>radius_km or not set(request.cuisines)&set(q['cuisines'])
-                        or not set(request.dietary_requirements)<=set(q['diets'])
+                    if (not q['available'] or distance>radius_km or not matches(request.cuisines, request.dietary_requirements, q['cuisines'], q['diets'])
                         or not request.minimum<=q['estimate_per_person_minor']<=request.maximum):
                         continue
                     q.update(distance_km=round(distance,2),provider_priority=row['priority'])

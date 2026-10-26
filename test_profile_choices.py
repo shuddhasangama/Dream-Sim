@@ -92,3 +92,34 @@ class ProfileChoicesTests(WeekApiTests):
         self.assertEqual(self.request('/profile/personal',method='PUT',body=body).status_code,200)
         body['ethnicity']=opts[:3]
         self.assertEqual(self.request('/profile/personal',method='PUT',body=body).status_code,400)
+
+    def test_bio_separate_save_and_withdraw_preserve_preferences(self):
+        prefs={'mode':'specific','categories':['diabetes'],'include_undisclosed':True}
+        r=self.request('/reach/health',method='POST',body=prefs)
+        self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(r.json['data']['health_filter']['preferences'],prefs)
+        body={'categories':['diabetes'],'share_health':True,'note':'Context','ethnicity':[]}
+        r=self.request('/profile/bio',method='PUT',body=body)
+        self.assertEqual(r.status_code,200,r.json)
+        self.assertEqual(r.json['data']['openness'],prefs)
+        row=db.fetch_one(self.conn,'User',id='owner');row['journey_state']='relationship';db.insert_row(self.conn,'User',row)
+        self.assertEqual(self.request('/reach/health',method='POST',body=prefs).status_code,403)
+        r=self.request('/profile/bio/withdraw',method='POST',body={})
+        self.assertEqual(r.status_code,200,r.json)
+        self.assertFalse(r.json['data']['health']['consent'])
+        self.assertEqual(r.json['data']['openness'],prefs)
+
+    def test_empty_specific_filter_rejected(self):
+        r=self.request('/reach/health',method='POST',body={'mode':'specific','categories':[],'include_undisclosed':True})
+        self.assertEqual(r.status_code,400,r.json)
+
+    def test_browser_bio_and_reach_render(self):
+        from test_segment_efg_routes import app_module
+        app_module.app.config['AUTH_ENABLED']=False
+        self.login('owner')
+        for path in ('/bio','/reach'):
+            r=self.client.get(path,headers=self.headers['owner'])
+            self.assertEqual(r.status_code,200,r.data[:200])
+        self.match('owner','partner')
+        r=self.client.get('/week',headers=self.headers['owner'])
+        self.assertEqual(r.status_code,200,r.data[:200])

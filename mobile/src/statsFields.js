@@ -16,7 +16,7 @@ export const STAT_LABELS = {
   diet: 'Dietary preference', smoking: 'Smoking', drinking: 'Drinking',
   fitness_routine: 'Fitness routine', marital_history: 'Marital history',
   ethnicity: 'Ethnicity', religion: 'Religion', languages: 'Languages you speak',
-  cuisine: 'Cuisine you enjoy', income_band: 'Salary band', budget: 'Restaurant budget',
+  cuisine: 'Cuisine you enjoy', income_band: 'Salary band', budget: 'Food budget per person',
   // round4-fixes-spec.md §5: children a person ALREADY has — not the Kids
   // pillar (which is about wanting them).
   has_children: 'Already has children', children_count: 'Number of children',

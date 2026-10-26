@@ -3,7 +3,7 @@ export function renderNavigator(n, safe) {
   if (!n?.enabled) return '';
   const drafts=n._drafts || {};
   const button=(action,label)=>`<button type="button" class="secondary" data-private-action="${action}">${label}</button>`;
-  return `<section class="card"><h2>Talk with Guru</h2><p class="hint">${n.mode==='ai'?'AI-assisted conversation.':'Guided prompts.'} Your last 50 exchanges stay private from your partner. Only messages you submit in a shared conversation go to your partner.</p>
+  return `<section class="card"><h2>Talk with Guru</h2><p role="status"><strong>${n.mode==='ai'?'AI-assisted mode':'Guided mode'}</strong></p><p class="hint">${n.mode==='ai'?'AI-assisted conversation.':'Guided prompts.'} Stage/status answers remain guided, even in AI-assisted mode. Each reply shows which mode produced it. Your last 50 exchanges stay private from your partner. Only messages you submit in a shared conversation go to your partner.</p>
     <form id="guru-private-form"><label for="guru-topic">Explore</label><select id="guru-topic" name="topic">${n.topics.map(t=>`<option value="${safe(t.id)}" ${drafts.topic===t.id?'selected':''}>${safe(t.label)}</option>`).join('')}</select>
     <div class="guru-history" aria-label="Private conversation">${n.history.map(m=>`<div class="${m.role==='user'?'p-bubble-user':'p-bubble-guru'}"><strong>${m.role==='user'?'You':m.mode==='ai'?'Guru · AI':'Guru · guided'}</strong><p>${safe(m.text)}</p></div>`).join('')}</div>
     <label for="guru-message">Your thoughts</label><textarea id="guru-message" name="text" maxlength="800" required placeholder="What would you like to explore?">${safe(drafts.text||'')}</textarea><button class="primary">Send privately</button></form>

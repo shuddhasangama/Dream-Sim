@@ -3,7 +3,7 @@ import * as vision from './screens/vision.js';
 import * as chemistry from './screens/chemistry.js';
 import { editableFieldsForm, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from './statsFields.js';
 
-export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry', 'Profile'];
+export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry', 'Bio'];
 
 // A rehearsal of onboarding for an authenticated, already associated
 // profile. The normal profile APIs remain the authority for edit eligibility.
