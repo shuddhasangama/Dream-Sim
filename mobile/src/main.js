@@ -10,6 +10,7 @@ import * as calendarScreen from './screens/calendar.js';
 import * as planScreen from './screens/plan.js';
 import * as ceremonyScreen from './screens/ceremony.js';
 import * as identityScreen from './screens/identity.js';
+import * as verificationScreen from './screens/verification.js';
 import * as debriefScreen from './screens/debrief.js';
 import * as gateScreen from './screens/gate.js';
 import * as afterDateScreen from './screens/afterDate.js';
@@ -92,6 +93,7 @@ const nav = createNav(render);
 // Unimplemented surfaces show an honest availability message, never raw API data. Bespoke screens are
 // pure functions of ctx (below) — no import of main.js, so no import cycle.
 const screens = {
+  verify: verificationScreen,
   gate: gateScreen,
   after_date: afterDateScreen,
   escalations: afterDateScreen,

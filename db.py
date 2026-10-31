@@ -32,6 +32,8 @@ DEFAULT_DB_PATH = Path(__file__).parent / "data" / "dream.db"
 # this so a bad table name fails fast with a clear error instead of a raw
 # database syntax error from string-interpolating an identifier.
 TABLES = {
+    "BgvEvidence",
+    "BgvRequest",
     "RestaurantBooking", "RestaurantEvent",
     "BookingPreference", "BookingSnapshot",
     "BillingPurchase", "BillingEntitlement", "BillingEvent",

@@ -14,6 +14,7 @@ from api_contract import allowlist
 
 # Extend when a tested JSON capability ships. Values are real GET routes only.
 READ_APIS = {
+    'verify': '/api/v1/verification',
     'dashboard': '/api/v1/dashboard',
     'reach': '/api/v1/reach',
     'guru': '/api/v1/guidance',

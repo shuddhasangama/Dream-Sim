@@ -1005,3 +1005,20 @@ CREATE TABLE IF NOT EXISTS "BillingEntitlement" (
     active INTEGER NOT NULL DEFAULT 0,
     expires_at BIGINT
 );
+CREATE TABLE IF NOT EXISTS "BgvEvidence" (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    environment TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    status TEXT NOT NULL,
+    fields_json TEXT NOT NULL,
+    protected_details TEXT NOT NULL,
+    protection TEXT NOT NULL,
+    received_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "BgvRequest" (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES "User"(id),
+ operation TEXT NOT NULL, environment TEXT NOT NULL, state TEXT NOT NULL,
+ protected_input TEXT NOT NULL, protected_result TEXT,
+ summary_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
