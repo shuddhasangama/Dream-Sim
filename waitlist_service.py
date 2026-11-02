@@ -76,17 +76,53 @@ def submit(conn, body):
 
 def statistics(conn):
     rows=db.fetch_all(conn,'WaitlistEntry'); counts={}; daily={}; surveys={}
+    def summary():
+        return {'registrations':0,'contact_verified':0,'linked_accounts':0,
+                'statuses':{},'neighbourhoods':{},'sources':{},'genders':{},'age_bands':{},
+                'other_locations':{},'consent_versions':{},'survey_versions':{},
+                'with_story_answers':0,'without_story_answers':0,'story_answer_count':0,
+                'with_name':0,'with_email':0,'consent_recorded':0,'synthetic_test_registrations':0}
+    totals=summary()
+    def increment(group,key):
+        group[key]=group.get(key,0)+1
     for row in rows:
-        key=row['market_id']; item=counts.setdefault(key,{'registrations':0,'contact_verified':0,'statuses':{},'neighbourhoods':{},'sources':{}})
-        item['registrations']+=1; item['contact_verified']+=row['contact_verified']
+        key=row['market_id']; item=counts.setdefault(key,summary())
         day=row['created_at'][:10]; daily[day]=daily.get(day,0)+1
-        item['statuses'][row['status']]=item['statuses'].get(row['status'],0)+1
         data=json.loads(cipher().decrypt(row['protected_data'].encode()))
-        for n in data.get('neighbourhoods',[]): item['neighbourhoods'][n]=item['neighbourhoods'].get(n,0)+1
         source=data.get('source','unknown'); item['sources'][source]=item['sources'].get(source,0)+1
         version=data.get('survey_version','unspecified')
+        # Known deployment fixture only; do not classify ordinary users as tests
+        # merely because their name or email contains the word "test".
+        synthetic=source=='deployment-smoke-test'
+        for group in (item,totals):
+            group['registrations']+=1
+            group['contact_verified']+=int(bool(row['contact_verified']))
+            group['linked_accounts']+=int(bool(row.get('user_id')))
+            group['synthetic_test_registrations']+=int(synthetic)
+            increment(group['statuses'],row['status'])
+            increment(group['genders'],data.get('gender') or 'not_recorded')
+            increment(group['age_bands'],data.get('age_band') or 'not_recorded')
+            increment(group['consent_versions'],data.get('consent_version') or 'not_recorded')
+            increment(group['survey_versions'],version)
+            if group is totals: increment(group['sources'],source)
+            for n in data.get('neighbourhoods',[]): increment(group['neighbourhoods'],n)
+            if data.get('other_location'): increment(group['other_locations'],data['other_location'])
+            answers=data.get('answers',{})
+            group['with_story_answers' if answers else 'without_story_answers']+=1
+            group['story_answer_count']+=len(answers)
+            group['with_name']+=int(bool(data.get('name','').strip()))
+            group['with_email']+=int(bool(data.get('email')))
+            group['consent_recorded']+=int(data.get('consent') is True and bool(data.get('consented_at')))
         for question,answer in data.get('answers',{}).items():
             group=surveys.setdefault(version+':'+question,{})
             group[str(answer)]=group.get(str(answer),0)+1
+    states={r['id']:r['state'] for r in db.fetch_all(conn,'WaitlistMarket')}
+    metadata={r['id']:r for r in markets()}
+    for key,item in counts.items():
+        item['city']=metadata.get(key,{}).get('city',key)
+        item['launch_status']=states.get(key,'collecting')
+        item['non_test_registrations']=item['registrations']-item['synthetic_test_registrations']
     return {'total_registrations':len(rows),'markets':counts,'daily_registrations_utc':daily,'survey_answers':surveys,
-            'note':'Interest registrations, not verified people or active matching users. Neighbourhood counts overlap.'}
+            'totals':totals,'non_test_registrations':len(rows)-totals['synthetic_test_registrations'],
+            'synthetic_test_registrations':totals['synthetic_test_registrations'],
+            'note':'Aggregate counts include test entries; non_test_registrations excludes the deployment-smoke-test source. Interest registrations, not verified people or active matching users. Age is an age band, gender is self-declared. Neighbourhood counts overlap. Names and emails are counted for completeness, not printed.'}

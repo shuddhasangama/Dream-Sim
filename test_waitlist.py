@@ -34,6 +34,30 @@ class WaitlistTests(unittest.TestCase):
         rows=self.conn.execute('SELECT * FROM "WaitlistEntry"').fetchall();self.assertEqual(len(rows),1)
         data=json.loads(service.cipher().decrypt(rows[0]['protected_data'].encode()))
         self.assertEqual(data['name'],'Private Name')
+
+    def test_statistics_cover_demographics_consent_and_test_entries(self):
+        service.submit(self.conn,self.entry())
+        service.submit(self.conn,self.entry()|{'email':'deployment@example.invalid','gender':'Prefer not to say',
+            'age_band':'Over 50','source':'deployment-smoke-test','answers':{},'name':''})
+        before=list(self.conn.iterdump())
+        result=service.statistics(self.conn)
+        self.assertEqual(result['total_registrations'],2)
+        self.assertEqual(result['non_test_registrations'],1)
+        self.assertEqual(result['synthetic_test_registrations'],1)
+        totals=result['totals']
+        self.assertEqual(totals['genders'],{'A woman':1,'Prefer not to say':1})
+        self.assertEqual(totals['age_bands'],{'25–29':1,'Over 50':1})
+        self.assertEqual(totals['consent_versions'],{'waitlist-v1':2})
+        self.assertEqual(totals['consent_recorded'],2)
+        self.assertEqual(totals['with_story_answers'],1)
+        self.assertEqual(totals['without_story_answers'],1)
+        self.assertEqual(totals['with_name'],1)
+        self.assertEqual(totals['with_email'],2)
+        self.assertEqual(result['markets']['IN-BLR']['genders'],totals['genders'])
+        self.assertEqual(result['markets']['IN-BLR']['city'],'Bengaluru')
+        self.assertNotIn('Private Name',json.dumps(result))
+        self.assertNotIn('test@example.invalid',json.dumps(result))
+        self.assertEqual(before,list(self.conn.iterdump()))
     def test_invalid_preferences_or_consent(self):
         for change in ({'consent':False},{'neighbourhoods':['unknown']},{'neighbourhoods':['indiranagar']*4},
                        {'market_id':'US-FAKE'},{'email':'bad'},{'website':'spam'}):
