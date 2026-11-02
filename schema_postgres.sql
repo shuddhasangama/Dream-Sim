@@ -1016,3 +1016,17 @@ CREATE TABLE IF NOT EXISTS "BgvRequest" (
  protected_input TEXT NOT NULL, protected_result TEXT,
  summary_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS "WaitlistMarket" (
+ id TEXT PRIMARY KEY, state TEXT NOT NULL DEFAULT 'collecting', updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "WaitlistEntry" (
+ id TEXT PRIMARY KEY, contact_hash TEXT NOT NULL UNIQUE,
+ market_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'waiting',
+ contact_verified INTEGER NOT NULL DEFAULT 0,
+ user_id TEXT REFERENCES "User"(id),
+ protected_data TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "WaitlistAudit" (
+ id TEXT PRIMARY KEY, target_id TEXT NOT NULL, action TEXT NOT NULL,
+ actor TEXT NOT NULL, created_at TEXT NOT NULL
+);

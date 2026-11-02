@@ -4668,6 +4668,8 @@ import road_service
 auth.register_auth(app, get_db)
 import billing_api
 billing_api.register_web(app, get_db, current_user)
+import waitlist_api
+waitlist_api.register(app, get_db)
 import restaurant_service
 import restaurant_web
 restaurant_web.register(app, get_db, current_user, login_required)

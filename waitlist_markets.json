@@ -1,0 +1,107 @@
+[
+  {
+    "id": "IN-BLR",
+    "country": "IN",
+    "city": "Bengaluru",
+    "timezone": "Asia/Kolkata",
+    "neighbourhoods": [
+      {
+        "id": "indiranagar",
+        "name": "Indiranagar",
+        "lat": 12.9784,
+        "lon": 77.6408
+      },
+      {
+        "id": "koramangala",
+        "name": "Koramangala",
+        "lat": 12.9352,
+        "lon": 77.6245
+      },
+      {
+        "id": "mg-road",
+        "name": "MG Road",
+        "lat": 12.9756,
+        "lon": 77.6067
+      },
+      {
+        "id": "jayanagar",
+        "name": "Jayanagar",
+        "lat": 12.925,
+        "lon": 77.5938
+      },
+      {
+        "id": "hsr-layout",
+        "name": "HSR Layout",
+        "lat": 12.9116,
+        "lon": 77.6389
+      },
+      {
+        "id": "whitefield",
+        "name": "Whitefield",
+        "lat": 12.9698,
+        "lon": 77.75
+      }
+    ]
+  },
+  {
+    "id": "IN-DEL",
+    "country": "IN",
+    "city": "Delhi NCR",
+    "timezone": "Asia/Kolkata",
+    "neighbourhoods": []
+  },
+  {
+    "id": "IN-BOM",
+    "country": "IN",
+    "city": "Mumbai",
+    "timezone": "Asia/Kolkata",
+    "neighbourhoods": []
+  },
+  {
+    "id": "IN-HYD",
+    "country": "IN",
+    "city": "Hyderabad",
+    "timezone": "Asia/Kolkata",
+    "neighbourhoods": []
+  },
+  {
+    "id": "IN-MAA",
+    "country": "IN",
+    "city": "Chennai",
+    "timezone": "Asia/Kolkata",
+    "neighbourhoods": []
+  },
+  {
+    "id": "IN-PNQ",
+    "country": "IN",
+    "city": "Pune",
+    "timezone": "Asia/Kolkata",
+    "neighbourhoods": []
+  },
+  {
+    "id": "IN-CCU",
+    "country": "IN",
+    "city": "Kolkata",
+    "timezone": "Asia/Kolkata",
+    "neighbourhoods": []
+  },
+  {
+    "id": "IN-AMD",
+    "country": "IN",
+    "city": "Ahmedabad",
+    "timezone": "Asia/Kolkata",
+    "neighbourhoods": []
+  },
+  {
+    "id": "IN-OTHER",
+    "country": "IN",
+    "city": "Elsewhere in India",
+    "neighbourhoods": []
+  },
+  {
+    "id": "GLOBAL-INTEREST",
+    "country": "OTHER",
+    "city": "Outside India",
+    "neighbourhoods": []
+  }
+]
