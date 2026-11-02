@@ -26,7 +26,7 @@ def payload(values):
     return {'signup':True,'callbackUrl':https_url(values['callbackUrl']),
             'successRedirectUrl':'https://dhashu.com/','successRedirectTime':'5',
             'failureRedirectUrl':'https://dhashu.com/','failureRedirectTime':'5',
-            'logoVisible':'true','logo':'','docType':['ADHAR'],'purpose':'kyc',
+            'logoVisible':'true','logo':'https://dhashu.com/media/dhashu-logo.png','docType':['ADHAR'],'purpose':'kyc',
             'serviceName':service.strip(),'getScope':True,'internalId':identifier(values['internalId']),
             'getBase64Files':False,'getEAadhaarPdf':False,'getEAadhaarJpeg':False}
 
