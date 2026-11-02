@@ -54,3 +54,20 @@ class WaitlistTests(unittest.TestCase):
         self.assertEqual(result.headers['Cache-Control'],'no-store')
         with patch.dict(os.environ,{'DHASHU_WAITLIST_ENABLED':'0'}):
             self.assertEqual(client.get('/public/waitlist/config',headers=headers).status_code,503)
+
+    def test_public_waitlist_with_secure_auth_enabled(self):
+        import auth
+        app=Flask(__name__);app.secret_key='test-only-secret-with-more-than-32-characters'
+        with patch.dict(os.environ,{'AUTH_ENABLED':'1','AUTH_PUBLIC_ORIGIN':'https://backend.example','SECRET_KEY':app.secret_key}), patch('auth_delivery.configured',return_value=True):
+            auth.register_auth(app,lambda:self.conn)
+        waitlist_api.register(app,lambda:self.conn)
+        client=app.test_client()
+        with patch('auth_sessions.throttle',return_value=True):
+            result=client.post('/public/waitlist',json=self.entry(),headers={'Origin':'https://dhashu.com'})
+        self.assertEqual(result.status_code,201)
+        self.assertEqual(self.conn.execute('SELECT count(*) FROM "WaitlistEntry"').fetchone()[0],1)
+        self.assertEqual(client.post('/public/waitlist',json=self.entry(),headers={'Origin':'https://untrusted.example'}).status_code,403)
+        self.assertEqual(client.post('/public/waitlist',json=self.entry()).status_code,403)
+        # Nearby routes and ordinary browser writes retain the global boundary.
+        self.assertEqual(client.post('/public/waitlist/other',headers={'Origin':'https://dhashu.com'}).status_code,403)
+        self.assertEqual(client.post('/calendar/availability',headers={'Origin':'https://dhashu.com'}).status_code,403)

@@ -162,6 +162,10 @@ def register_auth(app, get_db):
         # Browser origin/session checks do not apply to server-to-server delivery.
         if request.path == '/billing/webhooks/razorpay' and request.method == 'POST':
             return None
+        # The public waitlist owns its origin allowlist, consent and rate limit.
+        # It accepts website interest only; it cannot create accounts/sessions.
+        if request.path == '/public/waitlist' and request.method == 'POST':
+            return None
         if not enabled():
             if request.path == '/signin':
                 return redirect('/signup')
