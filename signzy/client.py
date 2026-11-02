@@ -10,6 +10,7 @@ import urllib.request
 from . import current_employer, pan_extensive, pan_simple, individual_search, individual_result, uan_passbook, employment_history
 from .errors import classify
 from . import fir_search, fir_result
+from . import digilocker_create_url, digilocker_eaadhaar
 
 BASES = {'preproduction': 'https://api-preproduction.signzy.app/api/v3',
          'production': 'https://api.signzy.app/api/v3'}
@@ -17,6 +18,7 @@ OPERATIONS = {'pan_extensive': pan_extensive, 'current_employer': current_employ
 OPERATIONS.update(individual_search=individual_search, individual_result=individual_result, uan_passbook=uan_passbook)
 OPERATIONS['employment_history'] = employment_history
 OPERATIONS.update(fir_search=fir_search, fir_result=fir_result)
+OPERATIONS.update(digilocker_create_url=digilocker_create_url, digilocker_eaadhaar=digilocker_eaadhaar)
 
 
 @dataclass(frozen=True)

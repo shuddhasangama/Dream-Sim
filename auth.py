@@ -166,6 +166,9 @@ def register_auth(app, get_db):
         # It accepts website interest only; it cannot create accounts/sessions.
         if request.path == '/public/waitlist' and request.method == 'POST':
             return None
+        # Sandbox acknowledgement only: never reads data or approves identity.
+        if request.endpoint == 'signzy_digilocker_callback' and request.method == 'POST':
+            return None
         if not enabled():
             if request.path == '/signin':
                 return redirect('/signup')

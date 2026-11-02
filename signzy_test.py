@@ -5,6 +5,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 import secrets
+import os
+from dataclasses import replace
 from signzy.client import Client, Config, OPERATIONS
 from signzy.receipts import ReceiptStore
 
@@ -14,6 +16,8 @@ def main():
     parser.add_argument('operation', choices=sorted(OPERATIONS))
     parser.add_argument('--user-id', help='Explicit test user to store field evidence against')
     parser.add_argument('--search-receipt', help='Private receipt of the corresponding court/FIR search')
+    parser.add_argument('--create-receipt', help='Encrypted receipt from this DigiLocker Create URL request')
+    parser.add_argument('--prompt-key', action='store_true', help='Read the sandbox API key in a hidden terminal prompt')
     parser.add_argument('--match-type', choices=('exact', 'possible'), default=None,
                         help='Court search matching mode (default: exact)')
     parser.add_argument('--case-category', choices=('criminal', 'civil'), default=None,
@@ -26,6 +30,8 @@ def main():
     config = Config.from_env()
     if config.environment != 'preproduction':
         raise ValueError('This runner only permits preproduction')
+    if args.prompt_key:
+        config=replace(config,token=getpass.getpass('Signzy sandbox API key (hidden): ').strip())
     if not config.token:
         raise ValueError('Set SIGNZY_TEST_API_KEY once in this environment before running the tester')
     client = Client(config)
@@ -50,7 +56,26 @@ def main():
                     {'employer': getpass.getpass('User-declared current employer (hidden): ').strip()})
         user_binding = binding(args.user_id, declared)
     print('Submitting the final input sends one consented preproduction check; may consume credits. Ctrl+C to stop.')
-    if args.operation == 'individual_search':
+    if args.operation == 'digilocker_create_url':
+        print('Requesting ADHAR only; base64, Aadhaar PDF and JPEG retrieval disabled.')
+        callback_base=os.getenv('SIGNZY_DIGILOCKER_CALLBACK_BASE','').rstrip('/')
+        callback_url=(callback_base+'/'+secrets.token_hex(16) if callback_base else
+                      getpass.getpass('Registered HTTPS callback URL (hidden): ').strip())
+        values={'callbackUrl':callback_url,
+                'internalId':'dhashu_'+secrets.token_hex(12),
+                'serviceName':input('Service name registered with Signzy: ').strip()}
+    elif args.operation == 'digilocker_eaadhaar':
+        if not args.create_receipt:raise ValueError('Use --create-receipt with your own completed consent session receipt')
+        from signzy.receipts import read_private
+        from signzy.digilocker_create_url import session
+        prior=read_private(args.create_receipt)
+        if prior.get('operation')!='digilocker_create_url' or prior.get('environment')!='preproduction' or (prior.get('provider_response') or {}).get('http_status')!=200:
+            raise ValueError('Receipt must be a successful preproduction DigiLocker Create URL response')
+        request_id,_=session(prior['provider_response'].get('json'))
+        if input('Have you completed DigiLocker consent for THIS link? Type YES: ').strip()!='YES':
+            raise ValueError('Complete consent before retrieving eAadhaar')
+        values={'requestId':request_id}
+    elif args.operation == 'individual_search':
         print('Court search matchType=' + (args.match_type or 'exact'))
         print('Court search caseCategory=' + (args.case_category or 'omitted (provider default)'))
         values = {'name': getpass.getpass('Consented full name (hidden): ').strip(),
@@ -139,6 +164,14 @@ def main():
     print('Sanitised receipt:', path.resolve())
     for private_path in private_paths:
         print('Private encrypted receipt (do not share):', private_path.resolve())
+    if args.operation=='digilocker_create_url' and receipt.get('consent_link_received'):
+        from signzy.digilocker_create_url import session
+        from signzy.receipts import read_private
+        _,consent_url=session(read_private(private_paths[0])['provider_response']['json'])
+        print('Open this private link yourself to complete DigiLocker consent (do not share):')
+        print(consent_url)
+    if args.operation=='digilocker_eaadhaar':
+        print('To view only name, DOB and address privately: python signzy_digilocker_fields.py <private-receipt-path>')
     print('View privately: python signzy_receipt.py <private-receipt-path>')
     print('No automatic retries. Summary is not the full provider response.')
 
