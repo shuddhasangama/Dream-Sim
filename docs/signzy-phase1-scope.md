@@ -2,13 +2,14 @@
 
 Updated **3 November 2026**. This supersedes the earlier 227 scope. Criminal court only; civil is quantity zero. PAN Simple/Extensive and UAN are excluded.
 
-Vendor testing means saved real sandbox evidence. Automated tests use synthetic responses. Installed-app E2E means a fresh app/vendor journey. HTTP 200 alone is not person verification. **Backend and worker deployed for m06 on 3 November 2026. Android APK built; iOS build 68 uploaded/processed; user confirmed iOS deployment completed. Fresh vendor/device acceptance is still pending.**
+Vendor testing means saved real sandbox evidence. Automated tests use synthetic responses. Installed-app E2E means a fresh app/vendor journey. HTTP 200 alone is not person verification. **Backend and worker deployed for m06 on 3 November 2026. Android APK built; iOS build 68 uploaded/processed; user confirmed iOS deployment completed. User confirmed installed-app Aadhaar retrieval working; fresh combined PAN/screening acceptance is pending.**
 
 | Product | Data element / purpose | Testing status / implementation | Quote | Quantity | Cost | Phase | App launch pending |
 |---|---|---|---:|---:|---:|---|---|
 | Current Employer Verification | Current employer evidence | Vendor 200; adapter, comparison, app queue and worker built | 4 | 1 | 4 | 1a | Flag interpretation and fresh installed-app E2E; API/worker deployed |
-| DigiLocker Create URL | Consent/access link | Vendor 200; prior consent completed; new photo consent/request automated-tested | 3.5 | 1 | 3.5 | 1a | Fresh app OTP and photo-enabled consent |
-| DigiLocker get eAadhaar | Name, DOB/age, document address and photo reference | Vendor 200 for prior request; new photo flag and encrypted reference implemented | 3.5 | 1 | 3.5 | 1a | Live photo-enabled retrieval, persistence/restart, URL expiry |
+| DigiLocker Create URL | Consent/access link | Vendor 200; prior consent completed; new photo consent/request automated-tested | 3.5 | 1 | 3.5 | 1a | Prior installed-app Aadhaar consent confirmed by user; new ADHAR/PANCR scope pending |
+| DigiLocker Get Details | Available issued-document listing, PAN identifier and mobile | Supplied contract implemented; encrypted worker evidence and synthetic workflow tested | TBC | 1 | TBC | 1a | First live combined consent/listing test; confirm endpoint billing |
+| DigiLocker get eAadhaar | Name, DOB/age, document address and photo reference | Vendor 200 for prior request; new photo flag and encrypted reference implemented | 3.5 | 1 | 3.5 | 1a | User reported installed-app identity/photo reference received; fresh combined flow, persistence/restart and URL expiry pending |
 | Individual Court Search - Civil | Civil candidates | Prior vendor 200; excluded from new app submissions | 40 | 0 | 0 | Inactive | Not scheduled |
 | Individual Court Result - Civil | Civil results | Excluded from new Phase 1 workflow | 40 | 0 | 0 | Inactive | Not scheduled |
 | Individual Court Search - Criminal | Criminal candidates | Vendor 200; app enforces criminal/possible; linked result workflow built and automated-tested | 40 | 1 | 40 | 1b | Fresh app search/result chain |
@@ -20,7 +21,7 @@ Vendor testing means saved real sandbox evidence. Automated tests use synthetic 
 | ConsenzAI | Video consent/liveness/optional match | Not implemented/tested | 7 | 0 | 0 | Inactive | Not scheduled |
 | Face Match, standalone | Compare face images | Separate product excluded; combined Face Smart adapter reports match separately | 2.5 | 0 | 0 | Inactive | No separate paid call scheduled |
 | Face Extraction | Extract document portrait | Not implemented; DigiLocker photo reference used if returned | 3 | 0 | 0 | Inactive | Not scheduled |
-| **Total** | **1a: 17; 1b: 130** | **User-supplied prices; currency/tax unspecified** | | | **147** | | |
+| **Total** | **1a: 17; 1b: 130** | **Original scope only; Get Details price, currency/tax unspecified** | | | **147** | | |
 
 The two historical employer records came from Past Employment History, a different endpoint. Current Employer is the selected product, not an additional historical call. Shifted Result rows are interpreted as Court 40 x 1 and FIR 25 x 1. Confirm separate search/result billing before treating 147 as invoice terms.
 
@@ -57,4 +58,6 @@ Release regression: **1,690 backend tests passed, 33 skipped, 820 subtests passe
 - Compact UI now has seven status rows, document-detail disclosure, age-declaration difference, conditional employer declaration, and read-only progress refresh. It distinguishes received identity, processing, review and unavailable states. Document address is not proof of current residence. Face capture/upload remains unavailable until the vendor contract is connected.
 - Aadhaar is required for this pilot identity route. Installing/creating a DigiLocker account does not issue Aadhaar; users without Aadhaar need support and cannot complete this route.
 
-Validation: 52 focused backend tests passed, all 53 Signzy tests passed (overlapping suites), 111 mobile unit tests passed, two compact-screen browser tests passed, and the production web bundle built. No new live vendor calls were made during automated testing.
+Validation: 53 focused backend tests passed, all 53 Signzy tests passed (overlapping suites), 111 mobile unit tests passed, all 50 browser regression tests passed, and the production web bundle built. No new live vendor calls were made during automated testing.
+
+Current combined-flow release: API and worker deployed successfully; iOS build 70 uploaded to App Store Connect. User will distribute build 70 personally. See [acceptance steps and release status](bgv-compact-flow.md).

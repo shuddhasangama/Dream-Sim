@@ -95,3 +95,26 @@ class BundleTests(unittest.TestCase):
         self.assertIsNone(documents(body)['pan'])
         body=self.details();body['result']['files'].append({'doctype':'PANCR','issuerid':'in.gov.pan','id':'in.gov.pan-PANCR-BCDEF2345G'})
         self.assertEqual(documents(body)['pan_state'],'needs_review');self.assertIsNone(documents(body)['pan'])
+
+    def test_bundle_api_only_accepts_consent_and_declaration_not_identity_inputs(self):
+        from flask import Flask,g
+        import bgv_app_api
+        self.session(bundle=False,version=identity.VERSION)
+        app=Flask(__name__)
+        @app.before_request
+        def actor():
+            g.api_user={'user_id':'u1'};g.auth_session={'kind':'mobile'}
+        @app.errorhandler(ApiError)
+        def error(exc):return {'error':exc.message},exc.status
+        bgv_app_api.register(app,lambda:self.conn)
+        client=app.test_client();headers={'Authorization':'Bearer synthetic'}
+        body={'session_id':self.sid,'consent':True,'consent_version':identity.BUNDLE_VERSION,'employer':'Synthetic Ltd'}
+        self.assertEqual(client.post('/verification/bundle',json=body).status_code,401)
+        self.assertEqual(client.post('/verification/bundle',headers=headers,json={**body,'name':'FORGED NAME'}).status_code,400)
+        with patch('bgv_app.Client.execute') as provider:
+            response=client.post('/verification/bundle',headers=headers,json=body)
+            self.assertEqual(response.status_code,202)
+            self.assertTrue(response.json['bundle']['consented'])
+            self.assertEqual(client.get('/verification',headers=headers).status_code,200)
+            provider.assert_not_called()
+        self.assertEqual(db.fetch_all(self.conn,'BgvRequest'),[])
