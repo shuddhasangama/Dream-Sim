@@ -65,7 +65,7 @@ def view(conn, uid):
         key = (row['operation'], row['environment'])
         if key not in latest:
             latest[key] = {'id': row['id'], 'operation': row['operation'], 'state': row['state'],
-                'environment': row['environment'], 'updated_at': row['updated_at'],
+                'environment': row['environment'], 'updated_at': row['updated_at'], 'parent_request_id':row.get('parent_request_id'),
                 **json.loads(row['summary_json'])}
             item = latest[key]
             children = [r for r in rows if r.get('parent_request_id') == row['id']]
@@ -75,7 +75,7 @@ def view(conn, uid):
             item['can_check_again'] = bool(row['operation'] in RESULTS.values() and row['state']=='pending'
                 and datetime.now(timezone.utc)-datetime.fromisoformat(row['updated_at']) >= timedelta(seconds=60))
     return {'enabled': enabled, 'environment': environment, 'consent_version': VERSION,
-            'consent_text': CONSENT, 'checks': available_checks, 'result_labels':RESULT_LABELS, 'results': list(latest.values()),
+            'consent_text': CONSENT, 'checks': available_checks, 'result_labels':RESULT_LABELS, 'results': [item for item in latest.values() if item['operation'] not in RESULTS.values() or not item.get('parent_request_id') or item['parent_request_id']==latest.get((next(op for op,result in RESULTS.items() if result==item['operation']),item['environment']),{}).get('id')],
             'bundle': __import__('bgv_bundle').view(conn,uid),
             'overall_approval': 'Separate BGV review required; these checks do not unlock matching.'}
 
@@ -87,9 +87,11 @@ def submit(conn, uid, body):
         if operation not in CHECKS or body.get('consent') is not True or body.get('consent_version') != VERSION:
             raise ValueError()
         values = OPERATIONS[operation].payload(body['inputs'])
+        if operation in ('individual_search','fir_search') and values.get('matchType')!='exact':
+            raise ValueError('App screening requires exact matching')
         if operation == 'individual_search':
-            if values.get('caseCategory') != 'criminal' or values.get('matchType') != 'possible':
-                raise ValueError('Phase 1 requires explicit criminal possible matching')
+            if values.get('caseCategory') != 'criminal' or values.get('matchType') != 'exact':
+                raise ValueError('Phase 1 requires explicit criminal exact matching')
         declared = binding(uid, body.get('declared', {}))['declared_fields']
         if operation == 'current_employer' and not declared.get('employer', '').strip():
             raise ValueError()
@@ -114,7 +116,7 @@ def submit(conn, uid, body):
                 raise ApiError('request_conflict', 'This request reference has already been used.', 409)
             return
         active = db.fetch_all(conn, 'BgvRequest', user_id=uid, operation=operation, environment=cfg.environment)
-        if any(r['state'] in ('queued', 'processing', 'pending', 'outcome_unknown','result_available') for r in active):
+        if any(r['state'] in ('queued', 'processing', 'pending', 'outcome_unknown','result_available') and (operation not in RESULTS or protection.open(r['protected_input'])['inputs'].get('matchType')==values['matchType']) for r in active):
             raise ApiError('check_in_progress', 'A check is already in progress or awaiting review. Do not resubmit.', 409)
         now = stamp()
         auth_sessions.sql(conn, 'INSERT INTO "BgvRequest" '
@@ -188,7 +190,7 @@ def public_message(operation,state,summary):
     if operation in RESULTS.values():
         if summary.get('processing_complete'):
             count=summary.get('cases_returned') if operation=='individual_result' else summary.get('candidates_returned')
-            if count==0:return 'Search completed with no candidate records returned. Final BGV review is pending.'
+            if count==0:return 'Search completed with no candidate records returned.'
             return 'Possible candidate records returned. Identity matching and BGV review are required.'
         return 'The provider response format needs support review. Your details have not been marked incorrect.'
     if operation=='current_employer':
@@ -201,17 +203,18 @@ def reproject_saved(conn,uid):
     cfg=config();protection=Protection();changed=0
     if cfg.environment!='preproduction':raise ValueError('Saved-result pilot repair is sandbox-only')
     for row in db.fetch_all(conn,'BgvRequest',user_id=uid,environment=cfg.environment):
-        if row['operation'] not in {*RESULTS.values(),'current_employer'} or row['state'] not in ('needs_review','pending','verified','partially_verified') or not row.get('protected_result'):continue
+        if row['operation'] not in {*RESULTS.values(),'current_employer'} or row['state'] not in ('needs_review','pending','verified','partially_verified','not_confirmed','history_available','employment_mismatch') or not row.get('protected_result'):continue
         if row.get('case_check_id') and db.fetch_all(conn,'BgvReview',case_check_id=row['case_check_id']):continue
         evidence=protection.open(row['protected_result']);provider=evidence.get('provider_response') or {}
         if provider.get('http_status') not in (200,202):continue
         summary=OPERATIONS[row['operation']].summarize(provider['http_status'],provider.get('json'))
-        state=row['state']
-        if row['operation'] in RESULTS.values():state='pending' if summary['outcome']=='accepted_pending_confirmation' else 'needs_review'
-        public=json.loads(row['summary_json']);public['message']=public_message(row['operation'],state,summary)
-        if row['operation'] in RESULTS.values():
-            public['processing_complete']=summary.get('processing_complete',False)
-            public['candidate_count']=summary.get('cases_returned') if row['operation']=='individual_result' else summary.get('candidates_returned')
+        import bgv_result_policy
+        if row['operation'] in RESULTS.values():state,extra=bgv_result_policy.legal(conn,row,summary,protection)
+        else:
+            from signzy.verification import evaluate
+            comparison=evaluate(evidence)[0]
+            state,extra=bgv_result_policy.employment(provider.get('json'),summary,comparison)
+        public={**json.loads(row['summary_json']),**extra}
         encoded=json.dumps(public)
         if state==row['state'] and encoded==row['summary_json']:continue
         with auth_sessions.transaction(conn):
@@ -234,10 +237,10 @@ def work_one(conn):
     # Claim is committed before the external call. Interrupted attempts are never resent automatically.
     try:
         data = protection.open(row['protected_input'])
-        if row['operation']=='individual_search' and (data['inputs'].get('caseCategory')!='criminal' or data['inputs'].get('matchType')!='possible'):
+        if row['operation'] in RESULTS and (data['inputs'].get('matchType')!='exact' or row['operation']=='individual_search' and data['inputs'].get('caseCategory')!='criminal'):
             with auth_sessions.transaction(conn):
                 auth_sessions.sql(conn,'UPDATE "BgvRequest" SET state=?,summary_json=?,updated_at=? WHERE id=?',
-                    ('unavailable',json.dumps({'message':'This queued search is outside the current criminal-only scope. Support review required.'}),stamp(),row['id']))
+                    ('unavailable',json.dumps({'message':'This queued search is outside the current exact-screening scope. Support review required.'}),stamp(),row['id']))
             return True
         if os.getenv('DHASHU_BGV_POLICY_ENABLED')=='1':
             key={'current_employer':'current_employer','individual_search':'criminal_court','individual_result':'criminal_court','fir_search':'fir','fir_result':'fir','digilocker_details':'identity_details'}[row['operation']]
@@ -287,9 +290,14 @@ def work_one(conn):
             public['fields'] = json.loads(saved['fields_json'])
             state = status if status in ('verified', 'partially_verified') else 'needs_review'
         public['message']=public_message(row['operation'],state,summary)
-        if row['operation'] in RESULTS.values():
-            public['processing_complete']=summary.get('processing_complete',False)
-            public['candidate_count']=summary.get('cases_returned') if row['operation']=='individual_result' else summary.get('candidates_returned')
+        if state not in ('unavailable','outcome_unknown'):
+            import bgv_result_policy
+            if row['operation'] in RESULTS.values():
+                state,extra=bgv_result_policy.legal(conn,row,summary,protection)
+                public.update(extra)
+            elif row['operation']=='current_employer':
+                state,extra=bgv_result_policy.employment(item['provider_response'].get('json'),summary,state)
+                public.update(extra)
         with auth_sessions.transaction(conn):
             auth_sessions.sql(conn, 'UPDATE "BgvRequest" SET state=?,summary_json=?,updated_at=? WHERE id=?',
                 (state, json.dumps(public), stamp(), row['id']))

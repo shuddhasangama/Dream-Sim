@@ -34,7 +34,7 @@ class LegalShapeTests(unittest.TestCase):
     def test_empty_completed_result_is_distinct_from_pending(self):
         result=court.summarize(200,{'status':1,'cases':[]})
         self.assertTrue(result['processing_complete']);self.assertEqual(result['cases_returned'],0)
-        self.assertIn('Final BGV review',bgv_app.public_message('individual_result','needs_review',result))
+        self.assertIn('no candidate records',bgv_app.public_message('individual_result','needs_review',result))
 
 class RepairAndPhotoTests(unittest.TestCase):
     setUp=fixtures.BundleTests.setUp
@@ -55,7 +55,7 @@ class RepairAndPhotoTests(unittest.TestCase):
         row=db.fetch_one(self.conn,'BgvRequest',id=rid)
         self.assertEqual(row['state'],'pending');self.assertEqual(row['protected_result'],raw)
         self.assertTrue(bgv_app.view(self.conn,'u1')['results'])
-        self.assertIn('Possible candidate',json.loads(db.fetch_one(self.conn,'BgvRequest',id=fid)['summary_json'])['message'])
+        self.assertIn('previous possible-match',json.loads(db.fetch_one(self.conn,'BgvRequest',id=fid)['summary_json'])['message'])
         self.assertEqual(db.fetch_all(self.conn,'BgvAttempt'),[])
         self.assertEqual(db.fetch_one(self.conn,'User',id='u1')['bgv_status'],'declared')
     def test_repair_never_touches_other_users_or_unknown_submissions(self):

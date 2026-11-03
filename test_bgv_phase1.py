@@ -28,7 +28,7 @@ class Phase1Tests(unittest.TestCase):
         self.conn.executemany('INSERT INTO "User" (id,journey_state) VALUES (?,?)',[('u1','onboarding'),('u2','onboarding')]); self.conn.commit()
     def tearDown(self): self.conn.close(); self.env.stop()
     def body(self,op='individual_search'):
-        inputs={'name':'SYNTHETIC PERSON','address':'SYNTHETIC ADDRESS','matchType':'possible'}
+        inputs={'name':'SYNTHETIC PERSON','address':'SYNTHETIC ADDRESS','matchType':'exact'}
         if op=='individual_search': inputs['caseCategory']='criminal'
         return {'request_id':str(uuid.uuid4()),'operation':op,'inputs':inputs,'declared':{},'consent':True,'consent_version':bgv_app.VERSION}
     def work(self,body,status=200,timeout=False):
@@ -42,7 +42,7 @@ class Phase1Tests(unittest.TestCase):
     def test_criminal_chain_ownership_idempotency_and_no_clearance(self):
         request=self.body(); bgv_app.submit(self.conn,'u1',request)
         inputs=self.work({'status':1,'caseId':'synthetic_case_123'})
-        self.assertEqual(inputs['caseCategory'],'criminal'); self.assertEqual(inputs['matchType'],'possible')
+        self.assertEqual(inputs['caseCategory'],'criminal'); self.assertEqual(inputs['matchType'],'exact')
         parent=request['request_id']; child=str(uuid.uuid4())
         self.assertTrue(bgv_app.view(self.conn,'u1')['results'][0]['can_fetch_result'])
         with self.assertRaises(ApiError): bgv_app.fetch_result(self.conn,'u2',parent,child)
@@ -52,7 +52,7 @@ class Phase1Tests(unittest.TestCase):
         self.assertEqual(self.work({'status':1,'cases':[],'total':0}),{'caseId':'synthetic_case_123'})
         self.assertFalse(bgv_app.work_one(self.conn))
         result=next(r for r in bgv_app.view(self.conn,'u1')['results'] if r['operation']=='individual_result')
-        self.assertEqual(result['state'],'needs_review')
+        self.assertEqual(result['state'],'verified')
         self.assertNotIn('synthetic_case',json.dumps(result))
         self.assertEqual(db.fetch_one(self.conn,'User',id='u1')['bgv_status'],'declared')
         self.assertEqual(len(db.fetch_all(self.conn,'BgvAttempt')),2)
@@ -66,7 +66,7 @@ class Phase1Tests(unittest.TestCase):
         bgv_app.check_again(self.conn,'u1',child)
         with self.assertRaises(ApiError): bgv_app.check_again(self.conn,'u1',child)
         self.work({'status':1,'message':'Processing done','cases':[],'numresults':0})
-        self.assertEqual(db.fetch_one(self.conn,'BgvRequest',id=child)['state'],'needs_review')
+        self.assertEqual(db.fetch_one(self.conn,'BgvRequest',id=child)['state'],'verified')
         self.assertEqual(len(db.fetch_all(self.conn,'BgvAttempt',request_id=child)),2)
     def test_timeout_cannot_be_polled_or_replayed(self):
         request=self.body(); bgv_app.submit(self.conn,'u1',request)
@@ -142,7 +142,7 @@ class Phase1Tests(unittest.TestCase):
             body=self.body(); bgv_app.submit(self.conn,'u1',body)
             self.work({'caseId':'synthetic_case_123'})
             child=str(uuid.uuid4()); bgv_app.fetch_result(self.conn,'u1',body['request_id'],child)
-            self.work({'cases':[],'total':0})
+            self.work({'status':1,'cases':[{}],'total':1})
         check=db.fetch_one(self.conn,'BgvCaseCheck',case_id=cid,check_definition_id='criminal_court')
         attempt=db.fetch_all(self.conn,'BgvAttempt',request_id=child)[0]
         result=bgv_policy.review(self.conn,check['id'],attempt['id'],'satisfied','Synthetic review note','operator-test')

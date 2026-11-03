@@ -77,7 +77,7 @@ def schedule(conn):
             from digilocker_photo_cache import cache
             cache(conn,row)
             for operation in ('individual_search','fir_search'):
-                inputs={'name':identity['name'],'address':identity['document_address'],'matchType':'possible'}
+                inputs={'name':identity['name'],'address':identity['document_address'],'matchType':'exact'}
                 if operation=='individual_search':inputs['caseCategory']='criminal'
                 queue(conn,row,bundle,operation,inputs,{})
             details_id=request_id(row['id'],'digilocker_details')
@@ -103,6 +103,7 @@ def schedule(conn):
     for row in db.fetch_all(conn,'BgvRequest',environment=cfg.environment):
         snapshot=protection.open(row['protected_input'])
         if not snapshot.get('bundle_session_id'):continue
+        if row['operation'] in bgv_app.RESULTS and snapshot['inputs'].get('matchType')!='exact':continue
         try:
             if row['operation'] in bgv_app.RESULTS and row['state']=='result_available' and not db.fetch_all(conn,'BgvRequest',parent_request_id=row['id']):
                 bgv_app.fetch_result(conn,row['user_id'],row['id'],request_id(row['id'],'result'))
@@ -118,13 +119,13 @@ def queue(conn,session,bundle,operation,inputs,declared):
     with auth_sessions.transaction(conn):
         if db._is_postgres_connection(conn):auth_sessions.sql(conn,'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
         existing=db.fetch_all(conn,'BgvRequest',user_id=session['user_id'],operation=operation,environment=session['environment'])
-        if any(r.get('case_check_id')==case_check for r in existing):return
+        if any(r.get('case_check_id')==case_check and (operation=='current_employer' or bgv_app.Protection().open(r['protected_input'])['inputs'].get('matchType')=='exact') for r in existing):return
         values=bgv_app.OPERATIONS[operation].payload(inputs)
         now=bgv_app.stamp()
         snapshot={'inputs':values,'declared':declared,'bundle_session_id':session['id'],
                   'consent':{'version':BUNDLE_VERSION,'text':BUNDLE_CONSENT,'user_id':session['user_id'],'accepted_at':bundle['accepted_at']}}
         auth_sessions.sql(conn,'INSERT INTO "BgvRequest" (id,user_id,operation,environment,state,protected_input,created_at,updated_at,case_check_id) VALUES (?,?,?,?,?,?,?,?,?)',
-            (request_id(session['id'],operation),session['user_id'],operation,session['environment'],'queued',bgv_app.Protection().seal(snapshot),now,now,case_check))
+            (request_id(session['id'],operation+(':exact-v1' if operation in bgv_app.RESULTS else '')),session['user_id'],operation,session['environment'],'queued',bgv_app.Protection().seal(snapshot),now,now,case_check))
 
 def view(conn,uid):
     try:cfg=bgv_app.config()

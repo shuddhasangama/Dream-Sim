@@ -27,3 +27,9 @@ test('compact checklist uses received identity, flags age difference and never i
   assert.doesNotMatch(html,/<private>|<address>|None found|Live face match/);
   assert.match(html,/Setup needed/);assert.match(html,/View document details/);
 });
+
+test('exact zero results show Verified and historical employer shows History found',()=>{
+  const html=render({safe,data:{enabled:true,environment:'preproduction',bundle:{consented:true,employer_declared:true},results:[{operation:'current_employer',environment:'preproduction',state:'history_available',message:'Last recorded employer: Synthetic Ltd (2021 to 2022). Current employment is not established.'},{operation:'individual_result',environment:'preproduction',state:'verified',message:'Verified: completed exact search returned zero cases.'},{operation:'fir_result',environment:'preproduction',state:'verified',message:'Verified: completed exact search returned zero cases.'}]}});
+  assert.match(html,/History found/);assert.match(html,/Last recorded employer/);assert.equal((html.match(/bgv-badge good">Verified/g)||[]).length,2);
+  assert.doesNotMatch(html,/Review needed|Final BGV review is pending/);
+});

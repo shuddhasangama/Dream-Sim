@@ -27,3 +27,12 @@ test('legacy Aadhaar identity asks for screening consent without manual PAN entr
  await expect(page.locator('input[name=panNumber],input[name=address]')).toHaveCount(0);
  await expect(page.locator('input[name=consent]')).not.toBeChecked();
 });
+
+test('exact checks and source employment history have distinct outcomes',async({page})=>{
+ await preview(page,{...fixture,results:[{operation:'current_employer',environment:'preproduction',state:'history_available',message:'Last recorded employer: Synthetic Ltd (20 May 2021 to 23 May 2022; 1 year, 3 days). This historical record does not establish your current employment status.'},{operation:'individual_result',environment:'preproduction',state:'verified',message:'Verified: completed exact search returned zero cases.'},{operation:'fir_result',environment:'preproduction',state:'needs_review',message:'Exact search returned 2 case candidate(s). Review is required before this check can be verified.'}]});
+ await expect(page.getByText('History found',{exact:true})).toBeVisible();
+ await expect(page.getByText('Verified',{exact:true})).toBeVisible();
+ await expect(page.getByText(/1 year, 3 days/)).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:'../outputs/bgv-exact-history-preview.png',fullPage:true});
+});

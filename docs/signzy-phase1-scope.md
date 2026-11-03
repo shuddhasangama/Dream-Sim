@@ -73,3 +73,13 @@ A consented Aadhaar photo reference now supports one bounded file download into 
 Get Details supplies a PAN record identifier, not a PAN portrait. PAN-photo availability stays false until a documented retrieval contract exists. Live face/liveness testing remains on hold. Sending original portraits to an avatar provider still needs a separate app workflow and purpose-specific consent.
 
 Backend correction release `74d1fd39`: API and worker both deployed successfully on 3 November 2026. Saved projections were repaired without provider calls; one existing pending Court result was subsequently rechecked. The original Aadhaar portrait was downloaded and validated successfully. Existing app build 70 can read the updated messages and result state; no mobile rebuild is required for this correction. Validation: 45 focused backend tests and all 53 Signzy tests passed (overlapping suites). No live face/liveness call or avatar-generation call was performed.
+
+## Exact-screening outcome rule (supersedes earlier possible matching)
+
+New app Court and FIR searches use `matchType: exact`; Court remains criminal only. Request IDs include the new exact-search revision and old encrypted possible-search inputs/results are preserved. A completed old possible result is not relabelled as an exact result. New exact searches are scheduled once per consented identity/case, with one linked result request each; pending rechecks remain explicit/bounded.
+
+For each linked exact result: explicit successful completion plus an empty cases list and consistent zero counters yields `verified` for that check. Positive case candidates yield `needs_review`. Pending, malformed, mismatched-owner/environment/source links and contradictory zero counts never verify. These rules do not change overall member BGV/matching approval. The earlier mandatory-review wording on zero cases was an application decision, not Signzy's response.
+
+Employment is now projected separately as `history_available`, `employment_mismatch`, `not_confirmed` or verified current employer. Historical employer name and validated joining/exit dates and duration are shown without PAN/UAN/member identifiers. A historical exit record does not establish unemployment or account for all later employment. No new employer vendor call is needed to update saved evidence.
+
+There is an append-only operator review command; reviewer assignment, notifications and a case-review dashboard are not built. Positive exact case candidates therefore require an operator action rather than implying somebody is already reviewing them. The mobile update adds explicit History found / Not confirmed / Doesn't match / Verified labels; build 70 cannot display all new badges correctly.

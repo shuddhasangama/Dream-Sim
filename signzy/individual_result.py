@@ -27,7 +27,9 @@ def summarize(status, body):
     result={'outcome':'accepted_pending_confirmation' if waiting else
             'response_received_review_required' if shaped else
             'response_received_contract_review_required' if status==200 else 'request_failed_or_unexpected_response',
-            'processing_complete':shaped,'cases_returned':len(cases) if shaped else None,
+            'processing_complete':shaped,'completion_confirmed':bool(shaped and type(data.get('status'))is int and data['status']==1),
+            'provider_count_discrepancy':bool(shaped and 'total' in data and (type(total)is not int or total!=len(cases))),
+            'cases_returned':len(cases) if shaped else None,
             'total_reported':total if shaped and type(total)is int and total>=0 else None,
             'court_clearance':'not_evaluated','automatic_verification':False}
     if status==404:result['diagnostic']='record_not_found_meaning_unconfirmed_not_a_clearance'

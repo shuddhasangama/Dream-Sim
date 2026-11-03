@@ -3,8 +3,8 @@ export async function load(session) {
   const [checks,identity,plan,liveness]=await Promise.all([session.get('/api/v1/verification'),digilocker.load(session),session.get('/api/v1/verification/plan'),session.get('/api/v1/verification/liveness')]);
   return {...checks,digilocker:identity,plan,liveness};
 }
-const labels={queued:'Confirming',processing:'Confirming',pending:'Processing',result_available:'Retrieving result',
-  verified:'Checked',partially_verified:'Review needed',needs_review:'Review needed',unavailable:'Check unavailable',
+const labels={history_available:'History found',employment_mismatch:'Doesn’t match',not_confirmed:'Not confirmed',queued:'Confirming',processing:'Confirming',pending:'Processing',result_available:'Retrieving result',
+  verified:'Verified',partially_verified:'Review needed',needs_review:'Review needed',unavailable:'Check unavailable',
   outcome_unknown:'Support review',reviewed_satisfied:'Reviewed',reviewed_needs_review:'Review needed',reviewed_not_satisfied:'Follow-up needed',waived:'Exception recorded'};
 export function render({data,safe}) {
   if(!data)return '<section class="card">Loading verification…</section>';
@@ -15,7 +15,7 @@ export function render({data,safe}) {
     const r=results.find(r=>r.operation===child)||results.find(r=>r.operation===op);
     const reviewed=data.plan?.checks?.find(c=>c.key===key||c.check_key===key);
     const state=reviewed?.state?.startsWith('reviewed_')?reviewed.state:r?.state;
-    return {status:labels[state]||'Not started',tone:state==='verified'||state==='reviewed_satisfied'?'good':state==='needs_review'||state==='unavailable'?'attention':'waiting',
+    return {status:labels[state]||'Not started',tone:state==='verified'||state==='reviewed_satisfied'?'good':state==='needs_review'||state==='unavailable'||state==='employment_mismatch'?'attention':'waiting',
       text:r?.message||(identity&&bundle.consented?'Starting in the background':'Waiting for DigiLocker and consent')};
   }
   const employer=check('current_employer',null,'current_employer'),court=check('individual_search','individual_result','criminal_court'),fir=check('fir_search','fir_result','fir');
@@ -40,7 +40,7 @@ export function render({data,safe}) {
     ${results.filter(r=>r.can_check_again).map(r=>`<button type="button" class="secondary" data-bgv-poll="${safe(r.id)}">Check ${r.operation==='fir_result'?'FIR':'Court'} processing status again</button>`).join('')}
     <p class="hint">Face capture isn’t connected yet. No live face check has been performed.</p>
     <button type="button" id="bgv-refresh" class="secondary">Refresh status</button>
-    <p class="hint">${data.environment==='preproduction'?'Sandbox testing · ':''}Separate BGV review is required before account approval. Search results alone do not establish clearance.</p>
+    <p class="hint">${data.environment==='preproduction'?'Sandbox testing · ':''}Each check has its own result. An exact search with zero cases verifies that check; overall account approval is separate.</p>
     ${!data.enabled?'<p>Verification checks are not enabled yet.</p>':''}</div>`;
 }
 export function bind(root,ctx) {

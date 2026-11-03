@@ -27,6 +27,6 @@ def summarize(status, body):
     return {'outcome':'accepted_pending_confirmation' if waiting else
             'response_received_review_required' if done else
             'response_received_contract_review_required' if status==200 else 'request_failed_or_unexpected_response',
-            'processing_complete':done,'candidates_returned':len(cases) if done else None,
+            'processing_complete':done,'completion_confirmed':done,'candidates_returned':len(cases) if done else None,
             'numresults_reported':total if done else None,'provider_count_discrepancy':bool(discrepancy),
             'fir_clearance':'not_evaluated','automatic_verification':False}
