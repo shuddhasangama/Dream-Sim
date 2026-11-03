@@ -4,6 +4,9 @@
 // API's per-user state does — not just fixed fixtures.
 export function previewTransport() {
   let active = false;
+  const workCategories=['Salaried','Self-employed','Freelancer','Business owner','Other'];
+  let workPreferences={categories:[],include_undisclosed:true,verified_only:false,max_age_days:0};
+  let workIgnored=false;
 
   let reach = {
     counts: { mutual_open: 1, fits_user_filters: 6, no_realistic_matches: false },
@@ -48,7 +51,7 @@ export function previewTransport() {
   // this fixture (a slider or filter entry exists for all seven), so
   // there is nothing to list here — matches the real API always
   // including the key, empty or not.
-  function reachState() { return { ...reach, locked_levers: [], ...reachIgnoredSummary() }; }
+  function reachState() { return { ...reach, work_verification_filter:{categories:workCategories,preferences:workPreferences,ignored:workIgnored}, locked_levers: [], ...reachIgnoredSummary() }; }
 
   // "The week" grid, mirroring week_map.py's own algorithm (BANDS/MOMENTS)
   // against a fixed clock — a faithful preview fixture, not a second copy
@@ -177,7 +180,7 @@ export function previewTransport() {
     lock_in: null, date_plan: null,
     matches: [
       { id: 'match-1', week: 1, slot: 1, revealed_at: 'Mon:12', window_closes_at: 'Tue:12', action: 'none', status: 'open',
-        candidate: { display_name: 'Priya Sharma', city: 'Bangalore', bgv_status: 'verified', visions: [{ key: 'Intimacy', stance: ['Emotional'] }], stats: { age: 29, height_cm: 162, profession: 'Design', income_band: '₹₹', education: "Master's", diet: 'Vegetarian', nationality: 'IN' } },
+        candidate: { display_name: 'Priya Sharma', city: 'Bangalore', bgv_status: 'verified', employment_category:'Freelancer', verification_summary:{shared:true,sandbox:true,checks:[{key:'court',label:'Criminal court',status:'verified',status_label:'Verified',checked_on:'2026-11-03'},{key:'fir',label:'FIR',status:'verified',status_label:'Verified',checked_on:'2026-11-03'},{key:'employment',label:'Employment',status:'history_found',status_label:'History found',checked_on:'2026-11-02'}]}, visions: [{ key: 'Intimacy', stance: ['Emotional'] }], stats: { age: 29, height_cm: 162, profession: 'Design', income_band: '₹₹', education: "Master's", diet: 'Vegetarian', nationality: 'IN' } },
         their_interest: false, allowed_actions: ['interest', 'pass'] },
       { id: 'match-2', week: 1, slot: 2, revealed_at: 'Tue:12', window_closes_at: 'Wed:12', action: 'none', status: 'not_yet_revealed',
         candidate: null, their_interest: false, allowed_actions: [] },
@@ -261,12 +264,12 @@ export function previewTransport() {
   // reopens it (see the PATCH handler below), same as the real API.
   let statsChecks = { age: 'verified', education: 'verified', nationality: 'verified', profession: 'verified', income_band: 'verified' };
   const statChanges = [];
-  const STAT_OPTIONS = { education: ["Bachelor's", "Master's", 'PhD'], nationality: ['IN', 'NRI'], profession: ['Engineering', 'Design', 'Medicine', 'Law'], diet: ['Vegetarian', 'Vegan', 'Everything'], smoking: ['Never', 'Occasionally', 'Regularly'], drinking: ['Never', 'Socially', 'Regularly'], fitness_routine: ['Sedentary', 'Occasional', 'Gym 3x/week', 'Athlete'], marital_history: ['Never married', 'Divorced', 'Widowed'], has_children: ['No', 'Yes'], ethnicity: ['South Asian', 'East Asian', 'Mixed', 'Other'], religion: ['Hindu', 'Muslim', 'Christian', 'Other'], languages: ['English', 'Hindi', 'Tamil', 'Bengali'], cuisine: ['North Indian', 'South Indian', 'Italian', 'Cafe'], income_band: ['₹₹ · 10L–25L', '₹₹₹ · 25L–50L', '₹₹₹₹ · 50L+'], budget: ['₹1,500–2,500', '₹2,500–4,000', '₹4,000+'] };
+  const STAT_OPTIONS = { employment_category:workCategories,share_verification_summary:['Yes','No'], education: ["Bachelor's", "Master's", 'PhD'], nationality: ['IN', 'NRI'], profession: ['Engineering', 'Design', 'Medicine', 'Law'], diet: ['Vegetarian', 'Vegan', 'Everything'], smoking: ['Never', 'Occasionally', 'Regularly'], drinking: ['Never', 'Socially', 'Regularly'], fitness_routine: ['Sedentary', 'Occasional', 'Gym 3x/week', 'Athlete'], marital_history: ['Never married', 'Divorced', 'Widowed'], has_children: ['No', 'Yes'], ethnicity: ['South Asian', 'East Asian', 'Mixed', 'Other'], religion: ['Hindu', 'Muslim', 'Christian', 'Other'], languages: ['English', 'Hindi', 'Tamil', 'Bengali'], cuisine: ['North Indian', 'South Indian', 'Italian', 'Cafe'], income_band: ['₹₹ · 10L–25L', '₹₹₹ · 25L–50L', '₹₹₹₹ · 50L+'], budget: ['₹1,500–2,500', '₹2,500–4,000', '₹4,000+'] };
   const STAT_RANGES = { age: [21, 75], height_cm: [140, 210], weight_kg: [40, 150], waist_in: [20, 55], children_count: [1, 10] };
   const VERIFIED_KEYS = ['age', 'education', 'nationality', 'profession', 'income_band'];
   const VERIFIED_EDIT_WARNING = 'Editing a verified field re-opens its BGV check.';
   function statsRows() {
-    const editable = ['height_cm', 'weight_kg', 'waist_in', 'diet', 'religion', 'has_children', 'children_count', 'smoking', 'drinking', 'fitness_routine', 'marital_history', 'ethnicity', 'languages', 'cuisine', 'budget'];
+    const editable = ['employment_category','share_verification_summary','height_cm', 'weight_kg', 'waist_in', 'diet', 'religion', 'has_children', 'children_count', 'smoking', 'drinking', 'fitness_routine', 'marital_history', 'ethnicity', 'languages', 'cuisine', 'budget'];
     return [
       ...editable.map((key) => ({ key, value: statsData[key] ?? null, editable: true, why: 'open', reason: null, warning: null, check: null, group: 'declared' })),
       ...VERIFIED_KEYS.map((key) => {
@@ -502,6 +505,7 @@ export function previewTransport() {
     if (path.endsWith('/profile/stats/reverification')) return ok({ status: 'in_review', provider_mode: 'manual_review_required', verification_granted: false });
 
     if (path.endsWith('/reach') && method === 'GET') return ok(reachState());
+    if(path.endsWith('/reach/work-verification')){workPreferences={...body};workIgnored=false;return ok(reachState());}
     if (path.endsWith('/reach/widen')) {
       const slider = reach.sliders.find((s) => s.key === body.lever);
       if (slider) slider.current = [Math.max(slider.min, slider.current[0] - 2), Math.min(slider.max, slider.current[1] + 2)];
@@ -527,6 +531,7 @@ export function previewTransport() {
       return ok(reachState());
     }
     if (path.endsWith('/reach/show-all')) {
+      workIgnored=!!body.ignore;
       [...reach.sliders, ...reach.filters].forEach((f) => { f.ignored = !!body.ignore; });
       return ok(reachState());
     }

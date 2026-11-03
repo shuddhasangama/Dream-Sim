@@ -120,7 +120,7 @@ class WhenTests(unittest.TestCase):
         """"we don't want stats to change between the match and date"."""
         for field in se.EDITABLE:
             with self.subTest(field=field):
-                self.assertFalse(self.yes(field, KEEN))
+                self.assertEqual(self.yes(field, KEEN),field=="share_verification_summary")
 
     def test_a_relationship_opens_it_all_again(self):
         for field in se.EDITABLE:

@@ -79,11 +79,11 @@ VERIFIED = ("age", "education", "nationality", "profession", "income_band")
 # than during one.
 # has_children/children_count (round4-fixes-spec.md §5) belong here too:
 # someone else's REACH filter runs against has_children.
-CANDIDATE_FACING = ("height_cm", "weight_kg", "waist_in", "diet", "religion",
+CANDIDATE_FACING = ("employment_category", "height_cm", "weight_kg", "waist_in", "diet", "religion",
                     "has_children", "children_count")
 
 # Soft and nobody screens on them. Editable whenever.
-FREE = ("smoking", "drinking", "fitness_routine", "marital_history",
+FREE = ("share_verification_summary", "smoking", "drinking", "fitness_routine", "marital_history",
         "ethnicity", "languages", "cuisine", "budget")
 
 EDITABLE = CANDIDATE_FACING + FREE
@@ -140,6 +140,8 @@ def editable(field: str, state: dict[str, bool], verified_now: bool = False) -> 
     verified field exactly like any other candidate-facing one — being
     checked by BGV does not make it any less visible to a match.
     """
+    if field=='share_verification_summary':
+        return {'editable':True,'reason':None,'why':'privacy','warning':None}
     def verified_editable():
         if field in VERIFIED and verified_now:
             return {"editable": True, "reason": None, "why": "verified_editable", "warning": VERIFIED_EDIT_WARNING}

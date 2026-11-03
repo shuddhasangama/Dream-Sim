@@ -351,12 +351,14 @@ def with_view_fields(user: dict) -> dict:
 
 
 def load_pool() -> list[dict]:
-    return [from_user_row(r) for r in db.fetch_all(get_db(), "User")]
+    import match_checks
+    return match_checks.attach(get_db(),[from_user_row(r) for r in db.fetch_all(get_db(), "User")])
 
 
 def load_user(user_id: str) -> dict | None:
     row = db.fetch_one(get_db(), "User", id=user_id)
-    return from_user_row(row) if row else None
+    import match_checks
+    return match_checks.attach(get_db(),[from_user_row(row)])[0] if row else None
 
 
 def find_couple_for_user(user_id: str) -> dict | None:
@@ -944,9 +946,13 @@ def _ignored_summary(user: dict, filters: list[dict]) -> dict:
     """How many filters the person has switched to Any, and whether that
     is all of them."""
     switched = matching.ignored_set(user["preferences"])
+    import match_checks
+    work=match_checks.preferences(user)
+    work_active=bool(work["categories"] or work["verified_only"])
+    work_ignored=user["preferences"].get("work_verification_ignored",False)
     return {
-        "ignored_count": len(switched),
-        "all_ignored": bool(filters) and all(f["ignored"] for f in filters),
+        "ignored_count": len(switched)+int(work_active and work_ignored),
+        "all_ignored": bool(filters) and all(f["ignored"] for f in filters) and (not work_active or work_ignored),
     }
 
 
@@ -1056,11 +1062,13 @@ def _reach_state(user_id: str) -> dict:
     action returns this rather than a partial patch, so the counts on the
     screen can never disagree with what is saved."""
     import profile_choices
+    import match_checks
     fresh = load_user(user_id)
     pool, counting_unverified = reach_pool(fresh)
     filters = filter_view(fresh, pool)
     return {
         "health_filter": profile_choices.reach_health(fresh),
+        "work_verification_filter": match_checks.reach(fresh),
         "counts": matching.reciprocity_counts(fresh, pool),
         "deltas": [d for d in matching.whatif_deltas(fresh, pool)
                    if d["lever"] not in _SLIDER_KEYS],
@@ -1075,6 +1083,23 @@ def _reach_state(user_id: str) -> dict:
         "locked_levers": locked_lever_view(fresh),
         **_ignored_summary(fresh, filters),
     }
+
+
+@app.route('/reach/work-verification',methods=['POST'])
+@login_required
+def reach_work_verification():
+    import match_checks
+    from api_contract import ApiError
+    from evolution_service import transaction
+    user=current_user()
+    with transaction(get_db()):
+        fresh=load_user(user['user_id'])
+        if reach_locked(fresh):return jsonify(error='REACH preferences are frozen during match review and date planning/debrief.'),403
+        try:value=match_checks.validate(request.get_json(silent=True))
+        except ApiError as exc:return jsonify(error=exc.message),exc.status
+        prefs={**fresh['preferences'],'work_verification':value,'work_verification_ignored':False}
+        save_preferences(user['user_id'],prefs)
+    return jsonify(_reach_state(user['user_id']))
 
 
 @app.route("/reach/widen", methods=["POST"])
@@ -4551,6 +4576,9 @@ def _api_match_view(user, row):
                    'education', 'diet', 'nationality') if k in shown['stats']}}
     import profile_choices
     result['candidate'].update(profile_choices.public_profile(get_db(), candidate))
+    import match_checks
+    result['candidate']['verification_summary']=match_checks.public(candidate)
+    result['candidate']['employment_category']=candidate['stats'].get('employment_category')
     result['candidate']['verified_fields'] = sorted(stats_edit.verified_field_set(db.fetch_all(get_db(), 'Verification', user_id=candidate['user_id'])))
     result['their_interest'] = candidate['user_id'] in _interested_in_me(user['user_id'], row['week'])
     # Filter editing is frozen during review; that must not disable Like/Pass.
@@ -4696,7 +4724,7 @@ register_api(
     week_prepare=lambda user: week_service.prepare(get_db(), user['user_id'], get_clock()),
     match_action=lambda user, match_id, body: week_service.decide(
         get_db(), user['user_id'], match_id, body['action'], body.get('pass_reason'), get_clock()),
-    reach_actions={"health": reach_health_update, "ignore": reach_ignore, "show-all": reach_show_all,
+    reach_actions={"work-verification": reach_work_verification, "health": reach_health_update, "ignore": reach_ignore, "show-all": reach_show_all,
                    "widen": reach_widen, "set-range": reach_set_range},
     get_clock=get_clock, set_clock=set_clock,
 )

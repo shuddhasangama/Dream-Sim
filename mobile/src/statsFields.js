@@ -11,6 +11,8 @@
 // stats_edit.py already defines, never business logic of its own.
 
 export const STAT_LABELS = {
+  employment_category:'Employment category (self-declared)',
+  share_verification_summary:'Share Court, FIR and employment statuses and check dates with matches (no documents or case details)',
   age: 'Age', height_cm: 'Height', weight_kg: 'Weight', waist_in: 'Waist',
   education: 'Education', nationality: 'Nationality', profession: 'Profession',
   diet: 'Dietary preference', smoking: 'Smoking', drinking: 'Drinking',

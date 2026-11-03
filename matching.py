@@ -222,6 +222,7 @@ def set_ignored_all(user: dict[str, Any], ignore: bool) -> dict[str, Any]:
         **user["preferences"],
         "ignored": sorted(IGNORABLE) if ignore else [],
         "health_filter_ignored": bool(ignore),
+        "work_verification_ignored": bool(ignore),
     }}
 
 
@@ -364,6 +365,8 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     Opening this up to other orientations later means adding that real
     field and reading it here, not deleting this check."""
     from profile_choices import health_fits
+    import match_checks
+    if not match_checks.fits(user_a,user_b):return False
     if not health_fits(user_a, user_b):
         return False
     if user_a["gender"] == user_b["gender"]:

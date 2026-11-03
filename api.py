@@ -156,6 +156,7 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         def view():
             fields = {
                 "health": {"mode", "categories", "include_undisclosed"},
+                "work-verification": {"categories","include_undisclosed","verified_only","max_age_days"},
                 "ignore": {"filter", "ignore"},
                 "show-all": {"ignore"},
                 "widen": {"lever"},

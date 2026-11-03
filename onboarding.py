@@ -450,6 +450,8 @@ CHOICE_STATS = [
 ]
 
 OPTIONAL_CHOICE_STATS = [
+    ('employment_category','Employment category (self-declared)',['Salaried','Self-employed','Freelancer','Business owner','Other']),
+    ('share_verification_summary','Share check statuses and dates with matches',['Yes','No']),
     ("diet", "Dietary preference", DIETS),
     ("smoking", "Smoking", SMOKING),
     ("drinking", "Drinking", DRINKING),

@@ -1,3 +1,4 @@
+import {render as matchChecks} from '../matchChecks.js';
 import { pairContext } from './pairContext.js';
 // Week & Match (§2.2) and Lock-in (§2.3) — presentation redesigned per
 // design_handoff_app_ui_pulse/README.md ("Pulse", option 1a): a day strip
@@ -290,8 +291,10 @@ function matchSlot(m, safe, rehearsal = false, myActivities = {}) {
   const c = m.candidate;
   return `<div class="candidate-card" data-match="${safe(m.id)}" style="margin-top:0;">
     <div class="muted">${rehearsal ? 'Stays open during this test journey' : `Window closes ${safe(m.window_closes_at)}`}</div>
-    ${c ? `<div class="candidate-name">${safe(c.display_name)}</div><div class="muted">${safe(c.city)}${c.bgv_status ? ' · ' + safe(c.bgv_status) : ''}</div>
+    ${c ? `<div class="candidate-name">${safe(c.display_name)}</div><div class="muted">${safe(c.city)}</div>
     ${c.photo ? `<img class="profile-portrait" src="${safe(c.photo)}" alt="Profile portrait">` : ''}
+    ${matchChecks(c.verification_summary,safe)}
+    ${c.employment_category?`<p>Employment category: ${safe(c.employment_category)} <small>Self-declared</small></p>`:''}
     <div class="match-panels">
     <details><summary>Vision</summary><p>${safe(c.vision_template||'Individual Vision')}</p>
     <div class="chips">${(c.visions || []).map(v=>`<span>${safe(v.key)} · ${safe(Array.isArray(v.stance)?v.stance.join(', '):v.stance||'')}</span>`).join('')}</div>

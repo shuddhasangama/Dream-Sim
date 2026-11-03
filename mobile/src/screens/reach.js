@@ -91,6 +91,12 @@ function chipUnits(data) {
   ];
 }
 
+function workVerificationForm(data,safe){
+ if(!data)return '';
+ const p=data.preferences||{};
+ return `<details class="card reach-work"><summary>Employment &amp; verification filters</summary>${data.ignored?'<p class="hint">Currently ignored by “Any for everything”. Save below to apply these choices.</p>':''}<form id="reach-work-verification"><fieldset><legend>Employment category · self-declared</legend><p class="hint">Leave all unchecked for Any category.</p>${(data.categories||[]).map(c=>`<label class="checkbox-row"><input type="checkbox" name="categories" value="${safe(c)}" ${(p.categories||[]).includes(c)?'checked':''}> ${safe(c)}</label>`).join('')}<label class="checkbox-row"><input type="checkbox" name="include_undisclosed" ${p.include_undisclosed!==false?'checked':''}> Include people who have not declared a category</label></fieldset><label class="checkbox-row"><input type="checkbox" name="verified_only" ${p.verified_only?'checked':''}> Verified checks only</label><p class="hint">Requires shared, verified Court, FIR and current employment checks. History found and self-declarations do not qualify. This option may exclude self-employed people without current-employer proof.</p><label>Checks completed<select name="max_age_days" ${p.verified_only?'':'disabled'}><option value="0" ${!p.max_age_days?'selected':''}>Any time</option><option value="90" ${p.max_age_days===90?'selected':''}>Within the last 90 days</option><option value="180" ${p.max_age_days===180?'selected':''}>Within the last 180 days</option></select></label><button type="submit" class="primary">Save employment &amp; verification filters</button></form></details>`;
+}
+
 export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Reach</h1></section><section class="card"><p>Loading…</p></section>';
@@ -99,7 +105,7 @@ export function render(ctx) {
   const fit = counts?.fits_user_filters ?? 0;
   const units = chipUnits(data);
 
-  return `${healthForm(data.health_filter, safe)}<section class="intro"><span class="p-eyebrow">REACH · THIS WEEK</span></section>
+  return `${workVerificationForm(data.work_verification_filter,safe)}${healthForm(data.health_filter, safe)}<section class="intro"><span class="p-eyebrow">REACH · THIS WEEK</span></section>
     <div class="p-reach-hero">
       <div class="p-reach-ring" style="background:${reachRingGradient(mutual, fit, 'var(--p-success)', 'var(--p-track)')}">
         <div class="p-reach-ring-inner"><div><div class="p-reach-num">${safe(mutual)}</div><div class="p-reach-sub">open to you</div></div></div>
@@ -245,6 +251,14 @@ export function bind(root, ctx) {
       patch(held ? await session.post('/api/v1/reach/ignore', { filter: held.name, ignore: true }) : data);
     }
   })));
+
+  const work=root.querySelector('#reach-work-verification');
+  work?.elements.verified_only.addEventListener('change',()=>{work.elements.max_age_days.disabled=!work.elements.verified_only.checked;if(!work.elements.verified_only.checked)work.elements.max_age_days.value='0';});
+  work?.addEventListener('submit',event=>{
+    event.preventDefault();
+    const body={categories:Array.from(work.querySelectorAll('[name=categories]:checked')).map(c=>c.value),include_undisclosed:work.elements.include_undisclosed.checked,verified_only:work.elements.verified_only.checked,max_age_days:work.elements.verified_only.checked?Number(work.elements.max_age_days.value):0};
+    run(async()=>patch(await session.post('/api/v1/reach/work-verification',body)));
+  });
 
   root.querySelector('#show-all')?.addEventListener('click', (e) => run(async () => {
     patch(await session.post('/api/v1/reach/show-all', { ignore: e.target.dataset.ignore === 'true' }));

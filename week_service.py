@@ -41,7 +41,8 @@ def eligible_user(conn, uid):
     row = db.fetch_one(conn, 'User', id=uid)
     if not row or row['journey_state'] != 'dating' or row['bgv_status'] != 'verified':
         raise ApiError('matching_unavailable', 'Matching requires verified Dating profiles.', 403)
-    return from_user_row(row)
+    import match_checks
+    return match_checks.attach(conn,[from_user_row(row)])[0]
 
 
 def prepare(conn, uid, clock):
@@ -64,6 +65,8 @@ def prepare(conn, uid, clock):
         if not existing:
             reserved = fixed_test_pairs.configured()
             pool = [from_user_row(r) for r in db.fetch_all(conn, 'User', journey_state='dating') if r['id'] not in reserved]
+            import match_checks
+            pool=match_checks.attach(conn,pool)
             active = db.fetch_all(conn, 'LockIn', status='active')
             locked = {uid for r in active for uid in (r['user_a'], r['user_b'])}
             recent = {r['candidate_id'] for r in db.fetch_all(conn, 'Match', user_id=uid)

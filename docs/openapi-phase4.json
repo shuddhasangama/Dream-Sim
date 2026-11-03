@@ -13876,6 +13876,147 @@
           }
         }
       }
+    },
+    "/reach/work-verification": {
+      "post": {
+        "operationId": "setReachWorkVerification",
+        "summary": "Set employment-category and verified-check/freshness preferences; frozen during match review/date planning.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped JSON response; no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON or operation inputs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Actor or journey not eligible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not owned or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale, already processed or unavailable operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit or persisted cooldown.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Feature disabled or provider configuration unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "categories",
+                  "include_undisclosed",
+                  "verified_only",
+                  "max_age_days"
+                ],
+                "properties": {
+                  "categories": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "Salaried",
+                        "Self-employed",
+                        "Freelancer",
+                        "Business owner",
+                        "Other"
+                      ]
+                    }
+                  },
+                  "include_undisclosed": {
+                    "type": "boolean"
+                  },
+                  "verified_only": {
+                    "type": "boolean"
+                  },
+                  "max_age_days": {
+                    "enum": [
+                      0,
+                      90,
+                      180
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

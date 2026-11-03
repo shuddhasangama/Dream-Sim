@@ -36,6 +36,8 @@ export const DASHBOARD_STAT_ROWS = [
   ['age', 'Age', ''], ['height_cm', 'Height', ' cm'], ['weight_kg', 'Weight', ' kg'],
   ['waist_in', 'Waist', ' in'], ['income_band', 'Salary band', ''], ['diet', 'Diet', ''],
   ['education', 'Education', ''], ['nationality', 'Nationality', ''], ['profession', 'Profession', ''],
+  ['employment_category','Employment category (self-declared)',''],
+  ['share_verification_summary','Share verification summary with matches',''],
   ['religion', 'Religion', ''],
   ['has_children', 'Already has children', ''], ['children_count', 'Number of children', ''],
 ];

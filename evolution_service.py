@@ -63,6 +63,8 @@ def save_stats(conn, uid, submitted, situation, clock, strict=False):
                     raise ApiError('validation_error', field+' is too long.')
                 raw = str(raw) if type(raw) in (int,float) else raw
             got = stats_edit.coerce(field, raw, onboarding.STAT_RANGES, onboarding.MULTI_VALUE_LIMIT)
+            if field in ('employment_category','share_verification_summary') and got['value'] is not None and got['value'] not in onboarding.STAT_OPTIONS[field]:
+                errors.append(field+' must be one of the listed choices.');continue
             if not got['ok']:
                 errors.append(got['error']); continue
             before, after = stats.get(field), got['value']
