@@ -21,3 +21,11 @@ Runtime commit `d7e4a4be` is on origin/master. API deployment `6d0406cd-ab18-44d
 Android debug build 2026110302 was built and copied to `outputs/bgv-compact-release/DhaShu-BGV-2026110302.apk` (SHA256 `6DC08B7AC8F840BA87957EBE0DC96AACE76966E0AF48EBA0E00731B4A35FFD0A`). iOS build **70** uploaded successfully to App Store Connect through [Codemagic](https://codemagic.io/app/6aaa35b8366c2d5c4eedc58b/build/6ae9b0d7e83a9019991ca5f7). Apple processing and TestFlight group availability were not inspected because sign-in was required; the user chose to distribute build 70 personally.
 
 Validation: 53 focused backend tests and 53 Signzy tests passed (overlapping suites), all 111 mobile unit tests passed, all 50 browser regression tests passed, web production bundle and Android native build succeeded. Provider tests were mocked. Fresh installed-app consent and live Get Details / downstream vendor results remain to be tested by the user.
+
+## Exact screening and employment labels
+
+The exact-screening release supersedes the older review-on-all-results behaviour above. Use iOS build 71 for the Verified / History found / Not confirmed / Doesn't match badges. Court and FIR submit exact matching; a linked, explicitly completed exact response with zero cases and consistent counters verifies that check. Positive cases require operator review. Pending, malformed or contradictory results never verify. Overall account approval remains separate.
+
+Employment shows the latest employer record with validated dates/duration when current employment cannot be confirmed. It does not infer unemployment or completeness of employment history. This release changes new legal search requests and preserves prior possible-match evidence. Operator review is currently CLI-based; assignment/notification/dashboard are not implemented.
+
+Build 71 upload: https://codemagic.io/app/6aaa35b8366c2d5c4eedc58b/build/6ae9c1c857e81944fbc19522
