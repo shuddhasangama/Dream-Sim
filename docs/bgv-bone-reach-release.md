@@ -82,4 +82,6 @@ unchanged by BGV setup. The requested REACH rule applies to everyone.
 
 Fresh vendor/device acceptance remains a human test, particularly OTP and consent.
 Automated responses are synthetic; a successful build is not proof of a passed BGV.
-The iOS workflow uploads successful builds to TestFlight, not the public App Store.
+The iOS workflow uploads successful builds to App Store Connect for internal
+TestFlight testing, not the public App Store. External beta review is not submitted
+automatically; it requires completed review-contact metadata and a separate decision.
