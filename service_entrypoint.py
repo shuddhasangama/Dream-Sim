@@ -26,6 +26,9 @@ def prepare_pilot():
                 raise ValueError('Existing pilot case needs operator review; not overwriting it')
         else:
             bgv_policy.assign(conn,uid,'IN','BLR','User-authorized direct app Signzy sandbox pilot, 3 November 2026')
+        import bgv_app
+        repaired=bgv_app.reproject_saved(conn,uid) if os.getenv('DHASHU_BGV_APP_ENABLED')=='1' else 0
+        print(f'BGV sandbox saved-result projections refreshed: {repaired}; no provider calls.',flush=True)
         print('BGV sandbox pilot schema and account policy ready; public profile and overall BGV unchanged.',flush=True)
     finally: conn.close()
 

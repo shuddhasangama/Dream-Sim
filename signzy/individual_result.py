@@ -15,15 +15,20 @@ def payload(values):
 
 
 def summarize(status, body):
-    cases = body.get('cases') if isinstance(body, dict) else None
-    shaped = status == 200 and isinstance(cases, list)
-    total = body.get('total') if isinstance(body, dict) else None
-    result = {'outcome': ('response_received_review_required' if shaped else
-                          'response_received_contract_review_required' if status == 200 else
-                          'request_failed_or_unexpected_response'),
-              'cases_returned': len(cases) if shaped else None,
-              'total_reported': total if shaped and type(total) is int else None,
-              'court_clearance': 'not_evaluated', 'automatic_verification': False}
-    if status == 404:
-        result['diagnostic'] = 'record_not_found_meaning_unconfirmed_not_a_clearance'
+    from .legal_result import normalized,pending
+    data,envelope=normalized(body)
+    waiting=pending(status,data)
+    cases=data.get('cases')
+    # Preserve the legacy documented cases-list response without a status field.
+    shaped=(status==200 and envelope and not waiting and isinstance(cases,list)
+            and all(isinstance(row,dict) for row in cases)
+            and ('status' not in data or type(data['status']) is int and data['status']==1))
+    total=data.get('total')
+    result={'outcome':'accepted_pending_confirmation' if waiting else
+            'response_received_review_required' if shaped else
+            'response_received_contract_review_required' if status==200 else 'request_failed_or_unexpected_response',
+            'processing_complete':shaped,'cases_returned':len(cases) if shaped else None,
+            'total_reported':total if shaped and type(total)is int and total>=0 else None,
+            'court_clearance':'not_evaluated','automatic_verification':False}
+    if status==404:result['diagnostic']='record_not_found_meaning_unconfirmed_not_a_clearance'
     return result

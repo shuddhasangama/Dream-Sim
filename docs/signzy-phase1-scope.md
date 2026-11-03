@@ -61,3 +61,13 @@ Release regression: **1,690 backend tests passed, 33 skipped, 820 subtests passe
 Validation: 53 focused backend tests passed, all 53 Signzy tests passed (overlapping suites), 111 mobile unit tests passed, all 50 browser regression tests passed, and the production web bundle built. No new live vendor calls were made during automated testing.
 
 Current combined-flow release: API and worker deployed successfully; iOS build 70 uploaded to App Store Connect. User will distribute build 70 personally. See [acceptance steps and release status](bgv-compact-flow.md).
+
+## Response reconciliation and portrait caching
+
+The sandbox returned Court HTTP 200 with status 0 / `Process pending.` and FIR results nested under `result`, using `numResults`. Both shapes now have regression coverage. Pending results are not completed empty searches; candidate results and provider-counter discrepancies require review. Public messages now distinguish pending processing, completed candidate/empty results, contract/access problems and unconfirmed current employment.
+
+The configured sandbox pilot bootstrap reprojects saved result receipts without changing raw encrypted evidence, creating attempts, calling the provider, granting approval or overwriting operator-reviewed checks. A pending linked result can then be checked again within the existing 60-second / five-recheck limit; no new Court/FIR search is needed.
+
+A consented Aadhaar photo reference now supports one bounded file download into encrypted session storage. The original image is validated and retained without AI enhancement. No image bytes or private URLs are returned through normal app status responses. Download failures/interruptions are not retried automatically. This is preparation for avatar-source use, not avatar generation or face verification.
+
+Get Details supplies a PAN record identifier, not a PAN portrait. PAN-photo availability stays false until a documented retrieval contract exists. Live face/liveness testing remains on hold. Sending original portraits to an avatar provider still needs a separate app workflow and purpose-specific consent.

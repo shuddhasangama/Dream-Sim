@@ -60,6 +60,8 @@ def detail_data(request,protection):
 
 def schedule(conn):
     cfg=bgv_app.config(); protection=bgv_app.Protection()
+    from digilocker_photo_cache import purge_expired
+    purge_expired(conn)
     sessions=sorted(db.fetch_all(conn,'DigiLockerSession'),key=lambda r:r['created_at'],reverse=True)
     seen=set()
     for row in sessions:
@@ -72,6 +74,8 @@ def schedule(conn):
         try:
             identity_check=bgv_policy.check_for(conn,uid,'identity_details',cfg.environment)
             if identity_check!=row.get('case_check_id'):continue
+            from digilocker_photo_cache import cache
+            cache(conn,row)
             for operation in ('individual_search','fir_search'):
                 inputs={'name':identity['name'],'address':identity['document_address'],'matchType':'possible'}
                 if operation=='individual_search':inputs['caseCategory']='criminal'
@@ -131,6 +135,10 @@ def view(conn,uid):
     stats=json.loads(user.get('stats_json','{}')) if user else {}
     if type(stats.get('age')) is int:result['declared_age']=stats['age']
     if not row or row['state']!='complete':return result
+    photo=bgv_app.Protection().open(row['protected_photo']) if row.get('protected_photo') else {}
+    result['photo_sources']={'aadhaar_reference_available':bool(row.get('protected_photo')),'aadhaar_image_available':bool(photo.get('image_base64')),
+                             'aadhaar_download_state':photo.get('download_state','not_started'),'pan_photo_available':False,
+                             'pan_photo_state':'not_provided_by_get_details','avatar_state':'not_generated'}
     value=bgv_app.Protection().open(row['protected_result']); bundle=value.get('_bundle',{})
     result.update(session_id=row['id'],consented=bundle.get('version')==BUNDLE_VERSION,employer_declared=bool(bundle.get('employer')) or bool(db.fetch_all(conn,'BgvRequest',user_id=uid,operation='current_employer',environment=cfg.environment)))
     detail=db.fetch_one(conn,'BgvRequest',id=request_id(row['id'],'digilocker_details'),user_id=uid)

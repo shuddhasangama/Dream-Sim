@@ -178,6 +178,48 @@ def check_again(conn, uid, rid):
         if changed.rowcount != 1:
             raise ApiError('request_conflict','A result lookup is already queued.',409)
 
+def public_message(operation,state,summary):
+    if state=='outcome_unknown':return 'The provider outcome is unknown. Contact support before resubmitting.'
+    if state=='unavailable':return 'Provider access or availability needs support review.'
+    if state=='pending':return 'The provider is still processing this check. Check its status again later.'
+    if state=='result_available':return 'Search accepted. The linked result lookup will follow.'
+    if state=='verified':return 'Selected fields match.'
+    if state=='partially_verified':return 'Some fields match; review the remaining details.'
+    if operation in RESULTS.values():
+        if summary.get('processing_complete'):
+            count=summary.get('cases_returned') if operation=='individual_result' else summary.get('candidates_returned')
+            if count==0:return 'Search completed with no candidate records returned. Final BGV review is pending.'
+            return 'Possible candidate records returned. Identity matching and BGV review are required.'
+        return 'The provider response format needs support review. Your details have not been marked incorrect.'
+    if operation=='current_employer':
+        if summary.get('is_employed') is False:return 'Current employment was not confirmed by this data source. Review is required; this does not establish unemployment.'
+        return 'The returned employment evidence needs comparison with your declaration.'
+    return 'The provider result needs support review.'
+
+def reproject_saved(conn,uid):
+    """Reinterpret existing sandbox receipts; never call, retry or approve a provider check."""
+    cfg=config();protection=Protection();changed=0
+    if cfg.environment!='preproduction':raise ValueError('Saved-result pilot repair is sandbox-only')
+    for row in db.fetch_all(conn,'BgvRequest',user_id=uid,environment=cfg.environment):
+        if row['operation'] not in {*RESULTS.values(),'current_employer'} or row['state'] not in ('needs_review','pending','verified','partially_verified') or not row.get('protected_result'):continue
+        if row.get('case_check_id') and db.fetch_all(conn,'BgvReview',case_check_id=row['case_check_id']):continue
+        evidence=protection.open(row['protected_result']);provider=evidence.get('provider_response') or {}
+        if provider.get('http_status') not in (200,202):continue
+        summary=OPERATIONS[row['operation']].summarize(provider['http_status'],provider.get('json'))
+        state=row['state']
+        if row['operation'] in RESULTS.values():state='pending' if summary['outcome']=='accepted_pending_confirmation' else 'needs_review'
+        public=json.loads(row['summary_json']);public['message']=public_message(row['operation'],state,summary)
+        if row['operation'] in RESULTS.values():
+            public['processing_complete']=summary.get('processing_complete',False)
+            public['candidate_count']=summary.get('cases_returned') if row['operation']=='individual_result' else summary.get('candidates_returned')
+        encoded=json.dumps(public)
+        if state==row['state'] and encoded==row['summary_json']:continue
+        with auth_sessions.transaction(conn):
+            result=auth_sessions.sql(conn,'UPDATE "BgvRequest" SET state=?,summary_json=? WHERE id=? AND user_id=? AND state=? AND protected_result=? AND summary_json=?',
+                (state,encoded,row['id'],uid,row['state'],row['protected_result'],row['summary_json']))
+            changed+=result.rowcount
+    return changed
+
 def work_one(conn):
     cfg = config(); protection = Protection()
     with auth_sessions.transaction(conn):
@@ -244,12 +286,10 @@ def work_one(conn):
             saved = db.fetch_one(conn, 'BgvEvidence', id=item['receipt_id'])
             public['fields'] = json.loads(saved['fields_json'])
             state = status if status in ('verified', 'partially_verified') else 'needs_review'
-        public['message'] = {'verified': 'Selected fields match.', 'partially_verified': 'Some fields match; review the remaining details.',
-            'unavailable': 'Check unavailable. Support needs to review provider access or availability.',
-            'outcome_unknown': 'Confirmation pending. Please do not submit again.',
-            'pending': 'The provider is still processing this check.'}.get(state, 'Review your declared details; this result needs review.')
-        if state == 'result_available':
-            public['message'] = 'Search accepted. Retrieve the linked result when ready.'
+        public['message']=public_message(row['operation'],state,summary)
+        if row['operation'] in RESULTS.values():
+            public['processing_complete']=summary.get('processing_complete',False)
+            public['candidate_count']=summary.get('cases_returned') if row['operation']=='individual_result' else summary.get('candidates_returned')
         with auth_sessions.transaction(conn):
             auth_sessions.sql(conn, 'UPDATE "BgvRequest" SET state=?,summary_json=?,updated_at=? WHERE id=?',
                 (state, json.dumps(public), stamp(), row['id']))

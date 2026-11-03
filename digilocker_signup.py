@@ -85,6 +85,9 @@ def view(conn, uid):
         if state == 'complete':
             item['identity'] = {k:v for k,v in Protection().open(row['protected_result']).items() if not k.startswith('_')}
         item['reference_photo_available']=bool(row.get('protected_photo'))
+        photo=Protection().open(row['protected_photo']) if row.get('protected_photo') else {}
+        item['portrait_image_available']=bool(photo.get('image_base64'))
+        item['portrait_download_state']=photo.get('download_state','not_started')
         item['cooldown_until']=row.get('cooldown_until')
         item['cooling_down']=cooling(row)
         item['can_restart']=state=='not_confirmed' and not cooling(row)
