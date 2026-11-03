@@ -296,6 +296,11 @@ export function previewTransport() {
   const err = (message, status) => ({status, data:{error:{message},data:null}});
 
   return async (path, method, body) => {
+    if (path === '/api/v1/verification/plan') return ok({assigned:false});
+    if (path === '/api/v1/verification/liveness') return ok({enabled:false,state:'setup_required',reference_photo_available:false,message:'Liveness is not connected in preview.'});
+    // Preview never creates real identity-provider sessions.
+    if (path === '/api/v1/verification/digilocker') return ok({enabled:false});
+    if (path === '/api/v1/verification') return ok({enabled:false,checks:{},results:[],overall_approval:'Verification is unavailable in local preview.'});
     if (path.endsWith('/auth/request')) return ok({challenge_id:'local-preview'},202);
     if (path.endsWith('/auth/verify')) {
       if (body.code !== '123456') return {status:401,data:{error:{message:'Preview code is 123456.'},data:null}};

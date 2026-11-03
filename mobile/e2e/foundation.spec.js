@@ -295,7 +295,7 @@ test('Home: three rings reflect real Vision/Stats/Chemistry progress, and each o
   // plus any ONE more already satisfies every rule), so a smaller valid
   // choice must never read as an unfinished profile.
   await expect(page.locator('[data-ring="vision"] .p-ring-inner')).toHaveText('V');
-  await expect(page.locator('.p-detail-summary')).toContainText('BYOB');
+  await expect(page.locator('.p-detail-summary')).toContainText('Custom Together');
   await expect(page.locator('.p-detail-title')).toHaveText('Vision');
   await expect(page.locator('.p-fact-tile',{hasText:'Intimacy'})).toContainText('Emotional');
   await page.locator('[data-open-editor]').click(); // "Finish vision →"

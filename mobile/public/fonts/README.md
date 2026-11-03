@@ -1,0 +1,1 @@
+Local Latin font assets: Gloock (400), Outfit (400–700), IBM Plex Mono (500). Source: Google Fonts CSS API, downloaded 3 November 2026. No runtime font requests. Upstream projects: google/fonts ofl/gloock, ofl/outfit, ofl/ibmplexmono. See associated license files.

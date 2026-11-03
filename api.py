@@ -31,6 +31,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         identity_capture.register(api, evolution['get_db'])
         import bgv_app_api
         bgv_app_api.register(api, evolution['get_db'])
+        import digilocker_api
+        digilocker_api.register(api, evolution['get_db'])
         import guru_navigator
         guru_navigator.register(api, evolution['get_db'], journey_state)
     if planning is not None:
@@ -57,7 +59,7 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         if g.api_user is None:
             return failure("authentication_required", "Sign in to continue.", 401)
         if request.path.startswith("/api/v1/reach") and reach_locked(g.api_user):
-            return failure("reach_locked", "REACH is locked once you're past Dating", 403)
+            return failure("reach_locked", "REACH is paused during match review and date planning/debrief. It reopens when no candidates remain or you return to the pool.", 403)
 
     @api.get("/health")
     def health():

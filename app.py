@@ -799,14 +799,8 @@ REACH_LOCKED_STATES = {"relationship", "engaged", "married"}
 
 
 def reach_locked(user: dict) -> bool:
-    if user["journey_state"] in REACH_LOCKED_STATES:
-        return True
-    # docs/dating-stage-spec.md §4/§12: "REACH sunsets at lock-in" — this
-    # applies from the moment of mutual lock-in, which happens while
-    # journey_state is still 'dating' (the Relationship transition only
-    # happens post-date, in outcomes.py) — so the journey_state check
-    # above alone isn't enough; also check for an active LockIn.
-    return lockin.is_locked_in(user["user_id"], _active_lockins())
+    import reach_access
+    return reach_access.state(get_db(),user,get_clock())['locked']
 
 
 # Age/height/weight/waist/distance get a drag-both-ends slider bar instead
@@ -4559,10 +4553,11 @@ def _api_match_view(user, row):
     result['candidate'].update(profile_choices.public_profile(get_db(), candidate))
     result['candidate']['verified_fields'] = sorted(stats_edit.verified_field_set(db.fetch_all(get_db(), 'Verification', user_id=candidate['user_id'])))
     result['their_interest'] = candidate['user_id'] in _interested_in_me(user['user_id'], row['week'])
-    if row['week'] == get_clock().week and state == 'open' and not reach_locked(user):
+    # Filter editing is frozen during review; that must not disable Like/Pass.
+    if row['week'] == get_clock().week and state == 'open' and user['journey_state']=='dating' and not _my_active_lockin(user['user_id']):
         result['allowed_actions'] = ['pass']
         if (contact_verified(user['user_id']) and candidate['journey_state'] == 'dating'
-                and not reach_locked(candidate)
+                and not _my_active_lockin(candidate['user_id'])
                 and week_service.fixed_test_pairs.permits(user['user_id'], candidate['user_id'])):
             result['allowed_actions'].append('interest')
     return result

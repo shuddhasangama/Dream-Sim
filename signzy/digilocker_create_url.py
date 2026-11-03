@@ -18,8 +18,10 @@ def identifier(value):
     return value
 
 def payload(values):
-    if not isinstance(values,dict) or set(values)!={'callbackUrl','internalId','serviceName'}:
+    if not isinstance(values,dict) or not {'callbackUrl','internalId','serviceName'} <= values.keys() or set(values)-{'callbackUrl','internalId','serviceName','includePhoto'}:
         raise ValueError('callbackUrl, internalId and serviceName are required')
+    if type(values.get('includePhoto',False)) is not bool:
+        raise ValueError('includePhoto must be a boolean')
     service=values['serviceName']
     if not isinstance(service,str) or not service.strip() or len(service)>120 or any(ord(c)<32 for c in service):
         raise ValueError('Use the service name registered with Signzy')
@@ -28,7 +30,7 @@ def payload(values):
             'failureRedirectUrl':'https://dhashu.com/','failureRedirectTime':'5',
             'logoVisible':'true','logo':'https://dhashu.com/media/dhashu-logo.png','docType':['ADHAR'],'purpose':'kyc',
             'serviceName':service.strip(),'getScope':True,'internalId':identifier(values['internalId']),
-            'getBase64Files':False,'getEAadhaarPdf':False,'getEAadhaarJpeg':False}
+            'getBase64Files':False,'getEAadhaarPdf':False,'getEAadhaarJpeg':values.get('includePhoto',False)}
 
 def session(body):
     result=body.get('result') if isinstance(body,dict) else None

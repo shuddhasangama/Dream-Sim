@@ -14,7 +14,7 @@ test('new Vision templates and optional personal profile persist in preview',asy
  await page.locator('input[name=categories][value=diabetes]').check();
  await page.locator('input[name=share_health]').check();
  await page.locator('textarea[name=note]').fill('Happy to discuss what helps.');
- await page.getByRole('button',{name:'Save profile preferences'}).click();
+ await page.getByRole('button',{name:'Save Bio'}).click();
  await expect(page.getByRole('status').filter({hasText:'Saved ✓'})).toHaveText('Saved ✓');
  await page.locator('#personal-open').click();await page.locator('#personal-open').click();
  await expect(page.locator('input[name=categories][value=diabetes]')).toBeChecked();
@@ -26,7 +26,7 @@ test('new Vision templates and optional personal profile persist in preview',asy
  await page.locator('textarea[name=note]').fill('Updated note');
  await page.getByRole('button',{name:'Save portrait'}).click();
  await expect(page.locator('#personal-photo-note')).toContainText('Save your profile preferences');
- await page.getByRole('button',{name:'Save profile preferences'}).click();
+ await page.getByRole('button',{name:'Save Bio'}).click();
  await page.locator('#portrait-file').setInputFiles({name:'portrait.png',mimeType:'image/png',buffer:Buffer.from(bytes,'base64')});
  await expect(page.locator('#portrait-editor')).toBeVisible();
  await page.getByRole('button',{name:'Save portrait'}).click();

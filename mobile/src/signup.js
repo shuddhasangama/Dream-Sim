@@ -1,6 +1,7 @@
 import * as personal from './screens/personal.js';
 import * as vision from './screens/vision.js';
 import * as chemistry from './screens/chemistry.js';
+import * as digilocker from './digilocker.js';
 import { editableFieldsForm, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from './statsFields.js';
 
 export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry', 'Bio'];
@@ -9,9 +10,11 @@ export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry', 'Bio'];
 // profile. The normal profile APIs remain the authority for edit eligibility.
 export function createSignup({session, run, safe, finish}) {
   let step = 0, data = null, dirty = false, error = '', draft = [];
+  let identity = null;
   const key = () => step===3?'personal':SIGNUP_STEPS[step].toLowerCase();
   async function load() {
     data = await session.get(`/api/v1/profile/${key()}`);
+    identity = step===1 ? await digilocker.load(session) : null;
     dirty = false; error = ''; draft = [];
   }
   function ctx() {
@@ -36,7 +39,7 @@ export function createSignup({session, run, safe, finish}) {
         <h2>Step ${step + 1} of 4 · ${SIGNUP_STEPS[step]}</h2>
         <p>We filled this in from your profile. Review it, save any edits, then continue. Existing journey and verification rules still apply.</p>
         <ol class="signup-progress">${SIGNUP_STEPS.map((label,i)=>`<li ${i===step?'aria-current="step"':''}>${label}</li>`).join('')}</ol></section>
-        ${body}${error ? `<p class="warn" role="alert">${safe(error)}</p>` : ''}
+        ${body}${step===1?digilocker.render(identity,safe):''}${error ? `<p class="warn" role="alert">${safe(error)}</p>` : ''}
         <div class="signup-actions">
           ${step ? '<button id="signup-back" class="secondary" type="button">Previous step</button>' : ''}
           <button id="signup-next" class="primary" type="button">${step===3?'Finish sign up':'Continue to '+SIGNUP_STEPS[step+1]}</button>
@@ -44,6 +47,7 @@ export function createSignup({session, run, safe, finish}) {
         </div>`;
     },
     bind(root) {
+      if (step===1) digilocker.bind(root,{session,run,data:identity,patch:next=>{identity=next;}});
       const inputs = ()=>[...root.querySelectorAll('form input, form select, form textarea')];
       if (dirty && draft.length) inputs().forEach((input,i)=>{
         if(draft[i]) { input.value=draft[i].value; input.checked=draft[i].checked; }
@@ -52,7 +56,7 @@ export function createSignup({session, run, safe, finish}) {
         dirty = true;
         draft = inputs().map(input=>({value:input.value,checked:input.checked}));
       };
-      root.querySelectorAll('form').forEach(form=>{
+      root.querySelectorAll('form:not(#digilocker-start):not(#digilocker-complete)').forEach(form=>{
         form.addEventListener('input', remember);
         form.addEventListener('change', remember);
       });

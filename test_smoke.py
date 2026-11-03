@@ -140,6 +140,11 @@ class EveryScreenRendersTests(RouteTestCase):
         broke = []
         for path in _plain_get_routes():
             response = self.client.get(path, follow_redirects=False)
+            if path=='/billing' and response.status_code==503:
+                # The suite intentionally disables payments. This is an explicit
+                # feature-off response, not a template crash in a user journey.
+                self.assertIn('not enabled',response.get_data(as_text=True).lower())
+                continue
             if response.status_code >= 500:
                 broke.append(f"{path} → {response.status_code}")
         self.assertEqual(broke, [], f"{label}: screens returned a server error")

@@ -11,6 +11,7 @@ from . import current_employer, pan_extensive, pan_simple, individual_search, in
 from .errors import classify
 from . import fir_search, fir_result
 from . import digilocker_create_url, digilocker_eaadhaar
+from . import smart_verification
 
 BASES = {'preproduction': 'https://api-preproduction.signzy.app/api/v3',
          'production': 'https://api.signzy.app/api/v3'}
@@ -19,6 +20,7 @@ OPERATIONS.update(individual_search=individual_search, individual_result=individ
 OPERATIONS['employment_history'] = employment_history
 OPERATIONS.update(fir_search=fir_search, fir_result=fir_result)
 OPERATIONS.update(digilocker_create_url=digilocker_create_url, digilocker_eaadhaar=digilocker_eaadhaar)
+OPERATIONS['smart_verification']=smart_verification
 
 
 @dataclass(frozen=True)
@@ -56,9 +58,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class Client:
-    def __init__(self, config):
+    def __init__(self, config, *, timeout=45):
         config.validate()
         self.config = config
+        self.timeout = timeout
 
     def execute(self, operation, values, *, consent_confirmed=False, evidence_sink=None):
         if consent_confirmed is not True:
@@ -94,7 +97,7 @@ class Client:
             'User-Agent': 'DhaShu-Signzy/0.1'}, method='POST')
         try:
             try:
-                response = urllib.request.build_opener(NoRedirect()).open(request, timeout=45)
+                response = urllib.request.build_opener(NoRedirect()).open(request, timeout=self.timeout)
             except urllib.error.HTTPError as exc:
                 response = exc
             with response:

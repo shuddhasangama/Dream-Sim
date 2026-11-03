@@ -30,7 +30,7 @@ test('guided sign up verifies first, prefills and persists edits through all fou
   await expect(page.locator('input[type=radio]:checked').first()).toBeChecked();
   await page.getByRole('button',{name:'Save chemistry'}).click();
   await expect(page.getByText('Saved.',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Continue to Profile'}).click();
+  await page.getByRole('button',{name:'Continue to Bio'}).click();
   await expect(page.getByRole('heading',{name:'Your profile portrait'})).toBeVisible();
   await page.getByRole('button',{name:'Finish sign up'}).click();
   await expect(page.getByRole('heading',{name:'Hi, Preview'})).toBeVisible();
@@ -69,7 +69,7 @@ test('invalid stats stay on the step and preserve the entered value for correcti
   await expect(page.getByRole('heading',{name:'Step 1 of 4 · Vision'})).toBeVisible();
 });
 
-for(const [key,label,kids] of [['grow','Grow Together',true],['two','Two Together',false],['explore','Explore Together',false]])test(`signup still offers ${label}`,async({page})=>{
+for(const [key,label,kids] of [['grow','Family Together',true],['two','Two Together',false],['explore','Travel Together',false]])test(`signup still offers ${label}`,async({page})=>{
  await enter(page);
  await page.locator('#vision-template-form select[name=template]').selectOption(key);
  await page.getByRole('button',{name:'Save Vision',exact:true}).click();

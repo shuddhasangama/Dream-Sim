@@ -4,11 +4,13 @@ from .digilocker_create_url import identifier
 PATH = '/digilocker-v2/geteAadhaar'
 
 def payload(values):
-    if not isinstance(values,dict) or set(values)!={'requestId'}:
+    if not isinstance(values,dict) or 'requestId' not in values or set(values)-{'requestId','includePhoto'}:
         raise ValueError('A requestId from the completed consent session is required')
+    if type(values.get('includePhoto',False)) is not bool:
+        raise ValueError('includePhoto must be a boolean')
     # Preserve the supplied contract's string type for this switch.
     return {'requestId':identifier(values['requestId']),'extraDigitalCertificateParams':'false',
-            'getEAadhaarPdf':False,'getEAadhaarJpeg':False}
+            'getEAadhaarPdf':False,'getEAadhaarJpeg':values.get('includePhoto',False)}
 
 def identity_fields(body):
     result=body.get('result') if isinstance(body,dict) else None

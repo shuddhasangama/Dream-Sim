@@ -31,7 +31,7 @@ def surface(key, reached, reach_is_locked):
     eligible = key in disclosure.BY_KEY and disclosure.is_open(key, reached)
     reason = disclosure.locked_reason(key, reached) if not eligible else None
     if key == 'reach' and reach_is_locked:
-        eligible, reason = False, 'REACH is closed while you are locked in or past Dating.'
+        eligible, reason = False, 'REACH is paused during match review, date planning and debrief, or after Dating.'
     href = READ_APIS.get(key)
     return {
         'key': key, 'eligible': eligible, 'blocked_reason': reason,

@@ -24,11 +24,11 @@ class BgvAppTests(unittest.TestCase):
     def tearDown(self):
         self.conn.close(); self.env.stop()
     def body(self):
-        return {'request_id':str(uuid.uuid4()),'operation':'pan_simple','inputs':{'panNumber':'AAAPA0000A'},
-            'declared':{'name':'Jane Doe','dob':'2000-01-01'},'consent':True,'consent_version':bgv_app.VERSION}
+        return {'request_id':str(uuid.uuid4()),'operation':'current_employer','inputs':{'panNumber':'AAAPA0000A','mobile':'9000000000'},
+            'declared':{'employer':'SYNTHETIC EMPLOYER'},'consent':True,'consent_version':bgv_app.VERSION}
     def run_response(self, status=200, body=None):
         if body is None:
-            body={'result':{'name':'JANE DOE','dob':'2000-01-01','panStatus':'VALID'}}
+            body={'resultCode':200,'employmentSummary':{'is_employed':True,'recent_employer_data':{'establishment_name':'SYNTHETIC EMPLOYER'}}}
         response = io.BytesIO(json.dumps(body).encode()); response.code = status
         with patch('urllib.request.build_opener') as opener:
             opener.return_value.open.return_value = response

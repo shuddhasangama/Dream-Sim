@@ -1,0 +1,15 @@
+# Backend and BGV worker do not need native sources, build caches or local evidence.
+.git
+mobile
+node_modules
+data
+tmp
+output
+outputs
+website-waitlist
+__pycache__
+.pytest_cache
+*.p8
+*.p12
+*.mobileprovision
+*.enc

@@ -24,6 +24,7 @@ import { createSignup } from './signup.js';
 import { howItWorks, bindHowItWorks } from './howItWorks.js';
 import { renderRehearsal, progressKey } from './rehearsal.js';
 import './style.css';
+import './bone.css';
 
 const native = Capacitor.isNativePlatform();
 const preview = import.meta.env.DEV && !Capacitor.isNativePlatform();
@@ -158,7 +159,7 @@ function render() {
   const current = nav.current;
   const tabs = signedIn ? primaryTabs(journey.surfaces) : [];
   root.innerHTML = `<header class="brandbar">
-      <span class="brandmark"><span class="brand-glyph" aria-hidden="true">D</span><span class="brand-name">DhaShu</span></span>
+      <span class="brandmark"><span class="brand-glyph" aria-hidden="true"><svg viewBox="22 22 56 56"><path d="M34 28h14a22 22 0 0 1 0 44H34z" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="46" cy="50" r="5" fill="#E8735A"/></svg></span><span class="brand-name">DhaShu</span></span>
       ${signedIn ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
     </header>
     ${preview?'<aside class="preview">Local preview · no messages sent · code 123456</aside>':''}
@@ -231,7 +232,8 @@ function renderChrome(current, tabs) {
 }
 
 function renderTabBar(current, tabs) {
-  return `<nav class="p-tabbar" aria-label="Sections">${tabs.map(t=>`<button type="button" class="p-tab ${t.key===current.key?'is-active':''}" data-nav="${safe(t.key)}"><span class="p-tab-dot" aria-hidden="true"></span>${safe(t.label)}</button>`).join('')}</nav>`;
+  const icons={dashboard:'<path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/>',reach:'<circle cx="12" cy="12" r="9"/><path d="m16 8-2 6-6 2 2-6z"/>',week:'<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/>',guru:'<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/>'};
+  return `<nav class="p-tabbar" aria-label="Sections">${tabs.map(t=>`<button type="button" class="p-tab ${t.key===current.key?'is-active':''}" data-nav="${safe(t.key)}" ${t.key===current.key?'aria-current="page"':''}><svg class="p-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[t.key]||''}</svg>${safe(t.label)}</button>`).join('')}</nav>`;
 }
 
 function renderAvatarSheet() {
@@ -404,6 +406,11 @@ async function refreshAcceleratedClock() {
   try {
     const next = await session.get('/api/v1/journey/status');
     if (progressKey(next) === progressKey(journey)) return;
+    if (nav.current.key==='reach' && !next.surfaces?.find(s=>s.key==='reach')?.eligible) {
+      journey=next;screenDirty=false;clockPending=false;
+      message='REACH is now paused for match review or your date. Unsaved filters were not applied.';
+      nav.resetTo('dashboard');render();return;
+    }
     if (screenDirty || root.querySelector('video') && [...root.querySelectorAll('video')].some(v=>!v.paused)) {
       clockPending=true;
       const hint=root.querySelector('.accelerated-banner .hint, .rehearsal-banner .hint');

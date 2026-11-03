@@ -32,6 +32,8 @@ DEFAULT_DB_PATH = Path(__file__).parent / "data" / "dream.db"
 # this so a bad table name fails fast with a clear error instead of a raw
 # database syntax error from string-interpolating an identifier.
 TABLES = {
+    "BgvPolicy", "BgvMarketPolicy", "BgvProviderCoverage", "BgvCase", "BgvCaseCheck", "BgvAttempt", "BgvReview",
+    "DigiLockerSession",
     "WaitlistEntry", "WaitlistMarket", "WaitlistAudit",
     "BgvEvidence",
     "BgvRequest",
@@ -94,6 +96,7 @@ TABLES = {
 }
 
 CONFLICT_COLUMNS = {
+    "BgvMarketPolicy": ("country_code", "city_code"),
     "Verification": ("user_id", "field"),
     "Payment": ("user_id", "purpose", "scope_id"),
     "Ceremony": ("user_id", "kind", "scope_id"),

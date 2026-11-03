@@ -28,11 +28,30 @@ def payload(values):
     return result
 
 
+def result_identifier(body):
+    """Observed sandbox envelope plus the originally supplied flat contract.
+
+    Reject contradictory identifiers rather than guessing which paid search to fetch.
+    """
+    if not isinstance(body, dict):
+        raise ValueError('Unexpected FIR search response')
+    nested = body.get('result')
+    values = [body.get('searchId')]
+    if isinstance(nested, dict):
+        if type(nested.get('status')) is not int or nested['status'] != 1:
+            raise ValueError('Unconfirmed FIR search status')
+        values.append(nested.get('verifyId'))
+    found = [identifier(value) for value in values if value is not None]
+    if not found or len(set(found)) != 1:
+        raise ValueError('Missing or ambiguous FIR result identifier')
+    return found[0]
+
+
 def summarize(status, body):
     present = False
     if isinstance(body, dict):
         try:
-            identifier(body.get('searchId'))
+            result_identifier(body)
             present = True
         except ValueError:
             pass

@@ -83,6 +83,11 @@ def main():
                   'matchType': args.match_type or 'exact'}
         if args.case_category:
             values['caseCategory'] = args.case_category
+    elif args.operation == 'smart_verification':
+        print('Requires consented images already uploaded through Signzy. No upload or document-photo retrieval is performed.')
+        values={'livenessImage':getpass.getpass('Vendor-hosted selfie image URL (hidden): ').strip(),
+                'faceMatchImage':getpass.getpass('Vendor-hosted reference image URL (hidden): ').strip(),
+                'livenessStrictMode':True,'faceMatchThreshold':0.7}
     elif args.operation == 'fir_search':
         print('FIR search matchType=' + (args.match_type or 'exact'))
         values = {'name': getpass.getpass('Consented full name (hidden): ').strip(),
@@ -100,8 +105,9 @@ def main():
         if provider.get('http_status') not in (200, 202):
             raise ValueError('Prior FIR search failed; no result request sent')
         found = provider.get('json') or {}
-        values = {'verifyId': found.get('searchId') if isinstance(found, dict) else None}
-        print('Using prior FIR searchId as result verifyId. One result call; no automatic polling.')
+        from signzy.fir_search import result_identifier
+        values = {'verifyId': result_identifier(found)}
+        print('Using the result identifier from this FIR search. One result call; no automatic polling.')
     elif args.operation == 'individual_result':
         if not args.search_receipt:
             raise ValueError('individual_result needs --search-receipt <private receipt of the earlier court search>')

@@ -16,6 +16,6 @@ test('disabled verification exposes no submission form',()=>{
 test('verification reads only own status and binds with root/context signature',async()=>{
   const calls=[];
   await load({get:async p=>calls.push(p)});
-  assert.deepEqual(calls,['/api/v1/verification']);
+  assert.deepEqual(calls,['/api/v1/verification','/api/v1/verification/digilocker','/api/v1/verification/plan','/api/v1/verification/liveness']);
   assert.doesNotThrow(()=>bind({querySelector:()=>null},{session:{},run:()=>{},patch:()=>{}}));
 });

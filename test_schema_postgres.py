@@ -194,7 +194,7 @@ class UpsertKeyTests(unittest.TestCase):
                 body = _table_body(table)
                 found = [
                     tuple(c.strip() for c in group.split(","))
-                    for group in re.findall(r'UNIQUE\s*\(([^)]*)\)', body)
+                    for group in re.findall(r'(?:UNIQUE|PRIMARY KEY)\s*\(([^)]*)\)', body)
                 ]
                 self.assertIn(
                     tuple(columns), found,

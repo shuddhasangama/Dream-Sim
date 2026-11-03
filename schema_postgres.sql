@@ -34,6 +34,7 @@
 -- needs it to drive REACH (docs/agent-1-reach.pdf 3: preferences.fixed /
 -- preferences.adjustable)  added here rather than left DB-less.
 CREATE TABLE IF NOT EXISTS "User" (
+    active_bgv_case_id TEXT,
     id                TEXT PRIMARY KEY,
     journey_state     TEXT NOT NULL CHECK (journey_state IN (
                           'onboarding', 'dating', 'relationship', 'engaged', 'married',
@@ -1011,6 +1012,9 @@ CREATE TABLE IF NOT EXISTS "BgvEvidence" (
     received_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS "BgvRequest" (
+ parent_request_id TEXT,
+ case_check_id TEXT,
+ poll_count INTEGER NOT NULL DEFAULT 0,
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES "User"(id),
  operation TEXT NOT NULL, environment TEXT NOT NULL, state TEXT NOT NULL,
  protected_input TEXT NOT NULL, protected_result TEXT,
@@ -1029,4 +1033,55 @@ CREATE TABLE IF NOT EXISTS "WaitlistEntry" (
 CREATE TABLE IF NOT EXISTS "WaitlistAudit" (
  id TEXT PRIMARY KEY, target_id TEXT NOT NULL, action TEXT NOT NULL,
  actor TEXT NOT NULL, created_at TEXT NOT NULL
+);
+
+-- Account-bound DigiLocker sessions; only minimal identity fields are retained encrypted.
+CREATE TABLE IF NOT EXISTS "DigiLockerSession" (
+    cooldown_until TEXT,
+    protected_photo TEXT,
+    case_check_id TEXT,
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES "User"(id),
+    environment TEXT NOT NULL,
+    state TEXT NOT NULL,
+    protected_session TEXT,
+    protected_result TEXT,
+    consent_version TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS digilocker_user ON "DigiLockerSession"(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS "BgvPolicy" (
+ id TEXT PRIMARY KEY, definition_json TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "BgvMarketPolicy" (
+ country_code TEXT NOT NULL, city_code TEXT NOT NULL, policy_id TEXT NOT NULL REFERENCES "BgvPolicy"(id),
+ PRIMARY KEY (country_code,city_code)
+);
+CREATE TABLE IF NOT EXISTS "BgvProviderCoverage" (
+ id TEXT PRIMARY KEY, provider TEXT NOT NULL, check_key TEXT NOT NULL,
+ country_code TEXT NOT NULL, city_code TEXT NOT NULL, environment TEXT NOT NULL, state TEXT NOT NULL,
+ UNIQUE (provider,check_key,country_code,city_code,environment)
+);
+CREATE TABLE IF NOT EXISTS "BgvCase" (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES "User"(id), policy_id TEXT NOT NULL REFERENCES "BgvPolicy"(id),
+ country_code TEXT NOT NULL, city_code TEXT NOT NULL, environment TEXT NOT NULL,
+ definition_json TEXT NOT NULL, assignment_reason TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "BgvCaseCheck" (
+ id TEXT PRIMARY KEY, case_id TEXT NOT NULL REFERENCES "BgvCase"(id),
+ check_definition_id TEXT NOT NULL, provider TEXT NOT NULL,
+ UNIQUE (case_id,check_definition_id)
+);
+CREATE TABLE IF NOT EXISTS "BgvAttempt" (
+ id TEXT PRIMARY KEY, request_id TEXT NOT NULL REFERENCES "BgvRequest"(id),
+ protected_evidence TEXT NOT NULL, created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "BgvReview" (
+ id TEXT PRIMARY KEY, case_check_id TEXT NOT NULL REFERENCES "BgvCaseCheck"(id),
+ source_id TEXT, decision TEXT NOT NULL, protected_note TEXT NOT NULL, created_at TEXT NOT NULL
 );

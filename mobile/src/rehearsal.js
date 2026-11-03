@@ -11,5 +11,5 @@ export function renderRehearsal(state, safe, clock) {
 export function progressKey(journey) {
   // Partner readiness can change while the displayed clock stays the same.
   return JSON.stringify([journey?.clock, journey?.async_rehearsal, journey?.current_date_plan,
-    journey?.current_lock_in, journey?.milestones, journey?.next_action]);
+    journey?.current_lock_in, journey?.milestones, journey?.next_action,journey?.surfaces]);
 }
