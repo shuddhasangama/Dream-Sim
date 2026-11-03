@@ -4629,6 +4629,16 @@ def _api_journey_state(user):
         clock=get_clock(), reach_is_locked=reach_locked(user), facts=_guru_facts(user),
         display_name=display_name(user['user_id'], user['gender']), simulated=clock_module.simulated(),
         partner_greeting=partner_greeting)
+    # Simulated testers may already carry the legacy "verified" milestone.
+    # An explicitly assigned sandbox case must still expose its private Verify
+    # screen; this does not alter the milestone or unlock any other account.
+    if os.getenv('DHASHU_BGV_POLICY_ENABLED')=='1':
+        pilot_user=db.fetch_one(get_db(),'User',id=user['user_id'])
+        pilot_case=db.fetch_one(get_db(),'BgvCase',id=pilot_user.get('active_bgv_case_id')) if pilot_user and pilot_user.get('active_bgv_case_id') else None
+        if pilot_case and pilot_case['user_id']==user['user_id'] and pilot_case['environment']=='preproduction':
+            target=next((s for s in result['surfaces'] if s['key']=='verify'),None)
+            if target is not None:
+                target.update(eligible=True,blocked_reason=None,api_available=True,request={'method':'GET','path':'/api/v1/verification'})
     if active:
         partner=named_for(user['user_id'],load_user(_partner_id_in_lockin(active,user['user_id'])))
         result['current_lock_in']['partner_name']=(partner or {}).get('name',MASKED_NAME)
