@@ -16,7 +16,7 @@ def summarize(status, body):
     cases=data.get('cases')
     waiting=pending(status,data)
     done=(status==200 and envelope and not waiting and type(data.get('status'))is int and data['status']==1
-          and data.get('message')=='Processing done' and isinstance(cases,list)
+          and isinstance(data.get('message'),str) and data['message'].strip().rstrip('.').casefold() in ('processing done','process complete') and isinstance(cases,list)
           and all(isinstance(row,dict) for row in cases))
     # Sandbox has returned numResults; retain compatibility with the earlier contract.
     counts=[data[k] for k in ('numResults','numresults') if k in data]

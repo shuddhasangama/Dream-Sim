@@ -31,13 +31,20 @@ class ExactPolicyTests(unittest.TestCase):
         with patch('bgv_app.Client.execute') as provider:
             bgv_app.reproject_saved(self.conn,'u1');provider.assert_not_called()
         self.assertTrue(all(r['state']=='verified' for r in db.fetch_all(self.conn,'BgvRequest') if r['operation'] in bgv_app.RESULTS.values()))
+    def test_observed_exact_fir_completion_repaired_without_vendor_retry(self):
+        _,row=self.chain('fir_search',{'result':{'status':1,'message':'Process complete.','cases':[],'numResults':0,'total':0}})
+        self.assertEqual(row['state'],'verified')
+        self.conn.execute('UPDATE "BgvRequest" SET state=? WHERE id=?',('unavailable',row['id']));self.conn.commit()
+        with patch('bgv_app.Client.execute') as provider:
+            bgv_app.reproject_saved(self.conn,'u1');provider.assert_not_called()
+        self.assertEqual(db.fetch_one(self.conn,'BgvRequest',id=row['id'])['state'],'verified')
     def test_exact_cases_require_review_not_automatic_adverse_decision(self):
         _,row=self.chain('fir_search',{'result':{'status':1,'message':'Processing done','cases':[{}],'total':0,'numResults':1}})
         self.assertEqual(row['state'],'needs_review');self.assertIn('Exact search returned 1',json.loads(row['summary_json'])['message'])
     def test_pending_empty_and_conflicting_zero_do_not_verify(self):
         _,row=self.chain(result={'status':0,'message':'Process pending.','cases':[],'total':0})
         self.assertEqual(row['state'],'pending')
-        _,row=self.chain('fir_search',{'result':{'status':1,'message':'Processing done','cases':[],'numResults':0,'total':15}})
+        _,row=self.chain('fir_search',{'result':{'status':1,'message':'Process complete.','cases':[],'numResults':0,'total':15}})
         self.assertEqual(row['state'],'unavailable')
     def test_possible_results_are_not_relabelled_as_exact(self):
         parent,row=self.chain(result={'status':1,'cases':[],'total':0})

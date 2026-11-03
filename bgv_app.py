@@ -203,8 +203,13 @@ def reproject_saved(conn,uid):
     cfg=config();protection=Protection();changed=0
     if cfg.environment!='preproduction':raise ValueError('Saved-result pilot repair is sandbox-only')
     for row in db.fetch_all(conn,'BgvRequest',user_id=uid,environment=cfg.environment):
-        if row['operation'] not in {*RESULTS.values(),'current_employer'} or row['state'] not in ('needs_review','pending','verified','partially_verified','not_confirmed','history_available','employment_mismatch') or not row.get('protected_result'):continue
+        if row['operation'] not in {*RESULTS.values(),'current_employer'} or row['state'] not in ('needs_review','pending','verified','partially_verified','not_confirmed','history_available','employment_mismatch','unavailable') or not row.get('protected_result'):continue
         if row.get('case_check_id') and db.fetch_all(conn,'BgvReview',case_check_id=row['case_check_id']):continue
+        if os.getenv('DHASHU_BGV_POLICY_ENABLED')=='1':
+            key={'individual_result':'criminal_court','fir_result':'fir','current_employer':'current_employer'}[row['operation']]
+            try:
+                if bgv_policy.check_for(conn,uid,key,cfg.environment)!=row.get('case_check_id'):continue
+            except ApiError:continue
         evidence=protection.open(row['protected_result']);provider=evidence.get('provider_response') or {}
         if provider.get('http_status') not in (200,202):continue
         summary=OPERATIONS[row['operation']].summarize(provider['http_status'],provider.get('json'))
