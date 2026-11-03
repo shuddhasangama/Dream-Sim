@@ -32,6 +32,13 @@ def register(api, get_db):
             required_inputs=['Signzy image upload or approved capture SDK contract','Image access/expiry requirements','Sandbox test with a consented selfie and document photo'])
         result.headers['Cache-Control']='no-store'
         return result
+    @api.post('/verification/bundle')
+    def verification_bundle():
+        import bgv_bundle
+        uid=actor(); request.max_content_length=4096
+        body=json_object(required={'session_id','consent','consent_version'},optional={'employer'})
+        bgv_bundle.consent(get_db(),uid,body)
+        return response(uid),202
     @api.post('/verification')
     def verification_submit():
         uid = actor()

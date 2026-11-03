@@ -35,6 +35,17 @@ class DigiLockerTests(unittest.TestCase):
         for extra in [{'getEAadhaarPdf':True},{'extraDigitalCertificateParams':True}]:
             with self.assertRaises(ValueError):fetch.payload({'requestId':'synthetic_123',**extra})
 
+    def test_pan_document_consent_is_explicit_and_not_aadhaar_output(self):
+        values={'callbackUrl':'https://dhashu.com/callback','internalId':'synthetic_123','serviceName':'DhaShu'}
+        self.assertEqual(create.payload(values)['docType'],['ADHAR'])
+        requested=create.payload({**values,'includePan':True,'includePhoto':True})
+        self.assertEqual(requested['docType'],['ADHAR','PANCR'])
+        self.assertIs(requested['getEAadhaarJpeg'],True)
+        for invalid in ['true',1,None]:
+            with self.assertRaises(ValueError):create.payload({**values,'includePan':invalid})
+        # Requesting PAN scope does not turn the Aadhaar response into PAN evidence.
+        self.assertEqual(fetch.identity_fields({'result':{'panNumber':'ABCDE1234F'}}),{})
+
     def test_callback_and_consent_link_validation(self):
         for url in ['http://dhashu.com/callback','https://<callbackURL>.com/','https://user:password@dhashu.com/callback','https://dhashu.com/callback\n']:
             with self.assertRaises(ValueError):create.https_url(url)

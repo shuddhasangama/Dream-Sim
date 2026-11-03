@@ -12,14 +12,14 @@ export function render(data, safe) {
     not_confirmed:'Verification attempt unsuccessful: DigiLocker consent or data was not confirmed. This does not mean your identity failed.',
     needs_review:'Your result needs review. Contact support.', unavailable:'DigiLocker is unavailable. Contact support.',
     outcome_unknown:'The provider response could not be confirmed. Contact support before starting again.'};
-  return `<section class="card"><h2>Name, age, document address and photo</h2>
+  return `<section class="card"><h2>Connect DigiLocker</h2>
     ${data.environment==='preproduction'?'<p class="hint">Sandbox test · does not approve your account.</p>':''}
-    <p>Share these details securely from DigiLocker. Enter your Aadhaar and OTP only on DigiLocker.</p>
-    ${!s || s.state==='expired' || s.can_request_photo || s.can_restart ? `<form id="digilocker-start"><label><input type="checkbox" name="consent" required> ${safe(data.consent_text)}</label><button type="submit">${s?.can_request_photo?'Create a new consent link including document photo':'Create DigiLocker link'}</button></form>` : `<p role="status">${safe(labels[s.state]||'Refresh your status')}</p>`}
-    ${s?.consent_url?`<button type="button" id="digilocker-open">Open DigiLocker to complete OTP and consent</button>
+    <p>Share Aadhaar details and available PAN records. Enter Aadhaar and OTP only on DigiLocker. If you have Aadhaar but no DigiLocker account, set one up in DigiLocker first. If you do not have Aadhaar, contact support; installing DigiLocker does not issue Aadhaar.</p>
+    ${!s || s.state==='expired' || s.can_request_photo || s.can_restart ? `<form id="digilocker-start"><label><input type="checkbox" name="consent" required> ${safe(data.consent_text)}</label><button class="primary" type="submit">${s?.can_request_photo?'Create a new document-sharing link':'Create DigiLocker link'}</button></form>` : `<p role="status">${safe(labels[s.state]||'Refresh your status')}</p>`}
+    ${s?.consent_url?`<button type="button" id="digilocker-open" class="primary">Open DigiLocker to complete OTP and consent</button>
       <p>Complete OTP and document sharing in DigiLocker, then return here. Closing the browser or only receiving an OTP does not complete consent.</p>
       <p>Confirm only when finished. Each consent link permits one retrieval attempt. An unconfirmed attempt requires a ${safe(data.cooldown_minutes||30)}-minute cooldown before starting again.</p>
-      <form id="digilocker-complete"><label><input type="checkbox" name="completed" required> I completed DigiLocker OTP and consent for this link.</label><button type="submit">Retrieve my details</button></form>`:''}
+      <form id="digilocker-complete"><label><input type="checkbox" name="completed" required> I completed DigiLocker OTP and consent for this link.</label><button class="primary" type="submit">Retrieve my details</button></form>`:''}
     ${s?.identity?`<dl><dt>Name</dt><dd>${safe(s.identity.name)}</dd><dt>Date of birth</dt><dd>${safe(s.identity.dob)}</dd>
       <dt>Age as of ${safe(s.identity.age_as_of)}</dt><dd>${safe(s.identity.age)}</dd><dt>Document address</dt><dd>${safe(s.identity.document_address)}</dd></dl>
       <p class="hint">Age is calculated from the document date of birth. The document address does not confirm your current residence.</p>`:''}
@@ -38,14 +38,14 @@ export function bind(root, {session, run, data, patch}) {
   let id=crypto.randomUUID();
   form?.addEventListener('submit',event=>{
     event.preventDefault();
-    run(async()=>patch(await session.post('/api/v1/verification/digilocker/sessions',{
+    run(async()=>await patch(await session.post('/api/v1/verification/digilocker/sessions',{
       request_id:id, consent:form.elements.consent.checked, consent_version:data.consent_version})));
   });
   const complete=root.querySelector('#digilocker-complete');
   complete?.addEventListener('submit',event=>{
     event.preventDefault();
-    run(async()=>patch(await session.post(`/api/v1/verification/digilocker/sessions/${data.session.id}/complete`,{
+    run(async()=>await patch(await session.post(`/api/v1/verification/digilocker/sessions/${data.session.id}/complete`,{
       consent_completed:complete.elements.completed.checked})));
   });
-  root.querySelector('#digilocker-refresh')?.addEventListener('click',()=>run(async()=>patch(await load(session))));
+  root.querySelector('#digilocker-refresh')?.addEventListener('click',()=>run(async()=>await patch(await load(session))));
 }

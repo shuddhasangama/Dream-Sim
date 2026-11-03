@@ -82,7 +82,7 @@ def view(conn,uid):
     checks=[]
     for item in definition['checks']:
         check=db.fetch_one(conn,'BgvCaseCheck',case_id=case['id'],check_definition_id=item['key'])
-        requests=db.fetch_all(conn,'BgvRequest',user_id=uid,case_check_id=check['id']) if check else []
+        requests=[r for r in db.fetch_all(conn,'BgvRequest',user_id=uid,case_check_id=check['id']) if r['operation']!='digilocker_details'] if check else []
         sessions=db.fetch_all(conn,'DigiLockerSession',user_id=uid,case_check_id=check['id']) if check else []
         attempts=sorted(requests+sessions,key=lambda r:r['created_at'],reverse=True)
         latest=attempts[0] if attempts else None

@@ -17,6 +17,9 @@ from signzy.digilocker_create_url import session as provider_session, https_url
 from signzy.digilocker_eaadhaar import identity_fields
 
 VERSION = 'digilocker-identity-photo-v2'
+BUNDLE_VERSION = 'digilocker-screening-v3'
+PHOTO_VERSIONS = {VERSION, BUNDLE_VERSION}
+BUNDLE_CONSENT = 'I consent to sharing Aadhaar name, date of birth, document address and photo, and available PAN document identifiers and mobile from DigiLocker through Signzy. DhaShu may use these details for criminal court, FIR and current-employer screening and a future selfie-to-document face comparison, and securely store the results.'
 CONSENT = 'I consent to sharing my DigiLocker name, date of birth, document address and document photo with DhaShu through Signzy for identity checks and a future selfie-to-document face comparison.'
 
 def now():
@@ -66,7 +69,7 @@ def view(conn, uid):
         cfg = configuration(uid)
     except ApiError:
         return {'enabled': False}
-    result = {'enabled':True, 'environment':cfg.environment, 'consent_version':VERSION, 'consent_text':CONSENT,
+    result = {'enabled':True, 'environment':cfg.environment, 'consent_version':BUNDLE_VERSION, 'consent_text':BUNDLE_CONSENT,
               'cooldown_minutes':cooldown_minutes(),
               'session':None, 'overall_approval':False}
     latest = [r for r in rows(conn, uid) if r['environment'] == cfg.environment]
@@ -80,12 +83,12 @@ def view(conn, uid):
         if state=='awaiting_consent' and row['attempts']==0:
             item['consent_url'] = Protection().open(row['protected_session'])['url']
         if state == 'complete':
-            item['identity'] = Protection().open(row['protected_result'])
+            item['identity'] = {k:v for k,v in Protection().open(row['protected_result']).items() if not k.startswith('_')}
         item['reference_photo_available']=bool(row.get('protected_photo'))
         item['cooldown_until']=row.get('cooldown_until')
         item['cooling_down']=cooling(row)
         item['can_restart']=state=='not_confirmed' and not cooling(row)
-        item['can_request_photo']=state=='complete' and not cooling(row) and (row['consent_version']!=VERSION or not row.get('protected_photo'))
+        item['can_request_photo']=state=='complete' and not cooling(row) and (row['consent_version']!=BUNDLE_VERSION or not row.get('protected_photo'))
         result['session'] = item
     return result
 
@@ -94,7 +97,7 @@ def create(conn, uid, body):
     case_check_id=bgv_policy.check_for(conn,uid,'identity_details',cfg.environment)
     try:
         sid = str(uuid.UUID(body['request_id']))
-        if body['consent'] is not True or body['consent_version'] != VERSION:
+        if body['consent'] is not True or body['consent_version'] not in PHOTO_VERSIONS:
             raise ValueError()
     except (ValueError, TypeError, KeyError, AttributeError):
         raise ApiError('validation_error', 'Confirm identity consent before creating a link.') from None
@@ -113,18 +116,18 @@ def create(conn, uid, body):
             raise ApiError('rate_limited', 'Daily consent-link limit reached. Please contact support.', 429)
         if previous:
             last = previous[0]
-            old_completed=last['state']=='complete' and (last['consent_version']!=VERSION or not last.get('protected_photo'))
+            old_completed=last['state']=='complete' and (last['consent_version']!=BUNDLE_VERSION or not last.get('protected_photo'))
             retry_after_cooldown=last['state']=='not_confirmed' and not cooling(last)
             if not old_completed and not retry_after_cooldown and (last['state'] in ('creating','retrieving','outcome_unknown','complete') or now() < datetime.fromisoformat(last['expires_at'])):
                 raise ApiError('session_exists', 'Resume your existing DigiLocker session or contact support.', 409)
         stamp = now()
         auth_sessions.sql(conn, 'INSERT INTO "DigiLockerSession" (id,user_id,environment,state,protected_session,protected_result,consent_version,created_at,updated_at,expires_at,attempts,case_check_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-            (sid,uid,cfg.environment,'creating',None,None,VERSION,stamp.isoformat(),stamp.isoformat(),(stamp+timedelta(minutes=30)).isoformat(),0,case_check_id))
+            (sid,uid,cfg.environment,'creating',None,None,body['consent_version'],stamp.isoformat(),stamp.isoformat(),(stamp+timedelta(minutes=30)).isoformat(),0,case_check_id))
     evidence = []
     try:
         summary = Client(cfg, timeout=20).execute('digilocker_create_url', {
             'callbackUrl':os.environ['SIGNZY_DIGILOCKER_CALLBACK_BASE'].rstrip('/')+'/'+secrets.token_hex(16),
-            'internalId':'dhashu_'+secrets.token_hex(16), 'serviceName':'DhaShu','includePhoto':True}, consent_confirmed=True, evidence_sink=evidence.append)
+            'internalId':'dhashu_'+secrets.token_hex(16), 'serviceName':'DhaShu','includePhoto':True,'includePan':body['consent_version']==BUNDLE_VERSION}, consent_confirmed=True, evidence_sink=evidence.append)
         response = evidence[0].get('provider_response') or {}
         if summary.get('http_status') == 200:
             request_id, url = provider_session(response.get('json'))
@@ -178,12 +181,14 @@ def complete(conn, uid, sid, body):
     try:
         linked = protection.open(row['protected_session'])
         # Existing pre-photo consent is not silently expanded.
-        summary = Client(cfg, timeout=20).execute('digilocker_eaadhaar', {'requestId':linked['requestId'],'includePhoto':row['consent_version']==VERSION},
+        summary = Client(cfg, timeout=20).execute('digilocker_eaadhaar', {'requestId':linked['requestId'],'includePhoto':row['consent_version'] in PHOTO_VERSIONS},
             consent_confirmed=True, evidence_sink=evidence.append)
         status = summary.get('http_status')
         if status == 200:
             try:
                 identity = projection(evidence[0]['provider_response']['json'])
+                if row['consent_version']==BUNDLE_VERSION:
+                    identity['_bundle']={'version':BUNDLE_VERSION,'accepted_at':row['created_at'],'pan_scope':True,'employer':''}
                 protected = protection.seal(identity)
                 state = 'complete' if identity['adult'] else 'needs_review'
             except (ValueError, TypeError, KeyError):
@@ -195,9 +200,9 @@ def complete(conn, uid, sid, body):
     except Exception:
         state = 'outcome_unknown'
     photo=None
-    if state=='complete' and row['consent_version']==VERSION:
+    if state=='complete' and row['consent_version'] in PHOTO_VERSIONS:
         from signzy.document_photo import reference
         found=reference(evidence[0]['provider_response']['json'])
-        if found: photo=protection.seal({**found,'consent_version':VERSION,'received_at':now().isoformat()})
+        if found: photo=protection.seal({**found,'consent_version':row['consent_version'],'received_at':now().isoformat()})
     with auth_sessions.transaction(conn):
         update(conn, sid, state=state, protected_result=protected,protected_photo=photo)

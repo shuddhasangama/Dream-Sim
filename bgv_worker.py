@@ -3,6 +3,7 @@ import argparse
 import time
 import db
 import bgv_app
+import bgv_bundle
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
@@ -12,6 +13,7 @@ if __name__ == '__main__':
     while True:
         conn = db.get_connection()
         try:
+            bgv_bundle.schedule(conn)
             processed = bgv_app.work_one(conn)
         finally:
             conn.close()

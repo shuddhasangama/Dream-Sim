@@ -44,3 +44,17 @@ The two historical employer records came from Past Employment History, a differe
 - [ ] Production entitlements, configuration and acceptance.
 
 Release regression: **1,690 backend tests passed, 33 skipped, 820 subtests passed; 110 mobile unit tests and 48 browser tests passed**. PostgreSQL schema/policy bootstrap succeeded on Railway. Provider calls in automated tests were mocked; fresh installed-device/vendor acceptance is not established. DigiLocker confirmation now has one retrieval per session and a configurable 30-minute default cooldown. See [release runbook](signzy-phase1-release.md).
+
+## Combined DigiLocker and background screening update — 3 November 2026
+
+- Installed-app Aadhaar retrieval was confirmed working by the user. PAN listing and the combined fresh device journey still need live acceptance.
+- New consent `digilocker-screening-v3` requests ADHAR + PANCR and photo, and explicitly covers criminal Court/FIR/current-employer screening. Older v2 sessions are not retroactively expanded. Existing completed identity can authorize legal screening separately; PAN sharing needs a fresh DigiLocker session.
+- Supplied `/digilocker-v2/getDetails` is implemented in the worker. It receives the owner-bound requestId from encrypted session storage. Only unambiguous `in.gov.pan` / PANCR issued-record identifiers with a complete PAN pattern are eligible as employer API input. This is document-list evidence, not full PAN-card retrieval or independent PAN verification. Masked, malformed, conflicting identifiers are held for review. Mobile must meet the employer API's ten-digit format, and account name must agree with retrieved Aadhaar name before employer submission.
+- Successful adult Aadhaar retrieval schedules criminal-only Court and FIR searches automatically after bundle consent. Missing PAN/mobile/employer declaration does not block legal checks. Name/address come only from the saved encrypted Aadhaar projection.
+- Employer starts once the PAN identifier and mobile are available and the user has supplied their declared employer. Manual PAN input remains deferred.
+- The worker schedules one linked result lookup per successful search. Repeated refreshes do not submit vendor calls. Automatic pending-result rechecks default to zero (`DHASHU_BGV_AUTO_RESULT_RECHECKS`, optional 0–5); the user can explicitly request bounded rechecks after 60 seconds. Confirm pending/result billing before enabling automatic repeated polling. Unknown outcomes are never replayed automatically.
+- New local workflow uses existing encrypted columns and deterministic request IDs; no schema migration. Case-level suppression prevents automatic reassessment after a new link. No account approval/matching gate was changed.
+- Compact UI now has seven status rows, document-detail disclosure, age-declaration difference, conditional employer declaration, and read-only progress refresh. It distinguishes received identity, processing, review and unavailable states. Document address is not proof of current residence. Face capture/upload remains unavailable until the vendor contract is connected.
+- Aadhaar is required for this pilot identity route. Installing/creating a DigiLocker account does not issue Aadhaar; users without Aadhaar need support and cannot complete this route.
+
+Validation: 52 focused backend tests passed, all 53 Signzy tests passed (overlapping suites), 111 mobile unit tests passed, two compact-screen browser tests passed, and the production web bundle built. No new live vendor calls were made during automated testing.

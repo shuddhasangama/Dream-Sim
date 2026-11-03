@@ -132,7 +132,7 @@ function buildCtx() {
     session, journey, profile, data: screenData, busy, safe,
     params: nav.current.params, simulatedClockBuild,
     run, navigateTo, goBack,
-    patch(next) { screenData = next; },
+    patch(next) { screenData = next; if(nav.current.key==='verify')screenDirty=false; },
     // For a mutation that can change eligibility/tabs (e.g. mutual interest
     // creating a lock-in, which closes REACH) — refetches journey/status
     // without touching this screen's own already-patched data.
@@ -404,6 +404,10 @@ wireKeyboardScroll();
 async function refreshAcceleratedClock() {
   if (busy || !journey || signupActive || document.hidden) return;
   try {
+    if(nav.current.key==='verify' && !screenDirty && !document.activeElement?.closest?.('form')) {
+      const nextVerification=await verificationScreen.load(session);
+      if(nav.current.key==='verify' && !busy && !screenDirty && !document.activeElement?.closest?.('form') && JSON.stringify(nextVerification)!==JSON.stringify(screenData)) {screenData=nextVerification;render();}
+    }
     const next = await session.get('/api/v1/journey/status');
     if (progressKey(next) === progressKey(journey)) return;
     if (nav.current.key==='reach' && !next.surfaces?.find(s=>s.key==='reach')?.eligible) {

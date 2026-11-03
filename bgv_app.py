@@ -61,6 +61,7 @@ def view(conn, uid):
     rows = sorted(db.fetch_all(conn, 'BgvRequest', user_id=uid), key=lambda r:r['created_at'], reverse=True)
     latest = {}
     for row in rows:
+        if row['operation']=='digilocker_details':continue
         key = (row['operation'], row['environment'])
         if key not in latest:
             latest[key] = {'id': row['id'], 'operation': row['operation'], 'state': row['state'],
@@ -75,6 +76,7 @@ def view(conn, uid):
                 and datetime.now(timezone.utc)-datetime.fromisoformat(row['updated_at']) >= timedelta(seconds=60))
     return {'enabled': enabled, 'environment': environment, 'consent_version': VERSION,
             'consent_text': CONSENT, 'checks': available_checks, 'result_labels':RESULT_LABELS, 'results': list(latest.values()),
+            'bundle': __import__('bgv_bundle').view(conn,uid),
             'overall_approval': 'Separate BGV review required; these checks do not unlock matching.'}
 
 def submit(conn, uid, body):
@@ -182,7 +184,7 @@ def work_one(conn):
         if db._is_postgres_connection(conn):
             auth_sessions.sql(conn, 'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
         rows = sorted((r for r in db.fetch_all(conn, 'BgvRequest', state='queued', environment=cfg.environment)
-                       if r['operation'] in {*CHECKS,*RESULTS.values()}), key=lambda r:r['created_at'])
+                       if r['operation'] in {*CHECKS,*RESULTS.values(),'digilocker_details'}), key=lambda r:r['created_at'])
         if not rows:
             return False
         row = rows[0]
@@ -196,7 +198,7 @@ def work_one(conn):
                     ('unavailable',json.dumps({'message':'This queued search is outside the current criminal-only scope. Support review required.'}),stamp(),row['id']))
             return True
         if os.getenv('DHASHU_BGV_POLICY_ENABLED')=='1':
-            key={'current_employer':'current_employer','individual_search':'criminal_court','individual_result':'criminal_court','fir_search':'fir','fir_result':'fir'}[row['operation']]
+            key={'current_employer':'current_employer','individual_search':'criminal_court','individual_result':'criminal_court','fir_search':'fir','fir_result':'fir','digilocker_details':'identity_details'}[row['operation']]
             try:
                 allowed=bgv_policy.check_for(conn,row['user_id'],key,cfg.environment)
                 if allowed != row.get('case_check_id'):

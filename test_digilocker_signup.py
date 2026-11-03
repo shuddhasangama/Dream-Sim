@@ -61,6 +61,21 @@ class DigiLockerSignupTests(unittest.TestCase):
         for secret in ('SYNTHETIC PERSON','request_12345678','Synthetic address','DO NOT STORE'):
             self.assertNotIn(secret,stored)
         self.assertEqual(self.conn.execute('SELECT bgv_status FROM "User" WHERE id=\'u1\'').fetchone()[0],'declared')
+    def test_v3_requests_pan_and_records_bundle_consent_without_inline_screening(self):
+        self.body['consent_version']=service.BUNDLE_VERSION
+        call=self.provider({'result':{'requestId':'request_12345678','url':'https://api.digitallocker.gov.in/public/oauth2/1/authorize'}})
+        service.create(self.conn,'u1',self.body)
+        self.assertEqual(json.loads(call.call_args.args[0].data)['docType'],['ADHAR','PANCR'])
+        call=self.provider({'result':{'name':'SYNTHETIC PERSON','dob':'01/01/1990','address':'SYNTHETIC ADDRESS'}})
+        service.complete(self.conn,'u1',self.body['request_id'],{'consent_completed':True})
+        self.assertEqual(call.call_count,1)
+        public=service.view(self.conn,'u1')
+        self.assertEqual(public['consent_version'],service.BUNDLE_VERSION)
+        self.assertNotIn('_bundle',public['session']['identity'])
+        private=service.Protection().open(dict(self.conn.execute('SELECT * FROM "DigiLockerSession"').fetchone())['protected_result'])
+        self.assertTrue(private['_bundle']['pan_scope'])
+        self.assertEqual(private['_bundle']['version'],service.BUNDLE_VERSION)
+
     def test_consent_ownership_and_expiry(self):
         with self.assertRaises(ApiError): service.create(self.conn,'u1',{**self.body,'consent':False})
         sid=self.create()
