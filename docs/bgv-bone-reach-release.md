@@ -85,3 +85,19 @@ Automated responses are synthetic; a successful build is not proof of a passed B
 The iOS workflow uploads successful builds to App Store Connect for internal
 TestFlight testing, not the public App Store. External beta review is not submitted
 automatically; it requires completed review-contact metadata and a separate decision.
+
+## Recorded deployment results
+
+- Mobile/UI commit: 8710bebd. API menu follow-up: 2d1c7c9d.
+- API deployment: 4c9a4cef-14f5-458f-ae7a-a3a6b2b041cc, SUCCESS.
+- BGV worker: 37e07a3f-84e5-48f3-986f-5c161c5ff288, SUCCESS.
+- PostgreSQL policy bootstrap completed; unauthenticated private BGV reads return 401.
+- Full release backend run: 1,690 passed, 33 skipped, 820 subtests passed.
+- Mobile: 110 unit tests and 48 browser tests passed; native Android APK built.
+- Codemagic build: https://codemagic.io/app/6aaa35b8366c2d5c4eedc58b/build/6ae97e3de83a9019991c96c6
+- Apple processed build: 5c86e856-d859-4c3a-a787-9373c5d46902 (app 6812635625).
+- Binary upload/processing succeeded. External review submission failed because
+  Feedback Email and review-contact First Name/Last Name/Phone/Email are missing.
+  The workflow was corrected to upload without automatic external review.
+- Existing internal TestFlight group assignment awaits App Store Connect sign-in.
+- No new paid Signzy calls and no account/profile resets were performed.

@@ -1,6 +1,6 @@
 # Phase 1 release and acceptance
 
-Updated 3 November 2026. [Canonical checklist](signzy-phase1-scope.md). New changes are local, not deployed. No new vendor calls were made during implementation.
+Updated 3 November 2026. [Canonical checklist](signzy-phase1-scope.md). API/worker deployed for the m06 sandbox pilot on 3 November 2026. Android APK built; iOS uploaded/processed, internal group assignment pending App Store Connect access. No new vendor calls were made during implementation.
 
 ## App workflows
 
@@ -73,7 +73,7 @@ All are under /api/v1 and bearer-only, owner-scoped, no-store.
 - Validate the operator review/waiver commands in the pilot; implement reassessment and define which 1a/1b checks gate signup or matching.
 - Configure and validate production separately. DigiLocker app operation remains explicitly sandbox-only.
 
-No production flags, paid calls, deployments or existing matching eligibility were changed by this local implementation.
+No Signzy production flags or paid vendor calls were enabled during this release. m06 sandbox setup and the explicitly requested REACH cycle rule were deployed. Overall BGV approval remains unchanged.
 
 ## Operator review and exceptions
 

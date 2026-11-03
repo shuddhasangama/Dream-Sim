@@ -2,11 +2,11 @@
 
 Updated **3 November 2026**. This supersedes the earlier 227 scope. Criminal court only; civil is quantity zero. PAN Simple/Extensive and UAN are excluded.
 
-Vendor testing means saved real sandbox evidence. Automated tests use synthetic responses. Installed-app E2E means a fresh app/vendor journey. HTTP 200 alone is not person verification. **New changes are local, not deployed.**
+Vendor testing means saved real sandbox evidence. Automated tests use synthetic responses. Installed-app E2E means a fresh app/vendor journey. HTTP 200 alone is not person verification. **Backend and worker deployed for m06 on 3 November 2026. Android APK built; iOS uploaded/processed, with internal TestFlight assignment pending sign-in. Fresh vendor/device acceptance is still pending.**
 
 | Product | Data element / purpose | Testing status / implementation | Quote | Quantity | Cost | Phase | App launch pending |
 |---|---|---|---:|---:|---:|---|---|
-| Current Employer Verification | Current employer evidence | Vendor 200; adapter, comparison, app queue and worker built | 4 | 1 | 4 | 1a | Deployment, flag interpretation, worker and app E2E |
+| Current Employer Verification | Current employer evidence | Vendor 200; adapter, comparison, app queue and worker built | 4 | 1 | 4 | 1a | Flag interpretation and fresh installed-app E2E; API/worker deployed |
 | DigiLocker Create URL | Consent/access link | Vendor 200; prior consent completed; new photo consent/request automated-tested | 3.5 | 1 | 3.5 | 1a | Fresh app OTP and photo-enabled consent |
 | DigiLocker get eAadhaar | Name, DOB/age, document address and photo reference | Vendor 200 for prior request; new photo flag and encrypted reference implemented | 3.5 | 1 | 3.5 | 1a | Live photo-enabled retrieval, persistence/restart, URL expiry |
 | Individual Court Search - Civil | Civil candidates | Prior vendor 200; excluded from new app submissions | 40 | 0 | 0 | Inactive | Not scheduled |
@@ -38,8 +38,9 @@ The two historical employer records came from Past Employment History, a differe
 - [ ] Vendor-approved upload/capture implementation and live Face Smart test.
 - [x] Append-only operator review/waiver command; decisions bound to evidence, private review notes encrypted.
 - [ ] Reassessment workflow and explicit signup/matching approval gates.
-- [ ] Backend/worker release and mobile build release.
+- [x] Backend/worker release and Android APK build; iOS build uploaded and processed.
+- [ ] Internal TestFlight group assignment (App Store Connect sign-in required).
 - [ ] Fresh installed-app E2E for every active check.
 - [ ] Production entitlements, configuration and acceptance.
 
-Latest selected regression: **105 backend tests and 110 mobile tests passed**, plus mobile build and Android sync. Backend count includes schema compatibility tests; no live PostgreSQL deployment was exercised. Tests mocked provider calls; these are not whole-repository counts or vendor acceptance. DigiLocker confirmation now has one retrieval per session and a configurable 30-minute default cooldown. See [release runbook](signzy-phase1-release.md).
+Release regression: **1,690 backend tests passed, 33 skipped, 820 subtests passed; 110 mobile unit tests and 48 browser tests passed**. PostgreSQL schema/policy bootstrap succeeded on Railway. Provider calls in automated tests were mocked; fresh installed-device/vendor acceptance is not established. DigiLocker confirmation now has one retrieval per session and a configurable 30-minute default cooldown. See [release runbook](signzy-phase1-release.md).
