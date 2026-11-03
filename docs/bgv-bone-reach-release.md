@@ -99,5 +99,5 @@ automatically; it requires completed review-contact metadata and a separate deci
 - Binary upload/processing succeeded. External review submission failed because
   Feedback Email and review-contact First Name/Last Name/Phone/Email are missing.
   The workflow was corrected to upload without automatic external review.
-- Existing internal TestFlight group assignment awaits App Store Connect sign-in.
+- User subsequently confirmed iOS deployment completed (build number 68); App Store Connect group membership was not independently inspected. No duplicate distribution action was performed.
 - No new paid Signzy calls and no account/profile resets were performed.

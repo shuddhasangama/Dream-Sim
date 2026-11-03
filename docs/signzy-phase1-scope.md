@@ -2,7 +2,7 @@
 
 Updated **3 November 2026**. This supersedes the earlier 227 scope. Criminal court only; civil is quantity zero. PAN Simple/Extensive and UAN are excluded.
 
-Vendor testing means saved real sandbox evidence. Automated tests use synthetic responses. Installed-app E2E means a fresh app/vendor journey. HTTP 200 alone is not person verification. **Backend and worker deployed for m06 on 3 November 2026. Android APK built; iOS uploaded/processed, with internal TestFlight assignment pending sign-in. Fresh vendor/device acceptance is still pending.**
+Vendor testing means saved real sandbox evidence. Automated tests use synthetic responses. Installed-app E2E means a fresh app/vendor journey. HTTP 200 alone is not person verification. **Backend and worker deployed for m06 on 3 November 2026. Android APK built; iOS build 68 uploaded/processed; user confirmed iOS deployment completed. Fresh vendor/device acceptance is still pending.**
 
 | Product | Data element / purpose | Testing status / implementation | Quote | Quantity | Cost | Phase | App launch pending |
 |---|---|---|---:|---:|---:|---|---|
@@ -39,7 +39,7 @@ The two historical employer records came from Past Employment History, a differe
 - [x] Append-only operator review/waiver command; decisions bound to evidence, private review notes encrypted.
 - [ ] Reassessment workflow and explicit signup/matching approval gates.
 - [x] Backend/worker release and Android APK build; iOS build uploaded and processed.
-- [ ] Internal TestFlight group assignment (App Store Connect sign-in required).
+- [x] User confirmed iOS deployment completed; uploaded build number 68. Group membership was not independently inspected.
 - [ ] Fresh installed-app E2E for every active check.
 - [ ] Production entitlements, configuration and acceptance.
 

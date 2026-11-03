@@ -1,6 +1,6 @@
 # Phase 1 release and acceptance
 
-Updated 3 November 2026. [Canonical checklist](signzy-phase1-scope.md). API/worker deployed for the m06 sandbox pilot on 3 November 2026. Android APK built; iOS uploaded/processed, internal group assignment pending App Store Connect access. No new vendor calls were made during implementation.
+Updated 3 November 2026. [Canonical checklist](signzy-phase1-scope.md). API/worker deployed for the m06 sandbox pilot on 3 November 2026. Android APK built; iOS build 68 uploaded/processed; user confirmed iOS deployment completed. No new vendor calls were made during implementation.
 
 ## App workflows
 
