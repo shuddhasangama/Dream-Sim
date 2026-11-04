@@ -40,12 +40,13 @@ def transaction(conn):
         # Existing DB helpers may have opened a read transaction. All callers
         # enter here with no pending writes; own the following commit boundary.
         conn.commit()
-        with conn.transaction():
+        with conn.transaction(), db.defer_commits(conn):
             yield
     else:
         conn.execute('BEGIN IMMEDIATE')
         try:
-            yield
+            with db.defer_commits(conn):
+                yield
             conn.commit()
         except BaseException:
             conn.rollback()
