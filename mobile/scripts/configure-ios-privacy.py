@@ -6,8 +6,8 @@ path = Path(__file__).resolve().parents[1] / 'ios' / 'App' / 'App' / 'Info.plist
 with path.open('rb') as source:
     settings = plistlib.load(source)
 settings.update({
-    'NSCameraUsageDescription': 'Take an identity photo for review, only when you choose to capture it.',
-    'NSPhotoLibraryUsageDescription': 'Choose a photo for your DhaShu profile.',
+    'NSCameraUsageDescription': 'Take a selfie for your avatar or identity comparison, only when you choose to capture it.',
+    'NSPhotoLibraryUsageDescription': 'Choose a recent selfie for your avatar or a photo for your DhaShu profile.',
     'NSPhotoLibraryAddUsageDescription': 'Photo saving is not used for identity captures.',
 })
 with path.open('wb') as target:
