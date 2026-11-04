@@ -405,6 +405,9 @@ wireKeyboardScroll();
 // overwrite an edited form, or interrupt a playing walkthrough.
 async function refreshAcceleratedClock() {
   if (busy || !journey || signupActive || document.hidden) return;
+  // A newly captured private selfie is unsaved screen memory. App-resume or
+  // clock polling must not replace its preview while the person reviews it.
+  if (nav.current.key==='avatar' && screenData?._stagedSelfie) return;
   try {
     if(nav.current.key==='verify' && !screenDirty && !document.activeElement?.closest?.('form')) {
       const nextVerification=await verificationScreen.load(session);
