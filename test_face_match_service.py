@@ -37,6 +37,9 @@ class FaceFlowTests(RouteTestCase):
   db.insert_row(self.conn,'DigiLockerSession',{'id':'newer','user_id':'owner','environment':'preproduction','state':'pending','consent_version':'digilocker-screening-v3','created_at':'2090-01-01','updated_at':service.stamp(),'expires_at':'2099-01-01'})
   self.assertFalse(service.view(self.conn,'owner')['reference_ready'])
   with self.assertRaises(ApiError):service.queue(self.conn,'owner',self.body())
+ def test_aadhaar_readiness_does_not_depend_on_selfie(self):
+  self.conn.execute('UPDATE "AvatarJob" SET protected_selfie=NULL');self.conn.commit()
+  view=service.view(self.conn,'owner');self.assertTrue(view['reference_ready']);self.assertFalse(view['selfie_ready']);self.assertFalse(view['can_request'])
  def test_unknown_not_replayed_and_clear_does_not_restore_allowance(self):
   service.queue(self.conn,'owner',self.body())
   def fail(cfg):raise TimeoutError()

@@ -17,7 +17,7 @@ def stamp():return datetime.now(timezone.utc).isoformat()
 def enabled():return os.getenv('DHASHU_FACE_MATCH_ENABLED')=='1' and os.getenv('SIGNZY_ENV','preproduction')=='preproduction'
 def sources(conn,uid):
  selfie=db.fetch_one(conn,'AvatarJob',id=uid)
- if not selfie or not selfie.get('protected_selfie') or selfie['expires_at']<=stamp():return None,None
+ if not selfie or not selfie.get('protected_selfie') or selfie['expires_at']<=stamp():selfie=None
  rows=db.fetch_all(conn,'DigiLockerSession',user_id=uid)
  rows=[r for r in rows if r['environment']=='preproduction']
  latest=max(rows,key=lambda r:r['created_at']) if rows else None
