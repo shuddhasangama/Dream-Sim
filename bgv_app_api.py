@@ -28,7 +28,7 @@ def register(api, get_db):
         uid=actor()
         rows=sorted(db.fetch_all(get_db(),'DigiLockerSession',user_id=uid),key=lambda r:r['created_at'],reverse=True)
         result=jsonify(enabled=False,state='setup_required',reference_photo_available=any(r.get('protected_photo') and r['state']=='complete' for r in rows),
-            message='Selfie upload and capture integration is not connected yet. No liveness check has been performed.',
+            message='Passive liveness is not connected. Selfie capture and standalone face comparison are separate app steps. No liveness check has been performed.',
             required_inputs=['Signzy image upload or approved capture SDK contract','Image access/expiry requirements','Sandbox test with a consented selfie and document photo'])
         result.headers['Cache-Control']='no-store'
         return result

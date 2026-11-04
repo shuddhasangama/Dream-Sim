@@ -1,7 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {render} from '../src/screens/avatar.js';
+import {render,bind} from '../src/screens/avatar.js';
 const safe=x=>String(x??'').replaceAll('<','&lt;');
+test('loading avatar screen binds without dereferencing missing data',()=>{
+ assert.doesNotThrow(()=>bind({querySelector:()=>null,querySelectorAll:()=>[]},{session:{},run:()=>{},patch:()=>{},data:null}));
+});
 test('avatar explains selfie-only consent and permanent two-option limit',()=>{
  const html=render({data:{enabled:true,can_capture:true,options:[],state:'not_started',message:'Capture',consent_text:'Only my selfie'},safe});
  assert.match(html,/two avatars · one run only/);assert.match(html,/Aadhaar and PAN photos are not sent/);assert.match(html,/Verification pending/);

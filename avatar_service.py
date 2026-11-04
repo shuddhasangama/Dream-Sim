@@ -79,6 +79,8 @@ def clear(conn,uid):
         r=row(conn,uid)
         if r and r['state'] in ('queued','submitting'):raise ApiError('in_progress','Wait for generation to finish before deleting.',409)
         if r:auth_sessions.sql(conn,'UPDATE "AvatarJob" SET state=?,protected_selfie=NULL,protected_options=NULL,protected_selected=NULL,selected_index=NULL,updated_at=? WHERE id=?',('deleted',stamp(),uid))
+        import face_match_service
+        face_match_service.clear_in_transaction(conn,uid)
 def generate(key,selfie):
     payload={'model':MODEL,'images':[{'image_url':data_url(selfie)}],'prompt':PROMPT,'n':2,'size':'1024x1024','quality':'low','output_format':'png',
              'safety_identifier':hashlib.sha256(selfie).hexdigest()}

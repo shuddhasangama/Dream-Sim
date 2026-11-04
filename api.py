@@ -29,6 +29,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         evolution_api.register(api, reach_locked=reach_locked, **evolution)
         import identity_capture
         identity_capture.register(api, evolution['get_db'])
+        import face_match_service
+        face_match_service.register(api,evolution['get_db'])
         import avatar_service
         avatar_service.register(api, evolution['get_db'])
         import bgv_app_api

@@ -1103,3 +1103,9 @@ CREATE TABLE IF NOT EXISTS "FaceImageLease" (
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, protected_images TEXT NOT NULL,
  expires_at TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS "FaceMatchJob" (
+ id TEXT PRIMARY KEY REFERENCES "User"(id), state TEXT NOT NULL, protected_input TEXT, protected_result TEXT,
+ selfie_sha256 TEXT NOT NULL, digilocker_session_id TEXT NOT NULL, consent_version TEXT NOT NULL, consent_at TEXT NOT NULL,
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT NOT NULL
+);

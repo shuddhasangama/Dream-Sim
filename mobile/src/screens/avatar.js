@@ -1,19 +1,21 @@
+import * as faceMatch from '../faceMatch.js';
 import {Camera} from '@capacitor/camera';
 import {captureOptions} from './identity.js';
-export async function load(session){return session.get('/api/v1/profile/avatar');}
+export async function load(session){const [avatar,face]=await Promise.all([session.get('/api/v1/profile/avatar'),session.get('/api/v1/profile/face-match')]);return {...avatar,face};}
 export function render({data,safe}){
  if(!data)return '<section class="card">Loading avatar…</section>';
- return `<section class="intro"><h1>Your avatar</h1><p>Two choices, one generation run. Made only from your latest selfie.</p></section><section class="card"><p role="status">${safe(data.message)}</p><p class="hint">AI avatar · Verification pending. Face verification is not connected yet.</p>
+ return `<section class="intro"><h1>Your avatar</h1><p>Two choices, one generation run. Made only from your latest selfie.</p></section><section class="card"><p role="status">${safe(data.message)}</p><p class="hint">AI avatar · Verification pending. Passive liveness is not connected yet.</p>
  ${!data.enabled?'<p>Avatar generation is being configured.</p>':''}
  ${data.can_capture?`<button type="button" id="avatar-camera">Capture latest selfie</button><img id="avatar-selfie" class="profile-portrait" hidden alt="Review your private selfie"><p id="avatar-note" role="status"></p><label class="checkbox-row"><input id="avatar-consent" type="checkbox"> ${safe(data.consent_text)}</label><button type="button" id="avatar-generate" disabled>Generate two avatars · one run only</button><p class="hint">GPT Image 2 · Low quality. Your Aadhaar and PAN photos are not sent to OpenAI. Camera capture alone does not prove liveness.</p>`:''}
  ${data.state==='draft'&&!data.can_capture?'':data.can_generate?'<p>Your latest saved selfie is ready. Capture it again to review it before generation.</p>':''}
  <div class="avatar-options">${(data.options||[]).map((src,i)=>`<div><img src="${safe(src)}" alt="Avatar option ${i+1}"><button type="button" data-avatar-accept="${i}">${data.selected===i?'Selected':'Choose avatar '+(i+1)}</button></div>`).join('')}</div>
  ${data.avatar?.photo?`<h2>Your selected avatar</h2><img class="profile-portrait" src="${safe(data.avatar.photo)}" alt="Your selected avatar"><p>Visible on your profile and to matches · Verification pending</p>`:''}
  <button type="button" id="avatar-refresh" class="secondary">Refresh avatar status</button>
- ${!['not_started','queued','submitting','deleted'].includes(data.state)?'<details><summary>Remove avatar and private images</summary><p>This removes your avatar from your profile and matches. It does not reset the one-run allowance or recall processing by OpenAI.</p><button type="button" id="avatar-delete" class="secondary">Remove my avatar images</button></details>':''}</section>`;
+ ${!['not_started','queued','submitting','deleted'].includes(data.state)?'<details><summary>Remove avatar and private images</summary><p>This removes your avatar from your profile and matches. It does not reset the one-run allowance or recall processing by OpenAI.</p><button type="button" id="avatar-delete" class="secondary">Remove my avatar images</button></details>':''}</section>${faceMatch.render(data.face,safe)}`;
 }
 export function bind(root,{session,run,patch,data}){
  let staged=null;const refresh=async()=>patch(await load(session));
+ faceMatch.bind(root,{session,run},data?.face,refresh);
  root.querySelector('#avatar-refresh')?.addEventListener('click',()=>run(refresh));
  root.querySelector('#avatar-camera')?.addEventListener('click',async()=>{
   const button=root.querySelector('#avatar-camera'),note=root.querySelector('#avatar-note');button.disabled=true;
