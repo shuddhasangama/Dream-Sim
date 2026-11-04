@@ -23,6 +23,8 @@ def main():
     parser.add_argument('--case-category', choices=('criminal', 'civil'), default=None,
                         help='Optional court search category; omission uses the provider default')
     args = parser.parse_args()
+    if args.operation in ('liveness_secure_create', 'liveness_secure_data'):
+        parser.error('Use python signzy_liveness_test.py create or get for the hosted two-step flow')
     if args.match_type is not None and args.operation not in ('individual_search', 'fir_search'):
         parser.error('--match-type is only available for individual_search or fir_search')
     if args.case_category is not None and args.operation != 'individual_search':

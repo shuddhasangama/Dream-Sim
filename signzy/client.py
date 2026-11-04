@@ -12,6 +12,7 @@ from .errors import classify
 from . import fir_search, fir_result
 from . import digilocker_create_url, digilocker_eaadhaar
 from . import smart_verification, digilocker_details, face_match
+from . import liveness_secure_create, liveness_secure_data
 
 BASES = {'preproduction': 'https://api-preproduction.signzy.app/api/v3',
          'production': 'https://api.signzy.app/api/v3'}
@@ -23,6 +24,8 @@ OPERATIONS.update(digilocker_create_url=digilocker_create_url, digilocker_eaadha
 OPERATIONS['smart_verification']=smart_verification
 OPERATIONS['face_match']=face_match
 OPERATIONS['digilocker_details']=digilocker_details
+OPERATIONS['liveness_secure_create'] = liveness_secure_create
+OPERATIONS['liveness_secure_data'] = liveness_secure_data
 
 
 @dataclass(frozen=True)
