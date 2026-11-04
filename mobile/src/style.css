@@ -612,3 +612,5 @@ input,select,textarea {max-width:100%;min-width:0;font-size:16px;}
 
 /* Hidden previews must stay hidden even when their component sets display:block. */
 .profile-portrait[hidden]{display:none!important}
+
+.avatar-flow [hidden]{display:none!important}

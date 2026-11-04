@@ -58,3 +58,20 @@ class AvatarPostgresTests(unittest.TestCase):
                 raise RuntimeError('rollback')
         self.assertIsNone(db.fetch_one(self.conn, 'User', id='rolled-back'))
 
+    def test_face_queue_and_private_image_lease_on_postgres(self):
+        import face_match_service as faces
+        from bgv_app import Protection
+        avatars.capture(self.conn, 'owner', self.image)
+        avatars.queue(self.conn, 'owner', {'consent': True, 'consent_version': avatars.VERSION})
+        source = avatars.row(self.conn, 'owner')
+        reference = ({'id': 'identity'}, {'image_base64': self.image.split(',')[1],
+            'mime_type': 'image/jpeg', 'image_expires_at': source['expires_at']})
+        with patch.dict(os.environ, {'DHASHU_FACE_MATCH_ENABLED': '1'}), patch.object(faces, 'sources', return_value=(source, reference)):
+            faces.queue(self.conn, 'owner', {'consent': True, 'consent_version': faces.VERSION})
+        self.assertEqual(db.fetch_one(self.conn, 'FaceMatchJob', id='owner')['state'], 'queued')
+        with auth_sessions.transaction(self.conn):
+            db.insert_row(self.conn, 'FaceImageLease', {'id': 'lease', 'user_id': 'owner',
+                'protected_images': Protection().seal({'synthetic': True}),
+                'expires_at': source['expires_at'], 'revoked': 0})
+        self.assertEqual(db.fetch_one(self.conn, 'FaceImageLease', id='lease')['revoked'], 0)
+

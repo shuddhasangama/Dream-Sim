@@ -7,7 +7,7 @@ test('loading avatar screen binds without dereferencing missing data',()=>{
 });
 test('avatar explains selfie-only consent and permanent two-option limit',()=>{
  const html=render({data:{enabled:true,can_capture:true,options:[],state:'not_started',message:'Capture',consent_text:'Only my selfie'},safe});
- assert.match(html,/two avatars · one run only/);assert.match(html,/Aadhaar and PAN photos are not sent/);assert.match(html,/Verification pending/);
+ assert.match(html,/One generation run/);assert.match(html,/Generate 2 avatars/);assert.match(html,/GPT Image 2/);assert.doesNotMatch(html,/avatar-photos/);
 });
 test('ready avatar options are individually selectable without another generation button',()=>{
  const html=render({data:{enabled:true,state:'ready',options:['data:image/jpeg;base64,one','data:image/jpeg;base64,two'],selected:1,avatar:{}},safe});
