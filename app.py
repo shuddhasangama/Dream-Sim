@@ -4710,6 +4710,8 @@ import waitlist_api
 waitlist_api.register(app, get_db)
 import signzy_digilocker_callback
 signzy_digilocker_callback.register(app)
+import face_image_lease
+face_image_lease.register(app,get_db)
 import restaurant_service
 import restaurant_web
 restaurant_web.register(app, get_db, current_user, login_required)

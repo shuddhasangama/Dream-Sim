@@ -5,6 +5,7 @@ import db
 import bgv_app
 import bgv_bundle
 import avatar_service
+import face_image_lease
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
@@ -14,6 +15,7 @@ if __name__ == '__main__':
     while True:
         conn = db.get_connection()
         try:
+            face_image_lease.purge(conn)
             bgv_bundle.schedule(conn)
             processed = avatar_service.work_one(conn)
             processed = bgv_app.work_one(conn) or processed

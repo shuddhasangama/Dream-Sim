@@ -1092,3 +1092,8 @@ CREATE TABLE IF NOT EXISTS "AvatarJob" (
  selected_index INTEGER, consent_version TEXT, consent_at TEXT,
  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS "FaceImageLease" (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL, protected_images TEXT NOT NULL,
+ expires_at TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0
+);

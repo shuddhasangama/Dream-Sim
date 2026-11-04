@@ -11,7 +11,7 @@ from . import current_employer, pan_extensive, pan_simple, individual_search, in
 from .errors import classify
 from . import fir_search, fir_result
 from . import digilocker_create_url, digilocker_eaadhaar
-from . import smart_verification, digilocker_details
+from . import smart_verification, digilocker_details, face_match
 
 BASES = {'preproduction': 'https://api-preproduction.signzy.app/api/v3',
          'production': 'https://api.signzy.app/api/v3'}
@@ -21,6 +21,7 @@ OPERATIONS['employment_history'] = employment_history
 OPERATIONS.update(fir_search=fir_search, fir_result=fir_result)
 OPERATIONS.update(digilocker_create_url=digilocker_create_url, digilocker_eaadhaar=digilocker_eaadhaar)
 OPERATIONS['smart_verification']=smart_verification
+OPERATIONS['face_match']=face_match
 OPERATIONS['digilocker_details']=digilocker_details
 
 
