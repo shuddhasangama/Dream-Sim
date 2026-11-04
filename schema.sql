@@ -1091,3 +1091,10 @@ CREATE TABLE IF NOT EXISTS "BgvReview" (
  id TEXT PRIMARY KEY, case_check_id TEXT NOT NULL REFERENCES "BgvCaseCheck"(id),
  source_id TEXT, decision TEXT NOT NULL, protected_note TEXT NOT NULL, created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS "AvatarJob" (
+ id TEXT PRIMARY KEY REFERENCES "User"(id), state TEXT NOT NULL,
+ protected_selfie TEXT, selfie_sha256 TEXT, protected_options TEXT, protected_selected TEXT,
+ selected_index INTEGER, consent_version TEXT, consent_at TEXT,
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT NOT NULL
+);

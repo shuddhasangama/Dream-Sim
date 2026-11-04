@@ -99,9 +99,11 @@ def public_profile(conn, user):
     pic=db.fetch_one(conn,'ProfilePhoto',id=user['user_id'])
     row=db.fetch_one(conn,'User',id=user['user_id'])
     skills=db.load_json_field(row.get('skills_json'),{}).get('activities',{})
-    return {'vision_template':template_label(stats,user['visions']), 'kids_intent':stats.get('kids_intent','undecided'),
+    import avatar_service
+    avatar=avatar_service.public(conn,user['user_id'])
+    return {**avatar,'vision_template':template_label(stats,user['visions']), 'kids_intent':stats.get('kids_intent','undecided'),
       'ethnicity':stats.get('ethnicity',[]), 'health':shared if shared.get('consent') else None,
-      'health_labels':HEALTH,'photo':pic['data_url'] if pic else None,
+      'health_labels':HEALTH,'photo':avatar.get('photo') or (pic['data_url'] if pic else None),
       'activities':skills}
 
 

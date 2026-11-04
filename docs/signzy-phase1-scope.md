@@ -2,26 +2,28 @@
 
 Updated **3 November 2026**. This supersedes the earlier 227 scope. Criminal court only; civil is quantity zero. PAN Simple/Extensive and UAN are excluded.
 
-Vendor testing means saved real sandbox evidence. Automated tests use synthetic responses. Installed-app E2E means a fresh app/vendor journey. HTTP 200 alone is not person verification. **Backend and worker deployed for m06 on 3 November 2026. Android APK built; iOS build 68 uploaded/processed; user confirmed iOS deployment completed. User confirmed installed-app Aadhaar retrieval working; fresh combined PAN/screening acceptance is pending.**
+Vendor testing means saved real sandbox evidence; automated tests use synthetic responses. Status as of **3 November 2026**, including installed-app DigiLocker testing, fresh exact Court/FIR sandbox results, and the deployed match-summary/REACH release. Sandbox success is not production launch approval. Earlier dated notes below are historical; this table is the current snapshot.
 
 | Product | Data element / purpose | Testing status / implementation | Quote | Quantity | Cost | Phase | App launch pending |
 |---|---|---|---:|---:|---:|---|---|
-| Current Employer Verification | Current employer evidence | Vendor 200; adapter, comparison, app queue and worker built | 4 | 1 | 4 | 1a | Flag interpretation and fresh installed-app E2E; API/worker deployed |
-| DigiLocker Create URL | Consent/access link | Vendor 200; prior consent completed; new photo consent/request automated-tested | 3.5 | 1 | 3.5 | 1a | Prior installed-app Aadhaar consent confirmed by user; new ADHAR/PANCR scope pending |
-| DigiLocker Get Details | Available issued-document listing, PAN identifier and mobile | Supplied contract implemented; encrypted worker evidence and synthetic workflow tested | TBC | 1 | TBC | 1a | Live combined listing received; confirm endpoint billing and PAN-document download contract |
-| DigiLocker get eAadhaar | Name, DOB/age, document address and photo reference | Vendor 200 for prior request; new photo flag and encrypted reference implemented | 3.5 | 1 | 3.5 | 1a | User reported installed-app identity/photo reference received; fresh combined flow, persistence/restart and URL expiry pending |
-| Individual Court Search - Civil | Civil candidates | Prior vendor 200; excluded from new app submissions | 40 | 0 | 0 | Inactive | Not scheduled |
-| Individual Court Result - Civil | Civil results | Excluded from new Phase 1 workflow | 40 | 0 | 0 | Inactive | Not scheduled |
-| Individual Court Search - Criminal | Criminal candidates | Vendor 200; app enforces criminal/possible; linked result workflow built and automated-tested | 40 | 1 | 40 | 1b | Fresh app search/result chain |
-| Individual Court Result - Criminal | Linked criminal results | Live criminal result lookup completed; pending/complete parsing corrected and regression-tested | 40 | 1 | 40 | 1b | Operator review acceptance; existing app can refresh corrected results |
+| Current Employer Verification | Current employer evidence; may return historical employment | Live sandbox response received; PAN/mobile-driven app integration works. Tested profile returned history, not current employment; meaningful dates/duration and History found status implemented | 4 | 1 | 4 | 1a | Live positive current-employer confirmation and mismatch/no-data device acceptance |
+| DigiLocker Create URL | External consent/access link | Live sandbox and installed-app link → Aadhaar/OTP/consent flow tested successfully; ADHAR + PANCR scope connected | 3.5 | 1 | 3.5 | 1a | Additional-device cancellation/expiry/resume acceptance |
+| DigiLocker Get Details (additional dependency) | Issued-document listing, PAN identifier, mobile | Live response received; PAN identifier retrieved and used as eligible employer input. Not full PAN-card verification or PAN photo retrieval | TBC | 1 | TBC | 1a | Confirm vendor billing; PAN document/photo retrieval contract if required |
+| DigiLocker get eAadhaar | Name, DOB/age, document address, original photo | Live decryption and installed-app retrieval successful; original Aadhaar photo downloaded/validated and stored encrypted; 30-day cache expiry/purge implemented | 3.5 | 1 | 3.5 | 1a | Wider device/recovery acceptance; photo does not establish liveness |
+| Individual Court Search — Criminal | Exact criminal case candidates | Fresh live sandbox exact search succeeded; automatically queued from consented Aadhaar name/address; linked result request implemented | 40 | 1 | 40 | 1b | Production access/coverage acceptance |
+| Individual Court Result — Criminal | Completed criminal screening outcome | Fresh exact result completed with zero cases; individual check Verified. Positive cases → Review required; pending/invalid results cannot verify | 40 | 1 | 40 | 1b | Live positive-case reviewer acceptance; dashboard not built |
+| FIR Search | Exact FIR candidates | Fresh live sandbox exact search succeeded; automatic identity-driven submission and linked result lookup work | 25 | 1 | 25 | 1b | Production access/coverage acceptance |
+| FIR Result | Completed FIR screening outcome | Fresh exact result completed with zero candidates; individual check Verified. Nested result/count/completion parsing corrected and regression-tested | 25 | 1 | 25 | 1b | Live positive-candidate reviewer acceptance |
+| Liveness Secure / supplied Face Smart endpoint | Liveness plus separate face comparison | Request/response mapper and synthetic tests exist; no live call or app capture/upload E2E. Aadhaar reference photo available; integration on hold | 6 | 1 | 6 | 1a | Signzy capture/upload contract, image compatibility, access/product/price confirmation, device E2E |
 | Entity Court Search/Result | Entity legal records | Not implemented/tested; quantity zero | 40 | 0 | 0 | 1b, inactive | Not scheduled |
-| FIR Search | FIR candidates | Vendor 200; observed result.verifyId envelope reconciled; app/worker chain built and automated-tested | 25 | 1 | 25 | 1b | Fresh linked vendor/app test |
-| FIR Result | Linked FIR results | Live result HTTP 200 received; nested result/numResults mapping corrected and candidate-review messaging tested | 25 | 1 | 25 | 1b | Candidate identity review and counter-semantics confirmation |
-| Liveness Secure / supplied Face Smart endpoint | Liveness and separate face-match outcome | Adapter/CLI and synthetic tests built; app setup placeholder only | 6 | 1 | 6 | 1a | Upload/capture contract, photo URL compatibility, entitlement/price confirmation, device E2E |
+| Individual Court Search — Civil | Civil case candidates | Earlier sandbox search 200; excluded from active app scope | 40 | 0 | 0 | Inactive | Not scheduled |
+| Individual Court Result — Civil | Civil results | No new civil E2E acceptance; excluded from active scope | 40 | 0 | 0 | Inactive | Not scheduled |
 | ConsenzAI | Video consent/liveness/optional match | Not implemented/tested | 7 | 0 | 0 | Inactive | Not scheduled |
-| Face Match, standalone | Compare face images | Separate product excluded; combined Face Smart adapter reports match separately | 2.5 | 0 | 0 | Inactive | No separate paid call scheduled |
-| Face Extraction | Extract document portrait | Not implemented; DigiLocker photo reference used if returned | 3 | 0 | 0 | Inactive | Not scheduled |
-| **Total** | **1a: 17; 1b: 130** | **Original scope only; Get Details price, currency/tax unspecified** | | | **147** | | |
+| Face Match, standalone | Compare face images | No standalone live test; combined Face Smart mapper only | 2.5 | 0 | 0 | Inactive | Not scheduled |
+| Face Extraction | Extract document portrait | Not implemented/tested as separate API; original DigiLocker Aadhaar photo used instead | 3 | 0 | 0 | Inactive | Not scheduled |
+| **Total** | **1a: 17; 1b: 130** | **Original supplied pricing only; Get Details is unpriced** | | | **147** | | |
+
+Today's match-summary release is deployed to API and worker (`ddc2cb6f`). Shared Court/FIR/employment statuses and dates, self-declared employment category, and REACH category/verified/freshness filters have automated coverage. Sharing is explicit opt-in; no documents/raw records are shared. Verified-only currently requires Court + FIR + confirmed current employment. No new Signzy calls were made for this presentation/filter release. Face/liveness and avatar generation remain unconnected. Overall member approval remains separate from per-check Verified.
 
 The two historical employer records came from Past Employment History, a different endpoint. Current Employer is the selected product, not an additional historical call. Shifted Result rows are interpreted as Court 40 x 1 and FIR 25 x 1. Confirm separate search/result billing before treating 147 as invoice terms.
 

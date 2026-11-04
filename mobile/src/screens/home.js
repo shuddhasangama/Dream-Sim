@@ -182,7 +182,7 @@ export function render(ctx) {
         ${journey.clock ? `<div class="p-eyebrow">WEEK ${safe(journey.clock.week)} · ${safe(String(journey.clock.day || '').toUpperCase())}</div>` : ''}
         <h1 class="p-hi">Hi, ${firstName}</h1>
       </div>
-      <button type="button" id="p-avatar" class="p-avatar" aria-label="Profile and settings" ${busy ? 'disabled' : ''}>${safe((user.display_name || '?').trim()[0] || '?').toUpperCase()}</button>
+      <button type="button" id="p-avatar" class="p-avatar" aria-label="Profile and settings" ${busy ? 'disabled' : ''}>${journey.own_avatar?.photo?`<img src="${safe(journey.own_avatar.photo)}" alt="Your AI avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:safe((user.display_name || '?').trim()[0] || '?').toUpperCase()}</button>
     </section>
 
     ${indicator?.show ? `<div class="p-stage-stepper" role="list" aria-label="${safe(indicator.label)}">
@@ -217,7 +217,7 @@ export function render(ctx) {
 
     <section class="card"><button type="button" id="identity-open" class="secondary">Private identity check</button>
     ${ctx.journey?.current_date_plan?.readiness ? `<p role="status">${safe(ctx.journey.current_date_plan.readiness.label)} · ${safe(ctx.journey.current_date_plan.readiness.message)}</p>` : ''}
-    <button type="button" id="personal-open" class="secondary">Bio · photo &amp; personal details</button>
+    ${journey.own_avatar?.photo?`<img class="avatar-mini" src="${safe(journey.own_avatar.photo)}" alt="Your selected avatar"><p class="hint">AI avatar · Verification pending</p>`:''}<button type="button" id="avatar-open" class="secondary">Your AI avatar</button><button type="button" id="personal-open" class="secondary">Bio · photo &amp; personal details</button>
     ${personalData ? personal.render({...ctx,data:personalData}) : ''}</section>
     ${editorOpen ? `<div class="p-editor-panel" data-editor-body="${selectedRing}">
       ${selectedRing === 'stats' ? renderStatsEditor(ctx) : renderFoldBody(selectedRing, ctx)}
@@ -244,6 +244,7 @@ export function bind(root, ctx) {
   const { run, session, navigateTo, folds, dashboardStats } = ctx;
 
   root.querySelector('#home-guru')?.addEventListener('click', () => navigateTo('guru'));
+  root.querySelector('#avatar-open')?.addEventListener('click',()=>ctx.navigateTo('avatar'));
   root.querySelector('#personal-open')?.addEventListener('click',()=>run(async()=>{personalData=personalData?null:await session.get('/api/v1/profile/personal');}));
   root.querySelector('#identity-open')?.addEventListener('click',()=>ctx.navigateTo('identity'));
   if(personalData) personal.bind(root,{...ctx,data:personalData,patch:next=>{personalData=next;}});

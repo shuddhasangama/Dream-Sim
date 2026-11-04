@@ -5,7 +5,7 @@ export function render({data,safe}) {
  const options=(name,selected)=>(Object.entries(data.categories||{}).map(([k,v])=>`<label class="checkbox-row"><input type="checkbox" name="${name}" value="${k}" ${selected.includes(k)?'checked':''}> ${safe(v)}</label>`).join(''));
  return `<h1>Your Bio</h1><h2>Your profile portrait</h2><p>Use a clear head-and-shoulders photo with simple lighting and background. No identity document is needed. Photos do not confer verification.</p>
  ${data.photo?`<img class="profile-portrait" src="${safe(data.photo)}" alt="Your profile portrait">`:''}
- <label for="portrait-file">Choose a portrait</label><input id="portrait-file" type="file" accept="image/jpeg,image/png,image/webp">
+ ${data.avatar?.avatar?'<p class="hint">AI avatar · Verification pending. Your accepted avatar is shown to matches.</p>':''}<label for="portrait-file">Choose a portrait</label><input id="portrait-file" type="file" accept="image/jpeg,image/png,image/webp">
  <p id="personal-photo-note" role="status"></p><div id="portrait-editor" hidden><canvas id="portrait-canvas" width="480" height="600" class="profile-portrait"></canvas>
  <label>Zoom<input id="portrait-zoom" type="range" min="1" max="3" step="0.01" value="1"></label>
  <label>Horizontal position<input id="portrait-x" type="range" min="0" max="1" step="0.01" value="0.5"></label>

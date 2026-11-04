@@ -1,0 +1,15 @@
+# Selfie-only avatars — 4 November 2026
+
+All authenticated testers may use Home → Your AI avatar. Capture the latest selfie, review it, explicitly consent to OpenAI processing, and request two options. Refresh status until ready, then choose one. Selection appears on the user's Home/profile, authorized opened match cards, Vision/Stats/Chemistry match panels and current-pair Vision context. Every avatar is labeled Verification pending. Signzy remains disconnected and no identity approval/matching gate changes.
+
+The server fixes GPT Image 2, Low quality, 1024-square, n=2. There is no expensive-model fallback. Only the newly captured selfie is sent to OpenAI; no Aadhaar/PAN photo, document, name, DOB or address is used. A source-image hash binds the reserved job to the actual capture. Avatar dissimilarity/anonymity is not measured or guaranteed.
+
+`AvatarJob.id` is the user ID and permanently reserves one generation run per account. Generation is queued transactionally and claimed atomically by the worker before external IO. Duplicate requests, photo replacement, deletion, restarts, timeout and ambiguous outcomes cannot issue another paid run. Unknown outcomes require support investigation; no local-pilot exception is ported into the app. Choosing the other existing option does not generate anything.
+
+Original selfie and generated options use the existing Fernet BGV encryption key. Private inputs and unselected options expire after 30 days and are purged by the worker. The accepted avatar is retained encrypted until user removal. Owner-only avatar endpoints expose generated previews, never the original selfie. Accepted images are included only through existing authorized profile/match projections. Source images are never profile portraits. Deletion withdraws the selected avatar, wipes the source/options and retains the non-image once-only ledger.
+
+Railway: `DHASHU_AVATAR_ENABLED=1` on API and bgv-worker, stable existing `SIGNZY_RECEIPT_ENCRYPTION_KEY`, and `OPENAI_API_KEY` on the worker. API also has the configured key for rollout consistency but never invokes generation. Apply the additive AvatarJob schema by deploying the API before the updated worker. No Signzy image key/SDK or new BGV call is needed. Existing DigiLocker restrictions need not be broadened: avatar creation does not require DigiLocker.
+
+Device testing requires the new app build. Test Home → Your AI avatar → capture → consent → generate → refresh → select, then check own profile and an authorized opened match and its comparisons. Existing local-pilot choices are not imported automatically and do not alter app account limits. Live generation is user-triggered only; release smoke checks do not spend the account's one run.
+
+Automated validation: 116 mobile unit tests, 55 browser tests, 47 targeted backend tests passed before final release checks. Covers selfie-only provider payload/Low/n=2, consent, auth/owner isolation, charge reservation, worker stale claims, unknown outcomes, deletion/expiry, existing matching and REACH, schema and documented API routes. Real device camera/provider acceptance remains a tester step.

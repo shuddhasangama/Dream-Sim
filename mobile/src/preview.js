@@ -298,7 +298,11 @@ export function previewTransport() {
   const ok = (data, status=200) => ({status, data:{data,error:null}});
   const err = (message, status) => ({status, data:{error:{message},data:null}});
 
+  let avatarPreview={enabled:true,state:'not_started',can_capture:true,can_generate:false,consent_version:'selfie-avatar-v1',consent_text:'Preview only: send only the latest selfie for two avatars. No real provider call in local preview.',options:[],selected:null,avatar:{},message:'Capture your latest selfie. Two choices, one run.'};
   return async (path, method, body) => {
+    if (path === '/api/v1/profile/avatar') {if(method==='DELETE')avatarPreview={...avatarPreview,state:'deleted',can_capture:false,options:[],avatar:{}};return ok(avatarPreview);}
+    if (path === '/api/v1/profile/avatar/selfie') {if(!avatarPreview.can_capture)return err('One run only.',409);avatarPreview={...avatarPreview,state:'draft',can_generate:true};return ok(avatarPreview);}
+    if (path === '/api/v1/profile/avatar/generate') {if(!body.consent||!avatarPreview.can_generate)return err('Consent and selfie required.',400);avatarPreview={...avatarPreview,state:'queued',can_capture:false,can_generate:false,message:'Preview only: generation queued. No image provider is called.'};return ok(avatarPreview);}
     if (path === '/api/v1/verification/plan') return ok({assigned:false});
     if (path === '/api/v1/verification/liveness') return ok({enabled:false,state:'setup_required',reference_photo_available:false,message:'Liveness is not connected in preview.'});
     // Preview never creates real identity-provider sessions.

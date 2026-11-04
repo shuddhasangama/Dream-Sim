@@ -1,0 +1,12 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {render} from '../src/screens/avatar.js';
+const safe=x=>String(x??'').replaceAll('<','&lt;');
+test('avatar explains selfie-only consent and permanent two-option limit',()=>{
+ const html=render({data:{enabled:true,can_capture:true,options:[],state:'not_started',message:'Capture',consent_text:'Only my selfie'},safe});
+ assert.match(html,/two avatars · one run only/);assert.match(html,/Aadhaar and PAN photos are not sent/);assert.match(html,/Verification pending/);
+});
+test('ready avatar options are individually selectable without another generation button',()=>{
+ const html=render({data:{enabled:true,state:'ready',options:['data:image/jpeg;base64,one','data:image/jpeg;base64,two'],selected:1,avatar:{}},safe});
+ assert.match(html,/data-avatar-accept="0"/);assert.match(html,/data-avatar-accept="1"/);assert.match(html,/Selected/);assert.doesNotMatch(html,/id="avatar-generate"/);
+});

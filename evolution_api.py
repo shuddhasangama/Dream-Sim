@@ -137,7 +137,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         pic=db.fetch_one(get_db(),'ProfilePhoto',id=uid())
         return jsonify(health=stats.get('health_shared',{}), openness=prefs.get('health_openness',{}),
             ethnicity=stats.get('ethnicity',[]), ethnicity_options=onboarding.STAT_OPTIONS['ethnicity'],
-            categories=profile_choices.HEALTH, photo=pic['data_url'] if pic else None)
+            categories=profile_choices.HEALTH, photo=(__import__('avatar_service').public(get_db(),uid()).get('photo') or (pic['data_url'] if pic else None)), avatar=__import__('avatar_service').public(get_db(),uid()))
 
     @api.put('/profile/bio')
     def bio_write():

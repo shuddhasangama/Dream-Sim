@@ -4578,6 +4578,7 @@ def _api_match_view(user, row):
     result['candidate'].update(profile_choices.public_profile(get_db(), candidate))
     import match_checks
     result['candidate']['verification_summary']=match_checks.public(candidate)
+    result['viewer_avatar']=__import__('avatar_service').public(get_db(),user['user_id'])
     result['candidate']['employment_category']=candidate['stats'].get('employment_category')
     result['candidate']['verified_fields'] = sorted(stats_edit.verified_field_set(db.fetch_all(get_db(), 'Verification', user_id=candidate['user_id'])))
     result['their_interest'] = candidate['user_id'] in _interested_in_me(user['user_id'], row['week'])
@@ -4672,6 +4673,9 @@ def _api_journey_state(user):
         result['current_lock_in']['partner_name']=(partner or {}).get('name',MASKED_NAME)
         result['current_lock_in']['partner_summary']={k:(partner or {}).get('stats',{}).get(k) for k in ('city','age','profession')}
         result['current_lock_in']['partner_summary']['visions']=(partner or {}).get('visions',[])
+        import avatar_service
+        result['current_lock_in']['partner_avatar']=avatar_service.public(get_db(),partner['user_id']) if partner else {}
+        result['current_lock_in']['my_avatar']=avatar_service.public(get_db(),user['user_id'])
         result['current_lock_in']['my_visions']=user.get('visions',[])
         import profile_choices
         result['current_lock_in']['my_vision_label']=profile_choices.template_label(user['stats'],user.get('visions',[]))
@@ -4685,6 +4689,7 @@ def _api_journey_state(user):
     if rehearsal.get('stage') == 'date' and rehearsal.get('my_ready'):
         result['next_action'].update(headline='Simulated date finished',
             body='Waiting for your partner before Debrief opens.', destination=None, cta=None)
+    result['own_avatar']=__import__('avatar_service').public(get_db(),user['user_id'])
     return result
 
 

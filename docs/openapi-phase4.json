@@ -14017,6 +14017,260 @@
           }
         }
       }
+    },
+    "/profile/avatar": {
+      "get": {
+        "operationId": "getAvatarAvatar",
+        "summary": "Owner-only selfie avatar operation",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only state and generated choices; original selfie never returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "401": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "403": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "409": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "503": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAvatarAvatar",
+        "summary": "Owner-only selfie avatar operation",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only state and generated choices; original selfie never returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "401": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "403": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "409": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "503": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          }
+        }
+      }
+    },
+    "/profile/avatar/selfie": {
+      "post": {
+        "operationId": "postAvatarSelfie",
+        "summary": "Owner-only selfie avatar operation",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only state and generated choices; original selfie never returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "401": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "403": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "409": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "503": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "image"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "maxLength": 2800000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profile/avatar/generate": {
+      "post": {
+        "operationId": "postAvatarGenerate",
+        "summary": "Owner-only selfie avatar operation",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only state and generated choices; original selfie never returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "401": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "403": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "409": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "503": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "consent",
+                  "consent_version"
+                ],
+                "properties": {
+                  "consent": {
+                    "const": true
+                  },
+                  "consent_version": {
+                    "const": "selfie-avatar-v1"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profile/avatar/accept": {
+      "post": {
+        "operationId": "postAvatarAccept",
+        "summary": "Owner-only selfie avatar operation",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only state and generated choices; original selfie never returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "401": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "403": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "409": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          },
+          "503": {
+            "description": "Invalid inputs, authentication, reserved run or unavailable configuration."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "index"
+                ],
+                "properties": {
+                  "index": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

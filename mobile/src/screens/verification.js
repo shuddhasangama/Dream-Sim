@@ -32,13 +32,13 @@ export function render({data,safe}) {
       ${row('Current employer',employer.text,employer.status,employer.tone)}
       ${row('Criminal court',court.text,court.status,court.tone)}
       ${row('FIR check',fir.text,fir.status,fir.tone)}
-      ${row('Identity / live face',s?.reference_photo_available?'Document photo ready · selfie integration pending':'Waiting for document photo','Setup needed')}
+      ${row('Identity / live face',s?.reference_photo_available?'Document photo ready · Signzy face verification pending':'Waiting for document photo','Setup needed')}
     </section>
     ${identity?`<details class="bgv-details"><summary>View document details</summary><p>${safe(identity.document_address)}</p><p class="hint">Age is calculated from Aadhaar DOB. The document address does not confirm your current residence. Received details are not a comparison against your profile declarations.</p><p>PAN: ${safe(({received:'Identifier received from issued-document listing',pending:'Retrieving available documents',not_shared:'Not shared through DigiLocker',unavailable:'Retrieval needs support review',needs_review:'Document identifier needs review'})[bundle.pan_state]||'Not requested in this consent session')}</p></details>`:digilocker.render(data.digilocker,safe)}
     ${identity&&bundle.enabled&&(!bundle.consented||!bundle.employer_declared)?`<form id="bgv-bundle-form" class="card"><h2>${bundle.consented?'Current employer':'Continue background checks'}</h2><label>Declared current employer (optional for Court/FIR)<input name="employer" maxlength="200" autocomplete="organization"></label><label class="bgv-consent"><input type="checkbox" name="consent" required> ${safe(bundle.consent_text)}</label><button type="submit" class="primary">${bundle.consented?'Save employer and continue':'Start relevant checks'}</button><p class="hint">Employer screening waits for PAN, mobile and your employer declaration. Missing PAN does not block Court/FIR.</p></form>`:''}
     ${identity&&s.can_request_photo?`<details class="bgv-details"><summary>Share a fresh DigiLocker session including PAN</summary>${digilocker.render(data.digilocker,safe)}</details>`:''}
     ${results.filter(r=>r.can_check_again).map(r=>`<button type="button" class="secondary" data-bgv-poll="${safe(r.id)}">Check ${r.operation==='fir_result'?'FIR':'Court'} processing status again</button>`).join('')}
-    <p class="hint">Face capture isn’t connected yet. No live face check has been performed.</p>
+    <p class="hint">Selfie capture for avatars is available from Home → Your AI avatar. No live face check has been performed.</p>
     <button type="button" id="bgv-refresh" class="secondary">Refresh status</button>
     <p class="hint">${data.environment==='preproduction'?'Sandbox testing · ':''}Each check has its own result. An exact search with zero cases verifies that check; overall account approval is separate.</p>
     ${!data.enabled?'<p>Verification checks are not enabled yet.</p>':''}</div>`;

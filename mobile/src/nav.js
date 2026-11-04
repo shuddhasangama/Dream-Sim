@@ -12,7 +12,7 @@
 // information-architecture choice every client makes for itself, not a
 // domain fact that could drift out of sync with the backend.
 export const SURFACE_LABELS = {
-  dashboard: 'Dashboard', verify: 'Verify', vision: 'Vision', chemistry: 'Chemistry',
+  avatar: 'Your avatar', dashboard: 'Dashboard', verify: 'Verify', vision: 'Vision', chemistry: 'Chemistry',
   stats: 'Stats', reach: 'REACH', week: 'Week', guru: 'Guru',
   relationship: 'Relationship', journey: 'Journey', married: 'Journey',
   align: 'Before the date', calendar: 'Calendar', plan: 'Date plan',
