@@ -11,6 +11,8 @@ class FaceMatchTests(unittest.TestCase):
   for value in ('http://images.example/a.jpg','data:image/jpeg;base64,test','https://user:pass@images.example/a.jpg'):
    with self.assertRaises(ValueError):face_match.payload(self.payload(firstImage=value))
   with self.assertRaises(ValueError):face_match.payload(self.payload(detectMask=['https://images.example/other.jpg']))
+  with self.assertRaises(ValueError):face_match.payload(self.payload(detectMask=[]))
+  self.assertEqual(face_match.payload(self.payload(detectMask=['https://images.example/selfie.jpg']))['detectMask'],['https://images.example/selfie.jpg'])
  def test_outcomes_are_not_liveness(self):
   for verified in (True,False):
    s=face_match.summarize(200,{'status':200,'result':{'verified':verified,'matchPercentage':'99.00%','maskDetections':[]}})

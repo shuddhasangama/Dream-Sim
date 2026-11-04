@@ -20,7 +20,7 @@ def payload(values):
     if type(threshold) not in (int,float) or not math.isfinite(threshold) or not .05<=threshold<=.95:raise ValueError('Use a numeric threshold between 0.05 and 0.95')
     result={'firstImage':image_url(values['firstImage']),'secondImage':image_url(values['secondImage']),'threshold':threshold}
     if 'detectMask' in values:
-        if type(values['detectMask']) is not list or len(values['detectMask'])>2:raise ValueError('Use at most the two source images for mask detection')
+        if type(values['detectMask']) is not list or not 1<=len(values['detectMask'])<=2:raise ValueError('Use one or both source images for mask detection')
         result['detectMask']=[image_url(x) for x in values['detectMask']]
         if any(x not in (result['firstImage'],result['secondImage']) for x in result['detectMask']):raise ValueError('Mask detection must use the supplied source pair')
     return result
