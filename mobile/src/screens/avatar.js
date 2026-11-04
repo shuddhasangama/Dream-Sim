@@ -2,10 +2,10 @@ import * as faceMatch from '../faceMatch.js';
 import {Camera} from '@capacitor/camera';
 import {captureOptions} from './identity.js';
 export async function load(session){
- const [avatar,face]=await Promise.allSettled([session.get('/api/v1/profile/avatar'),session.get('/api/v1/profile/face-match')]);
+ const [avatar,face]=await Promise.allSettled([session.get('/api/v1/profile/avatar'),faceMatch.load(session)]);
  if(avatar.status==='rejected')throw avatar.reason;
  if(face.status==='rejected'&&face.reason?.status===401)throw face.reason;
- return {...avatar.value,face:face.status==='fulfilled'?face.value:null,_faceError:face.status==='rejected'};
+ return {...avatar.value,...(avatar.value.verified_selfie_preview?{_stagedSelfie:avatar.value.verified_selfie_preview,_cameraNote:'Your Signzy selfie is ready. Review it before consenting to avatar generation.'}:{}),face:face.status==='fulfilled'?face.value:null,_faceError:face.status==='rejected'};
 }
 export function statusText(data){return ({not_started:'Capture your latest selfie to begin.',draft:'Review your selfie and consent to continue.',queued:'Your two avatars are queued.',submitting:'Generating your two avatars…',ready:'Choose your avatar.',accepted:'Your avatar is on your profile.',unknown:'Generation could not be confirmed. Contact support; another run is blocked.',deleted:'Images removed. Your generation allowance is unchanged.',expired:'Your private images have expired.'})[data.state]||data.message||'Check your avatar status.';}
 

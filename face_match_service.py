@@ -52,6 +52,8 @@ def queue(conn,uid,body):
    'selfie_sha256':selfie['selfie_sha256'],'digilocker_session_id':session['id'],'consent_version':VERSION,'consent_at':stamp(),
    'created_at':stamp(),'updated_at':stamp(),'expires_at':min(selfie['expires_at'],photo['image_expires_at'])})
 def clear_in_transaction(conn,uid):
+ import liveness_secure_service
+ liveness_secure_service.clear(conn,uid)
  auth_sessions.sql(conn,'UPDATE "FaceMatchJob" SET state=?,protected_input=NULL,protected_result=NULL,updated_at=? WHERE id=?',('deleted',stamp(),uid))
  auth_sessions.sql(conn,'UPDATE "FaceImageLease" SET revoked=1,protected_images=? WHERE user_id=?',('',uid))
 
@@ -99,3 +101,16 @@ def register(api,get_db):
  @api.post('/profile/face-match')
  def face_match_request():
   uid=actor();queue(get_db(),uid,json_object(required={'consent','consent_version'}));return jsonify(view(get_db(),uid))
+ @api.get('/profile/liveness')
+ def hosted_face_read():
+  import liveness_secure_service as hosted
+  return jsonify(hosted.view(get_db(),actor()))
+ @api.post('/profile/liveness')
+ def hosted_face_request():
+  import liveness_secure_service as hosted
+  uid=actor();hosted.queue_create(get_db(),uid,json_object(required={'consent','consent_version'}));return jsonify(hosted.view(get_db(),uid))
+ @api.post('/profile/liveness/complete')
+ def hosted_face_complete():
+  import liveness_secure_service as hosted
+  uid=actor();body=json_object(required={'session_id'})
+  hosted.queue_get(get_db(),uid,body['session_id']);return jsonify(hosted.view(get_db(),uid))

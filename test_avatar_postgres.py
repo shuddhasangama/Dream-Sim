@@ -75,3 +75,18 @@ class AvatarPostgresTests(unittest.TestCase):
                 'expires_at': source['expires_at'], 'revoked': 0})
         self.assertEqual(db.fetch_one(self.conn, 'FaceImageLease', id='lease')['revoked'], 0)
 
+    def test_hosted_liveness_full_flow_on_postgres(self):
+        import liveness_secure_service as hosted
+        import face_match_service as faces
+        from test_liveness_secure_service import FakeClient
+        FakeClient.calls=[];FakeClient.pending=False;FakeClient.mismatch=False;FakeClient.fail_match=False
+        photo={'image_base64':self.image.split(',')[1], 'mime_type':'image/jpeg',
+            'image_expires_at':'2099-01-01', 'url':'https://persist.signzy.tech/api/files/test/download/aadhaar.jpg'}
+        with patch.dict(os.environ, {'DHASHU_LIVENESS_SECURE_ENABLED':'1','SIGNZY_ENV':'preproduction'}), patch.object(faces,'sources',return_value=(None,({'id':'identity'},photo))):
+            hosted.queue_create(self.conn,'owner',{'consent':True,'consent_version':hosted.VERSION})
+            hosted.work_one(self.conn,FakeClient,lambda url:photo)
+            hosted.queue_get(self.conn,'owner',hosted.row(self.conn,'owner')['flow_id'])
+            hosted.work_one(self.conn,FakeClient,lambda url:photo)
+            self.assertTrue(hosted.view(self.conn,'owner')['combined_passed'])
+            self.assertIsNotNone(avatars.view(self.conn,'owner')['verified_selfie_preview'])
+

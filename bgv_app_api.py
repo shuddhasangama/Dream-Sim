@@ -26,6 +26,9 @@ def register(api, get_db):
     @api.get('/verification/liveness')
     def verification_liveness():
         uid=actor()
+        import liveness_secure_service as hosted
+        if hosted.enabled():
+            result=jsonify(hosted.view(get_db(),uid));result.headers['Cache-Control']='no-store';return result
         rows=sorted(db.fetch_all(get_db(),'DigiLockerSession',user_id=uid),key=lambda r:r['created_at'],reverse=True)
         result=jsonify(enabled=False,state='setup_required',reference_photo_available=any(r.get('protected_photo') and r['state']=='complete' for r in rows),
             message='Passive liveness is not connected. Selfie capture and standalone face comparison are separate app steps. No liveness check has been performed.',

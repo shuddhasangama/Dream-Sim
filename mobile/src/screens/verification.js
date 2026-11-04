@@ -1,7 +1,7 @@
 import * as faceMatch from '../faceMatch.js';
 import * as digilocker from '../digilocker.js';
 export async function load(session) {
-  const [checks,identity,plan,liveness,face]=await Promise.all([session.get('/api/v1/verification'),digilocker.load(session),session.get('/api/v1/verification/plan'),session.get('/api/v1/verification/liveness'),session.get('/api/v1/profile/face-match')]);
+  const [checks,identity,plan,liveness,face]=await Promise.all([session.get('/api/v1/verification'),digilocker.load(session),session.get('/api/v1/verification/plan'),session.get('/api/v1/verification/liveness'),faceMatch.load(session)]);
   return {...checks,digilocker:identity,plan,liveness,face};
 }
 const labels={history_available:'History found',employment_mismatch:'Doesn’t match',not_confirmed:'Not confirmed',queued:'Confirming',processing:'Confirming',pending:'Processing',result_available:'Retrieving result',
@@ -33,13 +33,13 @@ export function render({data,safe}) {
       ${row('Current employer',employer.text,employer.status,employer.tone)}
       ${row('Criminal court',court.text,court.status,court.tone)}
       ${row('FIR check',fir.text,fir.status,fir.tone)}
-      ${row('Identity / live face',data.face?.message||(s?.reference_photo_available?'Document photo ready · Face comparison available':'Waiting for document photo'),data.face?.state==='matched'?'Face matched':data.face?.state==='not_matched'?'Doesn’t match':data.face?.state==='unknown'?'Check unavailable':data.face?'Pending':'Setup needed',data.face?.state==='not_matched'?'attention':'waiting')}
+      ${row('Identity / live face',data.face?.message||(s?.reference_photo_available?'Document photo ready · Face comparison available':'Waiting for document photo'),data.face?.state==='matched'?(data.face.operation==='liveness_secure'?'Live face checked':'Face matched'):data.face?.state==='not_matched'?'Doesn’t match':data.face?.state==='unknown'?'Check unavailable':data.face?'Pending':'Setup needed',data.face?.state==='not_matched'?'attention':data.face?.state==='matched'?'good':'waiting')}
     </section>
     ${identity?`<details class="bgv-details"><summary>View document details</summary><p>${safe(identity.document_address)}</p><p class="hint">Age is calculated from Aadhaar DOB. The document address does not confirm your current residence. Received details are not a comparison against your profile declarations.</p><p>PAN: ${safe(({received:'Identifier received from issued-document listing',pending:'Retrieving available documents',not_shared:'Not shared through DigiLocker',unavailable:'Retrieval needs support review',needs_review:'Document identifier needs review'})[bundle.pan_state]||'Not requested in this consent session')}</p></details>`:digilocker.render(data.digilocker,safe)}
     ${identity&&bundle.enabled&&(!bundle.consented||!bundle.employer_declared)?`<form id="bgv-bundle-form" class="card"><h2>${bundle.consented?'Current employer':'Continue background checks'}</h2><label>Declared current employer (optional for Court/FIR)<input name="employer" maxlength="200" autocomplete="organization"></label><label class="bgv-consent"><input type="checkbox" name="consent" required> ${safe(bundle.consent_text)}</label><button type="submit" class="primary">${bundle.consented?'Save employer and continue':'Start relevant checks'}</button><p class="hint">Employer screening waits for PAN, mobile and your employer declaration. Missing PAN does not block Court/FIR.</p></form>`:''}
     ${identity&&s.can_request_photo?`<details class="bgv-details"><summary>Share a fresh DigiLocker session including PAN</summary>${digilocker.render(data.digilocker,safe)}</details>`:''}
     ${results.filter(r=>r.can_check_again).map(r=>`<button type="button" class="secondary" data-bgv-poll="${safe(r.id)}">Check ${r.operation==='fir_result'?'FIR':'Court'} processing status again</button>`).join('')}
-    <p class="hint">Selfie capture for avatars is available from Home → Your AI avatar. No liveness check has been performed.</p>
+    ${data.face?.operation==='liveness_secure'?'<p class="hint">After successful capture, your selfie is available under Your AI avatar.</p>':'<p class="hint">Selfie capture for avatars is available from Home → Your AI avatar. No liveness check has been performed.</p>'}
     ${faceMatch.render(data.face,safe)}<button type="button" id="bgv-refresh" class="secondary">Refresh status</button>
     <p class="hint">${data.environment==='preproduction'?'Sandbox testing · ':''}Each check has its own result. An exact search with zero cases verifies that check; overall account approval is separate.</p>
     ${!data.enabled?'<p>Verification checks are not enabled yet.</p>':''}</div>`;

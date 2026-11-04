@@ -34,7 +34,9 @@ def view(conn,uid):
     r=row(conn,uid) or {};options=[]
     if r.get('protected_options') and r.get('expires_at','')>stamp():
         options=Protection().open(r['protected_options'])['options']
-    return {'enabled':enabled(),'state':r.get('state','not_started'),'consent_version':VERSION,'consent_text':CONSENT,
+    import liveness_secure_service as hosted
+    verified_selfie=hosted.selfie(conn,uid) if hosted.enabled() and (not r or r['state']=='draft') else None
+    return {'verified_selfie_preview':verified_selfie,'enabled':enabled(),'state':r.get('state','not_started'),'consent_version':VERSION,'consent_text':CONSENT,
         'options':options,'selected':r.get('selected_index'),'avatar':public(conn,uid),'verification':'pending',
         'can_capture':enabled() and r.get('state','draft')=='draft','can_generate':enabled() and r.get('state')=='draft' and bool(r.get('protected_selfie')),
         'message':{'queued':'Two avatars are queued. Refresh to check progress.','submitting':'Generating two avatars. No retry is needed.',

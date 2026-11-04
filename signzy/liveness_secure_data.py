@@ -33,6 +33,8 @@ def summarize(status, body):
                         ('provider_status', result.get('status')), ('additional_checks_passed', extra.get('status'))]:
         if type(value) is bool:
             answer[name] = value
+    if answer['additional_checks_passed'] is True and (extra.get('failedChecks') or extra.get('isFaceCovered') is True or extra.get('multipleFaces') is True or 'faceCount' in extra and extra['faceCount'] != 1):
+        answer['additional_checks_passed'] = False
     score = face.get('matchPercentage')
     if isinstance(score, str) and re.fullmatch(r'\d{1,3}(?:\.\d+)?%', score):
         value = float(score[:-1])

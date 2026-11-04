@@ -14348,6 +14348,130 @@
           }
         }
       }
+    },
+    "/profile/liveness/complete": {
+      "post": {
+        "operationId": "completeHostedLivenessCapture",
+        "summary": "Owner-triggered bounded result fetch for the existing hosted capture session. Return alone never verifies identity.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "session_id"
+                ],
+                "properties": {
+                  "session_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Existing session status; retrieval queued idempotently."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Not the owner session."
+          },
+          "409": {
+            "description": "Cooldown, attempt limit or expiry."
+          },
+          "503": {
+            "description": "Feature disabled."
+          }
+        }
+      }
+    },
+    "/profile/liveness": {
+      "get": {
+        "operationId": "getHostedLivenessSecure",
+        "summary": "Owner-only hosted Signzy sandbox liveness and Aadhaar comparison. One creation; bounded result retrieval; no overall approval.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped status without source images."
+          },
+          "400": {
+            "description": "Invalid consent."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "409": {
+            "description": "Missing images or comparison already reserved."
+          },
+          "503": {
+            "description": "Feature unavailable."
+          }
+        }
+      },
+      "post": {
+        "operationId": "postHostedLivenessSecure",
+        "summary": "Owner-only hosted Signzy sandbox liveness and Aadhaar comparison. One creation; bounded result retrieval; no overall approval.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped status without source images."
+          },
+          "400": {
+            "description": "Invalid consent."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "409": {
+            "description": "Missing images or comparison already reserved."
+          },
+          "503": {
+            "description": "Feature unavailable."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "consent",
+                  "consent_version"
+                ],
+                "properties": {
+                  "consent": {
+                    "const": true
+                  },
+                  "consent_version": {
+                    "const": "hosted-liveness-aadhaar-v1"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

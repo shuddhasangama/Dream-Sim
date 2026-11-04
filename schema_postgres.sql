@@ -1103,3 +1103,11 @@ CREATE TABLE IF NOT EXISTS "FaceMatchJob" (
  selfie_sha256 TEXT NOT NULL, digilocker_session_id TEXT NOT NULL, consent_version TEXT NOT NULL, consent_at TEXT NOT NULL,
  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS "LivenessSession" (
+ id TEXT PRIMARY KEY REFERENCES "User"(id), flow_id TEXT NOT NULL UNIQUE, state TEXT NOT NULL,
+ digilocker_session_id TEXT NOT NULL, protected_input TEXT, protected_session TEXT, protected_result TEXT,
+ fetch_count INTEGER NOT NULL DEFAULT 0, next_fetch_at TEXT NOT NULL,
+ consent_version TEXT NOT NULL, consent_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+ capture_until TEXT NOT NULL, expires_at TEXT NOT NULL
+);
