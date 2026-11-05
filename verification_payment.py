@@ -23,7 +23,8 @@ def view(conn,uid):
     row=latest(conn,uid)
     paid=billing.entitled(conn,uid,'verification',uid)
     price=json.loads(row['price_json']) if row else {}
-    return {'required':True,'enabled':True,'can_begin':paid,'state':'paid' if paid else row['status'] if row else 'not_started',
+    test_access=bool(price.get('sandbox_bgv_access'))
+    return {'required':True,'enabled':True,'can_begin':paid or test_access,'state':'test_access' if test_access and not paid else 'paid' if paid else row['status'] if row else 'not_started',
             'purchase_id':row['id'] if row else None,'checkout_url':price.get('checkout_url') if row and row['status']=='pending' and not paid else None,
             'amount':100,'currency':'INR','real_amount':0,'mode':'sandbox',
             'message':'Test payment only — ₹0 real money deducted. Razorpay shows a simulated ₹1 payment.'}
@@ -66,6 +67,22 @@ def start(conn,uid):
     return view(conn,uid)
 
 def complete(conn,uid):
+    if catalog.mode()!='sandbox':raise ApiError('sandbox_only','Only sandbox payments can be checked here.',409)
+    row=latest(conn,uid)
+    if not row:raise ApiError('not_found','No verification test payment found.',404)
+    # Private tester rollout: failed/unavailable sandbox checkout must not block
+    # BGV. Record access separately; never fabricate paid/captured evidence or
+    # grant a billing entitlement. Live modes are rejected above.
+    with billing.transaction(conn):
+        current=billing.get(conn,row['id'],uid)
+        price=json.loads(current['price_json'])
+        price['sandbox_bgv_access']=True
+        price['sandbox_bgv_access_at']=int(time.time())
+        billing.update(conn,row['id'],price_json=json.dumps(price))
+    return view(conn,uid)
+
+
+def confirm_provider_payment(conn,uid):
     if catalog.mode()!='sandbox':raise ApiError('sandbox_only','Only sandbox payments can be checked here.',409)
     row=latest(conn,uid)
     if not row:raise ApiError('not_found','No verification test payment found.',404)

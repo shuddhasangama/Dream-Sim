@@ -46,3 +46,7 @@ On a testing account with an unused avatar allowance: sign in → complete Razor
 ## Independent signup acceptance
 
 Use Sign up with two separate real phone numbers. Receive and enter each SMS OTP, choose a Twogether plan, save Stats with an enabled launch city, save Chemistry and complete Verification. Close and reopen after Stats to verify resume. Confirm account separation, automatic Aadhaar name/age adoption, legal/face progress and saved avatar selection. New users are not admitted to matching merely by signing up. Actual SMS delivery, test checkout and native browser/camera return need device acceptance.
+
+## Sandbox checkout fallback
+
+During this private tester rollout, POST /verification/payment/complete records account-bound sandbox BGV access after a checkout attempt, even if Razorpay checkout failed or is unavailable. This does not mark a payment paid/captured, grant a billing entitlement, or verify the user. Live billing modes reject this path. Existing iOS build 78 can use its Check confirmation button after the backend release. The updated native UI labels it Continue to verification and also handles a checkout browser-open failure; returning from the checkout browser already triggers completion automatically.

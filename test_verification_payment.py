@@ -35,15 +35,30 @@ class VerificationPaymentTests(unittest.TestCase):
         with self.assertRaises(ApiError):service.require_paid(self.conn,'a')
         first=service.start(self.conn,'a');again=service.start(self.conn,'a')
         self.assertEqual(first['purchase_id'],again['purchase_id']);self.assertEqual(Gateway.creates,1)
-        self.assertFalse(service.complete(self.conn,'a')['can_begin'])
+        self.assertFalse(service.confirm_provider_payment(self.conn,'a')['can_begin'])
         Gateway.paid=True
-        self.assertTrue(service.complete(self.conn,'a')['can_begin'])
+        self.assertTrue(service.confirm_provider_payment(self.conn,'a')['can_begin'])
         self.assertTrue(service.start(self.conn,'a')['can_begin']);self.assertEqual(Gateway.creates,1)
         self.assertFalse(service.view(self.conn,'b')['can_begin'])
         self.assertEqual(db.fetch_one(self.conn,'User',id='a')['bgv_status'],'declared')
+    def test_failed_sandbox_checkout_allows_bgv_without_marking_paid(self):
+        service.start(self.conn,'a')
+        with patch.object(Gateway,'call',side_effect=TimeoutError()):
+            self.assertTrue(service.complete(self.conn,'a')['can_begin'])
+            self.assertTrue(service.complete(self.conn,'a')['can_begin'])
+        row=service.latest(self.conn,'a')
+        self.assertEqual(row['payment_status'],'unpaid')
+        self.assertEqual(row['status'],'pending')
+        self.assertFalse(service.billing.entitled(self.conn,'a','verification','a'))
+        self.assertFalse(service.view(self.conn,'b')['can_begin'])
+        self.assertEqual(db.fetch_one(self.conn,'User',id='a')['bgv_status'],'declared')
+        with patch.dict(os.environ,{'DHASHU_BILLING_MODE':'live_pilot'}):
+            self.assertFalse(service.view(self.conn,'a')['can_begin'])
+            with self.assertRaises(ApiError):service.complete(self.conn,'a')
+
     def test_foreign_or_wrong_price_provider_evidence_never_unlocks(self):
         service.start(self.conn,'a');Gateway.paid=True;Gateway.link['reference_id']='other'
-        with self.assertRaises(ApiError):service.complete(self.conn,'a')
+        with self.assertRaises(ApiError):service.confirm_provider_payment(self.conn,'a')
         self.assertFalse(service.view(self.conn,'a')['can_begin'])
     def test_uncertain_create_never_replayed_and_live_mode_blocked(self):
         with patch.object(Gateway,'call',side_effect=TimeoutError()):
