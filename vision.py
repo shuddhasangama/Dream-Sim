@@ -63,6 +63,8 @@ PILLAR_OPTIONS: dict[str, tuple[str, ...]] = {
 # own convention) then OTHER_VISION_KEYS' order — the display order for
 # anything that lists all four together.
 VISION_ELEMENT_KEYS = ("Intimacy", *OTHER_VISION_KEYS)
+# Preserve saved legacy routes; initial signup v2 exposes Kids as a toggle.
+PILLAR_OPTIONS["Cohabitate"] = (*PILLAR_OPTIONS["Cohabitate"], "Extended family", "Pets")
 
 
 def marriage_choices():
@@ -141,7 +143,7 @@ def validate_pillars(pillars: dict[str, list[str]]) -> dict[str, Any]:
         subs = pillars[key]
         if any(s not in PILLAR_OPTIONS[key] for s in subs):
             return {"ok": False, "error": f"Unknown sub-selection for {key}."}
-        if key == "Travel together":
+        if key == "Travel together" or key == "Kids" and not subs:
             selected_others.append(key)
             continue
         if not subs:

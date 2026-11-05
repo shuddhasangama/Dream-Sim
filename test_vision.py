@@ -62,13 +62,13 @@ class PillarOptionsTests(unittest.TestCase):
     def test_travel_together_has_no_sub_selections(self):
         self.assertEqual(PILLAR_OPTIONS["Travel together"], ())
 
-    def test_the_other_three_match_the_signup_vocabulary_exactly(self):
+    def test_legacy_routes_and_expanded_cohabitate_vocabulary(self):
         """Never redefined here — imported straight from generate_users.py,
         the same source onboarding.py's signup flow uses, so a pillar
         cannot drift between sign-up and Relationship-stage editing."""
         self.assertEqual(set(PILLAR_OPTIONS["Intimacy"]), {"Emotional", "Physical"})
         self.assertEqual(set(PILLAR_OPTIONS["Kids"]), {"Naturally", "Surrogacy", "Adoption"})
-        self.assertEqual(set(PILLAR_OPTIONS["Cohabitate"]), {"Chores split", "Expenses sharing"})
+        self.assertEqual(set(PILLAR_OPTIONS["Cohabitate"]), {"Chores split", "Expenses sharing", "Extended family", "Pets"})
 
 
 class ValidatePillarsTests(unittest.TestCase):
@@ -106,10 +106,9 @@ class ValidatePillarsTests(unittest.TestCase):
                 result = validate_pillars({"Intimacy": ["Emotional"], "Kids": [route]})
                 self.assertTrue(result["ok"], result["error"])
 
-    def test_kids_needs_at_least_one_sub_selection(self):
+    def test_kids_can_be_a_simple_pillar(self):
         result = validate_pillars({"Intimacy": ["Physical"], "Kids": []})
-        self.assertFalse(result["ok"])
-        self.assertIn("Kids needs at least one sub-selection", result["error"])
+        self.assertTrue(result["ok"], result["error"])
 
     def test_cohabitate_needs_at_least_one_sub_selection(self):
         result = validate_pillars({"Intimacy": ["Physical"], "Cohabitate": []})

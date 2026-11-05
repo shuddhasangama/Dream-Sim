@@ -1,3 +1,4 @@
+import {inferPlan} from './signupVision.js';
 // Local browser development only; imported into a separate module for
 // testing. Mutable preview state below exists so widen/ignore/prepare/match
 // actions actually change what a later GET returns, the same way the real
@@ -235,16 +236,19 @@ export function previewTransport() {
   let visionEntries = [];
   let visionChanges = [];
   const visionRcOpen = () => { const c = week.clock; return (c.day === 'Sun' && c.hour >= 21) || (c.day === 'Mon' && c.hour < 11); };
+  const signupPlans = [{"key": "grow", "label": "Family", "description": "", "choices": {"Intimacy": ["Emotional", "Physical"], "Kids": [], "Cohabitate": ["Chores split", "Expenses sharing", "Extended family", "Pets"], "Travel together": []}, "kids_intent": "want"}, {"key": "two", "label": "We Two", "description": "", "choices": {"Intimacy": ["Emotional", "Physical"], "Cohabitate": ["Chores split", "Expenses sharing", "Extended family", "Pets"], "Travel together": []}, "kids_intent": "no"}, {"key": "explore", "label": "Travel", "description": "", "choices": {"Intimacy": ["Emotional", "Physical"], "Travel together": []}, "kids_intent": "undecided"}, {"key": "custom", "label": "Custom", "description": "", "choices": null, "kids_intent": "undecided"}];
+  const signupOptions = {"Intimacy": ["Emotional", "Physical"], "Kids": [], "Cohabitate": ["Chores split", "Expenses sharing", "Extended family", "Pets"], "Travel together": []};
+  let visionSchemaVersion=1;
   const templates = [{"key": "grow", "label": "Family Together", "description": "Build a shared life with children in the picture.", "choices": {"Intimacy": ["Emotional", "Physical"], "Kids": ["Naturally"], "Cohabitate": ["Chores split", "Expenses sharing"]}, "kids_intent": "want"}, {"key": "two", "label": "Two Together", "description": "Build a shared life without having children.", "choices": {"Intimacy": ["Emotional", "Physical"], "Cohabitate": ["Chores split", "Expenses sharing"]}, "kids_intent": "no"}, {"key": "explore", "label": "Travel Together", "description": "Connection and travel; children and cohabitation remain undecided.", "choices": {"Intimacy": ["Emotional"], "Travel together": []}, "kids_intent": "undecided"}, {"key": "custom", "label": "Custom Together", "description": "Choose your own pillars and preferences.", "choices": null, "kids_intent": "undecided"}];
   let selectedTemplate="custom", kidsIntent="undecided";
   let personalProfile={health:{},openness:{},categories:{"mobility": "Mobility disability / wheelchair use", "physical": "Other physical disability", "sensory": "Sensory disability", "non_visible": "Non-visible disability", "diabetes": "Diabetes", "cancer": "Cancer / cancer history", "trauma": "Trauma / mental health history", "other": "Other health or accessibility needs"},ethnicity:[],ethnicity_options:["South Asian","East Asian","Mixed","Other"],photo:null};
-  const visionRead = () => ({ goals: visionGoals, presets: templates, template_key:selectedTemplate, template_label:templates.find(t=>t.key===selectedTemplate).label, kids_intent:kidsIntent, element_keys: visionElementKeys, pillar_options: PILLAR_OPTIONS, detail_explanation: VISION_EXPLANATION, rc_open: visionRcOpen(), entries: visionEntries, changes: visionChanges });
+  const visionRead = () => ({ goals: visionGoals, presets: templates, signup_presets:signupPlans, signup_pillar_options:signupOptions, schema_version:visionSchemaVersion, template_key:selectedTemplate, template_label:templates.find(t=>t.key===selectedTemplate).label, kids_intent:kidsIntent, element_keys: visionElementKeys, pillar_options: PILLAR_OPTIONS, detail_explanation: VISION_EXPLANATION, rc_open: visionRcOpen(), entries: visionEntries, changes: visionChanges });
   function visionValidate(map) {
     if (!(map.Intimacy || []).length) return 'Intimacy is mandatory — pick Emotional, Physical, or both.';
     const others = [];
     for (const k of ['Kids', 'Cohabitate', 'Travel together']) {
       if (!(k in map)) continue;
-      if (k !== 'Travel together' && !map[k].length) return `${k} needs at least one sub-selection — picking it alone says almost nothing.`;
+      if (k === 'Cohabitate' && !map[k].length) return `${k} needs at least one sub-selection — picking it alone says almost nothing.`;
       if (k === 'Kids' && map[k].includes('Naturally') && !map.Intimacy.includes('Physical')) return 'Having kids naturally needs Physical intimacy selected too. Add it, or choose surrogacy or adoption instead.';
       others.push(k);
     }
@@ -424,9 +428,16 @@ export function previewTransport() {
     }
     if(path.endsWith('/profile/photo')) {personalProfile.photo=body.photo;return ok(personalProfile);}
     if(path.endsWith('/profile/vision/template')) {
-      const item=templates.find(t=>t.key===body.template);if(!item)return err('Unknown template',400);
-      const map=structuredClone(item.choices||body.pillars);if(['grow','two'].includes(item.key)&&body.travel)map['Travel together']=[];const bad=visionValidate(map);if(bad)return err(bad,400);
-      selectedTemplate=item.key;kidsIntent=item.choices?item.kids_intent:body.kids_intent;visionCommit(map);return ok(visionRead());
+      const modern=body.schema_version===2;
+      const item=(modern?signupPlans:templates).find(t=>t.key===body.template);if(!item)return err('Unknown template',400);
+      const map=structuredClone(modern?body.pillars:item.choices||body.pillars);
+      if(!modern&&['grow','two'].includes(item.key)&&body.travel)map['Travel together']=[];
+      if(modern){
+        if(inferPlan(map)!==body.template)return err('Your Twogether plan must match your selected pillars.',400);
+        if(Object.entries(map).some(([k,values])=>!signupOptions[k]||!Array.isArray(values)||values.some(v=>!signupOptions[k].includes(v))))return err('Choose listed options only.',400);
+      }
+      const bad=visionValidate(map);if(bad)return err(bad,400);
+      visionSchemaVersion=modern?2:1;selectedTemplate=item.key;kidsIntent=modern?('Kids' in map?'want':item.key==='two'?'no':'undecided'):item.choices?item.kids_intent:body.kids_intent;visionCommit(map);return ok(visionRead());
     }
     if (path.endsWith('/profile/vision') && method === 'GET') return ok(visionRead());
     if (path.endsWith('/profile/vision/presets')) {

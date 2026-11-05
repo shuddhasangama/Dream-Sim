@@ -10438,6 +10438,14 @@
                       "no",
                       "undecided"
                     ]
+                  },
+                  "schema_version": {
+                    "type": "integer",
+                    "enum": [
+                      1,
+                      2
+                    ],
+                    "description": "Version 2 uses simple Kids/Travel toggles and validates plan against selected pillars."
                   }
                 },
                 "required": [

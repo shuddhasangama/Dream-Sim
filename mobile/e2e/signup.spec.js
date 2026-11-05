@@ -85,3 +85,19 @@ test('signup needs an explicit plan and custom choices have no history or duplic
  await page.getByRole('button',{name:'Family',exact:true}).click();await page.getByRole('button',{name:'We Two',exact:true}).click();await expect(page.locator('[data-signup-pillar="Kids"]')).not.toBeChecked();
  await page.getByRole('button',{name:'Travel',exact:true}).click();await expect(page.locator('[data-signup-pillar="Cohabitate"]')).not.toBeChecked();
 });
+for(const width of [320,390])test(`focus panel aligns plans and pillars at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:844});await enter(page);
+ await page.getByRole('button',{name:'Family',exact:true}).click();
+ await page.getByRole('switch',{name:'Include Kids',exact:true}).uncheck();
+ await expect(page.locator('[data-signup-plan="two"]')).toHaveAttribute('aria-pressed','true');
+ await page.getByRole('switch',{name:'Include Kids',exact:true}).check();
+ await expect(page.locator('[data-signup-plan="grow"]')).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('[data-signup-choice]')).toHaveCount(4);
+ await page.locator('[data-signup-choice][value="Pets"]').uncheck();
+ await expect(page.locator('[data-signup-plan="grow"]')).toHaveAttribute('aria-pressed','true');
+ await page.locator('[data-signup-focus="Intimacy"]').click();
+ await expect(page.locator('[data-signup-choice]')).toHaveCount(2);
+ const geometry=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth,plans:[...document.querySelectorAll('[data-signup-plan]')].map(e=>Math.round(e.getBoundingClientRect().top)),tiles:[...document.querySelectorAll('.signup-pillar-tile')].map(e=>Math.round(e.getBoundingClientRect().top))}));
+ expect(geometry.overflow).toBe(false);expect(new Set(geometry.plans).size).toBe(1);expect(new Set(geometry.tiles).size).toBe(2);
+ await page.getByRole('button',{name:'Continue to Stats'}).click();await expect(page.getByRole('heading',{name:'Step 2 of 4 · Stats'})).toBeVisible();
+});

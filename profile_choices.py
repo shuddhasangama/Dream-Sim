@@ -22,6 +22,9 @@ HEALTH.update({'hearing':'Hearing / communication needs','vision':'Vision-relate
 
 
 def template_label(stats, goals):
+    if stats.get('vision_schema_version')==2:
+        import vision_plans
+        return vision_plans.LABELS[vision_plans.plan_for({g['key']:g.get('stance') or [] for g in goals})]
     key=stats.get('vision_template','custom')
     item=next((t for t in TEMPLATES if t['key']==key),TEMPLATES[-1])
     current={g['key']:set(g.get('stance') or []) for g in goals}

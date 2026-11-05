@@ -69,6 +69,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
 
     @api.get('/profile/vision')
     def vision_read():
+        import vision_plans
         # round3-fixes-spec.md §7: pillar_options carries the real
         # sub-selection lists (empty for Travel together) so a client
         # never hardcodes them, plus the explanatory copy §7.1 asks to
@@ -76,11 +77,12 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         # (declare_change()'s own gate — surfaced ahead of time so the
         # UI can show why it's locked rather than just disabling it).
         return jsonify(goals=g.api_user['visions'],element_keys=vision.VISION_ELEMENT_KEYS,
-            presets=profile_choices.TEMPLATES,
+            presets=profile_choices.TEMPLATES, signup_presets=vision_plans.PRESETS, signup_pillar_options=vision_plans.OPTIONS,
+            schema_version=g.api_user['stats'].get('vision_schema_version',1),
             template_key=g.api_user['stats'].get('vision_template','custom'),
             template_label=profile_choices.template_label(g.api_user['stats'],g.api_user['visions']),
             kids_intent=g.api_user['stats'].get('kids_intent','undecided'),
-            pillar_options={k:list(v) for k,v in vision.PILLAR_OPTIONS.items()},
+            pillar_options={k:list(v) for k,v in (vision_plans.OPTIONS if g.api_user['stats'].get('vision_schema_version')==2 else vision.PILLAR_OPTIONS).items()},
             detail_explanation=vision.VISION_DETAIL_EXPLANATION,
             rc_open=vision.rc_open(get_clock()),
             entries=db.fetch_all(get_db(),'VisionEntry',user_id=uid()),changes=db.fetch_all(get_db(),'VisionChange',user_id=uid()))
@@ -88,6 +90,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
     @api.post('/profile/vision/details')
     def vision_detail():
         body=json_object(required={'request_id','pillar'},optional={'sub_selection'})
+        if g.api_user['stats'].get('vision_schema_version')==2 and body['pillar']=='Kids' and body.get('sub_selection') is not None:raise ApiError('validation_error','Kids is an option without sub-selections.')
         return jsonify(service.add_vision_detail(get_db(),uid(),body,get_clock()))
 
     @api.post('/profile/vision/presets')
@@ -98,6 +101,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
     @api.post('/profile/vision/changes')
     def vision_change():
         body=json_object(required={'request_id','pillar','disclosed_to_partner'},optional={'add','remove'})
+        if g.api_user['stats'].get('vision_schema_version')==2 and body['pillar']=='Kids' and (body.get('add') or body.get('remove')):raise ApiError('validation_error','Kids is an option without sub-selections.')
         return jsonify(service.declare_vision_change(get_db(),uid(),body,get_clock()))
 
     @api.get('/profile/chemistry')
@@ -198,28 +202,35 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
 
     @api.put('/profile/vision/template')
     def vision_template_write():
-        body=json_object(required={'template'},optional={'pillars','kids_intent','travel'})
-        item=next((t for t in profile_choices.TEMPLATES if t['key']==body['template']),None)
+        body=json_object(required={'template'},optional={'pillars','kids_intent','travel','schema_version'})
+        import vision_plans
+        version=body.get('schema_version',1)
+        if type(version) is not int or version not in (1,2):raise ApiError('validation_error','Unsupported Vision version.')
+        modern=version==2
+        item=next((t for t in (vision_plans.PRESETS if modern else profile_choices.TEMPLATES) if t['key']==body['template']),None)
         if not item: raise ApiError('validation_error','Choose a listed Vision template.')
         with service.transaction(get_db()):
             state=stats_situation(g.api_user)
             if state.get('keenness') or state.get('live_match') or state.get('in_relationship'):
                 raise ApiError('profile_locked','Your current match or relationship holds this Vision. Use the disclosed-change flow or return after the match window.',409)
             row=db.fetch_one(get_db(),'User',id=uid())
-            pillars=item['choices'] if item['choices'] is not None else body.get('pillars')
+            pillars=body.get('pillars') if modern else item['choices'] if item['choices'] is not None else body.get('pillars')
+            if modern:
+                vision_plans.validate(pillars)
+                if vision_plans.plan_for(pillars)!=body['template']:raise ApiError('validation_error','Your Twogether plan must match your selected pillars.')
             if type(pillars) is not dict or any(type(v) is not list or any(type(x) is not str for x in v) for v in pillars.values()):
                 raise ApiError('validation_error','Provide your selected pillars and their choices.')
             if 'travel' in body and type(body['travel']) is not bool:
                 raise ApiError('validation_error','Travel must be true or false.')
-            if item['key'] in ('grow','two') and body.get('travel',False):
+            if not modern and item['key'] in ('grow','two') and body.get('travel',False):
                 pillars={**pillars,'Travel together':[]}
             result=vision.validate_pillars(pillars)
             if not result['ok']: raise ApiError('validation_error',result['error'])
-            intent=item['kids_intent'] if item['choices'] is not None else body.get('kids_intent','undecided')
+            intent=vision_plans.intent_for(pillars) if modern else item['kids_intent'] if item['choices'] is not None else body.get('kids_intent','undecided')
             if intent not in ('want','open','no','undecided') or (intent=='no' and 'Kids' in pillars) or (intent=='want' and 'Kids' not in pillars):
                 raise ApiError('validation_error','Children intention must agree with your Kids pillar.')
             stats=db.load_json_field(row['stats_json'],{})
-            stats.update(vision_template=item['key'],kids_intent=intent)
+            stats.update(vision_template=item['key'],kids_intent=intent,vision_schema_version=version)
             row.update(stats_json=json.dumps(stats),vision_json=json.dumps(vision._as_vision_json(pillars)))
             db.insert_row(get_db(),'User',row)
         # g.api_user is a request snapshot; return fresh data after the mutation.

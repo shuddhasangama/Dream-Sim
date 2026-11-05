@@ -100,3 +100,28 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .signup-pillars legend{padding:0 6px;font-weight:600}.signup-pillars legend label{display:flex;align-items:center;gap:8px}.signup-pillars small{font-size:11px;color:var(--muted);font-weight:400}
 .signup-pillars input{accent-color:var(--white)}
 @media(max-width:350px){.signup-progress li{font-size:10px;letter-spacing:0}.signup-progress{gap:4px}}
+
+/* Approved Focus Panel: a single plan row, two pillar rows, one detail area. */
+.signup-vision .signup-plans{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;background:var(--card-2);padding:4px;border-radius:13px}
+.signup-vision .signup-plans button{padding:8px 2px;border:0;background:transparent;font-size:12px;min-width:0;min-height:44px;border-radius:9px}
+.signup-vision .signup-plans button[aria-pressed=true]{background:var(--white);color:var(--card)}
+.signup-focus-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:20px}
+.signup-pillar-tile{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;min-width:0;min-height:100px}
+.signup-pillar-tile.is-focused{border-color:var(--white);background:var(--card-2)}
+.signup-pillar-heading{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;font-size:14px;font-weight:600;min-height:44px}
+.signup-pillar-heading .signup-focus-title{background:transparent;color:var(--white);border:0;padding:0;margin:0;min-height:44px;min-width:0;text-align:left;font-size:14px;font-weight:600}
+.signup-pillar-tile small{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.signup-switch{width:44px;flex:0 0 44px;margin:0;min-width:44px;min-height:44px;display:grid;place-items:center;position:relative;cursor:pointer}
+.signup-switch input{position:absolute;opacity:0;width:44px;height:44px;margin:0;cursor:pointer}
+.signup-switch span{display:block;grid-area:1/1;width:30px;height:19px;border:1px solid var(--border-strong);border-radius:20px;background:var(--card-2);position:relative;pointer-events:none}
+.signup-switch span:before{content:'';position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:var(--muted)}
+.signup-switch input:checked+span{background:var(--white);border-color:var(--white)}
+.signup-switch input:checked+span:before{transform:translateX(11px);background:var(--card)}
+.signup-switch input:focus-visible+span{outline:2px solid var(--white);outline-offset:4px}
+#signup-pillar-detail{border-top:1px solid var(--border);padding-top:18px;margin-top:20px}
+#signup-pillar-detail h2{font-size:21px;margin:0 0 12px}
+.signup-focus-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.signup-focus-choices label{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:10px;padding:8px;min-height:48px;min-width:0;font-size:13px;line-height:1.3}
+.signup-focus-choices input{accent-color:var(--white);flex:none;width:16px;height:16px;margin:0}
+.signup-focus-choices span{overflow-wrap:anywhere}
+@media(max-width:350px){.signup-pillar-tile{padding:10px}.signup-focus-grid{gap:8px}.signup-pillar-heading,.signup-pillar-heading .signup-focus-title{font-size:13px}.signup-vision .signup-plans button{font-size:11px}}

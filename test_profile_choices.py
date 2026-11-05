@@ -22,6 +22,24 @@ class ProfileChoicesTests(WeekApiTests):
         self.assertEqual(choices.template_label({'vision_template':'two','kids_intent':'no'},
                           [{'key':'Intimacy','stance':['Emotional']}]),'Custom Together')
 
+    def test_focus_plan_roundtrip_and_server_alignment(self):
+        import vision_plans
+        for preset in vision_plans.PRESETS[:3]:
+            body={'schema_version':2,'template':preset['key'],'pillars':preset['choices']}
+            r=self.request('/profile/vision/template',method='PUT',body=body)
+            self.assertEqual(r.status_code,200,r.json)
+            data=r.json['data']
+            self.assertEqual(data['schema_version'],2)
+            self.assertEqual(data['template_key'],preset['key'])
+            saved={g['key']:g['stance'] or [] for g in data['goals']}
+            self.assertEqual(saved,preset['choices'])
+        body={'schema_version':2,'template':'grow','pillars':vision_plans.PRESETS[1]['choices']}
+        self.assertEqual(self.request('/profile/vision/template',method='PUT',body=body).status_code,400)
+        body={'schema_version':2,'template':'grow','pillars':dict(vision_plans.PRESETS[0]['choices'],Kids=['Naturally'])}
+        self.assertEqual(self.request('/profile/vision/template',method='PUT',body=body).status_code,400)
+        body={'schema_version':2,'template':'custom','pillars':{'Intimacy':['Emotional'],'Kids':[]}}
+        self.assertEqual(self.request('/profile/vision/template',method='PUT',body=body).status_code,200)
+
     def personal(self,**kw):
         return dict(categories=[],share_health=False,note='',openness='any',open_categories=[],include_undisclosed=True,ethnicity=[],**kw)
 
