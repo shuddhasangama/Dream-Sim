@@ -120,7 +120,7 @@ ETHNICITY_WEIGHTS = [0.74, 0.06, 0.02, 0.02, 0.02, 0.02, 0.03, 0.01, 0.03, 0.05]
 # Added 2026-09-03. Cuisine is multi-select — people rarely eat one way —
 # and feeds the date playbook's venue clause, where two people's lists
 # have to overlap for the agreement to name somewhere they both want.
-CUISINES = ["South Indian", "North Indian", "Italian", "Japanese", "Thai", "Levantine", "Mexican", "Korean", "Chinese", "Continental"]
+CUISINES = ["South Indian", "North Indian", "Italian", "Japanese", "Thai", "Mexican", "Korean", "Chinese", "Continental"]
 
 # Smoking and drinking finally give matching.py's non_smoker /
 # non_drinker dealbreakers something to check. They are NOT wired into

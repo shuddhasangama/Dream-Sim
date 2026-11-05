@@ -195,23 +195,22 @@
         "Italian",
         "Japanese",
         "Thai",
-        "Levantine",
         "Mexican",
         "Korean",
         "Chinese",
         "Continental"
       ],
       "income_band": [
-        "\u20b9 \u00b7 under 12L",
-        "\u20b9\u20b9 \u00b7 12L \u2013 25L",
-        "\u20b9\u20b9\u20b9 \u00b7 25L \u2013 50L",
-        "\u20b9\u20b9\u20b9\u20b9 \u00b7 50L+"
+        "₹ · under 12L",
+        "₹₹ · 12L – 25L",
+        "₹₹₹ · 25L – 50L",
+        "₹₹₹₹ · 50L+"
       ],
       "budget": [
-        "\u20b9 \u00b7 under 800",
-        "\u20b9\u20b9 \u00b7 800 \u2013 2,000",
-        "\u20b9\u20b9\u20b9 \u00b7 2,000 \u2013 4,500",
-        "\u20b9\u20b9\u20b9\u20b9 \u00b7 4,500+"
+        "₹ · under 800",
+        "₹₹ · 800 – 2,000",
+        "₹₹₹ · 2,000 – 4,500",
+        "₹₹₹₹ · 4,500+"
       ]
     },
     "ranges": {

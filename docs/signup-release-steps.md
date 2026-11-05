@@ -50,3 +50,7 @@ Use Sign up with two separate real phone numbers. Receive and enter each SMS OTP
 ## Sandbox checkout fallback
 
 During this private tester rollout, POST /verification/payment/complete records account-bound sandbox BGV access after a checkout attempt, even if Razorpay checkout failed or is unavailable. This does not mark a payment paid/captured, grant a billing entitlement, or verify the user. Live billing modes reject this path. Existing iOS build 78 can use its Check confirmation button after the backend release. The updated native UI labels it Continue to verification and also handles a checkout browser-open failure; returning from the checkout browser already triggers completion automatically.
+
+## Clean Home and avatar selection
+
+Home shows one bounded circular avatar next to the greeting. Tap it to open the existing two generated choices; selecting another does not generate new images or reset the allowance. Profile/settings remain available from Settings. Home no longer embeds private identity or the legacy Bio/portrait uploader. Ethnicity and optional health disclosure appear only when editing Stats, alongside existing Stats fields. Levantine is removed from newly offered cuisine choices; existing stored claims are not deleted. These native UI changes require a new Codemagic build, unlike the preceding backend-only payment fix.

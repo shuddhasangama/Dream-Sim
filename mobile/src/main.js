@@ -162,7 +162,7 @@ function render() {
   const current = nav.current;
   const tabs = signedIn ? primaryTabs(journey.surfaces) : [];
   root.innerHTML = `<header class="brandbar">
-      <span class="brandmark"><span class="brand-glyph" aria-hidden="true"><svg viewBox="22 22 56 56"><path d="M34 28h14a22 22 0 0 1 0 44H34z" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="46" cy="50" r="5" fill="#E8735A"/></svg></span><span class="brand-name">DhaShu</span></span>
+      ${signedIn&&!signupActive?'<button type="button" id="profile-settings" class="text-button" aria-label="Profile and settings">Settings</button>':''}<span class="brandmark"><span class="brand-glyph" aria-hidden="true"><svg viewBox="22 22 56 56"><path d="M34 28h14a22 22 0 0 1 0 44H34z" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="46" cy="50" r="5" fill="#E8735A"/></svg></span><span class="brand-name">DhaShu</span></span>
       ${signedIn&&!signupActive ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
     </header>
     ${preview?'<aside class="preview">Local preview · no messages sent · code 123456</aside>':''}
@@ -193,6 +193,7 @@ function render() {
     phone = root.querySelector('input[name="phone"]')?.value || phone;
     authIntent=button.dataset.authIntent; message=''; render();
   }));
+  root.querySelector('#profile-settings')?.addEventListener('click',()=>{avatarSheetOpen=true;render();});
   bindHowItWorks(root);
   if (signedIn && signupActive) signup.bind(root);
   else if (signedIn) bindChrome(current);

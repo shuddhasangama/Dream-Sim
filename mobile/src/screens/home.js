@@ -182,7 +182,7 @@ export function render(ctx) {
         ${journey.clock ? `<div class="p-eyebrow">WEEK ${safe(journey.clock.week)} · ${safe(String(journey.clock.day || '').toUpperCase())}</div>` : ''}
         <h1 class="p-hi">Hi, ${firstName}</h1>
       </div>
-      <button type="button" id="p-avatar" class="p-avatar" aria-label="Profile and settings" ${busy ? 'disabled' : ''}>${journey.own_avatar?.photo?`<img src="${safe(journey.own_avatar.photo)}" alt="Your AI avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:safe((user.display_name || '?').trim()[0] || '?').toUpperCase()}</button>
+      <button type="button" id="p-avatar" class="p-avatar" aria-label="Choose your avatar" ${busy ? 'disabled' : ''}>${journey.own_avatar?.photo?`<img src="${safe(journey.own_avatar.photo)}" alt="Your AI avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:safe((user.display_name || '?').trim()[0] || '?').toUpperCase()}</button>
     </section>
 
     ${indicator?.show ? `<div class="p-stage-stepper" role="list" aria-label="${safe(indicator.label)}">
@@ -215,10 +215,6 @@ export function render(ctx) {
       ${!detail.blocked ? (editorOpen ? '' : `<button type="button" class="p-outline-cta" data-open-editor="${selectedRing}">${ringDef.cta} <span aria-hidden="true">→</span></button>`) : ''}
     </div>
 
-    <section class="card"><button type="button" id="identity-open" class="secondary">Private identity check</button>
-    ${ctx.journey?.current_date_plan?.readiness ? `<p role="status">${safe(ctx.journey.current_date_plan.readiness.label)} · ${safe(ctx.journey.current_date_plan.readiness.message)}</p>` : ''}
-    ${journey.own_avatar?.photo?`<img class="avatar-mini" src="${safe(journey.own_avatar.photo)}" alt="Your selected avatar"><p class="hint">AI avatar · Verification pending</p>`:''}<button type="button" id="avatar-open" class="secondary">Your AI avatar</button><button type="button" id="personal-open" class="secondary">Bio · photo &amp; personal details</button>
-    ${personalData ? personal.render({...ctx,data:personalData}) : ''}</section>
     ${editorOpen ? `<div class="p-editor-panel" data-editor-body="${selectedRing}">
       ${selectedRing === 'stats' ? renderStatsEditor(ctx) : renderFoldBody(selectedRing, ctx)}
       <button type="button" class="secondary" id="p-close-editor" style="margin-top:10px;">${selectedRing === 'stats' && dashboardStats?._saved ? 'Done' : 'Close'}</button>
@@ -228,7 +224,8 @@ export function render(ctx) {
 function renderStatsEditor(ctx) {
   const { dashboardStats, safe } = ctx;
   const { editableFieldsForm } = ctx.statsFields;
-  return `${editableFieldsForm(dashboardStats, safe, 'dashboard-stats-form')}
+  return `${editableFieldsForm({...dashboardStats,rows:(dashboardStats.rows||[]).filter(r=>r.key!=='ethnicity')}, safe, 'dashboard-stats-form')}
+    ${personalData?personal.render({...ctx,data:personalData,statsOnly:true}):''}
     ${dashboardStats._saved ? '<p class="save-note">Saved.</p>' : ''}
     ${dashboardStats._error ? `<p class="warn">${safe(dashboardStats._error)}</p>` : ''}`;
 }
@@ -244,11 +241,8 @@ export function bind(root, ctx) {
   const { run, session, navigateTo, folds, dashboardStats } = ctx;
 
   root.querySelector('#home-guru')?.addEventListener('click', () => navigateTo('guru'));
-  root.querySelector('#avatar-open')?.addEventListener('click',()=>ctx.navigateTo('avatar'));
-  root.querySelector('#personal-open')?.addEventListener('click',()=>run(async()=>{personalData=personalData?null:await session.get('/api/v1/profile/personal');}));
-  root.querySelector('#identity-open')?.addEventListener('click',()=>ctx.navigateTo('identity'));
-  if(personalData) personal.bind(root,{...ctx,data:personalData,patch:next=>{personalData=next;}});
-  root.querySelector('#p-avatar')?.addEventListener('click', () => ctx.openAvatarSheet());
+  if(personalData&&selectedRing==='stats'&&dashboardStats) personal.bind(root,{...ctx,data:personalData,patch:next=>{personalData=next;}});
+  root.querySelector('#p-avatar')?.addEventListener('click', () => navigateTo('avatar'));
   root.querySelector('#p-next-up')?.addEventListener('click', (e) => navigateTo(e.currentTarget.dataset.destination));
 
   root.querySelectorAll('[data-ring]').forEach((btn) => btn.addEventListener('click', () => run(async () => {
@@ -257,7 +251,7 @@ export function bind(root, ctx) {
 
   root.querySelector('[data-open-editor]')?.addEventListener('click', () => run(async () => {
     const key = selectedRing;
-    if (key === 'stats') { ctx.setDashboardStats(await session.get('/api/v1/profile/stats')); return; }
+    if (key === 'stats') { const [stats,details]=await Promise.all([session.get('/api/v1/profile/stats'),session.get('/api/v1/profile/personal')]);personalData=details;ctx.setDashboardStats(stats); return; }
     ctx.toggleFold(key, true);
   }));
   root.querySelector('#p-close-editor')?.addEventListener('click', () => run(async () => {
@@ -305,6 +299,7 @@ function bindStatsEditor(root, ctx) {
         return;
       }
       ctx.setDashboardStats({ ...confirmed, _saved: true, _error: null, _fieldErrors: null });
+      if(personalData)personalData=await session.get('/api/v1/profile/personal');
       await ctx.refreshProfile();
     });
   });

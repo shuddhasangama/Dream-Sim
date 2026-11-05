@@ -1,9 +1,9 @@
 // Optional disclosures are never inferred from a photo or a missing answer.
-export function render({data,safe}) {
+export function render({data,safe,statsOnly=false}) {
  if(!data) return '<p>Loading profile…</p>';
  const h=data.health||{}, p=data.openness||{};
  const options=(name,selected)=>(Object.entries(data.categories||{}).map(([k,v])=>`<label class="checkbox-row"><input type="checkbox" name="${name}" value="${k}" ${selected.includes(k)?'checked':''}> ${safe(v)}</label>`).join(''));
- return `<h1>Your Bio</h1><h2>Your profile portrait</h2><p>Use a clear head-and-shoulders photo with simple lighting and background. No identity document is needed. Photos do not confer verification.</p>
+ return `${statsOnly?'':`<h1>Your Bio</h1><h2>Your profile portrait</h2><p>Use a clear head-and-shoulders photo with simple lighting and background. No identity document is needed. Photos do not confer verification.</p>
  ${data.photo?`<img class="profile-portrait" src="${safe(data.photo)}" alt="Your profile portrait">`:''}
  ${data.avatar?.avatar?'<p class="hint">AI avatar · Verification pending. Your accepted avatar is shown to matches.</p>':''}<label for="portrait-file">Choose a portrait</label><input id="portrait-file" type="file" accept="image/jpeg,image/png,image/webp">
  <p id="personal-photo-note" role="status"></p><div id="portrait-editor" hidden><canvas id="portrait-canvas" width="480" height="600" class="profile-portrait"></canvas>
@@ -12,7 +12,7 @@ export function render({data,safe}) {
  <label>Vertical position<input id="portrait-y" type="range" min="0" max="1" step="0.01" value="0.5"></label>
  <button type="button" id="portrait-save">Save portrait</button></div>
  ${data.photo?'<button type="button" id="portrait-remove">Remove photo</button>':''}
- <form id="personal-form"><h2>Ethnicity / cultural background</h2><p>Optional, up to two. Separate from nationality; shown on your match profile.</p>
+`}<form id="personal-form"><h2>Ethnicity / cultural background</h2><p>Optional, up to two. Separate from nationality; shown on your match profile.</p>
  ${(data.ethnicity_options||[]).map(v=>`<label class="checkbox-row"><input type="checkbox" name="ethnicity" value="${safe(v)}" ${(data.ethnicity||[]).includes(v)?'checked':''}> ${safe(v)}</label>`).join('')}
  ${h.consent?'<button type="button" id="health-withdraw">Withdraw health disclosure</button>':''}
  <h2>Health &amp; accessibility</h2><p>Optional and self-declared. Share only what you are comfortable showing to potential matches. This is not a medical assessment. An unanswered profile does not mean no conditions.</p>
@@ -21,7 +21,7 @@ export function render({data,safe}) {
  <label class="checkbox-row"><input name="share_health" type="checkbox" ${h.consent?'checked':''}> I consent to displaying these details to potential matches and using the selected categories for matching.</label>
  <p class="hint">You can withdraw disclosure at any time. Previously viewed information cannot be recalled.</p>
  <p>Partner preferences are managed privately in REACH.</p>
- <button type="submit" class="primary">Save Bio</button></form>
+ <button type="submit" class="primary">${statsOnly?'Save background & health':'Save Bio'}</button></form>
  ${data._saved?'<p role="status">Saved ✓</p>':''}${data._error?`<p role="alert" class="warn">${safe(data._error)}</p>`:''}`;
 }
 export function bind(root,ctx) {
