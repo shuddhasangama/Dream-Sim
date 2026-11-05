@@ -1,5 +1,6 @@
 """Operator-invited beta enrollment. No provider approval or identity minting API."""
 import math
+import json
 import uuid
 import auth
 import auth_sessions
@@ -44,12 +45,13 @@ def owned(conn, uid):
 
 def state(conn, uid):
     row, account = owned(conn, uid)
-    return {'mode': 'operator_invited_beta', 'status': ('submitted_for_review' if row['completed_at'] else 'draft') if row else 'existing_profile',
+    modern=json.loads(db.fetch_one(conn,'User',id=uid)['stats_json'] or '{}').get('signup_version')==3
+    return {'mode': 'self_signup' if modern else 'operator_invited_beta', 'status': ('submitted_for_review' if row['completed_at'] else 'draft') if row else 'existing_profile',
         'revision': row['revision'] if row else None, 'draft': db.load_json_field(row['payload_json'], {}) if row else None,
         'contact_verified': bool(account['verified_email'] or account['verified_phone']),
         'bgv_status': db.fetch_one(conn, 'User', id=uid)['bgv_status'],
         'verification_provider': 'manual_review_required', 'verification_granted': False,
-        'public_signup_available': False}
+        'public_signup_available': modern}
 
 
 def options():

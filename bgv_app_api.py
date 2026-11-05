@@ -20,7 +20,12 @@ def register(api, get_db):
         return response(actor())
     @api.get('/verification/plan')
     def verification_plan():
-        result=jsonify(bgv_policy.view(get_db(),actor()))
+        uid=actor()
+        import signup_markets
+        user=db.fetch_one(get_db(),'User',id=uid)
+        if not user.get('active_bgv_case_id') and __import__('launch_cities').find(__import__('json').loads(user['stats_json'] or '{}').get('city')):
+            signup_markets.ensure(get_db(),uid)
+        result=jsonify(bgv_policy.view(get_db(),uid))
         result.headers['Cache-Control']='no-store'
         return result
     @api.get('/verification/liveness')

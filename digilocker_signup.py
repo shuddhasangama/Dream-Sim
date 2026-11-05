@@ -42,8 +42,7 @@ def configuration(uid):
             raise ValueError()
         cfg = Config.from_env(); cfg.validate()
         # Sandbox identity must never silently become a live account approval.
-        testers = os.getenv('DHASHU_DIGILOCKER_TESTERS', '').split(',')
-        if cfg.environment != 'preproduction' or uid not in {v.strip() for v in testers}:
+        if cfg.environment != 'preproduction':
             raise ValueError()
         https_url(os.environ['SIGNZY_DIGILOCKER_CALLBACK_BASE'])
         Protection()
@@ -99,6 +98,9 @@ def create(conn, uid, body):
     import verification_payment
     verification_payment.require_paid(conn,uid)
     cfg = configuration(uid)
+    if os.getenv('DHASHU_BGV_POLICY_ENABLED')=='1':
+        import signup_markets
+        signup_markets.ensure(conn,uid)
     case_check_id=bgv_policy.check_for(conn,uid,'identity_details',cfg.environment)
     try:
         sid = str(uuid.UUID(body['request_id']))
@@ -195,7 +197,9 @@ def complete(conn, uid, sid, body):
             try:
                 identity = projection(evidence[0]['provider_response']['json'])
                 if row['consent_version']==BUNDLE_VERSION:
-                    identity['_bundle']={'version':BUNDLE_VERSION,'accepted_at':row['created_at'],'pan_scope':True,'employer':''}
+                    import json
+                    declared=json.loads(db.fetch_one(conn,'User',id=uid)['stats_json'] or '{}')
+                    identity['_bundle']={'version':BUNDLE_VERSION,'accepted_at':row['created_at'],'pan_scope':True,'employer':declared.get('employer','')}
                 protected = protection.seal(identity)
                 state = 'complete' if identity['adult'] else 'needs_review'
             except (ValueError, TypeError, KeyError):

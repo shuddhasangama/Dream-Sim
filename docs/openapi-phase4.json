@@ -14595,6 +14595,239 @@
         },
         "operationId": "completeVerificationSandboxPayment"
       }
+    },
+    "/auth/signup/request": {
+      "post": {
+        "operationId": "requestSignupOtp",
+        "summary": "Request SMS OTP for own-account signup or existing-account sign-in; create no account before OTP approval.",
+        "security": [],
+        "responses": {
+          "400": {
+            "description": "Invalid JSON or fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or credentials rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ownership proof or eligibility missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not available to actor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale revision or state conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JSON required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Secure authentication/provider unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Generic accepted response; only approved accounts trigger provider delivery.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channel": {
+                    "enum": [
+                      "email",
+                      "phone"
+                    ]
+                  },
+                  "destination": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "channel",
+                  "destination"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/signup/state": {
+      "get": {
+        "operationId": "getSelfSignupState",
+        "summary": "Read own resumable signup and enabled launch cities",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped signup state; claims and pending verification are separate."
+          },
+          "400": {
+            "description": "Invalid or unsupported city, fields or consent."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Secure app authentication required."
+          },
+          "409": {
+            "description": "Signup incomplete, identity-owned fields or verification already started in another city."
+          }
+        }
+      }
+    },
+    "/signup/stats": {
+      "put": {
+        "operationId": "saveSelfSignupStats",
+        "summary": "Save own identity claims and optional Stats, assign selected launch-city sandbox plan",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped signup state; claims and pending verification are separate."
+          },
+          "400": {
+            "description": "Invalid or unsupported city, fields or consent."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Secure app authentication required."
+          },
+          "409": {
+            "description": "Signup incomplete, identity-owned fields or verification already started in another city."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/signup/complete": {
+      "post": {
+        "operationId": "completeSelfSignup",
+        "summary": "Submit completed profile; matching admission still requires bound verification evidence",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped signup state; claims and pending verification are separate."
+          },
+          "400": {
+            "description": "Invalid or unsupported city, fields or consent."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Secure app authentication required."
+          },
+          "409": {
+            "description": "Signup incomplete, identity-owned fields or verification already started in another city."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

@@ -43,6 +43,31 @@ class PostgresAuthenticationTests(unittest.TestCase):
         conn.commit()
         return conn
 
+    def test_concurrent_fresh_signup_redemption_creates_one_account_and_session(self):
+        import threading
+        from unittest import mock
+        import auth,auth_delivery
+        from flask import Flask
+        app=Flask(__name__);app.secret_key='isolated-new-signup-test-secret-32-characters'
+        with app.test_request_context('/api/v1/auth/signup/request'),mock.patch.object(auth_delivery,'configured',return_value=True),mock.patch.object(auth_delivery,'start',return_value='VE'+'b'*32):
+            challenge,error=auth.start_challenge(self.conn,'phone','+919000000099','mobile',signup=True)
+            self.assertIsNone(error)
+        barrier=threading.Barrier(2)
+        def approved(*args):barrier.wait(timeout=5);return True
+        def redeem():
+            conn=self.connect()
+            try:
+                with app.test_request_context('/api/v1/auth/verify'):return auth.verify_challenge(conn,challenge['challenge_id'],'123456','mobile')
+            finally:conn.close()
+        with mock.patch.object(auth_delivery,'check',side_effect=approved),concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            result=list(pool.map(lambda _:redeem(),range(2)))
+        winner=[r for r in result if r]
+        self.assertEqual(len(winner),1)
+        accounts=db.fetch_all(self.conn,'Account',phone='+919000000099')
+        self.assertEqual(len(accounts),1);self.assertTrue(accounts[0]['verified_phone'])
+        self.assertEqual(accounts[0]['user_id'],winner[0]['user_id'])
+        self.assertEqual(len(db.fetch_all(self.conn,'AuthSession',user_id=winner[0]['user_id'])),1)
+
     def test_sessions_refresh_replay_and_revocation(self):
         tokens = sessions.issue(self.conn, 'owner')
         self.assertEqual(sessions.authenticate(self.conn, tokens['access_token'])['user_id'], 'owner')

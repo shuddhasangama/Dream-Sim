@@ -1,0 +1,327 @@
+{
+  "stats": {
+    "cities": [
+      {
+        "code": "BLR",
+        "name": "Bangalore",
+        "aliases": [
+          "Bengaluru"
+        ],
+        "enabled": true
+      },
+      {
+        "code": "DEL",
+        "name": "Delhi",
+        "aliases": [
+          "New Delhi"
+        ],
+        "enabled": true
+      },
+      {
+        "code": "BOM",
+        "name": "Mumbai",
+        "aliases": [
+          "Bombay"
+        ],
+        "enabled": true
+      }
+    ],
+    "metro_catalogue": [
+      {
+        "code": "BLR",
+        "name": "Bangalore",
+        "aliases": [
+          "Bengaluru"
+        ],
+        "enabled": true
+      },
+      {
+        "code": "DEL",
+        "name": "Delhi",
+        "aliases": [
+          "New Delhi"
+        ],
+        "enabled": true
+      },
+      {
+        "code": "BOM",
+        "name": "Mumbai",
+        "aliases": [
+          "Bombay"
+        ],
+        "enabled": true
+      },
+      {
+        "code": "HYD",
+        "name": "Hyderabad",
+        "aliases": [],
+        "enabled": false
+      },
+      {
+        "code": "MAA",
+        "name": "Chennai",
+        "aliases": [],
+        "enabled": false
+      },
+      {
+        "code": "CCU",
+        "name": "Kolkata",
+        "aliases": [],
+        "enabled": false
+      },
+      {
+        "code": "PNE",
+        "name": "Pune",
+        "aliases": [],
+        "enabled": false
+      },
+      {
+        "code": "AMD",
+        "name": "Ahmedabad",
+        "aliases": [],
+        "enabled": false
+      }
+    ],
+    "gender": [
+      "female",
+      "male"
+    ],
+    "fields": {
+      "education": [
+        "High school",
+        "Bachelor's",
+        "Master's",
+        "Doctorate"
+      ],
+      "nationality": [
+        "IN",
+        "NRI"
+      ],
+      "profession": [
+        "Engineering",
+        "Medicine",
+        "Finance",
+        "Law",
+        "Design",
+        "Education",
+        "Business/Entrepreneur",
+        "Government/Public sector",
+        "Arts/Media",
+        "Other"
+      ],
+      "employment_category": [
+        "Salaried",
+        "Self-employed",
+        "Freelancer",
+        "Business owner",
+        "Other"
+      ],
+      "share_verification_summary": [
+        "Yes",
+        "No"
+      ],
+      "diet": [
+        "Vegetarian",
+        "Vegan",
+        "Eggetarian",
+        "Halal",
+        "Jain",
+        "No red meat",
+        "Everything"
+      ],
+      "smoking": [
+        "Never",
+        "Socially",
+        "Regular",
+        "Quitting"
+      ],
+      "drinking": [
+        "Never",
+        "Socially",
+        "Weekly",
+        "Daily"
+      ],
+      "fitness_routine": [
+        "None right now",
+        "Occasional",
+        "2-3 times a week",
+        "4+ times a week",
+        "Daily"
+      ],
+      "marital_history": [
+        "Never married",
+        "Divorced",
+        "Widowed"
+      ],
+      "has_children": [
+        "No",
+        "Yes"
+      ],
+      "ethnicity": [
+        "Indian",
+        "South Asian (other)",
+        "East Asian",
+        "Southeast Asian",
+        "Middle Eastern",
+        "African",
+        "European",
+        "Latin American",
+        "Mixed",
+        "Prefer not to say"
+      ],
+      "religion": [
+        "Hindu",
+        "Muslim",
+        "Christian",
+        "Sikh",
+        "Spiritual",
+        "None"
+      ],
+      "languages": [
+        "English",
+        "Hindi",
+        "Marathi",
+        "Tamil",
+        "Telugu",
+        "Kannada",
+        "Bengali",
+        "Gujarati",
+        "Punjabi",
+        "Malayalam"
+      ],
+      "cuisine": [
+        "South Indian",
+        "North Indian",
+        "Italian",
+        "Japanese",
+        "Thai",
+        "Levantine",
+        "Mexican",
+        "Korean",
+        "Chinese",
+        "Continental"
+      ],
+      "income_band": [
+        "\u20b9 \u00b7 under 12L",
+        "\u20b9\u20b9 \u00b7 12L \u2013 25L",
+        "\u20b9\u20b9\u20b9 \u00b7 25L \u2013 50L",
+        "\u20b9\u20b9\u20b9\u20b9 \u00b7 50L+"
+      ],
+      "budget": [
+        "\u20b9 \u00b7 under 800",
+        "\u20b9\u20b9 \u00b7 800 \u2013 2,000",
+        "\u20b9\u20b9\u20b9 \u00b7 2,000 \u2013 4,500",
+        "\u20b9\u20b9\u20b9\u20b9 \u00b7 4,500+"
+      ]
+    },
+    "ranges": {
+      "height_cm": [
+        140,
+        210
+      ],
+      "weight_kg": [
+        40,
+        150
+      ],
+      "waist_in": [
+        20,
+        55
+      ]
+    },
+    "health": {
+      "mobility": "Mobility disability / wheelchair use",
+      "physical": "Other physical disability",
+      "sensory": "Sensory disability",
+      "non_visible": "Non-visible disability",
+      "diabetes": "Diabetes",
+      "cancer": "Cancer / cancer history",
+      "trauma": "Trauma / mental health history",
+      "other": "Other health or accessibility needs",
+      "hearing": "Hearing / communication needs",
+      "vision": "Vision-related disability",
+      "neurodivergence": "Neurodivergence (for example ADHD or autism)",
+      "mental_health": "Mental health condition",
+      "cancer_current": "Current cancer",
+      "cancer_history": "Past cancer history"
+    },
+    "max_religions": 2,
+    "max_ethnicities": 2
+  },
+  "vision": {
+    "signup_presets": [
+      {
+        "key": "grow",
+        "label": "Family",
+        "description": "",
+        "choices": {
+          "Intimacy": [
+            "Emotional",
+            "Physical"
+          ],
+          "Kids": [],
+          "Cohabitate": [
+            "Chores split",
+            "Expenses sharing",
+            "Extended family",
+            "Pets"
+          ],
+          "Travel together": []
+        },
+        "kids_intent": "want"
+      },
+      {
+        "key": "two",
+        "label": "We Two",
+        "description": "",
+        "choices": {
+          "Intimacy": [
+            "Emotional",
+            "Physical"
+          ],
+          "Cohabitate": [
+            "Chores split",
+            "Expenses sharing",
+            "Extended family",
+            "Pets"
+          ],
+          "Travel together": []
+        },
+        "kids_intent": "no"
+      },
+      {
+        "key": "explore",
+        "label": "Travel",
+        "description": "",
+        "choices": {
+          "Intimacy": [
+            "Emotional",
+            "Physical"
+          ],
+          "Travel together": []
+        },
+        "kids_intent": "undecided"
+      },
+      {
+        "key": "custom",
+        "label": "Custom",
+        "description": "",
+        "choices": null,
+        "kids_intent": "undecided"
+      }
+    ],
+    "signup_pillar_options": {
+      "Intimacy": [
+        "Emotional",
+        "Physical"
+      ],
+      "Kids": [],
+      "Cohabitate": [
+        "Chores split",
+        "Expenses sharing",
+        "Extended family",
+        "Pets"
+      ],
+      "Travel together": []
+    }
+  }
+}

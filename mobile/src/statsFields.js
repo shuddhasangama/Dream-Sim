@@ -24,8 +24,8 @@ export const STAT_LABELS = {
   has_children: 'Already has children', children_count: 'Number of children',
 };
 const STAT_UNITS = { age: 'years', height_cm: 'cm', weight_kg: 'kg', waist_in: 'in', children_count: 'children' };
-export const MULTI_STATS = ['languages', 'cuisine', 'budget', 'ethnicity'];
-const MULTI_CAPS = { ethnicity: 2 };
+export const MULTI_STATS = ['languages', 'cuisine', 'budget', 'ethnicity', 'religion'];
+const MULTI_CAPS = { ethnicity: 2, religion: 2 };
 
 export function label(key) { return STAT_LABELS[key] || key.replace(/_/g, ' '); }
 

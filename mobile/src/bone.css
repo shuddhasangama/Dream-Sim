@@ -139,3 +139,13 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .bgv-progress-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}
 .bgv-live-status{font-size:13px;color:var(--muted);display:flex;align-items:center;margin:14px 0}
 .bgv-document-complete h2{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:22px}
+
+.signup-stats-modern fieldset{border:0;padding:0;margin:18px 0}
+.signup-stats-modern legend{font-size:17px;font-weight:600;margin:10px 0}
+.signup-stats-modern label{display:block;margin:12px 0}
+.signup-stats-modern input:not([type=checkbox]),.signup-stats-modern select,.signup-stats-modern textarea{width:100%;box-sizing:border-box;min-height:44px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--card);color:var(--white);font-size:16px}
+.signup-stats-modern summary{min-height:44px;display:flex;align-items:center;font-weight:600;cursor:pointer;padding:12px 0}
+.signup-stats-modern details{border-top:1px solid var(--border);margin-top:14px}
+.signup-stats-modern .signup-stats-multi>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.signup-stats-modern .signup-stats-multi label,.signup-stats-modern .checkbox-row{display:flex;align-items:flex-start;gap:8px;min-height:44px;margin:0;font-size:13px;overflow-wrap:anywhere}
+.signup-stats-modern input[type=checkbox]{width:18px;height:18px;flex:none;accent-color:var(--white)}

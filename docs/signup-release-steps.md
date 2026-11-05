@@ -6,7 +6,11 @@ The long-running BGV worker now gives avatars their own single processing thread
 
 ## Release boundary
 
-Implemented commits include initial Vision Focus Panel, Chemistry additions, payment-first Verification, canonical DigiLocker identity, embedded avatar flow and concurrent worker handling. The wider proposed Stats redesign is still a preview. Public self-enrollment/admission work is not claimed complete by this release; the existing account/testing access rules still apply. No push, Railway deployment or Codemagic build was performed for these changes.
+This release adds independent phone/OTP signup, resumable Vision → Stats → Chemistry → Verification, and automatic sandbox BGV assignment for Bangalore, Delhi and Mumbai. The Stats page is implemented with identity, optional claims, date preferences and optional health disclosure. Other metro cities remain catalogued but disabled. OTP verifies phone ownership; matching admission still requires the bound Aadhaar, live face and required legal/employment results. Avatar selection is not identity proof.
+
+No Railway variable changes are needed with the currently audited configuration. DHASHU_DIGILOCKER_TESTERS is no longer used as a user-ID gate. Existing disabled accounts are not re-enabled. Signzy and Razorpay remain sandbox; this is production-style signup for the private tester distribution, not a switch to live billing or production Signzy.
+
+No push, Railway deployment or Codemagic build was performed for this release.
 
 ## PowerShell: publish the prepared checkout to GitHub master
 
@@ -38,3 +42,7 @@ Check that both deployments reach SUCCESS in Railway. Existing role variables ar
 After successful push and backend deployments, select master and the same release commit in Codemagic. Run ios-testflight for iOS; android-beta for a tester APK or android-play for a Play bundle. Distribute the resulting builds yourself.
 
 On a testing account with an unused avatar allowance: sign in → complete Razorpay test checkout → connect/complete DigiLocker → confirm profile name and age update → open Your avatar (auto-expanded on first completion) → capture latest selfie → consent → generate two → choose one. Court/FIR can progress at the same time. Reopen the app to verify selection persists, and check profile/match/comparison display. Existing accounts that already used their one generation run do not get another run through deployment. A completed Razorpay transaction and native camera/browser-return flow still require device acceptance; automated tests do not substitute for those checks.
+
+## Independent signup acceptance
+
+Use Sign up with two separate real phone numbers. Receive and enter each SMS OTP, choose a Twogether plan, save Stats with an enabled launch city, save Chemistry and complete Verification. Close and reopen after Stats to verify resume. Confirm account separation, automatic Aadhaar name/age adoption, legal/face progress and saved avatar selection. New users are not admitted to matching merely by signing up. Actual SMS delivery, test checkout and native browser/camera return need device acceptance.

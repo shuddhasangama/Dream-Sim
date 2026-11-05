@@ -163,8 +163,8 @@ class DigiLockerSignupTests(unittest.TestCase):
         saved=json.loads(self.conn.execute("SELECT stats_json FROM User WHERE id='u1'").fetchone()[0])
         self.assertEqual(saved['age'],reread.json['session']['identity']['age'])
         self.assertEqual(saved['identity_session_id'],sid)
-    def test_disabled_and_tester_scope(self):
-        self.assertFalse(service.view(self.conn,'ordinary_user')['enabled'])
+    def test_disabled_and_account_independent_scope(self):
+        self.assertTrue(service.view(self.conn,'ordinary_user')['enabled'])
         with patch.dict(os.environ,{'DHASHU_DIGILOCKER_ENABLED':'0'}):
             with self.assertRaises(ApiError): service.create(self.conn,'u1',self.body)
     def test_old_consent_never_requests_photo_and_allows_new_photo_consent(self):

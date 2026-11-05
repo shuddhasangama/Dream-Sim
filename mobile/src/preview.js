@@ -306,6 +306,7 @@ export function previewTransport() {
   let avatarPreview={enabled:true,state:'not_started',can_capture:true,can_generate:false,consent_version:'selfie-avatar-v1',consent_text:'Preview only: send only the latest selfie for two avatars. No real provider call in local preview.',options:[],selected:null,avatar:{},message:'Capture your latest selfie. Two choices, one run.'};
   return async (path, method, body) => {
     if (path === '/api/v1/profile/face-match' || path === '/api/v1/profile/liveness') return ok({enabled:true,state:'not_started',reference_ready:false,selfie_ready:false,can_request:false,liveness:'not_checked',consent_text:'Compare the original selfie with Aadhaar using Signzy.',consent_version:'selfie-aadhaar-face-match-v1',message:'Face comparison has not been requested.'});
+    if(path==='/api/v1/signup/state')return ok({modern:false,version:3,next_step:0});
     if(path==='/api/v1/verification/payment')return ok({required:false,enabled:false,can_begin:true});
     if (path === '/api/v1/profile/avatar') {if(method==='DELETE')avatarPreview={...avatarPreview,state:'deleted',can_capture:false,options:[],avatar:{}};return ok(avatarPreview);}
     if (path === '/api/v1/profile/avatar/selfie') {if(!avatarPreview.can_capture)return err('One run only.',409);avatarPreview={...avatarPreview,state:'draft',can_generate:true};return ok(avatarPreview);}
@@ -315,7 +316,7 @@ export function previewTransport() {
     // Preview never creates real identity-provider sessions.
     if (path === '/api/v1/verification/digilocker') return ok({enabled:false});
     if (path === '/api/v1/verification') return ok({enabled:false,checks:{},results:[],overall_approval:'Verification is unavailable in local preview.'});
-    if (path.endsWith('/auth/request')) return ok({challenge_id:'local-preview'},202);
+    if ((path.endsWith('/auth/request')||path.endsWith('/auth/signup/request'))) return ok({challenge_id:'local-preview'},202);
     if (path.endsWith('/auth/verify')) {
       if (body.code !== '123456') return {status:401,data:{error:{message:'Preview code is 123456.'},data:null}};
       active=true;

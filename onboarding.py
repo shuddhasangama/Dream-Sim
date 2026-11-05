@@ -542,7 +542,7 @@ STAT_RANGES: dict[str, tuple[int, int]] = {
 # request — "language, Cuisine and budget can be multi-selectable".
 MULTI_VALUE_STATS: tuple[str, ...] = tuple(
     key for key, _label, _opts, _hint in MULTI_STATS + OPTIONAL_MULTI_STATS
-) + ("budget", "ethnicity")
+) + ("budget", "ethnicity", "religion")
 
 # How many choices each capped field allows. Absent means no cap.
 #
@@ -550,7 +550,7 @@ MULTI_VALUE_STATS: tuple[str, ...] = tuple(
 # number that covers mixed descent without turning a self-description
 # into a checklist — and ethnicity is still never a matching filter, only
 # something a person says about themselves.
-MULTI_VALUE_LIMIT: dict[str, int] = {"ethnicity": 2}
+MULTI_VALUE_LIMIT: dict[str, int] = {"ethnicity": 2, "religion": 2}
 
 
 def normalise_stats(stats: dict[str, Any]) -> dict[str, Any]:
@@ -714,6 +714,7 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
          locale_defaults.budget_bands_for(str(form.get("city", "")).strip())),
         ("ethnicity", "Ethnicity", dict(
             (k, opts) for k, _l, opts in OPTIONAL_CHOICE_STATS)["ethnicity"]),
+        ("religion", "Religion", STAT_OPTIONS["religion"]),
     ):
         raw = form.get(key) or []
         if isinstance(raw, str):

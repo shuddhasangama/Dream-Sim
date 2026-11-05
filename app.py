@@ -4652,6 +4652,10 @@ def _api_week_state(user):
 
 
 def _api_journey_state(user):
+    if user.get('stats',{}).get('signup_version')==3 and user['stats'].get('signup_submitted') and user.get('bgv_status')!='verified':
+        import self_signup
+        self_signup.reconcile(get_db(),user['user_id'])
+        user=from_user_row(db.fetch_one(get_db(),'User',id=user['user_id']))
     """Snapshot persisted state without Week's lazy generation/resolution."""
     active = _my_active_lockin(user['user_id'])
     plan = _dateplan_for_lockin(active['id']) if active else None

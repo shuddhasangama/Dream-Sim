@@ -295,15 +295,16 @@ def _education_fits(accepted: list[str], candidate_education: str | None) -> boo
     return candidate_education is not None and candidate_education in accepted
 
 
-def _religion_fits(tiers: list[str], own_religion: str, candidate_religion: str | None) -> bool:
-    if any(t.lower() == "any" for t in tiers):
-        return True
-    if candidate_religion is None:
-        return False
-    if "same" in tiers and candidate_religion == own_religion:
-        return True
-    if "related" in tiers and _RELIGION_FAMILY.get(candidate_religion) == _RELIGION_FAMILY.get(own_religion):
-        return True
+def _religion_fits(tiers,own_religion,candidate_religion):
+    if any(t.lower()=='any' for t in tiers):return True
+    own=own_religion if isinstance(own_religion,list) else [own_religion]
+    other=candidate_religion if isinstance(candidate_religion,list) else [candidate_religion]
+    for a in own:
+        for b in other:
+            if not isinstance(a,str) or not isinstance(b,str):continue
+            if 'same' in tiers and a==b:return True
+            family=_RELIGION_FAMILY.get(a)
+            if 'related' in tiers and family is not None and family==_RELIGION_FAMILY.get(b):return True
     return False
 
 

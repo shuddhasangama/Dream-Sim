@@ -101,7 +101,7 @@ def snapshot(user, *, active, plan, couple, reached, contact, clock,
         raise ValueError('Journey projection received an unrelated plan')
     result = {
         'user': {**allowlist(user, ('user_id', 'journey_state', 'bgv_status')),
-                 'display_name': display_name},
+                 'display_name': display_name,'signup_version':user.get('stats',{}).get('signup_version'), 'signup_submitted':bool(user.get('stats',{}).get('signup_submitted'))},
         'stage_indicator': progress.stage_view(user['journey_state'], reached),
         'milestones': [key for key in disclosure.ORDER if key in reached],
         'contact_verification': allowlist(contact, ('required', 'satisfied',

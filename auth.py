@@ -72,7 +72,7 @@ def failure(message, status=400, code='validation_error'):
     return jsonify(error=message, code=code), status
 
 
-def start_challenge(conn, channel, destination, kind):
+def start_challenge(conn, channel, destination, kind, signup=False):
     if not auth_delivery.configured():
         return None, failure('Sign-in delivery is not configured yet.', 503, 'auth_unavailable')
     if not sessions.throttle(conn, [key('send-ip:' + (request.remote_addr or 'unknown'))], 20, 600):
@@ -85,7 +85,7 @@ def start_challenge(conn, channel, destination, kind):
     account = matches[0] if len(matches) == 1 and matches[0].get('auth_enabled') else None
     raw = secrets.token_urlsafe(32)
     provider_sid = None
-    if account:
+    if account or (signup and channel=='phone' and kind=='mobile' and not matches):
         try:
             provider_sid = auth_delivery.start(channel, destination)
         except auth_delivery.DeliveryUnavailable:
@@ -128,14 +128,23 @@ def verify_challenge(conn, challenge, code, kind):
         # Recheck expiry/consumption after the external call. Exactly one
         # request can redeem a challenge even if the provider repeats approval.
         suffix = ' FOR UPDATE' if db._is_postgres_connection(conn) else ''
-        account = sessions.sql(conn, 'SELECT * FROM "Account" WHERE id = ?' + suffix, (row['account_id'],)).fetchone()
-        if not account or not account['auth_enabled'] or normalize(row['channel'], account[row['channel']], stored=True) != row['destination']:
-            return None
-        redeemed = sessions.sql(conn, '''UPDATE "AuthChallenge" SET consumed_at = ?
-            WHERE id = ? AND consumed_at IS NULL AND expires_at > ? RETURNING account_id''',
-            (sessions.now(), row['id'], sessions.now())).fetchone()
-        if not redeemed:
-            return None
+        current=sessions.sql(conn,'SELECT * FROM "AuthChallenge" WHERE id=?'+suffix,(row['id'],)).fetchone()
+        if not current or current['consumed_at'] is not None or current['expires_at']<=sessions.now():return None
+        if row['account_id'] is None and kind=='mobile' and row['channel']=='phone':
+            # Only signup/request sends a provider challenge for an unknown phone.
+            if db._is_postgres_connection(conn):sessions.sql(conn,'LOCK TABLE "Account" IN SHARE ROW EXCLUSIVE MODE')
+            matches=[r for r in db.fetch_all(conn,'Account') if normalize('phone',r.get('phone'),stored=True)==row['destination']]
+            if len(matches)>1 or matches and not matches[0]['auth_enabled']:return None
+            if matches:account=matches[0]
+            else:
+                import self_signup
+                account=self_signup.create_account(conn,row['destination'])
+            sessions.sql(conn,'UPDATE "AuthChallenge" SET account_id=? WHERE id=?',(account['id'],row['id']))
+        else:
+            account=sessions.sql(conn,'SELECT * FROM "Account" WHERE id=?'+suffix,(row['account_id'],)).fetchone()
+        if not account or not account['auth_enabled'] or normalize(row['channel'],account[row['channel']],stored=True)!=row['destination']:return None
+        redeemed=sessions.sql(conn,'UPDATE "AuthChallenge" SET consumed_at=? WHERE id=? AND consumed_at IS NULL AND expires_at>? RETURNING account_id',(sessions.now(),row['id'],sessions.now())).fetchone()
+        if not redeemed:return None
         verified_column = 'verified_email' if row['channel'] == 'email' else 'verified_phone'
         sessions.sql(conn, 'UPDATE "Account" SET ' + verified_column + ' = 1 WHERE id = ?', (account['id'],))
         return sessions.issue_in_transaction(conn, account['user_id'], kind)
@@ -227,6 +236,17 @@ def register_auth(app, get_db):
             return failure('Enter a valid email or phone with country code, for example +91 followed by the number.')
         result, error = start_challenge(get_db(), body['channel'], destination, 'mobile')
         return error if error else (jsonify(result), 202)
+
+    @app.post('/api/v1/auth/signup/request')
+    def auth_signup_request():
+        body,error=payload(('channel','destination'))
+        if error:return error
+        destination=normalize(body['channel'],body['destination'])
+        if body['channel']!='phone' or destination is None:return failure('Use your own phone number including country code.')
+        result,error=start_challenge(get_db(),'phone',destination,'mobile',signup=True)
+        if error:return error
+        result['message']='If SMS delivery is available, a code will arrive shortly.'
+        return jsonify(result),202
 
     @app.post('/api/v1/auth/tester')
     def auth_tester():

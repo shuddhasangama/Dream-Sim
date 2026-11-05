@@ -1,6 +1,7 @@
 import * as verification from './screens/verification.js';
 import * as vision from './signupVision.js';
 import * as chemistry from './screens/chemistry.js';
+import * as signupStats from './signupStats.js';
 import { editableFieldsForm, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from './statsFields.js';
 
 export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry', 'Verification'];
@@ -9,11 +10,14 @@ export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry', 'Verification'];
 // Initial persistence still uses the existing protected profile APIs.
 export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
   let step = 0, data = null, dirty = false, error = '', draft = [];
-  let visionDraft = null;
+  let visionDraft = null, modern=false;
   const key = () => SIGNUP_STEPS[step].toLowerCase();
   async function load() {
-    data = step===3 ? await verification.load(session) : await session.get(`/api/v1/profile/${key()}`);
-    if(step===0)data={...data,_signupVision:visionDraft||vision.empty()};
+    data = step===3 ? await verification.load(session) : step===1&&modern?await session.get('/api/v1/signup/state'):await session.get(`/api/v1/profile/${key()}`);
+    if(step===0){
+      if(modern&&!visionDraft&&data.schema_version===2&&Array.isArray(data.goals)&&data.goals.length)visionDraft={plan:data.template_key,pillars:Object.fromEntries(data.goals.map(g=>[g.key,g.stance||[]])),focus:'Intimacy',kids_intent:data.kids_intent};
+      data={...data,_signupVision:visionDraft||vision.empty()};
+    }
     dirty = false; error = ''; draft = [];
   }
   function ctx() {
@@ -25,7 +29,7 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
     }};
   }
   return {
-    async begin() { step = 0; data = null; visionDraft=null; await load(); },
+    async begin() { step=0;data=null;visionDraft=null;const status=await session.get('/api/v1/signup/state');modern=!!status.modern;if(modern)step=status.next_step;await load(); },
     async refreshStatus() {
       if(step!==3||!verification.canAutoRefresh(data)||document.activeElement?.closest?.('form')||document.querySelector('#avatar-consent:checked'))return false;
       const folds=[...document.querySelectorAll('.verification-fold[open]')].map(e=>e.id);
@@ -39,6 +43,7 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
         : step === 0 ? vision.render(ctx())
         : step === 2 ? chemistry.render(ctx())
         : step === 3 ? verification.render(ctx())
+        : modern ? signupStats.render(ctx())
         : `<section class="card"><h1>Your Stats</h1><p>Tell us about yourself. Save your details to continue.</p>
           ${editableFieldsForm(data, safe, 'signup-stats')}
           ${(data.rows || []).filter(r=>!r.editable).map(r=>`<p class="hint">${safe(r.key.replaceAll('_',' '))}: ${safe(r.value)} · locked by your current journey</p>`).join('')}
@@ -71,6 +76,7 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
       if (step === 0) {
         vision.bind(root, ctx());
       }
+      if(step===1&&modern)signupStats.bind(root,ctx());
       if (step === 2) chemistry.bind(root, ctx());
       if (step === 3) verification.bind(root, ctx());
       root.querySelector('#signup-stats')?.addEventListener('submit', e=>{

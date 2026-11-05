@@ -48,9 +48,9 @@ export class Session {
     if (!envelope || envelope.error !== null || !envelope.data) throw new ApiError('Unexpected server response.');
     return envelope.data;
   }
-  async requestCode(destination) {
+  async requestCode(destination, signup=false) {
     if (!/^\+[1-9]\d{7,14}$/.test(destination)) throw new ApiError('Include the country code, for example +91 followed by your number.');
-    return this.raw('/api/v1/auth/request', 'POST', {channel: 'phone', destination});
+    return this.raw(signup?'/api/v1/auth/signup/request':'/api/v1/auth/request', 'POST', {channel: 'phone', destination});
   }
   async testerLogin(phone) {
     if (!/^\+[1-9]\d{7,14}$/.test(phone)) throw new ApiError('Include the country code.');

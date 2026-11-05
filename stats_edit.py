@@ -192,7 +192,7 @@ def rows(stats: dict[str, Any], state: dict[str, bool],
         # `group` lets a client show the BGV-verified fields together
         # without keeping its own copy of which fields those are.
         out.append({"key": field, "value": stats.get(field), **verdict,
-                    "group": "verified" if field in VERIFIED else "declared"})
+                    "group": "verified" if ((field in verified_fields or field=="age" and stats.get("identity_session_id")) if stats.get("signup_version")==3 else field in VERIFIED) else "declared"})
     return out
 
 

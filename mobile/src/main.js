@@ -52,6 +52,7 @@ const root = document.querySelector('#app');
 let challenge=null, phone='', busy=false, message='', journey=null, profile=null;
 let authIntent='login', signupActive=false, screenDirty=false, clockPending=false;
 const signup = createSignup({session, run, getBusy:()=>busy, safe: value=>safe(value), finish: async()=>{
+  if(profile?.stats?.signup_version===3)await session.post('/api/v1/signup/complete',{});
   await load(); signupActive=false; screenDirty=false; nav.resetTo('dashboard');
 }});
 // The currently-displayed non-dashboard screen's own data, and why it can't
@@ -177,14 +178,14 @@ function render() {
       const code=String(fields.get('code')||'').trim();
       run(async()=>{
         await session.verify(challenge,code);challenge=null;screenDirty=false;await load();
-        if(authIntent==='signup') {
+        if(authIntent==='signup'||journey.user.signup_version===3&&!journey.user.signup_submitted) {
           if(preview||journey.user.journey_state==='onboarding'){signupActive=true;await signup.begin();}
           else {message='Your account already exists. You are signed in; your profile is available from Home.';authIntent='login';}
         }
       });
     } else {
       phone=String(fields.get('phone')||'').trim();
-      run(async()=>{const result=await session.requestCode(phone);challenge=result.challenge_id;message='If this number is approved, a code will arrive shortly.';});
+      run(async()=>{const result=await session.requestCode(phone,authIntent==='signup');challenge=result.challenge_id;message='If SMS delivery is available, a code will arrive shortly.';});
     }
   });
   root.querySelector('#change')?.addEventListener('click',()=>{challenge=null;message='';render();});
@@ -293,7 +294,7 @@ function signin() {
     ${challenge?'<input id="credential" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,10}" minlength="4" maxlength="10" required placeholder="Enter SMS code">':`<input id="credential" name="phone" type="tel" autocomplete="tel" maxlength="16" required placeholder="+91 followed by your number" value="${safe(phone)}">`}
     <button class="primary" ${busy?'disabled':''}>${challenge?'Sign in':'Send SMS code'} <span aria-hidden="true">→</span></button>
 
-    ${challenge?`<button type="button" id="change" class="secondary" ${busy?'disabled':''}>Change number / request a new code</button>`:'<p class="hint">Include your country code. Beta access is by invitation.</p>'}</form>`;
+    ${challenge?`<button type="button" id="change" class="secondary" ${busy?'disabled':''}>Change number / request a new code</button>`:'<p class="hint">Include your country code. Sign up with your own phone number.</p>'}</form>`;
 }
 
 // ── generic fallback (§1: never a blank screen) ───────────────────────────
@@ -434,4 +435,4 @@ wireHardwareBack(native, nav, () => {
   if (window.confirm('Exit DhaShu?')) import('@capacitor/app').then(({App})=>App.exitApp());
 });
 render();
-run(async()=>{if(await session.restore())await load();});
+run(async()=>{if(await session.restore()){await load();if(profile?.stats?.signup_version===3&&!profile.stats.signup_submitted){signupActive=true;await signup.begin();}}});
