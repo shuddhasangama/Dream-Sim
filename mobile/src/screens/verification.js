@@ -52,10 +52,10 @@ export function render({data,safe,busy=false}) {
     <details class="card verification-fold" id="verification-face" ${data._verificationFolds?.includes('verification-face')?'open':''}><summary>Live face verification <span class="bgv-badge ${data.face?.state==='matched'?'good':data.face?.state==='not_matched'?'attention':'waiting'}">${FACE_WORK.includes(data.face?.state)?'Processing':data.face?.state==='matched'?'Complete':data.face?.state==='awaiting_capture'?'Continue capture':data.face?.state==='pending'?'Awaiting result':data.face?.state==='not_matched'?'Doesn’t match':['unknown','outcome_unknown','unavailable'].includes(data.face?.state)?'Needs attention':'To do'}</span></summary>
       ${faceMatch.render(data.face,safe,true)}
     </details>
-    <details class="card verification-fold" id="verification-avatar" ${data._verificationFolds?.includes('verification-avatar')?'open':''}><summary>Your avatar <span class="bgv-badge ${data.avatar?.state==='accepted'?'good':'waiting'}">${({queued:'Queued',submitting:'Generating',ready:'Choose one',accepted:'Complete'})[data.avatar?.state]||'To do'}</span></summary>
-      <div id="verification-avatar-body">${data.avatar?avatarScreen.render({data:data.avatar,safe,busy,embedded:true}):'<p>Avatar status unavailable.</p>'}</div>
+    <details class="card verification-fold" id="verification-avatar" ${(data._verificationFolds?.includes('verification-avatar')||(!data._verificationFolds&&identity&&['not_started','draft'].includes(data.avatar?.state)))?'open':''}><summary>Your avatar <span class="bgv-badge ${data.avatar?.state==='accepted'?'good':'waiting'}">${({queued:'Queued',submitting:'Generating',ready:'Choose one',accepted:'Complete'})[data.avatar?.state]||'To do'}</span></summary>
+      <div id="verification-avatar-body">${!identity&&!['queued','submitting','ready','accepted'].includes(data.avatar?.state)?'<p>Complete Aadhaar verification to set up your avatar here.</p>':data.avatar?avatarScreen.render({data:data.avatar,safe,busy,embedded:true}):'<p>Avatar status unavailable.</p>'}</div>
     </details>
-    ${!['queued','submitting','ready','accepted'].includes(data.avatar?.state)?'<p class="hint">After live capture, use that selfie to create your two avatar choices. Generation needs your separate consent.</p>':''}
+    ${!['queued','submitting','ready','accepted'].includes(data.avatar?.state)?'<p class="hint">After Aadhaar verification, capture your latest selfie here to create two avatar choices. Court and FIR checks can continue. Generation needs your consent.</p>':''}
     ${!processing(data)||data._statusError?`<button type="button" id="bgv-refresh" class="secondary" ${busy?'disabled':''}>Check for updates</button>`:''}
     <p class="hint">${data.environment==='preproduction'?'Sandbox testing · ':''}Each check has its own result. An exact search with zero cases verifies that check; overall account approval is separate.</p>
     ${!data.enabled?'<p>Verification checks are not enabled yet.</p>':''}</div>`;
@@ -66,9 +66,11 @@ export function bind(root,ctx) {
   const refresh=async()=>{
     const next=await load(session);
     const folds=[...root.querySelectorAll?.('.verification-fold[open]')||[]].map(e=>e.id);
+    if(!ctx.data?.digilocker?.session?.identity&&next.digilocker?.session?.identity&&next.avatar?.can_capture&&!folds.includes('verification-avatar'))folds.push('verification-avatar');
     patch({...next,...(next.avatar?.can_capture&&ctx.data?.avatar?._stagedSelfie?{avatar:{...next.avatar,_stagedSelfie:ctx.data.avatar._stagedSelfie,_avatarConsent:ctx.data.avatar._avatarConsent}}:{}),_verificationFolds:folds});
   };
   verificationPayment.bind(root,{session,run},ctx.data?.payment,refresh);
+  root.querySelectorAll?.('.verification-fold').forEach(section=>section.addEventListener('toggle',()=>{ctx.data._verificationFolds=[...root.querySelectorAll('.verification-fold[open]')].map(e=>e.id);}));
   const avatarRoot=root.querySelector('#verification-avatar-body');
   if(avatarRoot&&ctx.data?.avatar)avatarScreen.bind(avatarRoot,{session,run,embedded:true,data:ctx.data.avatar,patch:avatar=>{
     patch({...ctx.data,avatar:{...avatar,face:ctx.data.face},_verificationFolds:[...root.querySelectorAll('.verification-fold[open]')].map(e=>e.id)});

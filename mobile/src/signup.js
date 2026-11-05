@@ -31,6 +31,7 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
       const folds=[...document.querySelectorAll('.verification-fold[open]')].map(e=>e.id);
       try{const next=await verification.load(session);
       if(step!==3||!verification.canAutoRefresh(data))return false;
+      if(!data.digilocker?.session?.identity&&next.digilocker?.session?.identity&&next.avatar?.can_capture&&!folds.includes('verification-avatar'))folds.push('verification-avatar');
       data={...next,_verificationFolds:folds};return true;}catch(error){if(error?.status===401)throw error;data={...data,_statusError:'Status updates paused. Check your connection.'};return step===3;}
     },
     render() {

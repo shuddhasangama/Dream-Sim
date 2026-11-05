@@ -5,11 +5,11 @@ async function mount(page,mode){
   const {render}=await import('/src/screens/verification.js');
   const safe=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
   const identity={name:'Synthetic Private Name',age:36,dob:'1990-01-01',document_address:'SYNTHETIC PRIVATE ADDRESS'};
-  const active=mode!=='start';
+  const active=mode!=='start',setup=mode==='avatar_setup';
   const data={enabled:true,environment:'preproduction',bundle:{consented:true,employer_declared:true,pan_state:active?'received':'pending'},digilocker:{enabled:true,environment:'preproduction',consent_text:'I agree to share my Aadhaar details and available PAN records for verification.',session:active?{state:'complete',identity,reference_photo_available:true}:null},
    results:active?[{operation:'current_employer',state:'processing',environment:'preproduction',message:'Confirming available employment records'},{operation:'individual_result',state:'verified',environment:'preproduction',message:'Exact search completed: zero cases.'},{operation:'fir_result',state:'processing',environment:'preproduction',message:'Retrieving FIR result'}]:[],
-   face:{enabled:true,operation:'liveness_secure',state:active?'matched':'not_started',reference_ready:active,can_request:false,message:active?'Liveness and Aadhaar face match passed.':'Complete DigiLocker first.'},
-   avatar:{enabled:true,state:active?'submitting':'not_started',can_capture:!active,options:[]},_verificationFolds:[]};
+   face:{enabled:true,operation:'liveness_secure',state:active&&!setup?'matched':'not_started',reference_ready:active,can_request:false,message:active?'Liveness and Aadhaar face match passed.':'Complete DigiLocker first.'},
+   avatar:{enabled:true,state:active&&!setup?'submitting':'not_started',can_capture:!active||setup,options:[]},...(setup?{}:{_verificationFolds:[]})};
   document.querySelector('#app').innerHTML=render({safe,data});
  },mode);
 }
@@ -52,4 +52,13 @@ test('signup status polling makes reads only and never replaces an earlier signu
  });
  expect(result.initial).toBe(false);expect(result.initialCalls).toBe(0);expect(result.updated).toBe(true);
  expect(result.calls.length).toBeGreaterThan(0);expect(result.calls.every(([method])=>method==='GET')).toBe(true);
+});
+
+test('avatar capture is available after Aadhaar while Court or FIR is still running',async({page})=>{
+ await mount(page,'avatar_setup');
+ await expect(page.locator('#verification-avatar')).toHaveAttribute('open','');
+ await expect(page.getByRole('button',{name:'Capture latest selfie',exact:true})).toBeVisible();
+ await expect(page.getByText(/Checks are running in the background/)).toBeVisible();
+ await expect(page.locator('#verification-face')).not.toHaveAttribute('open','');
+ await page.screenshot({path:'../outputs/verification-avatar-after-aadhaar.png',fullPage:true});
 });
