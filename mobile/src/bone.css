@@ -132,3 +132,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .chemistry-partner-any input{width:18px;height:18px;flex:none;accent-color:var(--white)}
 .chemistry-add{border-top:1px solid var(--border);padding-top:18px;margin:18px 0}
 .chemistry-add>div{display:flex;flex-wrap:wrap;gap:8px}.chemistry-add input{flex:1;min-width:0;width:100%;min-height:44px}
+
+.verification-fold>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;list-style:none;font-weight:600}
+.verification-fold>summary:before{content:'+'}.verification-fold[open]>summary:before{content:'−'}
+.verification-fold .card{border:0;padding:14px 0 0;box-shadow:none;background:transparent;margin:0}
+.bgv-progress-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}
+.bgv-live-status{font-size:13px;color:var(--muted);display:flex;align-items:center;margin:14px 0}
+.bgv-document-complete h2{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:22px}

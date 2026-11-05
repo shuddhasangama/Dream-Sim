@@ -7,7 +7,7 @@ export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry', 'Verification'];
 
 // Signup presentation for authenticated onboarding accounts.
 // Initial persistence still uses the existing protected profile APIs.
-export function createSignup({session, run, safe, finish}) {
+export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
   let step = 0, data = null, dirty = false, error = '', draft = [];
   let visionDraft = null;
   const key = () => SIGNUP_STEPS[step].toLowerCase();
@@ -17,7 +17,7 @@ export function createSignup({session, run, safe, finish}) {
     dirty = false; error = ''; draft = [];
   }
   function ctx() {
-    return {session, run, safe, data, onboarding:true, patch(next) {
+    return {session, run, safe, data, busy:getBusy(), onboarding:true, patch(next) {
       data = next;
       if(step===0&&next._signupVision){visionDraft=next._signupVision;dirty=!!next._signupDirty;draft=[];}
       if(step===2){dirty=!next._saved;draft=[];}
@@ -26,6 +26,13 @@ export function createSignup({session, run, safe, finish}) {
   }
   return {
     async begin() { step = 0; data = null; visionDraft=null; await load(); },
+    async refreshStatus() {
+      if(step!==3||!verification.canAutoRefresh(data)||document.activeElement?.closest?.('form')||document.querySelector('#avatar-consent:checked'))return false;
+      const folds=[...document.querySelectorAll('.verification-fold[open]')].map(e=>e.id);
+      try{const next=await verification.load(session);
+      if(step!==3||!verification.canAutoRefresh(data))return false;
+      data={...next,_verificationFolds:folds};return true;}catch(error){if(error?.status===401)throw error;data={...data,_statusError:'Status updates paused. Check your connection.'};return step===3;}
+    },
     render() {
       const body = !data ? '<p>Loading your profile…</p>'
         : step === 0 ? vision.render(ctx())

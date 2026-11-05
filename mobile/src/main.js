@@ -51,7 +51,7 @@ const session = new Session(transport,vault);
 const root = document.querySelector('#app');
 let challenge=null, phone='', busy=false, message='', journey=null, profile=null;
 let authIntent='login', signupActive=false, screenDirty=false, clockPending=false;
-const signup = createSignup({session, run, safe: value=>safe(value), finish: async()=>{
+const signup = createSignup({session, run, getBusy:()=>busy, safe: value=>safe(value), finish: async()=>{
   await load(); signupActive=false; screenDirty=false; nav.resetTo('dashboard');
 }});
 // The currently-displayed non-dashboard screen's own data, and why it can't
@@ -399,14 +399,15 @@ wireKeyboardScroll();
 // Poll server time on both native platforms. Never advance time from a device,
 // overwrite an edited form, or interrupt a playing walkthrough.
 async function refreshAcceleratedClock() {
-  if (busy || !journey || signupActive || document.hidden) return;
+  if (busy || !journey || document.hidden) return;
+  if(signupActive){try{const changed=await signup.refreshStatus();if(changed&&signupActive&&!busy)render();}catch{}return;}
   // A newly captured private selfie is unsaved screen memory. App-resume or
   // clock polling must not replace its preview while the person reviews it.
   if (nav.current.key==='avatar' && screenData?._stagedSelfie) return;
   try {
-    if(nav.current.key==='verify' && !screenDirty && !document.activeElement?.closest?.('form')) {
+    if(nav.current.key==='verify' && verificationScreen.canAutoRefresh(screenData) && !document.querySelector('#avatar-consent:checked') && !screenDirty && !document.activeElement?.closest?.('form')) {
       const nextVerification=await verificationScreen.load(session);
-      if(nav.current.key==='verify' && !busy && !screenDirty && !document.activeElement?.closest?.('form') && JSON.stringify(nextVerification)!==JSON.stringify(screenData)) {screenData=nextVerification;render();}
+      if(nav.current.key==='verify' && !busy && !screenDirty && !document.activeElement?.closest?.('form') && JSON.stringify(nextVerification)!==JSON.stringify(screenData)) {screenData={...nextVerification,_verificationFolds:[...root.querySelectorAll('.verification-fold[open]')].map(e=>e.id)};render();}
     }
     const next = await session.get('/api/v1/journey/status');
     if (progressKey(next) === progressKey(journey)) return;
@@ -422,7 +423,9 @@ async function refreshAcceleratedClock() {
       return;
     }
     await run(async()=>{await reloadCurrent();clockPending=false;});
-  } catch { /* Normal user actions report connectivity/auth errors. */ }
+  } catch {
+    if(nav.current.key==='verify'&&screenData&&!busy){screenData={...screenData,_statusError:'Status updates paused. Check your connection.'};render();}
+  }
 }
 setInterval(refreshAcceleratedClock, 15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAcceleratedClock();});

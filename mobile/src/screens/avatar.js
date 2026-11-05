@@ -9,18 +9,18 @@ export async function load(session){
 }
 export function statusText(data){return ({not_started:'Capture your latest selfie to begin.',draft:'Review your selfie and consent to continue.',queued:'Your two avatars are queued.',submitting:'Generating your two avatars…',ready:'Choose your avatar.',accepted:'Your avatar is on your profile.',unknown:'Generation could not be confirmed. Contact support; another run is blocked.',deleted:'Images removed. Your generation allowance is unchanged.',expired:'Your private images have expired.'})[data.state]||data.message||'Check your avatar status.';}
 
-export function render({data,safe,busy}){
+export function render({data,safe,busy,embedded=false}){
  if(!data)return '<section class="card">Loading avatar…</section>';
- return `<section class="intro"><h1>Your avatar</h1><p>One selfie. Two choices. One generation run.</p></section><section class="card avatar-flow"><p role="status">${safe(data._requestNote||statusText(data))}</p>
+ return `${embedded?'':'<section class="intro"><h1>Your avatar</h1><p>One selfie. Two choices. One generation run.</p></section>'}<section class="card avatar-flow"><p role="status">${safe(data._requestNote||statusText(data))}</p>
  ${!data.enabled?'<p>Avatar generation is being configured.</p>':''}
- ${data.can_capture?`<button type="button" id="avatar-camera" ${busy?'disabled':''}>${data._stagedSelfie?'Retake selfie':'Capture latest selfie'}</button><img id="avatar-selfie" class="profile-portrait" ${data._stagedSelfie?`src="${safe(data._stagedSelfie)}"`:'hidden'} alt="Review your private selfie"><p id="avatar-note" role="status">${safe(data._cameraNote||'')}</p>
+ ${data.can_capture&&!['queued','submitting','ready','accepted'].includes(data.state)?`${embedded&&data.verified_selfie_preview?'<p class="hint">Your live-capture selfie is ready.</p>':`<button type="button" id="avatar-camera" ${busy?'disabled':''}>${data._stagedSelfie?'Retake selfie':'Capture latest selfie'}</button>`}<img id="avatar-selfie" class="profile-portrait" ${data._stagedSelfie?`src="${safe(data._stagedSelfie)}"`:'hidden'} alt="Review your private selfie"><p id="avatar-note" role="status">${safe(data._cameraNote||'')}</p>
  ${data._stagedSelfie?`<label class="checkbox-row"><input id="avatar-consent" type="checkbox" ${data._avatarConsent?'checked':''} ${busy?'disabled':''}> I agree to send this selfie to OpenAI to generate two avatars.</label><details><summary>How your photo is used</summary><p>${safe(data.consent_text)}</p></details>`:''}
  <button type="button" id="avatar-generate" ${data._stagedSelfie&&data._avatarConsent?'':'hidden'} ${busy?'disabled':''}>Generate 2 avatars</button><p class="hint">GPT Image 2 · Low quality</p>`:''}
  ${!data._stagedSelfie&&data.can_generate?'<p>Your latest saved selfie is ready. Capture it again to review it before generation.</p>':''}
- <div class="avatar-options">${(data.options||[]).map((src,i)=>`<div><img src="${safe(src)}" alt="Avatar option ${i+1}"><button type="button" data-avatar-accept="${i}">${data.selected===i?'Selected':'Choose avatar '+(i+1)}</button></div>`).join('')}</div>
+ <div class="avatar-options">${(data.state==='accepted'?[]:data.options||[]).map((src,i)=>`<div><img src="${safe(src)}" alt="Avatar option ${i+1}"><button type="button" data-avatar-accept="${i}">${data.selected===i?'Selected':'Choose avatar '+(i+1)}</button></div>`).join('')}</div>
  ${data.avatar?.photo?`<h2>Your selected avatar</h2><img class="profile-portrait" src="${safe(data.avatar.photo)}" alt="Your selected avatar"><p>Visible on your profile and to matches · Verification pending</p>`:''}
- <button type="button" id="avatar-refresh" class="secondary" ${busy?'disabled':''}>${busy?'Checking…':'Refresh avatar status'}</button>
- ${!['not_started','queued','submitting','deleted'].includes(data.state)?'<details><summary>Remove avatar and private images</summary><p>This removes your avatar from your profile and matches. It does not reset the one-run allowance or recall processing by OpenAI.</p><button type="button" id="avatar-delete" class="secondary">Remove my avatar images</button></details>':''}</section><details class="card"><summary>Face verification · ${safe(data.face?.state==='matched'?'Matched':'Pending')}</summary>${data._faceError?'<p>Face status unavailable. Refresh to try again.</p>':faceMatch.render(data.face,safe)}</details>`;
+ ${embedded?'':`<button type="button" id="avatar-refresh" class="secondary" ${busy?'disabled':''}>${busy?'Checking…':'Refresh avatar status'}</button>`}
+ ${!['not_started','queued','submitting','deleted'].includes(data.state)?'<details><summary>Remove avatar and private images</summary><p>This removes your avatar from your profile and matches. It does not reset the one-run allowance or recall processing by OpenAI.</p><button type="button" id="avatar-delete" class="secondary">Remove my avatar images</button></details>':''}</section>${embedded?'':`<details class="card"><summary>Face verification · ${safe(data.face?.state==='matched'?'Matched':'Pending')}</summary>${data._faceError?'<p>Face status unavailable. Refresh to try again.</p>':faceMatch.render(data.face,safe)}</details>`}`;
 }
 export function captureError(error){
  const text=String(error?.message||error||'').toLowerCase();
@@ -30,7 +30,7 @@ export function captureError(error){
  if(text.includes('large'))return 'The photo is too large. Retake your selfie and try again.';
  return 'The camera did not return a usable photo. Try capturing again. Nothing was uploaded.';
 }
-export function bind(root,{session,run,patch,data},takePhoto=options=>Camera.getPhoto(options)){
+export function bind(root,{session,run,patch,data,embedded=false},takePhoto=options=>Camera.getPhoto(options)){
  let staged=data?._stagedSelfie||null;
  const refresh=async()=>{
   try{
@@ -38,7 +38,7 @@ export function bind(root,{session,run,patch,data},takePhoto=options=>Camera.get
    patch({...next,...(next.can_capture&&staged?{_stagedSelfie:staged,_avatarConsent:!!data._avatarConsent}:{}),_requestNote:'Status updated. '+statusText(next)});
   }catch(error){if(error?.status===401)throw error;patch({...data,_requestNote:'Status could not be refreshed. Check your connection and try again.'});}
  };
- faceMatch.bind(root,{session,run},data?.face,refresh);
+ if(!embedded)faceMatch.bind(root,{session,run},data?.face,refresh);
  root.querySelector('#avatar-refresh')?.addEventListener('click',()=>run(refresh));
  function capture(source){
   // Global busy state suppresses app-resume polling and navigation while the

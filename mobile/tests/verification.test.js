@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { render, load, bind } from '../src/screens/verification.js';
+import { render, load, bind, processing, canAutoRefresh } from '../src/screens/verification.js';
 const safe = v=>String(v??'').replaceAll('<','&lt;').replaceAll('>','&gt;');
 test('verification labels sandbox and separates unavailable from mismatch',()=>{
   const html=render({safe,data:{enabled:true,environment:'preproduction',checks:{pan_simple:'Name and DOB'},
@@ -17,7 +17,7 @@ test('disabled verification exposes no submission form',()=>{
 test('verification reads only own status and binds with root/context signature',async()=>{
   const calls=[];
   await load({get:async p=>calls.push(p)});
-  assert.deepEqual(calls,['/api/v1/verification','/api/v1/verification/digilocker','/api/v1/verification/plan','/api/v1/verification/liveness','/api/v1/profile/liveness']);
+  assert.deepEqual(calls,['/api/v1/verification','/api/v1/verification/digilocker','/api/v1/verification/plan','/api/v1/verification/liveness','/api/v1/profile/liveness','/api/v1/profile/avatar']);
   assert.doesNotThrow(()=>bind({querySelector:()=>null},{session:{},run:()=>{},patch:()=>{}}));
 });
 
@@ -32,4 +32,20 @@ test('exact zero results show Verified and historical employer shows History fou
   const html=render({safe,data:{enabled:true,environment:'preproduction',bundle:{consented:true,employer_declared:true},results:[{operation:'current_employer',environment:'preproduction',state:'history_available',message:'Last recorded employer: Synthetic Ltd (2021 to 2022). Current employment is not established.'},{operation:'individual_result',environment:'preproduction',state:'verified',message:'Verified: completed exact search returned zero cases.'},{operation:'fir_result',environment:'preproduction',state:'verified',message:'Verified: completed exact search returned zero cases.'}]}});
   assert.match(html,/History found/);assert.match(html,/Last recorded employer/);assert.equal((html.match(/bgv-badge good">Verified/g)||[]).length,2);
   assert.doesNotMatch(html,/Review needed|Final BGV review is pending/);
+});
+
+
+test('background work shows progress without refresh or duplicate avatar actions',()=>{
+ const data={enabled:true,results:[{operation:'fir_search',state:'queued'}],digilocker:{enabled:true,session:{state:'retrieving'},consent_text:'Consent'},avatar:{enabled:true,state:'submitting',can_capture:true,options:[]},face:{enabled:true,state:'queued_get',operation:'liveness_secure',message:'Retrieving',can_complete:true}};
+ const html=render({safe,data});
+ assert.ok(html.indexOf('Connect DigiLocker')<html.indexOf('Verification checklist'));
+ assert.match(html,/Aadhaar is required/);assert.match(html,/PAN is optional/);
+ assert.match(html,/background/);assert.match(html,/Generating/);
+ assert.doesNotMatch(html,/id="(?:bgv-refresh|face-match-refresh|avatar-refresh|avatar-camera|avatar-generate|face-hosted-complete)"/);
+ assert.equal(processing(data),true);assert.equal(canAutoRefresh({...data,_verificationEditing:true}),false);
+});
+
+test('an unrelated avatar outage does not block verification reads',async()=>{
+ const result=await load({get:async path=>{if(path.endsWith('/avatar'))throw {status:503};return {};}});
+ assert.equal(result.avatar.state,'unavailable');
 });

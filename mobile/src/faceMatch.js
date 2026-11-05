@@ -4,21 +4,21 @@ export async function load(session){
  try{return await session.get('/api/v1/profile/liveness');}
  catch(error){if(![404,503].includes(error?.status))throw error;return session.get('/api/v1/profile/face-match');}
 }
-export function render(data,safe){
+export function render(data,safe,compact=false){
  if(!data)return '';
- if(data.operation==='liveness_secure')return `<section class="card face-comparison"><h2>Live face verification</h2><p role="status">${safe(data.message)}</p>
+ if(data.operation==='liveness_secure')return `<section class="card face-comparison">${compact?'':'<h2>Live face verification</h2>'}<p role="status">${safe(data.message)}</p>
  ${data.match_percentage!=null?`<p>Face match: ${safe(data.match_percentage)}% · Liveness: ${safe(data.liveness)}</p>`:''}
- ${data.enabled&&data.state==='not_started'?`${!data.reference_ready?'<p>Complete DigiLocker photo sharing first.</p>':''}<label class="checkbox-row"><input type="checkbox" id="face-match-consent"> I agree to live capture and comparison with my Aadhaar photo.</label><details><summary>How this check works</summary><p>${safe(data.consent_text)}</p></details><button type="button" id="face-match-start" ${data.can_request?'':'disabled'}>Start face verification</button>`:''}
+ ${data.enabled&&data.state==='not_started'&&(!compact||data.reference_ready)?`${!data.reference_ready?'<p>Complete DigiLocker photo sharing first.</p>':''}<label class="checkbox-row"><input type="checkbox" id="face-match-consent"> I agree to live capture and comparison with my Aadhaar photo.</label><details><summary>How this check works</summary><p>${safe(data.consent_text)}</p></details><button type="button" id="face-match-start" ${data.can_request?'':'disabled'}>Start face verification</button>`:''}
  ${data.capture_url?'<button type="button" id="face-hosted-open">Open Signzy capture</button>':''}
- ${data.can_complete?'<button type="button" id="face-hosted-complete">I’ve finished · Check result</button>':''}
- <p id="face-match-note" role="status"></p><button type="button" id="face-match-refresh" class="secondary">Refresh face status</button><p class="hint">Sandbox check · Overall account approval is separate.</p></section>`;
- return `<section class="card face-comparison"><h2>Selfie → Aadhaar</h2><p role="status">${safe(data.message)}</p>
+ ${data.can_complete&&!['queued_get','retrieving'].includes(data.state)?'<button type="button" id="face-hosted-complete">I’ve finished · Retrieve result</button>':''}
+ <p id="face-match-note" role="status"></p>${compact?'':'<button type="button" id="face-match-refresh" class="secondary">Refresh face status</button>'}<p class="hint">Sandbox check · Overall account approval is separate.</p></section>`;
+ return `<section class="card face-comparison">${compact?'':'<h2>Selfie → Aadhaar</h2>'}<p role="status">${safe(data.message)}</p>
  ${data.match_percentage!=null?`<p>Signzy match score: ${safe(data.match_percentage)}%</p>`:''}
  <p class="hint">Sandbox face comparison · Liveness not checked. This does not approve your account or block the other test journeys.</p>
- ${data.enabled&&data.state==='not_started'?`${!data.reference_ready?'<p>Complete DigiLocker with photo sharing first.</p>':''}${!data.selfie_ready?'<p>Capture and submit your latest selfie from Home → Your AI avatar.</p>':''}
+ ${data.enabled&&data.state==='not_started'&&(!compact||data.reference_ready)?`${!data.reference_ready?'<p>Complete DigiLocker with photo sharing first.</p>':''}${!data.selfie_ready?'<p>Capture and submit your latest selfie from Home → Your AI avatar.</p>':''}
  <label class="checkbox-row"><input type="checkbox" id="face-match-consent"> ${safe(data.consent_text)}</label><p id="face-match-note" role="status"></p><button type="button" id="face-match-start" ${data.can_request?'':'disabled'}>Compare selfie with Aadhaar</button>
  ${data.selfie_ready&&data.reference_ready&&!data.can_request?'<p>Submit your avatar generation to lock the current selfie before comparison.</p>':''}`:''}
- ${!data.enabled?'<p>Face comparison is being configured.</p>':''}<button type="button" id="face-match-refresh" class="secondary">Refresh face status</button></section>`;
+ ${!data.enabled?'<p>Face comparison is being configured.</p>':''}${compact?'':'<button type="button" id="face-match-refresh" class="secondary">Refresh face status</button>'}</section>`;
 }
 export async function waitForStatus(session,current,pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))){
  let next=current;
