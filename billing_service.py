@@ -279,7 +279,7 @@ def webhook(conn, raw, signature):
         if db.fetch_one(conn,'BillingEvent',id=event_id):
             return
         rows=db.fetch_all(conn,'BillingPurchase',mode=catalog.mode())
-        row=next((r for r in rows if (provider_id and r['provider_id']==provider_id) or
+        row=next((r for r in rows if (provider_id and (r['provider_id']==provider_id or (r['provider']=='razorpay_verification_test_link' and json.loads(r['price_json']).get('order_id')==provider_id))) or
                   (refund_entity.get('payment_id') and r['payment_id']==refund_entity['payment_id'])),None)
         if row is None:
             # A notification can race create_order's response; retry delivery later.

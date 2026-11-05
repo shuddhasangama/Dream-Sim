@@ -45,7 +45,9 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
     @api.get('/profile/stats')
     def stats_editor():
         verified_fields=stats_edit.verified_field_set(db.fetch_all(get_db(),'Verification',user_id=uid()))
-        return jsonify(rows=stats_edit.rows(g.api_user['stats'],stats_situation(g.api_user),verified_fields),
+        import verified_identity
+        identity=verified_identity.owner_identity(get_db(),uid())
+        return jsonify(identity=identity,rows=stats_edit.rows(g.api_user['stats'],stats_situation(g.api_user),verified_fields),
             options=onboarding.STAT_OPTIONS,ranges=onboarding.STAT_RANGES,
             changes=db.fetch_all(get_db(),'StatChange',user_id=uid()))
 

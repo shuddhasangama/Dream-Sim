@@ -22,6 +22,7 @@ class DigiLockerSignupTests(unittest.TestCase):
         self.env.start()
         self.conn=sqlite3.connect(':memory:'); self.conn.row_factory=sqlite3.Row
         self.conn.executescript('CREATE TABLE "User" (id TEXT PRIMARY KEY, bgv_status TEXT); INSERT INTO "User" VALUES (\'u1\',\'declared\'); INSERT INTO "User" VALUES (\'u2\',\'declared\');')
+        self.conn.execute("ALTER TABLE User ADD COLUMN stats_json TEXT NOT NULL DEFAULT '{}'")
         schema=Path('schema.sql').read_text(encoding='utf-8')
         self.conn.executescript(schema[schema.index('CREATE TABLE IF NOT EXISTS "DigiLockerSession"'):])
         self.body={'request_id':str(uuid.uuid4()),'consent':True,'consent_version':service.VERSION}
@@ -50,6 +51,14 @@ class DigiLockerSignupTests(unittest.TestCase):
         result=service.view(self.conn,'u1')['session']
         self.assertEqual(result['state'],'complete')
         self.assertEqual(result['identity']['name'],'SYNTHETIC PERSON')
+        import verified_identity
+        canonical=verified_identity.owner_identity(self.conn,'u1')
+        self.assertEqual(canonical['name'],'SYNTHETIC PERSON')
+        self.assertEqual(canonical['dob'],'1995-01-01')
+        saved=json.loads(self.conn.execute("SELECT stats_json FROM User WHERE id='u1'").fetchone()[0])
+        self.assertEqual(saved['age'],result['identity']['age'])
+        self.assertNotIn('SYNTHETIC PERSON',json.dumps(saved))
+        self.assertIsNone(verified_identity.owner_identity(self.conn,'u2'))
         self.assertFalse(result['identity']['current_address_verified'])
         self.assertNotIn('uid',result['identity'])
         self.assertTrue(result['reference_photo_available'])
@@ -61,6 +70,15 @@ class DigiLockerSignupTests(unittest.TestCase):
         for secret in ('SYNTHETIC PERSON','request_12345678','Synthetic address','DO NOT STORE'):
             self.assertNotIn(secret,stored)
         self.assertEqual(self.conn.execute('SELECT bgv_status FROM "User" WHERE id=\'u1\'').fetchone()[0],'declared')
+    def test_underage_result_does_not_replace_profile_age(self):
+        self.conn.execute("UPDATE User SET stats_json=? WHERE id='u1'",(json.dumps({'age':35}),));self.conn.commit()
+        sid=self.create()
+        self.provider({'result':{'name':'SYNTHETIC CHILD','dob':'01/01/2020','address':'Synthetic address'}})
+        service.complete(self.conn,'u1',sid,{'consent_completed':True})
+        self.assertEqual(service.view(self.conn,'u1')['session']['state'],'needs_review')
+        saved=json.loads(self.conn.execute("SELECT stats_json FROM User WHERE id='u1'").fetchone()[0])
+        self.assertEqual(saved,{'age':35})
+
     def test_v3_requests_pan_and_records_bundle_consent_without_inline_screening(self):
         self.body['consent_version']=service.BUNDLE_VERSION
         call=self.provider({'result':{'requestId':'request_12345678','url':'https://api.digitallocker.gov.in/public/oauth2/1/authorize'}})
@@ -138,6 +156,13 @@ class DigiLockerSignupTests(unittest.TestCase):
         self.provider({'result':{'name':'Test','dob':'01/01/1990','address':'Test'}})
         result=client.post('/verification/digilocker/sessions/'+sid+'/complete',json={'consent_completed':True},headers=headers)
         self.assertEqual(result.json['session']['state'],'complete')
+        self.conn.execute("UPDATE User SET stats_json=? WHERE id='u1'",(json.dumps({'age':25}),));self.conn.commit()
+        with patch('signzy.client.Client.execute',side_effect=AssertionError('Must not call provider')):
+            reread=client.get('/verification/digilocker',headers=headers)
+        self.assertEqual(reread.status_code,200)
+        saved=json.loads(self.conn.execute("SELECT stats_json FROM User WHERE id='u1'").fetchone()[0])
+        self.assertEqual(saved['age'],reread.json['session']['identity']['age'])
+        self.assertEqual(saved['identity_session_id'],sid)
     def test_disabled_and_tester_scope(self):
         self.assertFalse(service.view(self.conn,'ordinary_user')['enabled'])
         with patch.dict(os.environ,{'DHASHU_DIGILOCKER_ENABLED':'0'}):

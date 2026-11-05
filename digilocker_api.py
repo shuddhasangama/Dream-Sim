@@ -9,9 +9,30 @@ def register(api, get_db):
             raise ApiError('authentication_required','Sign in through the app to verify your details.',401)
         return g.api_user['user_id']
     def response(uid):
-        result = jsonify(service.view(get_db(),uid))
+        snapshot=service.view(get_db(),uid)
+        existing=snapshot.get('session') or {}
+        # Adopt previously-confirmed evidence once; never repeat a provider call.
+        if existing.get('state')=='complete' and existing.get('identity'):
+            import json, db, auth_sessions, verified_identity
+            with auth_sessions.transaction(get_db()):
+                row=db.fetch_one(get_db(),'User',id=uid)
+                if json.loads(row['stats_json'] or '{}').get('identity_session_id')!=existing['id']:
+                    verified_identity.apply(get_db(),uid,existing['id'],existing['identity'],snapshot['environment'])
+        result = jsonify(snapshot)
         result.headers['Cache-Control']='no-store'
         return result
+    @api.get('/verification/payment')
+    def verification_payment_read():
+        import verification_payment
+        result=jsonify(verification_payment.view(get_db(),actor()));result.headers['Cache-Control']='no-store';return result
+    @api.post('/verification/payment/start')
+    def verification_payment_start():
+        import verification_payment
+        uid=actor();json_object();return jsonify(verification_payment.start(get_db(),uid))
+    @api.post('/verification/payment/complete')
+    def verification_payment_complete():
+        import verification_payment
+        uid=actor();json_object();return jsonify(verification_payment.complete(get_db(),uid))
     @api.get('/verification/digilocker')
     def digilocker_read():
         return response(actor())

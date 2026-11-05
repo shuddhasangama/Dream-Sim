@@ -1,9 +1,10 @@
 import * as faceMatch from '../faceMatch.js';
 import * as digilocker from '../digilocker.js';
 import * as avatarScreen from './avatar.js';
+import * as verificationPayment from '../verificationPayment.js';
 export async function load(session) {
-  const [checks,identity,plan,liveness,face,avatar]=await Promise.all([session.get('/api/v1/verification'),digilocker.load(session),session.get('/api/v1/verification/plan'),session.get('/api/v1/verification/liveness'),faceMatch.load(session),session.get('/api/v1/profile/avatar').catch(error=>{if(error?.status===401)throw error;return {enabled:false,state:'unavailable',message:'Avatar status unavailable. Check for updates to try again.'};})]);
-  return {...checks,digilocker:identity,plan,liveness,face,avatar:avatar?{...avatar,...(avatar.verified_selfie_preview&&avatar.can_capture?{_stagedSelfie:avatar.verified_selfie_preview}:{}),face}:null};
+  const [checks,identity,plan,liveness,face,avatar,payment]=await Promise.all([session.get('/api/v1/verification'),digilocker.load(session),session.get('/api/v1/verification/plan'),session.get('/api/v1/verification/liveness'),faceMatch.load(session),session.get('/api/v1/profile/avatar').catch(error=>{if(error?.status===401)throw error;return {enabled:false,state:'unavailable',message:'Avatar status unavailable. Check for updates to try again.'};}),session.get('/api/v1/verification/payment').catch(error=>{if(error?.status===401)throw error;return {required:true,enabled:false,can_begin:false,state:'unavailable'};})]);
+  return {...checks,digilocker:identity,plan,liveness,face,payment,avatar:avatar?{...avatar,...(avatar.verified_selfie_preview&&avatar.can_capture?{_stagedSelfie:avatar.verified_selfie_preview}:{}),face}:null};
 }
 const FACE_WORK=['queued_create','creating','queued_get','retrieving'];
 const DOCUMENT_WORK=['creating','retrieving'];
@@ -32,7 +33,8 @@ export function render({data,safe,busy=false}) {
   }
   const row=(name,value,status,tone='waiting',running=false)=>`<div class="bgv-row"><div class="bgv-row-copy"><span class="bgv-label">${safe(name)}</span><div class="bgv-value">${safe(value)}</div></div><span class="bgv-badge ${tone}">${running?'<span class="bgv-progress-dot" aria-hidden="true"></span>':''}${safe(status)}</span></div>`;
   return `<div class="bgv-compact"><header><span class="bgv-label">STAGE 1 · BEFORE YOU MEET</span><h1>Your verification</h1><p>Share once. Follow your checks here.</p></header>
-    ${identity?`<section class="card bgv-document-complete"><h2>DigiLocker <span class="bgv-badge good">Details received</span></h2><p class="hint">Aadhaar shared · PAN ${bundle.pan_state==='received'?'received':bundle.pan_state==='pending'?'being retrieved':'optional'}</p></section>`:digilocker.render(data.digilocker,safe,true)}
+    ${verificationPayment.render(data.payment,safe,busy)}
+    ${identity?`<section class="card bgv-document-complete"><h2>DigiLocker <span class="bgv-badge good">Details received</span></h2><p class="hint">Aadhaar shared · PAN ${bundle.pan_state==='received'?'received':bundle.pan_state==='pending'?'being retrieved':'optional'}</p></section>`:data.payment?.required&&!data.payment.can_begin?'<p class="hint">Complete test payment to connect DigiLocker.</p>':digilocker.render(data.digilocker,safe,true)}
     <p class="bgv-live-status" role="status">${data._statusError?safe(data._statusError):processing(data)?'<span class="bgv-progress-dot" aria-hidden="true"></span> Checks are running in the background. Status updates automatically.':'Follow each check below.'}</p>
     <section class="card bgv-checklist" aria-label="Verification checklist" aria-live="polite">
       ${row('Name',identity?'Received securely · revealed to matches later':'Share from DigiLocker',identity?'Received':'Not started',identity?'good':'waiting')}
@@ -42,7 +44,7 @@ export function render({data,safe,busy=false}) {
       ${row('Criminal court',court.text,court.status,court.tone,court.running)}
       ${row('FIR check',fir.text,fir.status,fir.tone,fir.running)}
       ${row('Identity / live face',data.face?.message||(s?.reference_photo_available?'Document photo ready · Face comparison available':'Waiting for document photo'),data.face?.state==='matched'?(data.face.operation==='liveness_secure'?'Live face checked':'Face matched'):data.face?.state==='not_matched'?'Doesn’t match':data.face?.state==='unknown'?'Check unavailable':data.face?'Pending':'Setup needed',data.face?.state==='not_matched'?'attention':data.face?.state==='matched'?'good':'waiting')}
-    </section><p class="hint">Your verified age comes from Aadhaar DOB. Any difference from your declared age needs to be resolved. Your name is revealed later in the matching journey.</p>
+    </section><p class="hint">${identity?'Your name and age have been updated from DigiLocker. Age is calculated from the confirmed Aadhaar DOB.':'Your name and age will update automatically from confirmed DigiLocker details.'} Your name is revealed later in the matching journey.</p>
     ${identity?`<details class="bgv-details"><summary>View document details</summary><p>${safe(identity.name)}</p><p>${safe(identity.document_address)}</p><p class="hint">Age is calculated from Aadhaar DOB. The document address does not confirm your current residence. Received details are not a comparison against your profile declarations.</p><p>PAN: ${safe(({received:'Identifier received from issued-document listing',pending:'Retrieving available documents',not_shared:'Not shared through DigiLocker',unavailable:'Retrieval needs support review',needs_review:'Document identifier needs review'})[bundle.pan_state]||'Not requested in this consent session')}</p></details>`:''}
     ${identity&&bundle.enabled&&(!bundle.consented||!bundle.employer_declared)?`<form id="bgv-bundle-form" class="card"><h2>${bundle.consented?'Current employer':'Continue background checks'}</h2><label>Declared current employer (optional for Court/FIR)<input name="employer" maxlength="200" autocomplete="organization"></label><label class="bgv-consent"><input type="checkbox" name="consent" required> ${safe(bundle.consent_text)}</label><button type="submit" class="primary">${bundle.consented?'Save employer and continue':'Start relevant checks'}</button><p class="hint">Employer screening waits for PAN, mobile and your employer declaration. Missing PAN does not block Court/FIR.</p></form>`:''}
     ${identity&&s.can_request_photo?`<details class="bgv-details"><summary>Share a fresh DigiLocker session including PAN</summary>${digilocker.render(data.digilocker,safe,true)}</details>`:''}
@@ -66,6 +68,7 @@ export function bind(root,ctx) {
     const folds=[...root.querySelectorAll?.('.verification-fold[open]')||[]].map(e=>e.id);
     patch({...next,...(next.avatar?.can_capture&&ctx.data?.avatar?._stagedSelfie?{avatar:{...next.avatar,_stagedSelfie:ctx.data.avatar._stagedSelfie,_avatarConsent:ctx.data.avatar._avatarConsent}}:{}),_verificationFolds:folds});
   };
+  verificationPayment.bind(root,{session,run},ctx.data?.payment,refresh);
   const avatarRoot=root.querySelector('#verification-avatar-body');
   if(avatarRoot&&ctx.data?.avatar)avatarScreen.bind(avatarRoot,{session,run,embedded:true,data:ctx.data.avatar,patch:avatar=>{
     patch({...ctx.data,avatar:{...avatar,face:ctx.data.face},_verificationFolds:[...root.querySelectorAll('.verification-fold[open]')].map(e=>e.id)});

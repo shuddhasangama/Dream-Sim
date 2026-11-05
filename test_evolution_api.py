@@ -131,6 +131,17 @@ class EvolutionApiTests(RouteTestCase):
         self.assertEqual(self.request(path+'health_openness',method='PUT',body={'value':'yes'}).status_code,200)
         self.assertEqual(self.request(path+'intimacy_pace',uid='stranger',method='PUT',body={'value':'slow'}).status_code,403)
 
+    def test_confirmed_identity_age_is_not_a_manual_claim(self):
+        import json
+        row=db.fetch_one(self.conn,'User',id='owner')
+        stats=json.loads(row['stats_json']);stats.update(age=36,identity_session_id='server-confirmed-session')
+        row['stats_json']=json.dumps(stats);db.insert_row(self.conn,'User',row)
+        result=self.request('/profile/stats',method='PATCH',body={'fields':{'age':37}})
+        self.assertEqual(result.status_code,409,result.json)
+        response=self.request('/profile/stats').json['data']
+        age=next(r for r in response['rows'] if r['key']=='age')
+        self.assertEqual(age['value'],36);self.assertFalse(age['editable'])
+
     def test_chemistry_activities_round_trip(self):
         # Regression: chemistry_read() used to forward the raw skills_json
         # blob ({"activities": {...}, "by_bucket": {...}}) as `activities`

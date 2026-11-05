@@ -187,6 +187,8 @@ def rows(stats: dict[str, Any], state: dict[str, bool],
     out = []
     for field in EDITABLE + VERIFIED:
         verdict = editable(field, state, verified_now=field in verified_fields)
+        if field=='age' and stats.get('identity_session_id'):
+            verdict={**verdict,'editable':False,'reason':'Age is calculated from your confirmed DigiLocker date of birth.'}
         # `group` lets a client show the BGV-verified fields together
         # without keeping its own copy of which fields those are.
         out.append({"key": field, "value": stats.get(field), **verdict,

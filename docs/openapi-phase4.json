@@ -14498,6 +14498,103 @@
           }
         }
       }
+    },
+    "/verification/payment": {
+      "get": {
+        "summary": "Read own verification sandbox payment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped payment status; no secrets."
+          },
+          "401": {
+            "description": "App authentication required."
+          },
+          "409": {
+            "description": "Wrong mode, unknown result or provider evidence mismatch."
+          },
+          "503": {
+            "description": "Provider or configuration unavailable."
+          }
+        },
+        "operationId": "getVerificationSandboxPayment"
+      }
+    },
+    "/verification/payment/start": {
+      "post": {
+        "summary": "Create or reuse own verification sandbox Payment Link",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped payment status; no secrets."
+          },
+          "401": {
+            "description": "App authentication required."
+          },
+          "409": {
+            "description": "Wrong mode, unknown result or provider evidence mismatch."
+          },
+          "503": {
+            "description": "Provider or configuration unavailable."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "operationId": "startVerificationSandboxPayment"
+      }
+    },
+    "/verification/payment/complete": {
+      "post": {
+        "summary": "Confirm captured sandbox payment with Razorpay",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped payment status; no secrets."
+          },
+          "401": {
+            "description": "App authentication required."
+          },
+          "409": {
+            "description": "Wrong mode, unknown result or provider evidence mismatch."
+          },
+          "503": {
+            "description": "Provider or configuration unavailable."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "operationId": "completeVerificationSandboxPayment"
+      }
     }
   },
   "components": {

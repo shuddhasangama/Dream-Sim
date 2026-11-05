@@ -295,6 +295,12 @@ def display_name(user_id: str, gender: str) -> str:
     return f"{first} {last}"
 
 
+def own_display_name(user_id,gender):
+    import verified_identity
+    identity=verified_identity.owner_identity(get_db(),user_id)
+    return identity['name'] if identity else display_name(user_id,gender)
+
+
 # ── when a match's name becomes visible ───────────────────────────────────
 # 2026-09-09 (evening), user's rule: "the match names to be not visible
 # until after the date feedback is provided and lock-in."
@@ -337,7 +343,9 @@ def named_for(viewer_id: str, other: dict | None, masked: str = MASKED_NAME) -> 
         return None
     shown = with_view_fields(other)
     if NAMES_BEFORE_MEETING or _have_met(viewer_id, other["user_id"]):
-        return shown
+        import verified_identity
+        identity=verified_identity.owner_identity(get_db(),other["user_id"])
+        return {**shown,"name":identity["name"]} if identity else shown
     return {**shown, "name": masked}
 
 
@@ -452,7 +460,7 @@ def inject_globals():
         "session_user": user,
         "brand_name": brand.NAME,
         "bottom_tabs": _bottom_tabs(reached, request.endpoint) if user else [],
-        "session_user_name": display_name(user["user_id"], user["gender"]) if user else None,
+        "session_user_name": own_display_name(user["user_id"], user["gender"]) if user else None,
         "week_number": get_week_number(),
         "reach_locked": reach_locked(user) if user else False,
         "demo_enabled": demo.is_enabled(),
@@ -4656,7 +4664,7 @@ def _api_journey_state(user):
         user, active=active, plan=plan, couple=couple,
         reached=_milestones_for(user), contact=verification_status(user['user_id']),
         clock=get_clock(), reach_is_locked=reach_locked(user), facts=_guru_facts(user),
-        display_name=display_name(user['user_id'], user['gender']), simulated=clock_module.simulated(),
+        display_name=own_display_name(user['user_id'], user['gender']), simulated=clock_module.simulated(),
         partner_greeting=partner_greeting)
     # Simulated testers may already carry the legacy "verified" milestone.
     # An explicitly assigned sandbox case must still expose its private Verify

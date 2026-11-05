@@ -96,6 +96,8 @@ def view(conn, uid):
     return result
 
 def create(conn, uid, body):
+    import verification_payment
+    verification_payment.require_paid(conn,uid)
     cfg = configuration(uid)
     case_check_id=bgv_policy.check_for(conn,uid,'identity_details',cfg.environment)
     try:
@@ -167,6 +169,8 @@ def complete(conn, uid, sid, body):
         if row['environment'] != cfg.environment:
             raise ApiError('environment_mismatch', 'Start a session in the current environment.', 409)
         if row['state'] == 'complete':
+            import verified_identity
+            verified_identity.apply(conn,uid,sid,Protection().open(row['protected_result']),cfg.environment)
             return
         if cooling(row):
             raise ApiError('cooldown_active','This confirmation was already submitted. Wait for the cooldown or contact support.',429)
@@ -209,3 +213,6 @@ def complete(conn, uid, sid, body):
         if found: photo=protection.seal({**found,'consent_version':row['consent_version'],'received_at':now().isoformat()})
     with auth_sessions.transaction(conn):
         update(conn, sid, state=state, protected_result=protected,protected_photo=photo)
+        if state=='complete':
+            import verified_identity
+            verified_identity.apply(conn,uid,sid,identity,cfg.environment)

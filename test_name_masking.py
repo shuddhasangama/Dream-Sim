@@ -46,6 +46,13 @@ class MaskingTests(RouteTestCase):
         self.assertNotIn(self.their_name, self.body("/week"))
         self.assertIn("Your match", self.body("/week"))
 
+    def test_confirmed_legal_name_obeys_the_existing_reveal_gate(self):
+        from unittest.mock import patch
+        with patch('verified_identity.owner_identity',side_effect=lambda conn,uid:{'name':'SYNTHETIC LEGAL NAME'} if uid=='u2' else None):
+            self.assertNotIn('SYNTHETIC LEGAL NAME',self.body('/week'))
+            self.complete_a_date()
+            self.assertIn('SYNTHETIC LEGAL NAME',self.body('/after-date'))
+
     def test_nor_on_the_calendar_or_the_plan(self):
         self.make_plan(self.lock, status="confirmed")
         for path in ("/calendar", "/plan"):

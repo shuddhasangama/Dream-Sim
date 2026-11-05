@@ -49,6 +49,8 @@ def save_stats(conn, uid, submitted, situation, clock, strict=False):
         for field in stats_edit.ALL_FIELDS:
             if field not in submitted:
                 continue
+            if field=='age' and stored.get('identity_session_id'):
+                raise ApiError('identity_owned_field','Age is set from your confirmed DigiLocker date of birth.',409)
             raw = submitted[field]
             if strict:
                 if field in onboarding.MULTI_VALUE_STATS:
