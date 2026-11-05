@@ -13,7 +13,7 @@ test('personal screen explains consent, unknown status and displays saved values
  assert.match(html,/Withdraw health disclosure/);
  assert.match(html,/Previously viewed information cannot be recalled/);
 
- assert.deepEqual(SIGNUP_STEPS,['Vision','Stats','Chemistry','Bio']);
+ assert.deepEqual(SIGNUP_STEPS,['Vision','Stats','Chemistry','Verification']);
 });
 
 test('REACH contains private health preferences with saved selections',()=>{

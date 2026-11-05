@@ -162,7 +162,7 @@ function render() {
   const tabs = signedIn ? primaryTabs(journey.surfaces) : [];
   root.innerHTML = `<header class="brandbar">
       <span class="brandmark"><span class="brand-glyph" aria-hidden="true"><svg viewBox="22 22 56 56"><path d="M34 28h14a22 22 0 0 1 0 44H34z" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="46" cy="50" r="5" fill="#E8735A"/></svg></span><span class="brand-name">DhaShu</span></span>
-      ${signedIn ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
+      ${signedIn&&!signupActive ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
     </header>
     ${preview?'<aside class="preview">Local preview · no messages sent · code 123456</aside>':''}
     ${signedIn ? signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${signin()}</main>`}
@@ -177,20 +177,15 @@ function render() {
       const code=String(fields.get('code')||'').trim();
       run(async()=>{
         await session.verify(challenge,code);challenge=null;screenDirty=false;await load();
-        if(authIntent==='signup') { signupActive=true; await signup.begin(); }
+        if(authIntent==='signup') {
+          if(preview||journey.user.journey_state==='onboarding'){signupActive=true;await signup.begin();}
+          else {message='Your account already exists. You are signed in; your profile is available from Home.';authIntent='login';}
+        }
       });
     } else {
       phone=String(fields.get('phone')||'').trim();
       run(async()=>{const result=await session.requestCode(phone);challenge=result.challenge_id;message='If this number is approved, a code will arrive shortly.';});
     }
-  });
-  root.querySelector('#tester-login')?.addEventListener('click',()=>{
-    if(busy)return;
-    phone=String(root.querySelector('input[name="phone"]')?.value||'').trim();
-    run(async()=>{
-      await session.testerLogin(phone); challenge=null; screenDirty=false; await load();
-      if(authIntent==='signup') { signupActive=true; await signup.begin(); }
-    });
   });
   root.querySelector('#change')?.addEventListener('click',()=>{challenge=null;message='';render();});
   root.querySelectorAll('[data-auth-intent]').forEach(button=>button.addEventListener('click',()=>{
@@ -297,7 +292,7 @@ function signin() {
     <form id="signin-form" class="card"><label for="credential">${challenge?'Verification code':'Phone number'}</label>
     ${challenge?'<input id="credential" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,10}" minlength="4" maxlength="10" required placeholder="Enter SMS code">':`<input id="credential" name="phone" type="tel" autocomplete="tel" maxlength="16" required placeholder="+91 followed by your number" value="${safe(phone)}">`}
     <button class="primary" ${busy?'disabled':''}>${challenge?'Sign in':'Send SMS code'} <span aria-hidden="true">→</span></button>
-    ${!challenge?`<button type="button" id="tester-login" class="secondary" ${busy?'disabled':''}>Continue as tester without SMS</button><p class="hint">Only for profiles explicitly enabled for OTP-free testing.</p>`:''}
+
     ${challenge?`<button type="button" id="change" class="secondary" ${busy?'disabled':''}>Change number / request a new code</button>`:'<p class="hint">Include your country code. Beta access is by invitation.</p>'}</form>`;
 }
 

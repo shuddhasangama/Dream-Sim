@@ -86,3 +86,17 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .match-checks{border:1px solid var(--border);border-radius:14px;padding:14px;margin:14px 0;background:var(--card)}.match-checks h3{font-size:18px;margin:0 0 12px}.match-checks ul{list-style:none;margin:0;padding:0}.match-checks li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;padding:9px 0;border-bottom:1px solid var(--border);font-size:14px}.match-checks li:last-child{border:0}.match-checks li span{overflow-wrap:anywhere}.reach-work summary{min-height:44px;cursor:pointer;font-weight:600}.reach-work fieldset{margin:14px 0}.reach-work select{min-height:44px;width:100%}
 
 .avatar-mini{width:88px;height:88px;object-fit:cover;border-radius:50%}.avatar-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.avatar-options img{width:100%;border-radius:18px}.avatar-options button{width:100%}
+
+/* Initial signup uses a single treatment for every step and no profile-history controls. */
+.signup-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;list-style:none;padding:0;margin:20px 0 0;color:var(--muted)}
+.signup-progress li{display:grid;justify-items:center;gap:6px;text-align:center;font-size:12px;min-width:0}
+.signup-step-number{display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--border-strong);border-radius:50%;font-family:var(--font-display)}
+.signup-progress [aria-current=step]{color:var(--white);font-weight:600}
+.signup-progress [aria-current=step] .signup-step-number{background:var(--white);color:var(--card);border-color:var(--white)}
+.signup-plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0}
+.signup-plans button{margin:0;background:var(--card);color:var(--white);border:1px solid var(--border-strong);border-radius:14px;min-height:48px}
+.signup-plans button[aria-pressed=true]{background:var(--white);color:var(--card);border-color:var(--white)}
+.signup-pillars{display:grid;gap:12px}.signup-pillars fieldset{margin:0;border:1px solid var(--border);border-radius:14px;padding:12px 16px;min-width:0}
+.signup-pillars legend{padding:0 6px;font-weight:600}.signup-pillars legend label{display:flex;align-items:center;gap:8px}.signup-pillars small{font-size:11px;color:var(--muted);font-weight:400}
+.signup-pillars input{accent-color:var(--white)}
+@media(max-width:350px){.signup-progress li{font-size:10px;letter-spacing:0}.signup-progress{gap:4px}}

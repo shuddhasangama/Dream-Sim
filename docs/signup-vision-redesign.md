@@ -1,0 +1,13 @@
+# Initial signup correction — 5 November 2026
+
+The screenshot showed the profile-evolution editor inside initial signup. That exposed saved profile goals, match-window locks, Add detail and Declare a change, despite the user trying to set up an account. The initial picker now lives in signupVision.js and does not render profile history or change/disclosure controls. Existing-account profile evolution remains server protected.
+
+Initial signup shows Vision → Stats → Chemistry → Verification, using one consistent active-step style and a compact grid. The Verified account badge is hidden during setup. Bio remains available later in the profile, rather than occupying the verification step. DigiLocker is shown within Verification rather than the Stats page.
+
+Vision starts with no selected plan or inherited goal summary. The person chooses Family, We Two, Travel or Custom. Family selects all four pillars; We Two selects Intimacy, Cohabitate and Travel; Travel selects Intimacy and Travel using the existing Emotional default. Intimacy's Physical/Emotional choices, Kids choices and Cohabitate's Chores/Expenses choices remain visible. Changing an individual choice switches to Custom. Custom starts with the mandatory Intimacy pillar and no subchoices. Server validation still requires an additional pillar, valid subchoices and Physical when Naturally is selected. There is one Travel pillar control, no extra optional-travel toggle. Continue saves and checks the returned choices before advancing; no separate Save Vision button is required.
+
+The sign-in screen no longer renders the OTP-free tester button. After real authentication, an existing dating/relationship account goes to Home instead of being put through initial signup. Development preview may enter the wizard to review the layout with simulated requests; its local code banner is not included in native production behavior. No OTP or vendor request is sent by the screenshot tests.
+
+Scope: this is a local UI correction for the consolidated signup release. Public account creation, fresh-account OTP enrollment, resumed server-side enrollment drafts, new-user DigiLocker eligibility and matching admission still need their agreed E2E integration. Current initial saving uses the protected profile APIs; their lock rules are not bypassed. The change has not been deployed or submitted as another native build.
+
+Review artifact: outputs/signup-redesign-family.png. Tests cover no initial selections; preset switching; no profile change controls; explicit choice before Continue; saving/read-back; Stats validation; Verification as step four; and OTP-only entry.

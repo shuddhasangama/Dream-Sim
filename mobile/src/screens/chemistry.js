@@ -43,9 +43,9 @@ export function render(ctx) {
       </section>
     </form>
 
-    <section class="card"><div class="section-label">What moved out of here</div>
+    ${ctx.onboarding?'':`<section class="card"><div class="section-label">What moved out of here</div>
       <div class="hint">Intimacy expectations, openness to discussing sexual health and contraception, and your physical boundary preference used to sit on this page. They are not chemistry, and they should not be asked at sign-up. Boundaries open once a date is set; expectations open after your first date.</div>
-    </section>`;
+    </section>`}`;
 }
 
 // Shallow map equality — {activity: bucket} has no nesting, so this is a

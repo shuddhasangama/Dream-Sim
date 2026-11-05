@@ -425,7 +425,7 @@ export function previewTransport() {
     if(path.endsWith('/profile/photo')) {personalProfile.photo=body.photo;return ok(personalProfile);}
     if(path.endsWith('/profile/vision/template')) {
       const item=templates.find(t=>t.key===body.template);if(!item)return err('Unknown template',400);
-      const map=item.choices||body.pillars, bad=visionValidate(map);if(bad)return err(bad,400);
+      const map=structuredClone(item.choices||body.pillars);if(['grow','two'].includes(item.key)&&body.travel)map['Travel together']=[];const bad=visionValidate(map);if(bad)return err(bad,400);
       selectedTemplate=item.key;kidsIntent=item.choices?item.kids_intent:body.kids_intent;visionCommit(map);return ok(visionRead());
     }
     if (path.endsWith('/profile/vision') && method === 'GET') return ok(visionRead());
