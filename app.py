@@ -298,7 +298,23 @@ def display_name(user_id: str, gender: str) -> str:
 def own_display_name(user_id,gender):
     import verified_identity
     identity=verified_identity.owner_identity(get_db(),user_id)
-    return identity['name'] if identity else display_name(user_id,gender)
+    if identity:
+        return identity['name']
+    row=db.fetch_one(get_db(),'User',id=user_id)
+    stats=db.load_json_field(row['stats_json'],{}) if row else {}
+    if stats.get('signup_version')==3:
+        draft=db.fetch_one(get_db(),'EnrollmentDraft',id=user_id)
+        payload=db.load_json_field(draft['payload_json'],{}) if draft else {}
+        if payload.get('identity_claims'):
+            from bgv_app import Protection
+            claims=Protection().open(payload['identity_claims'])
+            if claims.get('name'):
+                return claims['name']
+        return 'Your profile'
+    # Real login accounts must never inherit a fictional simulation identity.
+    if db.fetch_one(get_db(),'Account',user_id=user_id):
+        return 'Your profile'
+    return display_name(user_id,gender)
 
 
 # ── when a match's name becomes visible ───────────────────────────────────
@@ -352,7 +368,9 @@ def named_for(viewer_id: str, other: dict | None, masked: str = MASKED_NAME) -> 
 def with_view_fields(user: dict) -> dict:
     """Attach display-only fields to a generate_users()-shaped dict without
     touching the underlying data."""
-    return {**user, "name": display_name(user["user_id"], user["gender"])}
+    real_account=db.fetch_one(get_db(),'Account',user_id=user['user_id'])
+    name='Member' if real_account or user.get('stats',{}).get('signup_version')==3 else display_name(user['user_id'],user['gender'])
+    return {**user, "name": name}
 
 
 # ── loading users/couples from the DB ──────────────────────────────────────

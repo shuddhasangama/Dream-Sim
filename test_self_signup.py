@@ -35,6 +35,31 @@ class SelfSignupTests(RouteTestCase):
         headers={'Authorization':'Bearer '+response.json['data']['access_token']}
         for path in ['/api/v1/profile','/api/v1/journey/status','/api/v1/signup/state']:
             self.assertEqual(self.client.get(path,headers=headers).status_code,200,path)
+    def test_distinct_phone_accounts_and_repeat_signup_preserve_owner(self):
+        import auth_sessions
+        uid,h=self.signup('+919000000001')
+        other,other_headers=self.signup('+919000000002')
+        self.assertNotEqual(uid,other)
+        self.assertEqual(self.client.get('/api/v1/profile',headers=h).json['data']['user_id'],uid)
+        self.assertEqual(self.client.get('/api/v1/profile',headers=other_headers).json['data']['user_id'],other)
+        with patch.object(auth_sessions,'throttle',return_value=True):
+            again,again_headers=self.signup('+919000000001')
+        self.assertEqual(again,uid)
+        self.assertEqual(self.client.get('/api/v1/profile',headers=again_headers).json['data']['user_id'],uid)
+        self.assertEqual(len([a for a in db.fetch_all(self.conn,'Account') if a.get('phone')=='+919000000001']),1)
+
+    def test_real_signup_never_displays_simulation_name(self):
+        uid,h=self.signup()
+        journey=self.client.get('/api/v1/journey/status',headers=h).json['data']
+        self.assertEqual(journey['user']['display_name'],'Your profile')
+        self.assertEqual(self.client.put('/api/v1/signup/stats',headers=h,json=self.stats()).status_code,200)
+        journey=self.client.get('/api/v1/journey/status',headers=h).json['data']
+        self.assertEqual(journey['user']['display_name'],self.stats()['name'])
+        with app_module.app.test_request_context('/'):
+            from unittest.mock import patch
+            with patch.object(app_module,'get_db',return_value=self.conn):
+                self.assertEqual(app_module.with_view_fields({'user_id':uid,'gender':'male','stats':{'signup_version':3}})['name'],'Member')
+
     def test_three_cities_only_auto_plan_and_saved_resume(self):
         for i,city in enumerate(['Bangalore','Delhi','Mumbai']):
             uid,h=self.signup('+91900000000'+str(i+1))
