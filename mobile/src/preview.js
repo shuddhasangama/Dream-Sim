@@ -259,6 +259,7 @@ export function previewTransport() {
 
   const chemistryBuckets = [['good', '★', 'Already good at it'], ['improve', '↑', 'Want to improve'], ['maybe', '?', 'Never considered, so maybe'], ['no', '✕', 'Not my cup of tea']];
   const chemistryActivities = ['Cooking', 'Hiking', 'Salsa', 'Tennis', 'Yoga', 'Photography', 'Board games', 'Live gigs', 'Cycling', 'Pottery', 'Stand-up', 'Scuba diving'];
+  let chemistryCustom=[],chemistryPartnerAny=[];
   let chemistryPicks = { Cooking: 'good', Hiking: 'good', Salsa: 'improve', Tennis: 'improve', Yoga: 'no', Photography: 'maybe' };
 
   let statsData = { age: 30, height_cm: 169, weight_kg: 66, waist_in: 31, income_band: '₹₹₹ · 25L–50L', education: "Master's", nationality: 'IN', profession: 'Engineering',
@@ -482,14 +483,16 @@ export function previewTransport() {
       return ok(row);
     }
 
-    if (path.endsWith('/profile/chemistry') && method === 'GET') return ok({ activities: chemistryPicks, activity_options: chemistryActivities, buckets: chemistryBuckets });
+    if (path.endsWith('/profile/chemistry') && method === 'GET') return ok({ activities: chemistryPicks, custom_activities:chemistryCustom,partner_any:chemistryPartnerAny,max_custom_activities:4, activity_options: chemistryActivities, buckets: chemistryBuckets });
     if (path.endsWith('/profile/chemistry/activities')) {
       // Mirrors onboarding.MIN_SORTED=4 (validate_activities) so the
       // below-minimum path is actually reachable in preview.
       const count = Object.keys(body.activities || {}).length;
       if (count < 4) return err(`Sort at least 4 activities (${count}/4 so far).`, 400);
-      chemistryPicks = { ...body.activities };
-      return ok({ activities: chemistryPicks, activity_options: chemistryActivities, buckets: chemistryBuckets });
+      if((body.custom_activities||[]).length>4)return err('Add up to four custom activities.',400);
+      if((body.custom_activities||[]).some(a=>!body.activities[a]))return err('Choose your own answer for each custom activity.',400);
+      chemistryPicks = { ...body.activities };chemistryCustom=[...(body.custom_activities||[])];chemistryPartnerAny=[...(body.partner_any||[])];
+      return ok({ activities: chemistryPicks, custom_activities:chemistryCustom,partner_any:chemistryPartnerAny,max_custom_activities:4, activity_options: chemistryActivities, buckets: chemistryBuckets });
     }
 
     if (path.endsWith('/profile/stats') && method === 'GET') return ok({ rows: statsRows(), options: STAT_OPTIONS, ranges: STAT_RANGES, changes: statChanges });

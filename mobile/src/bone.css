@@ -125,3 +125,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .signup-focus-choices input{accent-color:var(--white);flex:none;width:16px;height:16px;margin:0}
 .signup-focus-choices span{overflow-wrap:anywhere}
 @media(max-width:350px){.signup-pillar-tile{padding:10px}.signup-focus-grid{gap:8px}.signup-pillar-heading,.signup-pillar-heading .signup-focus-title{font-size:13px}.signup-vision .signup-plans button{font-size:11px}}
+
+/* Own Chemistry answer and independent partner preference. */
+.activity-row{flex-wrap:wrap}
+.chemistry-partner-any{display:flex;align-items:center;gap:8px;width:100%;font-size:12px;min-height:44px;margin:4px 0 0}
+.chemistry-partner-any input{width:18px;height:18px;flex:none;accent-color:var(--white)}
+.chemistry-add{border-top:1px solid var(--border);padding-top:18px;margin:18px 0}
+.chemistry-add>div{display:flex;flex-wrap:wrap;gap:8px}.chemistry-add input{flex:1;min-width:0;width:100%;min-height:44px}

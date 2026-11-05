@@ -117,7 +117,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         # response's `activities` never matched an ACTIVITIES key, so no
         # radio ever came back checked.
         skills=db.load_json_field(db.fetch_one(get_db(),'User',id=uid())['skills_json'],{})
-        return jsonify(activities=skills.get('activities',{}),
+        return jsonify(activities=skills.get('activities',{}), custom_activities=skills.get('custom_activities',[]), partner_any=skills.get('partner_any',[]), max_custom_activities=4,
             activity_options=onboarding.ACTIVITIES,buckets=onboarding.BUCKETS,
             answers=answers,entry_keys=(*chemistry.MANDATORY_KEYS,*chemistry.INTIMACY_MANDATORY_KEYS),
             options={'physical_boundary':chemistry.PHYSICAL_BOUNDARY_OPTIONS,'intimacy_pace':chemistry.INTIMACY_PACE_OPTIONS,'health_openness':chemistry.HEALTH_OPENNESS_OPTIONS},
@@ -125,7 +125,8 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
 
     @api.put('/profile/chemistry/activities')
     def activities_update():
-        service.save_activities(get_db(),uid(),json_object(required={'activities'})['activities'])
+        body=json_object(required={'activities'},optional={'custom_activities','partner_any'})
+        service.save_activities(get_db(),uid(),body['activities'],body.get('custom_activities'),body.get('partner_any'))
         return chemistry_read()
 
     @api.put('/profile/chemistry/entries/<key>')

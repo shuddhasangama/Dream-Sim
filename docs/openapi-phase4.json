@@ -3386,6 +3386,24 @@
                     "additionalProperties": {
                       "type": "string"
                     }
+                  },
+                  "custom_activities": {
+                    "type": "array",
+                    "maxItems": 4,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60
+                    }
+                  },
+                  "partner_any": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Answered activities for which the partner answer is immaterial; independent of own bucket."
                   }
                 },
                 "required": [

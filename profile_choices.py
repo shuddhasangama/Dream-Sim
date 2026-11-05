@@ -101,13 +101,14 @@ def public_profile(conn, user):
     stats=user['stats']; shared=stats.get('health_shared',{})
     pic=db.fetch_one(conn,'ProfilePhoto',id=user['user_id'])
     row=db.fetch_one(conn,'User',id=user['user_id'])
-    skills=db.load_json_field(row.get('skills_json'),{}).get('activities',{})
+    chemistry_data=db.load_json_field(row.get('skills_json'),{})
+    skills=chemistry_data.get('activities',{})
     import avatar_service
     avatar=avatar_service.public(conn,user['user_id'])
     return {**avatar,'vision_template':template_label(stats,user['visions']), 'kids_intent':stats.get('kids_intent','undecided'),
       'ethnicity':stats.get('ethnicity',[]), 'health':shared if shared.get('consent') else None,
       'health_labels':HEALTH,'photo':avatar.get('photo') or (pic['data_url'] if pic else None),
-      'activities':skills}
+      'activities':skills,'partner_any':chemistry_data.get('partner_any',[]),'custom_activities':chemistry_data.get('custom_activities',[])}
 
 
 def openness(body):

@@ -114,15 +114,17 @@ def save_stats(conn, uid, submitted, situation, clock, strict=False):
                 'reopened':[onboarding.STAT_LABELS.get(k,k) for k in reopened]}
 
 
-def save_activities(conn,uid,activities):
-    if type(activities) is not dict or set(activities)-set(onboarding.ACTIVITIES) or any(not isinstance(v,str) for v in activities.values()):
-        raise ApiError('validation_error','Provide known activity names and bucket strings.')
-    result=onboarding.validate_activities(activities)
-    if not result['ok']:
-        raise ApiError('validation_error',result['error'])
+def save_activities(conn,uid,activities,custom_activities=None,partner_any=None):
+    import chemistry_choices
     with transaction(conn):
         row=db.fetch_one(conn,'User',id=uid)
-        row['skills_json']=json.dumps(onboarding.build_skills(result['activities']),ensure_ascii=False)
+        previous=db.load_json_field(row['skills_json'],{})
+        custom_activities=custom_activities if custom_activities is not None else [x for x in previous.get('custom_activities',[]) if x in (activities or {})]
+        partner_any=partner_any if partner_any is not None else [x for x in previous.get('partner_any',[]) if x in (activities or {})]
+        clean=chemistry_choices.validate(activities,custom_activities,partner_any)
+        skills=onboarding.build_skills(clean['activities'])
+        skills.update(custom_activities=clean['custom_activities'],partner_any=clean['partner_any'])
+        row['skills_json']=json.dumps(skills,ensure_ascii=False)
         db.insert_row(conn,'User',row)
 
 

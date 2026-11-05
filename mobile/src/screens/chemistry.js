@@ -25,18 +25,21 @@
 export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Chemistry</h1></section><section class="card"><p>Loading…</p></section>';
-  const { activities = {}, activity_options = [], buckets = [] } = data;
+  const { activities = {}, activity_options = [], buckets = [], custom_activities = [], partner_any = [] } = data;
+  const allActivities=[...activity_options,...custom_activities];
 
   return `<section class="intro"><span class="eyebrow">Chemistry</span><h1>What you'd actually do together</h1>
-    <p class="lede">Hobbies, skills and activities. This is what Guru draws on when suggesting things to try together through the DREAM stages — the overlap matters more than the total.</p></section>
+    <p class="lede">Choose your own answer. Separately, tell us when your partner’s answer doesn’t matter to you.</p></section>
 
     <form id="activities-form">
       <section class="card">
         <div class="bucket-legend">${buckets.map((b) => `<span class="bucket-legend-item"><b>${safe(b[1])}</b> ${safe(b[2])}</span>`).join('')}</div>
-        <div class="activity-table">${activity_options.map((a) => `<div class="activity-row">
-          <span class="activity-name">${safe(a)}</span>
-          <span class="activity-buckets">${buckets.map((b) => `<label class="bucket-pick" title="${safe(b[2])}"><input type="radio" name="act__${safe(a)}" value="${safe(b[0])}" ${activities[a] === b[0] ? 'checked' : ''}><span class="bucket-glyph b-${safe(b[0])}">${safe(b[1])}</span></label>`).join('')}</span>
+        <div class="activity-table">${allActivities.map((a) => `<div class="activity-row">
+          <span class="activity-name">${safe(a)}</span>${custom_activities.includes(a)?`<button type="button" class="text-button" data-remove-activity="${safe(a)}" aria-label="Remove ${safe(a)}">Remove</button>`:''}
+          <span class="activity-buckets">${buckets.map((b) => `<label class="bucket-pick" title="${safe(b[2])}"><input type="radio" aria-label="${safe(a)}: ${safe(b[2])}" name="act__${safe(a)}" value="${safe(b[0])}" ${activities[a] === b[0] ? 'checked' : ''}><span class="bucket-glyph b-${safe(b[0])}">${safe(b[1])}</span></label>`).join('')}</span>
+          <label class="chemistry-partner-any"><input type="checkbox" name="partner_any" value="${safe(a)}" ${partner_any.includes(a)?'checked':''}> Partner preference doesn’t matter</label>
         </div>`).join('')}</div>
+        <div class="chemistry-add"><label for="custom-activity">Add your own activity · ${custom_activities.length}/4</label><div><input id="custom-activity" maxlength="60" placeholder="For example, marathon running" ${custom_activities.length>=4?'disabled':''}><button type="button" id="add-activity" ${custom_activities.length>=4?'disabled':''}>Add activity</button></div><p class="hint">Up to four. Choose your answer after adding.</p></div>
         <button class="primary" type="submit">Save chemistry</button>
         ${data._saved ? '<p class="save-note">Saved.</p>' : ''}
         ${data._error ? `<p class="warn">${safe(data._error)}</p>` : ''}
@@ -58,17 +61,30 @@ function activitiesEqual(a, b) {
 
 export function bind(root, ctx) {
   const { session, run, patch, data } = ctx;
+  function read(){
+    const form=new FormData(root.querySelector('#activities-form')),activities={};
+    for(const [key,value] of form.entries())if(key.startsWith('act__'))activities[key.slice(5)]=value;
+    return {activities,partner_any:form.getAll('partner_any'),custom_activities:[...(data.custom_activities||[])]};
+  }
+  root.querySelector('#add-activity')?.addEventListener('click',()=>run(async()=>{
+    const next=read(),name=root.querySelector('#custom-activity').value.trim();
+    if(!name)return;
+    const canonical=x=>x.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim();
+    if(next.custom_activities.length>=4||[...(data.activity_options||[]),...next.custom_activities].some(x=>canonical(x)===canonical(name))){patch({...data,...next,_saved:false,_error:'Add up to four distinct activities not already listed.'});return;}
+    patch({...data,...next,custom_activities:[...next.custom_activities,name],_saved:false,_error:null});
+  }));
+  root.querySelectorAll('[data-remove-activity]').forEach(button=>button.addEventListener('click',()=>run(async()=>{
+    const next=read(),name=button.dataset.removeActivity;delete next.activities[name];next.partner_any=next.partner_any.filter(x=>x!==name);next.custom_activities=next.custom_activities.filter(x=>x!==name);patch({...data,...next,_saved:false,_error:null});
+  })));
   root.querySelector('#activities-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     run(async () => {
-      const form = new FormData(e.target);
-      const picked = {};
-      for (const [key, value] of form.entries()) picked[key.slice('act__'.length)] = value;
+      const submitted=read(),picked=submitted.activities;
 
       console.info('[chemistry] PUT /api/v1/profile/chemistry/activities request', { activities: picked });
       let putResult;
       try {
-        putResult = await session.put('/api/v1/profile/chemistry/activities', { activities: picked });
+        putResult = await session.put('/api/v1/profile/chemistry/activities', submitted);
         console.info('[chemistry] PUT response', putResult);
       } catch (err) {
         // A validation_error (e.g. below the server's sort-at-least-N
@@ -79,7 +95,7 @@ export function bind(root, ctx) {
         // show, and re-picking twelve radios because one save failed is
         // its own kind of broken.
         console.error('[chemistry] PUT failed', err);
-        patch({ ...data, activities: picked, _saved: false, _error: err.message || 'Could not save — try again.' });
+        patch({ ...data, ...submitted, activities: picked, _saved: false, _error: err.message || 'Could not save — try again.' });
         throw err;
       }
 
@@ -95,11 +111,11 @@ export function bind(root, ctx) {
         console.info('[chemistry] confirmation GET response', confirmed);
       } catch (err) {
         console.error('[chemistry] confirmation GET failed', err);
-        patch({ ...putResult, activities: picked, _saved: false, _error: 'Saved, but could not confirm — reload to check.' });
+        patch({ ...putResult, ...submitted, activities: picked, _saved: false, _error: 'Saved, but could not confirm — reload to check.' });
         return;
       }
 
-      if (!activitiesEqual(confirmed.activities, picked)) {
+      if (!activitiesEqual(confirmed.activities, picked)||JSON.stringify([...(confirmed.custom_activities||[])].sort())!==JSON.stringify([...submitted.custom_activities].sort())||JSON.stringify([...(confirmed.partner_any||[])].sort())!==JSON.stringify([...submitted.partner_any].sort())) {
         console.error('[chemistry] MISMATCH: server read-back does not match what was submitted', {
           submitted: picked, read_back: confirmed.activities,
         });
@@ -107,7 +123,7 @@ export function bind(root, ctx) {
         // failure above) — the error is explicit that this is NOT what
         // the server actually has, so nothing here is dishonest about
         // what's persisted, only about what's still on screen to retry.
-        patch({ ...confirmed, activities: picked, _saved: false, _error: "That didn't actually save — the server's own copy doesn't match. Try again, or reload to see what's really there." });
+        patch({ ...confirmed, ...submitted, activities: picked, _saved: false, _error: "That didn't actually save — the server's own copy doesn't match. Try again, or reload to see what's really there." });
         return;
       }
 

@@ -144,6 +144,27 @@ class EvolutionApiTests(RouteTestCase):
         r=self.request('/profile/chemistry')
         self.assertEqual(r.json['data']['activities'],picks)
 
+    def test_custom_chemistry_and_partner_indifference_persist(self):
+        import json
+        picks={'Cooking':'good','Hiking':'no','Salsa':'improve','Marathon running':'good'}
+        body={'activities':picks,'custom_activities':['Marathon running'],'partner_any':['Marathon running','Hiking']}
+        r=self.request('/profile/chemistry/activities',method='PUT',body=body)
+        self.assertEqual(r.status_code,200,r.json)
+        saved=self.request('/profile/chemistry').json['data']
+        for key in body:self.assertEqual(saved[key],body[key])
+        skills=json.loads(db.fetch_one(self.conn,'User',id='owner')['skills_json'])
+        self.assertIn('Hiking',skills['by_bucket']['no'])
+        self.assertIn('Marathon running',skills['by_bucket']['good'])
+        self.assertEqual(self.request('/profile/chemistry',uid='stranger').json['data']['partner_any'],[])
+        for custom in [['cooking'],['Marathon running']*2,['A','B','C','D','E']]:
+            rejected={**body,'custom_activities':custom}
+            self.assertEqual(self.request('/profile/chemistry/activities',method='PUT',body=rejected).status_code,400)
+        self.assertEqual(self.request('/profile/chemistry/activities',method='PUT',body={**body,'partner_any':['Missing']}).status_code,400)
+        self.assertEqual(self.request('/profile/chemistry').json['data']['activities'],picks)
+        four=['Marathon running','Singing','Chess','Gardening']
+        body4={'activities':{x:'good' for x in four},'custom_activities':four,'partner_any':four}
+        self.assertEqual(self.request('/profile/chemistry/activities',method='PUT',body=body4).status_code,200)
+
     def test_chemistry_activities_below_minimum_rejected(self):
         r=self.request('/profile/chemistry/activities',method='PUT',body={'activities':{'Cooking':'good'}})
         self.assertEqual(r.status_code,400,r.json)

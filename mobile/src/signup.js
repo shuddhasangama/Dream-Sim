@@ -20,6 +20,7 @@ export function createSignup({session, run, safe, finish}) {
     return {session, run, safe, data, onboarding:true, patch(next) {
       data = next;
       if(step===0&&next._signupVision){visionDraft=next._signupVision;dirty=!!next._signupDirty;draft=[];}
+      if(step===2){dirty=!next._saved;draft=[];}
       if (next._saved) { dirty = false; error = ''; draft = []; }
     }};
   }
