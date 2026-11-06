@@ -65,6 +65,9 @@ def resolve(get_db):
         token, kind = session.get('auth_token'), 'web'
     if token:
         g.auth_session = sessions.authenticate(get_db(), token, kind)
+        if g.auth_session is not None and os.getenv('DHASHU_ACTIVITY_ENABLED') == '1':
+            import member_activity
+            member_activity.record(g.auth_session['user_id'],kind,request.headers.get('User-Agent',''))
     return g.auth_session
 
 

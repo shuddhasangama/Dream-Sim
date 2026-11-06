@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DhaShu administration</title><link rel="stylesheet" href="/static/dashboard.css"><script src="/static/dashboard.js" defer></script></head>
+<body>
+<section id="login" class="login-shell" hidden>
+ <div class="login-brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M15 8h13a24 24 0 0 1 0 48H15V8zm9 9v30h4a15 15 0 0 0 0-30z" fill="currentColor"/><circle cx="33" cy="32" r="5" fill="#ed7658"/></svg><span>Shuddha Sangama</span></div>
+ <div class="login-card"><p class="eyebrow">PRIVATE WORKSPACE</p><h1>DhaShu administration</h1><p class="muted">Sign in with your administrator account. Member app logins do not grant access.</p>
+ <form id="login-form"><label>Email<input id="email" type="email" autocomplete="username" value="office@shuddhasangama.org" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="200"></label><label>Authenticator code<input id="code" type="text" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" required></label><button type="submit">Open dashboard</button><p id="login-error" role="alert"></p></form>
+ <p class="fine">Access is provisioned privately. There is no public administrator signup.</p></div>
+</section>
+<div id="workspace" class="workspace" hidden>
+ <aside><a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M15 8h13a24 24 0 0 1 0 48H15V8zm9 9v30h4a15 15 0 0 0 0-30z" fill="currentColor"/><circle cx="33" cy="32" r="5" fill="#ed7658"/></svg><strong>DhaShu</strong></a><p class="sidebar-label">COMPANY OPERATIONS</p><nav id="navigation" aria-label="Dashboard sections"></nav><div class="sidebar-footer"><span class="read-only">Read-only reporting</span><p>Member changes and paid provider calls are unavailable here.</p></div></aside>
+ <main><header><div><p class="eyebrow">SHUDDHA SANGAMA · ADMINISTRATION</p><h1 id="page-title">Overview</h1></div><div class="account"><span id="admin-email"></span><span id="admin-role" class="badge"></span><button id="logout" class="quiet">Sign out</button></div></header>
+ <div class="toolbar"><p id="updated" class="muted">Loading…</p><button id="refresh" class="quiet">Refresh report</button></div>
+ <section id="search-area" hidden><form id="search-form"><label for="user-search">Find an account</label><div class="search-row"><input id="user-search" type="search" maxlength="128" placeholder="Full phone number or user ID" autocomplete="off"><button>Search</button><button id="clear-search" type="button" class="quiet">Clear</button></div></form></section>
+ <p id="report-error" role="alert" hidden></p><div id="report" aria-live="polite"></div>
+ <div id="pagination" class="pagination" hidden><button id="previous" class="quiet">Previous</button><span id="page-number"></span><button id="next" class="quiet">Next</button></div>
+ <footer>Private operational reporting · Dates displayed in IST · Sensitive identity evidence is excluded</footer></main>
+</div>
+<noscript>This private dashboard requires JavaScript.</noscript>
+</body></html>

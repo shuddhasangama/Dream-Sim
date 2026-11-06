@@ -1123,3 +1123,11 @@ CREATE TABLE IF NOT EXISTS "SignzyGuard" (
  error_code TEXT NOT NULL, paused_until INTEGER NOT NULL DEFAULT 0,
  active INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL, resume_reason TEXT
 );
+
+-- Observed member activity from authenticated requests, using real UTC time.
+CREATE TABLE IF NOT EXISTS "UserActivity" (
+ user_id TEXT PRIMARY KEY REFERENCES "User"(id) ON DELETE CASCADE,
+ first_seen_at BIGINT NOT NULL, last_seen_at BIGINT NOT NULL,
+ platform TEXT NOT NULL, auth_kind TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS user_activity_seen ON "UserActivity"(last_seen_at);

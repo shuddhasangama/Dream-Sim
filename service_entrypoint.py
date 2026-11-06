@@ -4,6 +4,7 @@ import sys
 
 def command(role):
     if role=='web': return ['gunicorn','app:app']
+    if role=='admin': return ['gunicorn','--bind','0.0.0.0:'+os.getenv('PORT','8080'),'--workers','2','--timeout','30','admin_dashboard.wsgi:app']
     if role=='bgv-worker': return [sys.executable,'bgv_worker.py']
     raise ValueError('Unknown DHASHU_PROCESS_ROLE')
 
@@ -36,4 +37,12 @@ if __name__=='__main__':
     role=os.getenv('DHASHU_PROCESS_ROLE','web')
     argv=command(role)
     if role=='web': prepare_pilot()
+    if role=='admin':
+        import db
+        from admin_dashboard.manage import initialize
+        conn=db.get_connection()
+        try:
+            db.init_db(conn)
+            initialize(conn)
+        finally: conn.close()
     os.execvp(argv[0],argv)
