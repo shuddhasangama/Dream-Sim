@@ -91,11 +91,14 @@ def schedule(conn):
                         now=bgv_app.stamp()
                         auth_sessions.sql(conn,'INSERT INTO "BgvRequest" (id,user_id,operation,environment,state,protected_input,created_at,updated_at,case_check_id) VALUES (?,?,?,?,?,?,?,?,?)',
                             (details_id,uid,'digilocker_details',cfg.environment,'queued',protection.seal(snapshot),now,now,identity_check))
-            details=detail_data(db.fetch_one(conn,'BgvRequest',id=details_id),protection)
+            detail_request=db.fetch_one(conn,'BgvRequest',id=details_id)
+            details=detail_data(detail_request,protection)
             # The listing's account name must agree with the Aadhaar legal name.
-            normalize=lambda value:' '.join((value or '').casefold().split())
-            if details and details['pan'] and details['mobile'] and bundle.get('employer') and normalize(details['name'])==normalize(identity['name']):
-                queue(conn,row,bundle,'current_employer',{'panNumber':details['pan'],'mobile':details['mobile']},{'employer':bundle['employer']})
+            import employment_lookup
+            waiting_details=detail_request and detail_request['state'] in ('queued','processing','pending')
+            employment_inputs=None if waiting_details else employment_lookup.inputs(conn,uid,identity,details)
+            if employment_inputs and bundle.get('employer'):
+                queue(conn,row,bundle,'current_employer',employment_inputs,{'employer':bundle['employer'],'name':identity['name']})
         except ApiError:
             # Disabled plan / existing work is not permission to retry a paid call.
             continue
@@ -120,9 +123,10 @@ def queue(conn,session,bundle,operation,inputs,declared):
         if db._is_postgres_connection(conn):auth_sessions.sql(conn,'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
         existing=db.fetch_all(conn,'BgvRequest',user_id=session['user_id'],operation=operation,environment=session['environment'])
         if any(r.get('case_check_id')==case_check and (operation=='current_employer' or bgv_app.Protection().open(r['protected_input'])['inputs'].get('matchType')=='exact') for r in existing):return
-        values=bgv_app.OPERATIONS[operation].payload(inputs)
+        provider_operation='employment_history' if operation=='current_employer' else operation
+        values=bgv_app.OPERATIONS[provider_operation].payload(inputs)
         now=bgv_app.stamp()
-        snapshot={'inputs':values,'declared':declared,'bundle_session_id':session['id'],
+        snapshot={'inputs':values,'declared':declared,'provider_operation':provider_operation,'bundle_session_id':session['id'],
                   'consent':{'version':BUNDLE_VERSION,'text':BUNDLE_CONSENT,'user_id':session['user_id'],'accepted_at':bundle['accepted_at']}}
         auth_sessions.sql(conn,'INSERT INTO "BgvRequest" (id,user_id,operation,environment,state,protected_input,created_at,updated_at,case_check_id) VALUES (?,?,?,?,?,?,?,?,?)',
             (request_id(session['id'],operation+(':exact-v1' if operation in bgv_app.RESULTS else '')),session['user_id'],operation,session['environment'],'queued',bgv_app.Protection().seal(snapshot),now,now,case_check))
@@ -149,4 +153,6 @@ def view(conn,uid):
         result['identity_name_match']=' '.join((data['name'] or '').casefold().split())==' '.join(value['name'].casefold().split())
     elif detail:result['pan_state']='pending' if detail['state'] in ('queued','processing','pending') else 'unavailable'
     elif bundle.get('pan_scope'):result['pan_state']='pending'
+    import employment_lookup
+    result['employment_identifier_available']=bool(employment_lookup.inputs(conn,uid,value,data))
     return result

@@ -212,9 +212,12 @@ def reproject_saved(conn,uid):
             except ApiError:continue
         evidence=protection.open(row['protected_result']);provider=evidence.get('provider_response') or {}
         if provider.get('http_status') not in (200,202):continue
-        summary=OPERATIONS[row['operation']].summarize(provider['http_status'],provider.get('json'))
+        summary=OPERATIONS[evidence.get('operation',row['operation'])].summarize(provider['http_status'],provider.get('json'))
         import bgv_result_policy
         if row['operation'] in RESULTS.values():state,extra=bgv_result_policy.legal(conn,row,summary,protection)
+        elif evidence.get('operation')=='employment_history':
+            import employment_lookup
+            state,extra=employment_lookup.assess(provider.get('json'),evidence.get('binding',{}).get('declared_fields',{}))
         else:
             from signzy.verification import evaluate
             comparison=evaluate(evidence)[0]
@@ -259,7 +262,10 @@ def work_one(conn):
                         ('unavailable',json.dumps({'message':'The assigned plan or provider is not enabled. Support review required.'}),stamp(),row['id']))
                 return True
         evidence = []
-        summary = Client(cfg).execute(row['operation'], data['inputs'], consent_confirmed=True, evidence_sink=evidence.append)
+        provider_operation=data.get('provider_operation',row['operation'])
+        if provider_operation!=row['operation'] and not (row['operation']=='current_employer' and provider_operation=='employment_history'):
+            raise ValueError('Unsupported provider operation mapping')
+        summary = Client(cfg).execute(provider_operation, data['inputs'], consent_confirmed=True, evidence_sink=evidence.append)
         item = evidence[0]
         item['binding'] = binding(row['user_id'], data['declared'])
         item['consent'] = data['consent']
@@ -289,7 +295,7 @@ def work_one(conn):
             auth_sessions.sql(conn,'INSERT INTO "BgvAttempt" (id,request_id,protected_evidence,created_at) VALUES (?,?,?,?)',
                 (item['receipt_id'],row['id'],protection.seal(item),stamp()))
             auth_sessions.sql(conn, 'UPDATE "BgvRequest" SET protected_result=? WHERE id=?', (protection.seal(item), row['id']))
-        if row['operation'] == 'current_employer' and state == 'needs_review':
+        if row['operation'] == 'current_employer' and provider_operation!='employment_history' and state == 'needs_review':
             status = ingest(conn, item, protection)
             saved = db.fetch_one(conn, 'BgvEvidence', id=item['receipt_id'])
             public['fields'] = json.loads(saved['fields_json'])
@@ -299,6 +305,10 @@ def work_one(conn):
             import bgv_result_policy
             if row['operation'] in RESULTS.values():
                 state,extra=bgv_result_policy.legal(conn,row,summary,protection)
+                public.update(extra)
+            elif row['operation']=='current_employer' and provider_operation=='employment_history':
+                import employment_lookup
+                state,extra=employment_lookup.assess(item['provider_response'].get('json'),data['declared'])
                 public.update(extra)
             elif row['operation']=='current_employer':
                 state,extra=bgv_result_policy.employment(item['provider_response'].get('json'),summary,state)

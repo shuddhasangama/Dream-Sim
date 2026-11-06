@@ -52,8 +52,9 @@ class BundleTests(unittest.TestCase):
             self.assertEqual(sum(r['operation']==op for r in rows),1)
         employer=next(r for r in rows if r['operation']=='current_employer')
         private=self.protection.open(employer['protected_input'])
-        self.assertEqual(private['inputs'],{'panNumber':'ABCDE1234F','mobile':'9876543210'})
-        self.assertEqual(private['declared'],{'employer':'Synthetic Ltd'})
+        self.assertEqual(private['inputs'],{'pan':'ABCDE1234F'})
+        self.assertEqual(private['declared'],{'employer':'Synthetic Ltd','name':'SYNTHETIC PERSON'})
+        self.assertEqual(private['provider_operation'],'employment_history')
         for op,values in called:
             if op in ('individual_search','fir_search'):
                 self.assertEqual(values['name'],'SYNTHETIC PERSON');self.assertEqual(values['address'],'SYNTHETIC ADDRESS')

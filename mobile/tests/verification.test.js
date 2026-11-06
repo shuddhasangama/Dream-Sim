@@ -23,7 +23,7 @@ test('verification reads only own status and binds with root/context signature',
 
 test('compact checklist uses received identity, flags age difference and never invents clearance',()=>{
   const html=render({safe,data:{enabled:true,environment:'preproduction',bundle:{declared_age:34,consented:true,pan_state:'not_shared'},digilocker:{session:{state:'complete',identity:{name:'<private>',age:42,dob:'1984-01-01',document_address:'<address>'}}},results:[{operation:'fir_result',environment:'preproduction',state:'needs_review',message:'Review needed'}]}});
-  assert.match(html,/Review age/);assert.match(html,/profile says 34/);assert.match(html,/PAN wasn/);
+  assert.match(html,/Review age/);assert.match(html,/profile says 34/);assert.match(html,/Add your declared employer/);
   assert.doesNotMatch(html,/<private>|<address>|None found|Live face match/);
   assert.match(html,/Setup needed/);assert.match(html,/View document details/);
 });
@@ -48,4 +48,9 @@ test('background work shows progress without refresh or duplicate avatar actions
 test('an unrelated avatar outage does not block verification reads',async()=>{
  const result=await load({get:async path=>{if(path.endsWith('/avatar'))throw {status:503};return {};}});
  assert.equal(result.avatar.state,'unavailable');
+});
+
+test('verified mobile allows employment lookup without PAN or DigiLocker mobile',()=>{
+ const html=render({safe,data:{enabled:true,bundle:{consented:true,pan_state:'not_shared',employer_declared:true,employment_identifier_available:true,mobile_available:false},results:[]}});
+ assert.match(html,/Starting in the background/);assert.doesNotMatch(html,/PAN wasn|Mobile wasn/);
 });

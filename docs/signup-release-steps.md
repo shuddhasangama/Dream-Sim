@@ -54,3 +54,11 @@ During this private tester rollout, POST /verification/payment/complete records 
 ## Clean Home and avatar selection
 
 Home shows one bounded circular avatar next to the greeting. Tap it to open the existing two generated choices; selecting another does not generate new images or reset the allowance. Profile/settings remain available from Settings. Home no longer embeds private identity or the legacy Bio/portrait uploader. Ethnicity and optional health disclosure appear only when editing Stats, alongside existing Stats fields. Levantine is removed from newly offered cuisine choices; existing stored claims are not deleted. These native UI changes require a new Codemagic build, unlike the preceding backend-only payment fix.
+
+## Employment history provider replacement
+
+New consented automatic signup employment checks use /underwriting/fetch-employment-history in the existing current_employer business-check slot. The encrypted snapshot records provider_operation=employment_history; raw receipts retain the actual vendor operation. After Get Details finishes, use its PAN only if the DigiLocker account name agrees with Aadhaar. Otherwise use only the authenticated account's verified Indian mobile. DOB alone is never sent. No unused blank fields are transmitted.
+
+Returned employee names must agree with Aadhaar before any employer record is displayed. fatherOrHusbandName is never the member identity. A blank exit date does not independently establish current employment; show History found with dates, not Current confirmed. No-hit responses do not establish unemployment. Existing paid checks, uncertain attempts and legacy queued request snapshots are preserved; deployment does not silently repeat or retarget them. Operator/manual legacy diagnostic submissions retain their original endpoint; the replaced path is automated signup orchestration.
+
+Deploy both Dream-Sim and bgv-worker from this checkout. No new variables or schema changes. Existing mobile builds receive backend result messages; the updated PAN/mobile explanatory text requires a new native build. No live provider call was made for this implementation.
