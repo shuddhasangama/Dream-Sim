@@ -121,7 +121,7 @@ def main():
         values = {'caseId': found.get('caseId') if isinstance(found, dict) else None}
         print('Using the caseId stored in that private receipt. Fetches the result of one earlier search.')
     elif args.operation == 'employment_history':
-        print('Use consented employment-history details; blank optional fields are sent as empty strings.')
+        print('Use consented employment-history details; blank optional fields are omitted from the request.')
         print('Provide at least PAN, mobile or UAN. Required combinations and DOB wire format need Signzy confirmation.')
         values = {
             'pan': getpass.getpass('Consented PAN (hidden; blank to omit): ').strip(),

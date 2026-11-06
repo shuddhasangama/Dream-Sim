@@ -14,14 +14,15 @@ def payload(values):
         value = values.get(key, '')
         if not isinstance(value, str):
             raise ValueError('Employment-history inputs must be strings')
-        result[key] = value.strip()
-    if not any(result[k] for k in ('pan', 'mobile', 'uan')):
+        if value.strip():
+            result[key] = value.strip()
+    if not any(result.get(k) for k in ('pan', 'mobile', 'uan')):
         raise ValueError('Provide a consented PAN, mobile or UAN')
-    if result['pan']:
+    if result.get('pan'):
         result['pan'] = pan(result['pan'])
-    if result['mobile'] and not re.fullmatch(r'[6-9][0-9]{9}', result['mobile']):
+    if result.get('mobile') and not re.fullmatch(r'[6-9][0-9]{9}', result['mobile']):
         raise ValueError('Invalid mobile format')
-    if result['uan'] and not re.fullmatch(r'[0-9]{12}', result['uan']):
+    if result.get('uan') and not re.fullmatch(r'[0-9]{12}', result['uan']):
         raise ValueError('UAN must contain exactly 12 digits')
     # Request DOB format and required field combinations are not supplied.
     # Preserve optional DOB verbatim; do not infer its format from response DOB.

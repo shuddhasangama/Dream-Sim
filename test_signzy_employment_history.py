@@ -10,11 +10,22 @@ class EmploymentHistoryTests(unittest.TestCase):
     def test_input_contract(self):
         self.assertIs(OPERATIONS['employment_history'], employment_history)
         self.assertEqual(employment_history.payload({'pan': ' aaapa0000a '}),
-                         dict(pan='AAAPA0000A', mobile='', uan='', dob='', employeeName=''))
+                         dict(pan='AAAPA0000A'))
         for values in ({}, {'uan': '123'}, {'mobile': 'bad'}, {'pan': 'bad'},
                        {'uan': '123456789012', 'unknown': ''}, {'uan': 123456789012}):
             with self.assertRaises(ValueError):
                 employment_history.payload(values)
+
+    def test_single_identifier_wire_body_omits_unused_and_blank_fields(self):
+        for field,value in [('pan','AAAPA0000A'),('mobile','9000000001'),('uan','123456789012')]:
+            supplied={key:'' for key in employment_history.FIELDS};supplied[field]=value
+            response=io.BytesIO(b'{"result":[]}');response.code=200
+            with patch('urllib.request.build_opener') as opener:
+                opener.return_value.open.return_value=response
+                Client(Config(token='synthetic')).execute('employment_history',supplied,consent_confirmed=True)
+                request=opener.return_value.open.call_args.args[0]
+                self.assertEqual(json.loads(request.data),{field:value})
+                self.assertEqual(opener.return_value.open.call_count,1)
 
     def test_response_privacy_and_limitations(self):
         body = {'result': [{'establishmentName': 'PRIVATE EMPLOYER', 'name': 'PRIVATE NAME',
@@ -48,7 +59,7 @@ class EmploymentHistoryTests(unittest.TestCase):
                 request = opener.return_value.open.call_args.args[0]
                 self.assertEqual(request.full_url,
                     'https://api-preproduction.signzy.app/api/v3/underwriting/fetch-employment-history')
-                self.assertEqual(json.loads(request.data)['uan'], '123456789012')
+                self.assertEqual(json.loads(request.data), {'uan':'123456789012'})
                 self.assertEqual(opener.return_value.open.call_count, 1)
             self.assertEqual(evidence[0]['provider_response']['json'], body)
             self.assertNotIn('PRIVATE', json.dumps(summary))
