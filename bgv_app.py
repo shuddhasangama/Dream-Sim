@@ -1,3 +1,4 @@
+import signzy_guard
 """Private queued verification. Provider calls run in a separate worker."""
 import json
 import os
@@ -68,6 +69,13 @@ def view(conn, uid):
                 'environment': row['environment'], 'updated_at': row['updated_at'], 'parent_request_id':row.get('parent_request_id'),
                 **json.loads(row['summary_json'])}
             item = latest[key]
+            if enabled and row['environment']==cfg.environment and row['state']=='queued':
+                op=Protection().open(row['protected_input']).get('provider_operation',row['operation'])
+                pause=signzy_guard.blocked(conn,cfg,op)
+                if pause:
+                    from signzy.errors import action
+                    issue=action(pause['error_code'])
+                    item.update(message=issue['user_message'],error_code=issue['error_code'],provider_paused=True)
             children = [r for r in rows if r.get('parent_request_id') == row['id']]
             last_child = children[0] if children else None
             item['can_fetch_result'] = bool(row['operation'] in RESULTS and
@@ -238,6 +246,7 @@ def work_one(conn):
             auth_sessions.sql(conn, 'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
         rows = sorted((r for r in db.fetch_all(conn, 'BgvRequest', state='queued', environment=cfg.environment)
                        if r['operation'] in {*CHECKS,*RESULTS.values(),'digilocker_details'}), key=lambda r:r['created_at'])
+        rows = [r for r in rows if not signzy_guard.blocked(conn,cfg,protection.open(r['protected_input']).get('provider_operation',r['operation']))]
         if not rows:
             return False
         row = rows[0]
@@ -265,7 +274,7 @@ def work_one(conn):
         provider_operation=data.get('provider_operation',row['operation'])
         if provider_operation!=row['operation'] and not (row['operation']=='current_employer' and provider_operation=='employment_history'):
             raise ValueError('Unsupported provider operation mapping')
-        summary = Client(cfg).execute(provider_operation, data['inputs'], consent_confirmed=True, evidence_sink=evidence.append)
+        summary = signzy_guard.execute(conn, cfg, Client(cfg), provider_operation, data['inputs'], consent_confirmed=True, evidence_sink=evidence.append)
         item = evidence[0]
         item['binding'] = binding(row['user_id'], data['declared'])
         item['consent'] = data['consent']
@@ -274,7 +283,7 @@ def work_one(conn):
             state = 'unavailable'
         if summary.get('outcome') == 'transport_error_outcome_unknown':
             state = 'outcome_unknown'
-        elif summary.get('http_status') == 202:
+        elif summary.get('http_status') == 202 and not summary.get('error_code'):
             state = 'pending'
         if row['operation'] in RESULTS and summary.get('http_status') in (200,202) and not summary.get('error_code'):
             try:
@@ -287,7 +296,7 @@ def work_one(conn):
                 state = 'result_available'
             except (ValueError, AttributeError):
                 state = 'needs_review'
-        if row['operation'] in RESULTS.values() and summary.get('outcome') == 'accepted_pending_confirmation':
+        if row['operation'] in RESULTS.values() and summary.get('outcome') == 'accepted_pending_confirmation' and not summary.get('error_code'):
             state = 'pending'
         public = {'fields': {}, 'message': 'Results require review.'}
         # Persist raw evidence before comparison so a comparison failure never loses a paid result.
@@ -300,7 +309,9 @@ def work_one(conn):
             saved = db.fetch_one(conn, 'BgvEvidence', id=item['receipt_id'])
             public['fields'] = json.loads(saved['fields_json'])
             state = status if status in ('verified', 'partially_verified') else 'needs_review'
-        public['message']=public_message(row['operation'],state,summary)
+        public['message']=summary.get('user_message') or public_message(row['operation'],state,summary)
+        if summary.get('error_code'):
+            public.update({k:summary[k] for k in ('error_code','action_owner','next_action','retry_automatically') if k in summary})
         if state not in ('unavailable','outcome_unknown'):
             import bgv_result_policy
             if row['operation'] in RESULTS.values():

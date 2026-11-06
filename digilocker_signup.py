@@ -1,3 +1,4 @@
+import signzy_guard
 """Account-bound DigiLocker consent and minimal encrypted identity projection.
 
 Human confirmation requests retrieval; only the provider supplies identity data.
@@ -71,6 +72,7 @@ def view(conn, uid):
     result = {'enabled':True, 'environment':cfg.environment, 'consent_version':BUNDLE_VERSION, 'consent_text':BUNDLE_CONSENT,
               'cooldown_minutes':cooldown_minutes(),
               'session':None, 'overall_approval':False}
+    result['provider_issue']=signzy_guard.public_pause(conn,cfg,'digilocker_create_url')
     latest = [r for r in rows(conn, uid) if r['environment'] == cfg.environment]
     if latest:
         row = latest[0]
@@ -91,6 +93,9 @@ def view(conn, uid):
         item['cooling_down']=cooling(row)
         item['can_restart']=state=='not_confirmed' and not cooling(row)
         item['can_request_photo']=state=='complete' and not cooling(row) and (row['consent_version']!=BUNDLE_VERSION or not row.get('protected_photo'))
+        if state!='complete' and row.get('protected_result'):
+            issue=Protection().open(row['protected_result']).get('provider_issue',{})
+            if issue: item.update(message=issue.get('user_message'),error_code=issue.get('error_code'))
         result['session'] = item
     return result
 
@@ -127,16 +132,17 @@ def create(conn, uid, body):
             retry_after_cooldown=last['state']=='not_confirmed' and not cooling(last)
             if not old_completed and not retry_after_cooldown and (last['state'] in ('creating','retrieving','outcome_unknown','complete') or now() < datetime.fromisoformat(last['expires_at'])):
                 raise ApiError('session_exists', 'Resume your existing DigiLocker session or contact support.', 409)
+        signzy_guard.require_available(conn,cfg,'digilocker_create_url')
         stamp = now()
         auth_sessions.sql(conn, 'INSERT INTO "DigiLockerSession" (id,user_id,environment,state,protected_session,protected_result,consent_version,created_at,updated_at,expires_at,attempts,case_check_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
             (sid,uid,cfg.environment,'creating',None,None,body['consent_version'],stamp.isoformat(),stamp.isoformat(),(stamp+timedelta(minutes=30)).isoformat(),0,case_check_id))
-    evidence = []
+    evidence = []; summary={}
     try:
-        summary = Client(cfg, timeout=20).execute('digilocker_create_url', {
+        summary = signzy_guard.execute(conn, cfg, Client(cfg, timeout=20), 'digilocker_create_url', {
             'callbackUrl':os.environ['SIGNZY_DIGILOCKER_CALLBACK_BASE'].rstrip('/')+'/'+secrets.token_hex(16),
             'internalId':'dhashu_'+secrets.token_hex(16), 'serviceName':'DhaShu','includePhoto':True,'includePan':body['consent_version']==BUNDLE_VERSION}, consent_confirmed=True, evidence_sink=evidence.append)
         response = evidence[0].get('provider_response') or {}
-        if summary.get('http_status') == 200:
+        if summary.get('http_status') == 200 and not summary.get('error_code'):
             request_id, url = provider_session(response.get('json'))
             linked = {'requestId':request_id, 'url':url}
             protected = protection.seal(linked)
@@ -147,7 +153,7 @@ def create(conn, uid, body):
     except Exception:
         state, protected = 'outcome_unknown', None
     with auth_sessions.transaction(conn):
-        update(conn, sid, state=state, protected_session=protected)
+        update(conn, sid, state=state, protected_session=protected, protected_result=protection.seal({'provider_issue':summary}) if summary.get('error_code') else None)
 
 def projection(body, today=None):
     fields = identity_fields(body)
@@ -181,19 +187,20 @@ def complete(conn, uid, sid, body):
         if now() >= datetime.fromisoformat(row['expires_at']):
             raise ApiError('expired', 'This consent session has expired. Create a new link.', 409)
         # CAS is important on PostgreSQL: concurrent confirmations must make one call.
+        signzy_guard.require_available(conn,cfg,'digilocker_eaadhaar')
         claimed_at=now()
         claim = auth_sessions.sql(conn, 'UPDATE "DigiLockerSession" SET state=?, attempts=attempts+1, updated_at=?, cooldown_until=? WHERE id=? AND state=? AND attempts=?',
             ('retrieving',claimed_at.isoformat(),(claimed_at+timedelta(minutes=cooldown_minutes())).isoformat(),sid,row['state'],row['attempts']))
         if claim.rowcount != 1:
             raise ApiError('session_busy', 'Retrieval is already in progress.', 409)
-    protection = Protection(); evidence=[]; protected=None
+    protection = Protection(); evidence=[]; protected=None; summary={}
     try:
         linked = protection.open(row['protected_session'])
         # Existing pre-photo consent is not silently expanded.
-        summary = Client(cfg, timeout=20).execute('digilocker_eaadhaar', {'requestId':linked['requestId'],'includePhoto':row['consent_version'] in PHOTO_VERSIONS},
+        summary = signzy_guard.execute(conn, cfg, Client(cfg, timeout=20), 'digilocker_eaadhaar', {'requestId':linked['requestId'],'includePhoto':row['consent_version'] in PHOTO_VERSIONS},
             consent_confirmed=True, evidence_sink=evidence.append)
         status = summary.get('http_status')
-        if status == 200:
+        if status == 200 and not summary.get('error_code'):
             try:
                 identity = projection(evidence[0]['provider_response']['json'])
                 if row['consent_version']==BUNDLE_VERSION:
@@ -204,12 +211,15 @@ def complete(conn, uid, sid, body):
                 state = 'complete' if identity['adult'] else 'needs_review'
             except (ValueError, TypeError, KeyError):
                 state = 'needs_review'
-        elif status == 202:
+        elif status == 202 and not summary.get('error_code'):
             state = 'not_confirmed'
         else:
             state = 'outcome_unknown' if status is None else 'needs_review'
     except Exception:
         state = 'outcome_unknown'
+    if summary.get('error_code'):
+        protected=protection.seal({'provider_issue':summary})
+        state='outcome_unknown' if summary.get('http_status') is None else 'unavailable'
     photo=None
     if state=='complete' and row['consent_version'] in PHOTO_VERSIONS:
         from signzy.document_photo import reference

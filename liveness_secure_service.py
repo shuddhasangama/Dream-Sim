@@ -1,3 +1,4 @@
+import signzy_guard
 """Owner-bound hosted sandbox capture. Redirect/return never establishes identity."""
 import os
 import secrets
@@ -45,15 +46,17 @@ def view(conn, uid):
     state = r['state'] if r else 'not_started'
     result = Protection().open(r['protected_result']) if r and r.get('protected_result') else {}
     summary = result.get('summary', {})
+    if enabled() and state in ('not_started','queued_create','queued_get'):
+        summary={**summary,**signzy_guard.public_pause(conn,Config.from_env(),'liveness_secure_data' if state=='queued_get' else 'liveness_secure_create')}
     can_complete = bool(r and state in ('awaiting_capture', 'pending') and r['fetch_count'] < 3
         and r['next_fetch_at'] <= stamp() and r['capture_until'] > stamp())
     url = None
     if r and state in ('awaiting_capture', 'pending') and r.get('protected_session') and r['capture_until'] > stamp():
         url = Protection().open(r['protected_session'])['url']
     return {'enabled': enabled(), 'operation': 'liveness_secure', 'provider': 'signzy', 'sandbox': True,
-        'state': state, 'session_id': r['flow_id'] if r else None, 'message': MESSAGES.get(state, 'Check status.'),
+        'state': state, 'session_id': r['flow_id'] if r else None, 'message': summary.get('user_message') or MESSAGES.get(state, 'Check status.'),
         'checked_at': r['updated_at'] if r and state in ('matched', 'not_matched') else None,
-        'reference_ready': bool(source), 'can_request': enabled() and not r and bool(source),
+        'reference_ready': bool(source), 'can_request': enabled() and not r and bool(source) and not summary.get('provider_paused'),
         'can_complete': enabled() and can_complete, 'capture_url': url, 'consent_version': VERSION, 'consent_text': CONSENT,
         'threshold': .6, 'liveness': 'passed' if summary.get('liveness_passed') is True else 'failed' if summary.get('liveness_passed') is False else 'pending',
         'face_match_passed': summary.get('face_match_passed'), 'match_percentage': summary.get('match_percentage'),
@@ -135,6 +138,7 @@ def work_one(conn, client_factory=Client, download=None):
             return False
         r = dict(raw)
         creating = r['state'] == 'queued_create'
+        if signzy_guard.blocked(conn,Config.from_env(),'liveness_secure_create' if creating else 'liveness_secure_data'): return False
         claimed = 'creating' if creating else 'retrieving'
         count = r['fetch_count'] + (0 if creating else 1)
         changed = auth_sessions.sql(conn, 'UPDATE "LivenessSession" SET state=?,fetch_count=?,updated_at=? WHERE id=? AND state=?',
@@ -155,9 +159,9 @@ def work_one(conn, client_factory=Client, download=None):
             raise ValueError('Sandbox only')
         if creating:
             original = Protection().open(r['protected_input'])
-            summary = client_factory(config).execute('liveness_secure_create', {'matchImage': [original['photo_url']],
+            summary = signzy_guard.execute(conn, config, client_factory(config), 'liveness_secure_create', {'matchImage': [original['photo_url']],
                 'faceMatchThreshold': .6, 'piiDeletionTTL': '6 months'}, consent_confirmed=True, evidence_sink=sink)
-            if summary.get('capture_link_received') is True and evidence:
+            if summary.get('capture_link_received') is True and evidence and not summary.get('error_code'):
                 token, url, consumer = session(evidence['provider_response']['json'])
                 if urlsplit(url).hostname != HOST:
                     raise ValueError('Unexpected capture host')
@@ -165,7 +169,8 @@ def work_one(conn, client_factory=Client, download=None):
                 state = 'awaiting_capture'
         else:
             link = Protection().open(r['protected_session'])
-            summary = client_factory(config).execute('liveness_secure_data', {'token': link['token']}, consent_confirmed=True, evidence_sink=sink)
+            summary = signzy_guard.execute(conn, config, client_factory(config), 'liveness_secure_data', {'token': link['token']}, consent_confirmed=True, evidence_sink=sink)
+            if summary.get('error_code'): raise ValueError('Provider request could not complete')
             body = ((evidence or {}).get('provider_response') or {}).get('json') or {}
             provider = body.get('result') if isinstance(body, dict) else None
             if not isinstance(provider, dict) or provider.get('token') != link['token'] or provider.get('consumerId') != link['consumer']:

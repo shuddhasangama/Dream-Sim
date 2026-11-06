@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import urllib.error
 import urllib.request
 from . import current_employer, pan_extensive, pan_simple, individual_search, individual_result, uan_passbook, employment_history
-from .errors import classify
+from .errors import classify, action
 from . import fir_search, fir_result
 from . import digilocker_create_url, digilocker_eaadhaar
 from . import smart_verification, digilocker_details, face_match
@@ -125,12 +125,23 @@ class Client:
             evidence['provider_response']['json'] = parsed
         except (urllib.error.URLError, TimeoutError, OSError):
             receipt['outcome'] = 'transport_error_outcome_unknown'
-            receipt['error_code'] = 'network_error_outcome_unknown'
+            receipt.update(action('network_error_outcome_unknown'))
             receipt['retry_automatically'] = False
             return finish()
         except (ValueError, UnicodeError):
+            receipt.update(action('invalid_provider_response'))
             receipt['outcome'] = 'invalid_or_oversized_response'
+            receipt.update(classify(receipt['http_status'], {}))
             return finish()
-        receipt.update(adapter.summarize(receipt['http_status'], parsed))
-        receipt.update(classify(receipt['http_status'], parsed))
+        error = classify(receipt['http_status'], parsed)
+        try:
+            receipt.update(adapter.summarize(receipt['http_status'], parsed))
+        except (ValueError, TypeError, KeyError, AttributeError):
+            receipt.update(action('invalid_provider_response'))
+            receipt['outcome'] = 'invalid_provider_response'
+        receipt.update(error)
+        if receipt.get('error_code'):
+            # Contradictory success fields never survive an error envelope.
+            for key in ('face_match_passed','liveness_passed','combined_passed','additional_checks_passed','capture_link_received','processing_complete','is_employed'):
+                if key in receipt: receipt[key] = None
         return finish()

@@ -1,3 +1,4 @@
+import signzy_guard
 """One-shot sandbox face comparison; never grants liveness or dating eligibility."""
 import hashlib
 import json
@@ -29,12 +30,13 @@ def view(conn,uid):
  r=db.fetch_one(conn,'FaceMatchJob',id=uid);selfie,reference=sources(conn,uid)
  result=Protection().open(r['protected_result']).get('summary',{}) if r and r.get('protected_result') else {}
  state=r['state'] if r else 'not_started'
+ if enabled() and state in ('not_started','queued'):result={**result,**signzy_guard.public_pause(conn,Config.from_env(),'face_match')}
  return {'enabled':enabled(),'state':state,'provider':'signzy','operation':'face_match','threshold':0.5,
   'face_match_passed':result.get('face_match_passed'),'match_percentage':result.get('match_percentage'),
   'liveness':'not_checked','sandbox':True,'reference_ready':bool(reference),'selfie_ready':bool(selfie),
-  'can_request':enabled() and not r and bool(selfie and reference) and selfie['state']!='draft',
+  'can_request':enabled() and not r and bool(selfie and reference) and selfie['state']!='draft' and not result.get('provider_paused'),
   'consent_version':VERSION,'consent_text':CONSENT,
-  'message':{'not_started':'Face comparison has not been requested.','queued':'Face comparison queued.','submitting':'Comparing the original selfie with Aadhaar.',
+  'message':result.get('user_message') or {'not_started':'Face comparison has not been requested.','queued':'Face comparison queued.','submitting':'Comparing the original selfie with Aadhaar.',
    'matched':'Face matched · Liveness not checked.','not_matched':'Face did not match · Liveness not checked.',
    'unknown':'Comparison unavailable or outcome uncertain. Support review is needed; another paid call is blocked.',
    'deleted':'Face evidence removed. The comparison allowance is not reset.'}.get(state,'Face comparison pending.')}
@@ -70,6 +72,7 @@ def work_one(conn,client_factory=Client):
   r=auth_sessions.sql(conn,'SELECT * FROM "FaceMatchJob" WHERE state=? ORDER BY created_at LIMIT 1',('queued',)).fetchone()
   if not r:return False
   r=dict(r)
+  if signzy_guard.blocked(conn,Config.from_env(),'face_match'):return False
   if r['expires_at']<=stamp():auth_sessions.sql(conn,'UPDATE "FaceMatchJob" SET state=? WHERE id=?',('unknown',r['id']));return True
   claim=auth_sessions.sql(conn,'UPDATE "FaceMatchJob" SET state=?,updated_at=? WHERE id=? AND state=?',('submitting',stamp(),r['id'],'queued'))
   if claim.rowcount!=1:return False
@@ -83,9 +86,9 @@ def work_one(conn,client_factory=Client):
   def sink(value):
    nonlocal evidence
    evidence=value
-  summary=client_factory(Config.from_env()).execute('face_match',{'firstImage':base+'selfie','secondImage':base+'aadhaar','threshold':0.5,'detectMask':[base+'selfie']},consent_confirmed=True,evidence_sink=sink)
-  if summary.get('face_match_passed') is True:state='matched'
-  elif summary.get('face_match_passed') is False:state='not_matched'
+  summary=signzy_guard.execute(conn, Config.from_env(), client_factory(Config.from_env()), 'face_match',{'firstImage':base+'selfie','secondImage':base+'aadhaar','threshold':0.5,'detectMask':[base+'selfie']},consent_confirmed=True,evidence_sink=sink)
+  if not summary.get('error_code') and summary.get('face_match_passed') is True:state='matched'
+  elif not summary.get('error_code') and summary.get('face_match_passed') is False:state='not_matched'
  except Exception:state='unknown'
  finally:
   with auth_sessions.transaction(conn):

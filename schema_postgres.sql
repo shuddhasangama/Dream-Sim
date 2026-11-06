@@ -1111,3 +1111,9 @@ CREATE TABLE IF NOT EXISTS "LivenessSession" (
  consent_version TEXT NOT NULL, consent_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
  capture_until TEXT NOT NULL, expires_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS "SignzyGuard" (
+ id TEXT PRIMARY KEY, environment TEXT NOT NULL, operation TEXT NOT NULL,
+ error_code TEXT NOT NULL, paused_until INTEGER NOT NULL DEFAULT 0,
+ active INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL, resume_reason TEXT
+);
