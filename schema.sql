@@ -1127,7 +1127,21 @@ CREATE TABLE IF NOT EXISTS "SignzyGuard" (
 -- Observed member activity from authenticated requests, using real UTC time.
 CREATE TABLE IF NOT EXISTS "UserActivity" (
  user_id TEXT PRIMARY KEY REFERENCES "User"(id) ON DELETE CASCADE,
- first_seen_at BIGINT NOT NULL, last_seen_at BIGINT NOT NULL,
+ first_seen_at BIGINT NOT NULL,
+ last_seen_at BIGINT NOT NULL,
  platform TEXT NOT NULL, auth_kind TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS user_activity_seen ON "UserActivity"(last_seen_at);
+
+-- A short-lived, one-use password setup/reset grant, issued only after provider OTP approval.
+CREATE TABLE IF NOT EXISTS "PasswordGrant" (
+    session_id TEXT PRIMARY KEY REFERENCES "AuthSession"(id),
+    expires_at BIGINT NOT NULL,
+    consumed_at BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS "MemberEmailChallenge" (
+ id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES "AuthSession"(id),
+ destination TEXT NOT NULL, provider_sid TEXT NOT NULL, expires_at BIGINT NOT NULL,
+ attempts INTEGER NOT NULL DEFAULT 0, consumed_at BIGINT
+);

@@ -196,6 +196,7 @@ class UpsertKeyTests(unittest.TestCase):
                     tuple(c.strip() for c in group.split(","))
                     for group in re.findall(r'(?:UNIQUE|PRIMARY KEY)\s*\(([^)]*)\)', body)
                 ]
+                found.extend((column,) for column in re.findall(r'^\s*(\w+)\s+\w+\s+PRIMARY KEY\b', body, re.MULTILINE))
                 self.assertIn(
                     tuple(columns), found,
                     f'{table}: db.CONFLICT_COLUMNS says ON CONFLICT {columns}, '

@@ -322,6 +322,11 @@ export function previewTransport() {
       active=true;
       return ok({access_token:'preview-access',refresh_token:'preview-refresh',expires_in:900});
     }
+    if(path.endsWith('/auth/password/login')){active=true;return ok({access_token:'preview-access',refresh_token:'preview-refresh',expires_in:900});}
+    if(path.endsWith('/auth/password/status'))return ok({password_set:true,can_set:true,verified_email:false,phone:'+15550001111'});
+    if(path.endsWith('/auth/password/set'))return ok({access_token:'preview-access',refresh_token:'preview-refresh',expires_in:900});
+    if(path.endsWith('/auth/email/request'))return ok({challenge_id:'preview-email'});
+    if(path.endsWith('/auth/email/verify'))return ok({verified:true});
     if (path.endsWith('/auth/logout')) { active=false; return ok({logged_out:true}); }
     if (!active) return {status:401,data:{error:{message:'Sign in again.'},data:null}};
 

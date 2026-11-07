@@ -2,3 +2,5 @@
 
 /* Keep operational identifiers and dates legible; wide reports scroll within their own table. */
 .table-wrap table{min-width:660px}td{overflow-wrap:normal}td[data-field="user_id"],td[data-field="reference"]{white-space:nowrap}td[data-field="city"],td[data-field="type"],td[data-field="phone"]{white-space:nowrap}td[data-field$="_at"]{min-width:140px}td[data-field="expires_at"],td[data-field="access_expires_at"]{min-width:140px}td button{white-space:nowrap}#report .table-wrap{scrollbar-gutter:stable}
+
+button.metric{display:block;background:transparent;border:0;padding:0;color:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:6px}button.metric:hover{color:#197341}button.metric:focus-visible{outline:3px solid #197341;outline-offset:5px}

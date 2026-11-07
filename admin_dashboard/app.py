@@ -107,9 +107,26 @@ def create_app():
         with reports.connection() as conn:
             if section=='users':
                 if request.args.get('q'):return jsonify(error='Use the private search form.'),400
-                value=reports.users(conn,'',page)
+                filter_name=request.args.get('filter','')
+                if filter_name:
+                    try:reports.cohort(conn,filter_name)
+                    except ValueError:return jsonify(error='Invalid account filter.'),400
+                value=reports.users(conn,'',page,filter_name)
             elif section=='sessions':value=reports.sessions(conn,page)
             else:value={'overview':reports.overview,'checks':reports.checks,'marketing':reports.marketing,'audit':reports.audit_log}[section](conn)
+        return jsonify({**value,'generated_at':int(time.time()),'timezone':'Asia/Kolkata'})
+
+    @app.get('/api/check-records')
+    def check_records():
+        if 'checks' not in PERMISSIONS.get(g.admin['role'],set()):return jsonify(error='This section is not available for your role.'),403
+        try:page=int(request.args.get('page','1'))
+        except ValueError:return jsonify(error='Invalid page.'),400
+        values=[request.args.get(k,'') for k in ('operation','environment','state')]
+        if not 1<=page<=10000 or any(not 1<=len(v)<=100 for v in values):return jsonify(error='Invalid filter.'),400
+        with auth_sessions.transaction(get_db()):security.audit(get_db(),g.admin['admin_id'],'report_view','checks')
+        with reports.connection() as conn:
+            try:value=reports.check_records(conn,*values,page)
+            except ValueError:return jsonify(error='Invalid filter.'),400
         return jsonify({**value,'generated_at':int(time.time()),'timezone':'Asia/Kolkata'})
 
     @app.post('/api/search/users')

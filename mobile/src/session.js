@@ -52,6 +52,20 @@ export class Session {
     if (!/^\+[1-9]\d{7,14}$/.test(destination)) throw new ApiError('Include the country code, for example +91 followed by your number.');
     return this.raw(signup?'/api/v1/auth/signup/request':'/api/v1/auth/request', 'POST', {channel: 'phone', destination});
   }
+  async passwordLogin(identifier,password) {
+    const epoch=this.generation;
+    const result=await this.raw('/api/v1/auth/password/login','POST',{identifier,password});
+    await this.accept(result,epoch);
+  }
+  async setPassword(password) {
+    const epoch=this.generation;
+    const result=await this.post('/api/v1/auth/password/set',{password});
+    await this.accept(result,epoch);
+  }
+  async recoveryCode(destination) {
+    const channel=destination.includes('@')?'email':'phone';
+    return this.raw('/api/v1/auth/request','POST',{channel,destination});
+  }
   async testerLogin(phone) {
     if (!/^\+[1-9]\d{7,14}$/.test(phone)) throw new ApiError('Include the country code.');
     const epoch = this.generation;

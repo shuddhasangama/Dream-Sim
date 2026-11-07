@@ -60,19 +60,42 @@ def overview(c):
         condition = expression+"='2'" if key=='vision_schema_version' else expression+" IN ('true','1')"
         funnel.append({'milestone':label,'accounts':scalar(c,'SELECT COUNT(*) n'+enabled+' AND '+condition)})
     funnel.append({'milestone':'Chemistry saved','accounts':None})
-    return {'metrics':[{'label':a,'value':b,'note':d} for a,b,d in metrics],
+    return {'metrics':[{'label':a,'value':b,'note':d,'filter':{'Enabled accounts':'enabled','Phone verified':'phone_verified','New signup flow':'new_signup','Overall BGV verified':'bgv_verified','Dating stage':'dating','Disabled accounts':'disabled','Active in last 24 hours':'active_1','Active in last 7 days':'active_7','Active in last 30 days':'active_30'}[a]} for a,b,d in metrics],
         'groups':rows(c,'SELECT u.journey_state AS stage,COUNT(*) AS accounts'+enabled+' GROUP BY u.journey_state ORDER BY COUNT(*) DESC'),
         'funnel':funnel,'notes':['Counts are distinct enabled accounts unless labelled otherwise. A valid session does not prove the person is online.',
         'Chemistry completion is not inferred from empty/default JSON; its milestone count needs a dedicated event.',
         'Actual matching eligibility is not calculated here because preparation/eligibility workflows can mutate member state.']}
 
-def users(c, query='', page=1):
+def cohort(c, name):
+    allowed={
+        'enabled':('a.auth_enabled=1',()),
+        'phone_verified':('a.auth_enabled=1 AND a.verified_phone=1',()),
+        'new_signup':('a.auth_enabled=1 AND '+js(c,'signup_version')+"='3'",()),
+        'bgv_verified':("a.auth_enabled=1 AND u.bgv_status='verified'",()),
+        'dating':("a.auth_enabled=1 AND u.journey_state='dating'",()),
+        'disabled':('a.auth_enabled=0',())}
+    for days in (1,7,30):allowed['active_'+str(days)]=('a.auth_enabled=1 AND v.last_seen_at>=?',(int(time.time())-days*86400,))
+    for key,label in [('vision_schema_version','vision'),('signup_stats_saved','stats'),('signup_submitted','submitted')]:
+        allowed[label]=('a.auth_enabled=1 AND '+js(c,key)+("='2'" if label=='vision' else " IN ('true','1')"),())
+    if name.startswith('city:') and len(name)<=100:return "a.auth_enabled=1 AND COALESCE(NULLIF("+js(c,'city')+",''),'Not set')=?",(name[5:],)
+    if name.startswith('payment:') and name[8:] in ('sandbox','live','test'):
+        return '''a.auth_enabled=1 AND EXISTS (SELECT 1 FROM "BillingPurchase" b WHERE b.user_id=a.user_id AND b.mode=? AND b.payment_status='captured' AND b.refund_status='none')''',(name[8:],)
+    if name.startswith('stage:') and len(name)<=80:return 'a.auth_enabled=1 AND u.journey_state=?',(name[6:],)
+    if name not in allowed:raise ValueError('Invalid account filter')
+    return allowed[name]
+
+def users(c, query='', page=1, filter_name=''):
+
     query=str(query).strip()[:128]; args=[]; where=''
     if query:
         escaped=query.lower().replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
         phone=''.join(x for x in query if x.isdigit())
         where=" WHERE (LOWER(a.user_id) LIKE ? ESCAPE '\\' OR REPLACE(REPLACE(COALESCE(a.phone,''),'+',''),' ','')=?)"
         args=['%'+escaped+'%',phone or '-']
+    if filter_name:
+        condition,values=cohort(c,filter_name)
+        where+=(' AND ' if where else ' WHERE ')+condition
+        args.extend(values)
     result=rows(c,'SELECT a.user_id,a.phone,a.auth_enabled,a.verified_phone,a.created_at,u.journey_state,u.bgv_status,u.stats_json,v.last_seen_at FROM "Account" a JOIN "User" u ON u.id=a.user_id LEFT JOIN "UserActivity" v ON v.user_id=a.user_id'+where+' ORDER BY a.created_at DESC,a.user_id LIMIT 51 OFFSET ?',(*args,(page-1)*50))
     output=[]
     for row in result[:50]:
@@ -145,3 +168,19 @@ def user_summary(c, user_id):
         for r in result:checks.append({'operation':label,'environment':r.get('environment','not an identity check' if table=='AvatarJob' else 'preproduction'),'state':r['state'],'created_at':r['created_at'],'updated_at':r['updated_at']})
     return {'account':account,'checks':checks,'errors':rows(c,'SELECT reference,occurred_at,endpoint,error_type FROM "ErrorReport" WHERE user_id=? ORDER BY occurred_at DESC LIMIT 20',(user_id,)),
         'notes':['Private user summary. No identity images, health details, Guru conversations or raw provider records are returned.','Read-only: use established operator procedures for recovery; this page cannot approve checks or repeat paid calls.']}
+
+
+def check_records(c,operation,environment,state,page=1):
+    tables={'DigiLocker':('DigiLockerSession','user_id'),'Hosted liveness':('LivenessSession','id'),'Face comparison':('FaceMatchJob','id'),'Avatar generation':('AvatarJob','id')}
+    if operation in tables:
+        table,uid=tables[operation]
+        expected='not an identity check' if operation=='Avatar generation' else 'preproduction'
+        if operation!='DigiLocker' and environment!=expected:raise ValueError('Invalid environment')
+        condition='state=?';args=[state]
+        if operation=='DigiLocker':condition+=' AND environment=?';args.append(environment)
+        statement='SELECT '+uid+' AS user_id,state,created_at,updated_at FROM "'+table+'" WHERE '+condition
+    else:
+        statement='SELECT user_id,operation,environment,state,created_at,updated_at FROM "BgvRequest" WHERE operation=? AND environment=? AND state=?'
+        args=[operation,environment,state]
+    result=rows(c,statement+' ORDER BY created_at DESC LIMIT 51 OFFSET ?',(*args,(page-1)*50))
+    return {'rows':result[:50],'page':page,'has_more':len(result)>50,'notes':['These are individual request/session records, not distinct people. Raw provider evidence is excluded.']}

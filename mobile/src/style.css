@@ -121,7 +121,7 @@ button{font:inherit}
 
 /* ── forms ──────────────────────────────────────────────────────────── */
 label{display:block;font-size:13px;color:var(--text-2);margin-bottom:6px}
-input[type="text"],input[type="tel"],input[type="number"],select,textarea{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--white);font-family:var(--font-display);font-size:16px;outline:none;min-height:44px}
+input[type="text"],input[type="tel"],input[type="number"],input[type="password"],input[type="email"],select,textarea{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--white);font-family:var(--font-display);font-size:16px;outline:none;min-height:44px}
 input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--coral-1);outline-offset:1px;border-color:var(--coral-1)}
 textarea{resize:vertical;min-height:88px}
 .field{margin-bottom:14px}
@@ -614,3 +614,5 @@ input,select,textarea {max-width:100%;min-width:0;font-size:16px;}
 .profile-portrait[hidden]{display:none!important}
 
 .avatar-flow [hidden]{display:none!important}
+
+#password-form label,#member-email-form label{display:block;margin:14px 0}#password-form input,#member-email-form input{display:block;margin-top:7px}#signin-form input[type="password"]{display:block;margin:7px 0 14px}.p-sheet{max-height:85dvh;overflow-y:auto}

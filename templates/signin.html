@@ -2,7 +2,13 @@
 {% block title %}Sign in — {{ brand_name }}{% endblock %}
 {% block content %}
 <h1>Welcome back</h1>
-<p>Sign in with the email or phone number registered for your beta account.</p>
+<p>Sign in with your phone number or verified email and your password.</p>
+<form method="post" action="{{ url_for('signin') }}" class="card">
+<input type="hidden" name="action" value="password">
+<label>Phone or verified email <input name="destination" autocomplete="username" required maxlength="254"></label>
+<label>Password <input name="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+<button type="submit" class="btn-primary">Sign in</button></form>
+<p>First password or forgot password? Use a code below. Set your password in the latest phone app after code verification.</p>
 {% if error %}<p role="alert">{{ error }}</p>{% endif %}
 {% if message %}<p role="status">{{ message }}</p>{% endif %}
 {% if challenge %}

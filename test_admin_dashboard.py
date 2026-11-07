@@ -93,4 +93,27 @@ class AdminDashboardTests(unittest.TestCase):
   with patch.dict(os.environ,{'ADMIN_PUBLIC_ORIGIN':'https://admin.shuddhasangama.org','ADMIN_ALLOW_HTTP':'0','DATABASE_URL':''}):
    with self.assertRaises(ValueError):create_app()
 
+
+ def test_metric_drilldowns_match_counts_and_reject_unknown_filters(self):
+  self.login()
+  metrics=self.client.get('/api/reports/overview').get_json()['metrics']
+  for m in metrics:
+   r=self.client.get('/api/reports/users?filter='+m['filter'])
+   self.assertEqual(r.status_code,200,r.text)
+   self.assertEqual(len(r.get_json()['rows']),m['value'] or 0)
+  self.assertEqual(self.client.get('/api/reports/users?filter=stage:onboarding').status_code,200)
+  self.assertEqual(self.client.get('/api/reports/users?filter=stats').status_code,200)
+  self.assertEqual(self.client.get('/api/reports/users?filter=not_a_filter').status_code,400)
+  self.assertEqual(self.client.get('/api/reports/users?filter=disabled').get_json()['rows'][0]['user_id'],'u2')
+
+
+ def test_check_record_details_and_privacy_boundary(self):
+  self.login()
+  r=self.client.get('/api/check-records?operation=criminal&environment=preproduction&state=completed')
+  self.assertEqual(r.status_code,200,r.text)
+  self.assertEqual(r.get_json()['rows'],[])
+  self.assertEqual(self.client.get('/api/check-records?operation=x&environment=x&state=x&page=0').status_code,400)
+  self.assertEqual(self.client.get('/api/reports/users?filter=city:Bangalore').get_json()['rows'][0]['user_id'],'u1')
+  self.assertEqual(self.client.get('/api/reports/users?filter=payment:sandbox').status_code,200)
+
 if __name__=='__main__':unittest.main()

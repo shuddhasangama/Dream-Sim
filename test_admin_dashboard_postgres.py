@@ -49,4 +49,29 @@ class AdminPostgresTests(unittest.TestCase):
   for _ in range(11):result,issue=security.login(self.c,'wrong@example.test','wrong','000000','test')
   self.assertEqual(issue,'throttled');initialize(self.c);self.assertEqual(len(db.fetch_all(self.c,'Account')),1)
 
+
+ def test_password_setup_login_and_reset_on_postgres(self):
+  import auth
+  import auth_delivery
+  from flask import Flask
+  app=Flask('password-pg-test');app.secret_key='synthetic-secret-key-for-test-only-123456'
+  with patch.dict(os.environ,{'AUTH_ENABLED':'0'}):auth.register_auth(app,lambda:self.c)
+  app.config.update(AUTH_ENABLED=True,AUTH_PUBLIC_ORIGIN='https://member.example.test',TESTING=True)
+  client=app.test_client()
+  with patch.object(auth_delivery,'configured',return_value=True),patch.object(auth_delivery,'start',return_value='VE'+'a'*32),patch.object(auth_delivery,'check',return_value=True):
+   r=client.post('/api/v1/auth/request',json={'channel':'phone','destination':'+919000000001'})
+   self.assertEqual(r.status_code,202,r.text)
+   r=client.post('/api/v1/auth/verify',json={'challenge_id':r.json['challenge_id'],'code':'123456'})
+   self.assertEqual(r.status_code,200,r.text);old=r.json['access_token']
+   r=client.post('/api/v1/auth/password/set',json={'password':'a long postgres test password'},headers={'Authorization':'Bearer '+old})
+   self.assertEqual(r.status_code,200,r.text)
+   self.assertEqual(client.get('/api/v1/auth/password/status',headers={'Authorization':'Bearer '+old}).status_code,401)
+   r=client.post('/api/v1/auth/password/login',json={'identifier':'+919000000001','password':'a long postgres test password'})
+   self.assertEqual(r.status_code,200,r.text)
+   self.assertEqual(client.post('/api/v1/auth/password/set',json={'password':'another long postgres password'},headers={'Authorization':'Bearer '+r.json['access_token']}).status_code,403)
+  with reports.connection() as conn:
+   for name in ('enabled','phone_verified','new_signup','active_1','disabled','stats'):
+    self.assertIsInstance(reports.users(conn,filter_name=name)['rows'],list)
+   self.assertEqual(len(reports.users(conn,filter_name='phone_verified')['rows']),1)
+
 if __name__=='__main__':unittest.main()

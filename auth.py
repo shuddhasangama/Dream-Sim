@@ -150,7 +150,9 @@ def verify_challenge(conn, challenge, code, kind):
         if not redeemed:return None
         verified_column = 'verified_email' if row['channel'] == 'email' else 'verified_phone'
         sessions.sql(conn, 'UPDATE "Account" SET ' + verified_column + ' = 1 WHERE id = ?', (account['id'],))
-        return sessions.issue_in_transaction(conn, account['user_id'], kind)
+        result = sessions.issue_in_transaction(conn, account['user_id'], kind)
+        sessions.sql(conn, 'INSERT INTO "PasswordGrant" (session_id,expires_at) VALUES (?,?)', (result['session_id'],sessions.now()+600))
+        return result
 
 
 def register_auth(app, get_db):
@@ -228,6 +230,9 @@ def register_auth(app, get_db):
         if not isinstance(body, dict) or set(body) != set(fields):
             return None, failure('Expected fields: ' + ', '.join(fields))
         return body, None
+
+    import member_password
+    member_password.register(app, get_db, payload)
 
     @app.post('/api/v1/auth/request')
     def auth_request():
@@ -315,7 +320,15 @@ def register_auth(app, get_db):
         message = error = None
         challenge = session.get('login_challenge')
         if request.method == 'POST':
-            if request.form.get('action') == 'request':
+            if request.form.get('action') == 'password':
+                result, problem = member_password.login(get_db(),request.form.get('destination'),request.form.get('password'),'web')
+                if result:
+                    active=resolve(get_db)
+                    if active:sessions.revoke(get_db(),active['id'],active['user_id'])
+                    session.clear();session['auth_token']=result['access_token'];session['user_id']=result['user_id']
+                    return redirect('/dashboard')
+                error='Phone/email or password was not accepted, or too many attempts. Use a code to sign in.'
+            elif request.form.get('action') == 'request':
                 channel = request.form.get('channel')
                 destination = normalize(channel, request.form.get('destination'))
                 if destination is None:
