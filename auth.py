@@ -1,4 +1,4 @@
-"""Email/SMS OTP identity, session integration and secure beta route guards."""
+"""Phone/SMS OTP identity, session integration and secure beta route guards."""
 import hashlib
 import hmac
 import os
@@ -76,6 +76,8 @@ def failure(message, status=400, code='validation_error'):
 
 
 def start_challenge(conn, channel, destination, kind, signup=False):
+    if channel != 'phone':
+        return None, failure('Use your registered phone number for SMS verification.')
     if not auth_delivery.configured():
         return None, failure('Sign-in delivery is not configured yet.', 503, 'auth_unavailable')
     if not sessions.throttle(conn, [key('send-ip:' + (request.remote_addr or 'unknown'))], 20, 600):
@@ -117,7 +119,7 @@ def verify_challenge(conn, challenge, code, kind):
         row = sessions.sql(conn, '''UPDATE "AuthChallenge" SET attempts = attempts + 1
             WHERE id = ? AND kind = ? AND consumed_at IS NULL AND attempts < 5 AND expires_at > ?
             RETURNING *''', (sessions.digest(challenge), kind, sessions.now())).fetchone()
-    if not row or not row['provider_sid']:
+    if not row or row['channel'] != 'phone' or not row['provider_sid']:
         return None
     row = dict(row)
     try:
@@ -327,7 +329,7 @@ def register_auth(app, get_db):
                     if active:sessions.revoke(get_db(),active['id'],active['user_id'])
                     session.clear();session['auth_token']=result['access_token'];session['user_id']=result['user_id']
                     return redirect('/dashboard')
-                error='Phone/email or password was not accepted, or too many attempts. Use a code to sign in.'
+                error='Phone number or password was not accepted, or too many attempts. Use a code to sign in.'
             elif request.form.get('action') == 'request':
                 channel = request.form.get('channel')
                 destination = normalize(channel, request.form.get('destination'))

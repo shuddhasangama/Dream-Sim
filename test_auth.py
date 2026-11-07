@@ -41,12 +41,12 @@ class AuthenticationTests(RouteTestCase):
     def post(self, path, body, **kwargs):
         return self.client.post('/api/v1/auth/' + path, json=body, **kwargs)
 
-    def challenge(self, channel='email', destination='owner@example.test'):
+    def challenge(self, channel='phone', destination='+919876543210'):
         response = self.post('request', {'channel': channel, 'destination': destination})
         self.assertEqual(response.status_code, 202, response.json)
         return response.json['data']['challenge_id']
 
-    def login_mobile(self, destination='owner@example.test'):
+    def login_mobile(self, destination='+919876543210'):
         challenge = self.challenge(destination=destination)
         response = self.post('verify', {'challenge_id': challenge, 'code': '123456'})
         self.assertEqual(response.status_code, 200, response.json)
@@ -91,9 +91,9 @@ class AuthenticationTests(RouteTestCase):
             self.assertEqual(self.post('refresh', {'refresh_token': tokens['refresh_token']}).status_code, 401)
         self.start.assert_not_called()
 
-    def test_email_login_issues_hashed_credentials_and_current_identity(self):
+    def test_phone_login_issues_hashed_credentials_and_current_identity(self):
         tokens = self.login_mobile()
-        self.start.assert_called_once_with('email', 'owner@example.test')
+        self.start.assert_called_once_with('phone', '+919876543210')
         self.check.assert_called_once_with(SID, '123456')
         self.assertEqual(tokens['expires_in'], 900)
         with self.client.session_transaction() as cookie:
@@ -104,7 +104,7 @@ class AuthenticationTests(RouteTestCase):
         stored = json.dumps(db.fetch_all(self.conn, 'AuthSession') + db.fetch_all(self.conn, 'AuthRefresh') + db.fetch_all(self.conn, 'AuthChallenge'))
         for secret in (tokens['access_token'], tokens['refresh_token'], '123456'):
             self.assertNotIn(secret, stored)
-        self.assertEqual(db.fetch_one(self.conn, 'Account', user_id='owner')['verified_email'], 1)
+        self.assertEqual(db.fetch_one(self.conn, 'Account', user_id='owner')['verified_phone'], 1)
 
     def test_sms_uses_country_code_and_same_account(self):
         challenge = self.challenge('phone', '+919876543210')
@@ -117,7 +117,7 @@ class AuthenticationTests(RouteTestCase):
     def test_unknown_and_unapproved_accounts_never_issue_tokens(self):
         self.conn.execute('UPDATE Account SET auth_enabled = 0 WHERE user_id = ?', ('other',))
         self.conn.commit()
-        for destination in ('absent@example.test', 'other@example.test'):
+        for destination in ('+15550000000', '+919876543211'):
             challenge = self.challenge(destination=destination)
             result = self.post('verify', {'challenge_id': challenge, 'code': '123456'})
             self.assertEqual(result.status_code, 401)
@@ -126,7 +126,7 @@ class AuthenticationTests(RouteTestCase):
         self.assertEqual(db.fetch_all(self.conn, 'AuthSession'), [])
 
     def test_canonical_duplicate_account_fails_closed(self):
-        self.conn.execute('UPDATE Account SET email = ? WHERE user_id = ?', ('OWNER@EXAMPLE.TEST', 'other'))
+        self.conn.execute('UPDATE Account SET phone = ? WHERE user_id = ?', ('+919876543210', 'other'))
         self.conn.commit()
         challenge = self.challenge()
         self.assertEqual(self.post('verify', {'challenge_id': challenge, 'code': '123456'}).status_code, 401)
@@ -154,14 +154,14 @@ class AuthenticationTests(RouteTestCase):
 
     def test_contact_change_during_challenge_cannot_authenticate(self):
         challenge = self.challenge()
-        self.conn.execute('UPDATE Account SET email = ? WHERE user_id = ?', ('changed@example.test', 'owner'))
+        self.conn.execute('UPDATE Account SET phone = ? WHERE user_id = ?', ('+15550000000', 'owner'))
         self.conn.commit()
         self.assertEqual(self.post('verify', {'challenge_id': challenge, 'code': '123456'}).status_code, 401)
         self.assertEqual(db.fetch_all(self.conn, 'AuthSession'), [])
 
     def test_provider_outage_fails_closed_without_details_or_codes(self):
         self.configured.return_value = False
-        result = self.post('request', {'channel': 'email', 'destination': 'owner@example.test'})
+        result = self.post('request', {'channel': 'phone', 'destination': '+919876543210'})
         self.assertEqual(result.status_code, 503)
         self.configured.return_value = True
         self.start.side_effect = auth_delivery.DeliveryUnavailable('private-provider-detail')
@@ -173,10 +173,10 @@ class AuthenticationTests(RouteTestCase):
 
     def test_send_cooldown_and_shared_ip_limit(self):
         self.challenge()
-        self.assertEqual(self.post('request', {'channel': 'email', 'destination': 'owner@example.test'}).status_code, 429)
+        self.assertEqual(self.post('request', {'channel': 'phone', 'destination': '+919876543210'}).status_code, 429)
         for i in range(18):
-            self.assertEqual(self.post('request', {'channel': 'email', 'destination': f'unknown{i}@example.test'}).status_code, 202)
-        self.assertEqual(self.post('request', {'channel': 'email', 'destination': 'last@example.test'}).status_code, 429)
+            self.assertEqual(self.post('request', {'channel': 'phone', 'destination': f'+1555000{i:04d}'}).status_code, 202)
+        self.assertEqual(self.post('request', {'channel': 'phone', 'destination': '+15559999999'}).status_code, 429)
         with mock.patch.object(sessions, 'now', return_value=sessions.now() + 601):
             self.challenge()
 
@@ -246,7 +246,7 @@ class AuthenticationTests(RouteTestCase):
     def test_web_signin_csrf_cookie_attributes_and_logout(self):
         self.assertEqual(self.client.post('/signin', data={'action': 'request'}).status_code, 403)
         result = self.client.post('/signin', headers={'Origin': ORIGIN}, data={
-            'action': 'request', 'channel': 'email', 'destination': 'owner@example.test'})
+            'action': 'request', 'channel': 'phone', 'destination': '+919876543210'})
         self.assertEqual(result.status_code, 200)
         with self.client.session_transaction() as cookie:
             challenge = cookie['login_challenge']
@@ -270,11 +270,11 @@ class AuthenticationTests(RouteTestCase):
 
     def test_invalid_input_and_body_size(self):
         for body in ([], {}, {'channel': 'phone', 'destination': '9876543210'},
-                     {'channel': [], 'destination': 'x'}, {'channel': 'email', 'destination': []}):
+                     {'channel': [], 'destination': 'x'}, {'channel': 'phone', 'destination': []}):
             self.assertEqual(self.post('request', body).status_code, 400)
         for path in ('request', 'verify', 'refresh'):
             self.assertEqual(self.client.post('/api/v1/auth/' + path, data='not-json').status_code, 415)
-        self.assertEqual(self.post('request', {'channel': 'email', 'destination': 'x' * 5000}).status_code, 413)
+        self.assertEqual(self.post('request', {'channel': 'phone', 'destination': 'x' * 5000}).status_code, 413)
         self.start.assert_not_called()
 
     def test_feature_disabled_preserves_existing_web_behavior(self):

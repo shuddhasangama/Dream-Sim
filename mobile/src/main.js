@@ -51,7 +51,7 @@ const session = new Session(transport,vault);
 const root = document.querySelector('#app');
 let challenge=null, phone='', busy=false, message='', journey=null, profile=null;
 let accountSecurity=null;
-let passwordSetup=false, codeLogin=false, emailChallenge=null;
+let passwordSetup=false, codeLogin=false;
 let authIntent='login', signupActive=false, screenDirty=false, clockPending=false;
 const signup = createSignup({session, run, getBusy:()=>busy, safe: value=>safe(value), finish: async()=>{
   if(profile?.stats?.signup_version===3)await session.post('/api/v1/signup/complete',{});
@@ -168,7 +168,7 @@ function render() {
       ${signedIn&&!signupActive&&!passwordSetup ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
     </header>
     ${preview?'<aside class="preview">Local preview · no messages sent · code 123456</aside>':''}
-    ${passwordSetup ? `<main class="container"><section class="card"><h1>Set your password</h1><p>Next time, sign in with your phone number or verified email and this password.</p><form id="password-form"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="15" maxlength="128" required></label><label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="15" maxlength="128" required></label><p class="hint">Use 15 or more characters. A memorable passphrase works well.</p><button class="primary" ${busy?'disabled':''}>Save password and continue</button><button type="button" id="password-new-code" class="text-button">Request a new verification code</button></form></section></main>` : signedIn ? signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${signin()}</main>`}
+    ${passwordSetup ? `<main class="container"><section class="card"><h1>Set your password</h1><p>Next time, sign in with your phone number and this password.</p><form id="password-form"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="hint">Use 12 or more characters. A memorable passphrase works well.</p><button class="primary" ${busy?'disabled':''}>Save password and continue</button><button type="button" id="password-new-code" class="text-button">Request a new verification code</button></form></section></main>` : signedIn ? signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${signin()}</main>`}
     <p id="notice" role="status" class="notice">${safe(message)}</p>
     ${busy?'<div class="loading" role="status">Please wait…</div>':''}
     ${signedIn && !signupActive ? '' : '<footer>Connection. Clarity. Together.</footer>'}`;
@@ -178,7 +178,7 @@ function render() {
     run(async()=>{await session.setPassword(password);passwordSetup=false;await load();await resumeSignup();message='Password saved. You are signed in.';});
   });
   root.querySelector('#use-code')?.addEventListener('click',()=>{codeLogin=true;message='Use a code to set or reset your password.';render();});
-  root.querySelector('#password-new-code')?.addEventListener('click',()=>{passwordSetup=false;codeLogin=true;challenge=null;journey=null;profile=null;message='Enter your phone number or verified email for a fresh code.';render();});
+  root.querySelector('#password-new-code')?.addEventListener('click',()=>{passwordSetup=false;codeLogin=true;challenge=null;journey=null;profile=null;message='Enter your phone number for a fresh code.';render();});
   const form=root.querySelector('#signin-form');
   form?.addEventListener('submit', e=>{
     e.preventDefault(); if(busy)return;
@@ -252,7 +252,6 @@ function renderAvatarSheet() {
       <div class="p-sheet-name">${safe(journey.user.display_name || 'Your profile')}</div>
       <div class="p-sheet-stage">${safe(String(journey.user.journey_state||'').replaceAll('_',' '))}${journey.clock?.week!=null?` · Week ${safe(journey.clock.week)}`:''}</div>
       ${extra.length ? `<div class="p-sheet-links">${extra.map(t=>`<button type="button" class="p-sheet-link" data-nav="${safe(t.key)}">${safe(t.label)}</button>`).join('')}</div>` : ''}
-      ${accountSecurity?.email_setup_enabled?`<details><summary>Email login &amp; recovery</summary><p>Add a verified email using your current login password.</p><form id="member-email-form">${emailChallenge?'<label>Email code<input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>':'<label>Email<input name="email" type="email" autocomplete="email" required></label><label>Current password<input name="password" type="password" autocomplete="current-password" maxlength="128" required></label>'}<button class="secondary" ${busy?'disabled':''}>${emailChallenge?'Verify email':'Send email code'}</button></form></details>`:''}
       <button type="button" id="set-member-password" class="secondary">Set / reset login password</button>
       <button type="button" id="logout" class="secondary" ${busy?'disabled':''}>Sign out</button>
     </div>`;
@@ -280,11 +279,6 @@ function bindChrome(current) {
   });
   root.querySelector('#back')?.addEventListener('click', goBack);
   root.querySelector('[data-close-avatar]')?.addEventListener('click', () => { avatarSheetOpen=false; render(); });
-  root.querySelector('#member-email-form')?.addEventListener('submit',e=>{
-    e.preventDefault();const f=new FormData(e.target);
-    run(async()=>{if(emailChallenge){await session.post('/api/v1/auth/email/verify',{challenge_id:emailChallenge,code:String(f.get('code')||'')});emailChallenge=null;message='Email verified. You can use it to sign in or recover your password.';}
-    else {const value=await session.post('/api/v1/auth/email/request',{email:String(f.get('email')||''),password:String(f.get('password')||'')});emailChallenge=value.challenge_id;message='Check your email for the code.';}});
-  });
   root.querySelector('#set-member-password')?.addEventListener('click',()=>run(async()=>{
     const status=await session.get('/api/v1/auth/password/status');
     if(status.can_set){passwordSetup=true;avatarSheetOpen=false;return;}
@@ -293,7 +287,7 @@ function bindChrome(current) {
     message='Enter the SMS code to set or reset your password.';
   }));
   root.querySelector('#logout')?.addEventListener('click',()=>run(async()=>{
-    journey=null;profile=null;challenge=null;phone='';passwordSetup=false;codeLogin=false;emailChallenge=null;signupActive=false;authIntent='login';screenDirty=false;folds=newFolds();weekSummary=null;avatarSheetOpen=false;nav.resetTo('dashboard');
+    journey=null;profile=null;challenge=null;phone='';passwordSetup=false;codeLogin=false;signupActive=false;authIntent='login';screenDirty=false;folds=newFolds();weekSummary=null;avatarSheetOpen=false;nav.resetTo('dashboard');
     const revoked=await session.logout();
     message=revoked?'You have signed out.':'Signed out on this device. The server could not be reached to revoke the session; it will expire automatically.';
   }));
@@ -320,11 +314,11 @@ function signin() {
   const passwordLogin=authIntent==='login'&&!codeLogin&&!challenge;
   return `${howItWorks(safe)}<section class="intro"><span class="eyebrow">A LITTLE CLOSER</span><h1>${challenge?'Check your messages':'Welcome to<br>DhaShu.'}</h1><p>${challenge?'Enter your verification code.':authIntent==='signup'?'Start with your own phone number.':'Sign in with your password.'}</p></section>
     ${!challenge?`<div class="auth-options" role="group" aria-label="Choose how to enter"><button type="button" class="${authIntent==='login'?'primary':'secondary'}" data-auth-intent="login">Log in</button><button type="button" class="${authIntent==='signup'?'primary':'secondary'}" data-auth-intent="signup">Sign up</button></div>`:''}
-    <form id="signin-form" class="card"><label for="credential">${challenge?'Verification code':authIntent==='signup'?'Phone number':'Phone number or verified email'}</label>
-    ${challenge?'<input id="credential" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,10}" maxlength="10" required>':`<input id="credential" name="phone" type="${authIntent==='signup'?'tel':'text'}" autocomplete="username" maxlength="254" required placeholder="${authIntent==='signup'?'+91 followed by your number':'Phone with +91, or verified email'}" value="${safe(phone)}">`}
+    <form id="signin-form" class="card"><label for="credential">${challenge?'Verification code':authIntent==='signup'?'Phone number':'Phone number'}</label>
+    ${challenge?'<input id="credential" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,10}" maxlength="10" required>':`<input id="credential" name="phone" type="tel" autocomplete="username" maxlength="254" required placeholder="${authIntent==='signup'?'+91 followed by your number':'+91 followed by your number'}" value="${safe(phone)}">`}
     ${passwordLogin?'<label>Password<input name="password" type="password" autocomplete="current-password" maxlength="128" required></label>':''}
     <button class="primary" ${busy?'disabled':''}>${challenge||passwordLogin?'Sign in':authIntent==='signup'?'Send SMS code':'Send recovery code'} <span aria-hidden="true">→</span></button>
-    ${challenge?'<button type="button" id="change" class="secondary">Change contact / request a new code</button>':passwordLogin?'<button type="button" id="use-code" class="text-button">First password / forgot password? Use a code</button>':'<p class="hint">SMS requires your country code. Email recovery requires a previously verified email.</p>'}</form>`;
+    ${challenge?'<button type="button" id="change" class="secondary">Change contact / request a new code</button>':passwordLogin?'<button type="button" id="use-code" class="text-button">First password / forgot password? Use a code</button>':'<p class="hint">SMS requires your registered phone number and country code.</p>'}</form>`;
 }
 
 // ── generic fallback (§1: never a blank screen) ───────────────────────────

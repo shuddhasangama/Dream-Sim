@@ -27,8 +27,8 @@ class PostgresAuthenticationTests(unittest.TestCase):
         self.conn.execute(sql.SQL('SET search_path TO {}').format(sql.Identifier(self.schema)))
         db.init_db(self.conn)
         self.conn.execute('INSERT INTO "User" (id, journey_state) VALUES (%s, %s)', ('owner', 'dating'))
-        self.conn.execute('INSERT INTO "Account" (id, user_id, email, created_at, auth_enabled) VALUES (%s,%s,%s,%s,1)',
-                          ('account-owner', 'owner', 'owner@example.test', 'test'))
+        self.conn.execute('INSERT INTO "Account" (id, user_id, email, phone, created_at, auth_enabled) VALUES (%s,%s,%s,%s,%s,1)',
+                          ('account-owner', 'owner', 'owner@example.test', '+919876543210', 'test'))
 
     def cleanup(self):
         try:
@@ -116,7 +116,7 @@ class PostgresAuthenticationTests(unittest.TestCase):
              mock.patch.object(auth_delivery, 'configured', return_value=True), \
              mock.patch.object(auth_delivery, 'start', return_value='VE' + 'a' * 32), \
              mock.patch.object(auth_delivery, 'check', return_value=True):
-            challenge, error = auth.start_challenge(self.conn, 'email', 'owner@example.test', 'mobile')
+            challenge, error = auth.start_challenge(self.conn, 'phone', '+919876543210', 'mobile')
             self.assertIsNone(error)
             tokens = auth.verify_challenge(self.conn, challenge['challenge_id'], '123456', 'mobile')
             self.assertIsNotNone(tokens)
@@ -139,7 +139,7 @@ class PostgresAuthenticationTests(unittest.TestCase):
         with app.test_request_context('/api/v1/auth/request'), \
              mock.patch.object(auth_delivery, 'configured', return_value=True), \
              mock.patch.object(auth_delivery, 'start', return_value='VE' + 'a' * 32):
-            challenge, error = auth.start_challenge(self.conn, 'email', 'owner@example.test', 'mobile')
+            challenge, error = auth.start_challenge(self.conn, 'phone', '+919876543210', 'mobile')
             self.assertIsNone(error)
         def provider_check(*args):
             barrier.wait(timeout=15)

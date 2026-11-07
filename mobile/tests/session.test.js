@@ -78,12 +78,12 @@ test('tester entry stores tokens without an OTP request and validates phone',asy
   assert.equal(calls.length,1);
 });
 
-test('password login and reset replace credentials; recovery supports verified email',async()=>{
+test('password login and reset replace credentials; recovery uses only the phone',async()=>{
  const calls=[];const {session,vault}=setup(async(...args)=>{calls.push(args);return ok(args[0].endsWith('/request')?{challenge_id:'recovery'}:token(calls.length));});
  await session.passwordLogin('+919999999999','a long password');
  assert.equal(await vault.read(),'refresh-1');
  await session.setPassword('another long password');
  assert.equal(calls[1][3],'access-1');assert.equal(await vault.read(),'refresh-2');
- await session.recoveryCode('owner@example.test');assert.equal(calls[2][2].channel,'email');
+ await session.recoveryCode('+919999999999');assert.equal(calls[2][0],'/api/v1/auth/request');assert.deepEqual(calls[2][2],{channel:'phone',destination:'+919999999999'});
  assert.equal(JSON.stringify(await vault.read()).includes('password'),false);
 });

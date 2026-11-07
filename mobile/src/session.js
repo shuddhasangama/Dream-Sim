@@ -63,8 +63,7 @@ export class Session {
     await this.accept(result,epoch);
   }
   async recoveryCode(destination) {
-    const channel=destination.includes('@')?'email':'phone';
-    return this.raw('/api/v1/auth/request','POST',{channel,destination});
+    return this.requestCode(destination);
   }
   async testerLogin(phone) {
     if (!/^\+[1-9]\d{7,14}$/.test(phone)) throw new ApiError('Include the country code.');

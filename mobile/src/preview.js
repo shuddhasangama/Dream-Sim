@@ -323,10 +323,8 @@ export function previewTransport() {
       return ok({access_token:'preview-access',refresh_token:'preview-refresh',expires_in:900});
     }
     if(path.endsWith('/auth/password/login')){active=true;return ok({access_token:'preview-access',refresh_token:'preview-refresh',expires_in:900});}
-    if(path.endsWith('/auth/password/status'))return ok({password_set:true,can_set:true,verified_email:false,phone:'+15550001111'});
+    if(path.endsWith('/auth/password/status'))return ok({password_set:true,can_set:true,phone:'+15550001111'});
     if(path.endsWith('/auth/password/set'))return ok({access_token:'preview-access',refresh_token:'preview-refresh',expires_in:900});
-    if(path.endsWith('/auth/email/request'))return ok({challenge_id:'preview-email'});
-    if(path.endsWith('/auth/email/verify'))return ok({verified:true});
     if (path.endsWith('/auth/logout')) { active=false; return ok({logged_out:true}); }
     if (!active) return {status:401,data:{error:{message:'Sign in again.'},data:null}};
 
@@ -336,7 +334,7 @@ export function previewTransport() {
         {key:'dating',label:'Dating',state:userJourneyState==='dating'?'current':'done'},{key:'relationship',label:'Relationship',state:userJourneyState==='relationship'?'current':'todo'},
         {key:'engaged',label:'Engaged',state:'todo'},{key:'married',label:'Married',state:'todo'}]},
       milestones:['registered','verified'],
-      contact_verification:{required:true,satisfied:true,verified_email:false,verified_phone:true},
+      contact_verification:{required:true,satisfied:true,verified_phone:true},
       clock:week.clock,
       // Preview is a dev/testing build — the stepping controls it proves
       // out (§7.6) are exactly what a real testing build would report.
