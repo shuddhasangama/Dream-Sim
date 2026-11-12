@@ -4,6 +4,8 @@ import * as chemistry from './screens/chemistry.js';
 import * as signupStats from './signupStats.js';
 import { editableFieldsForm, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from './statsFields.js';
 
+export const needsSignup = user => !!user && ['onboarding','dating'].includes(user.journey_state) && user.bgv_status !== 'verified';
+
 export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry', 'Verification'];
 
 // Signup presentation for authenticated onboarding accounts.
@@ -56,7 +58,8 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
         ${body}${error ? `<p class="warn" role="alert">${safe(error)}</p>` : ''}
         <div class="signup-actions">
           ${step ? '<button id="signup-back" class="secondary" type="button">Previous step</button>' : ''}
-          <button id="signup-next" class="primary" type="button">${step===3?'Go to Home':'Continue to '+SIGNUP_STEPS[step+1]}</button>
+          <button id="signup-next" class="primary" type="button">${step===3?'Check approval and continue':'Continue to '+SIGNUP_STEPS[step+1]}</button>
+          ${step<3?'<button id="signup-verification" class="secondary" type="button">Go to identity &amp; background checks</button>':'<p class="hint">Your profile stays in setup while verification is pending.</p>'}
           ${step>0&&step<3?'<button id="signup-reload" class="text-button" type="button">Discard unsaved edits and reload this step</button>':''}
         </div>`;
     },
@@ -108,6 +111,10 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
         step += delta;
         try { await load(); } catch (e) { step = previous; throw e; }
       }
+      root.querySelector('#signup-verification')?.addEventListener('click', ()=>run(async()=>{
+        if(dirty){error='Save your edits before opening verification.';return;}
+        const previous=step;step=3;try{await load();}catch(e){step=previous;throw e;}
+      }));
       root.querySelector('#signup-next')?.addEventListener('click', ()=>run(()=>move(1)));
       root.querySelector('#signup-back')?.addEventListener('click', ()=>run(()=>move(-1)));
       root.querySelector('#signup-reload')?.addEventListener('click', ()=>run(load));

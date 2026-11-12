@@ -21,7 +21,7 @@ import * as chemistryScreen from './screens/chemistry.js';
 import * as relationshipScreen from './screens/relationship.js';
 import * as roadScreen from './screens/road.js';
 import { editableFieldsForm, changedFields, fieldErrorsFromServer, fieldsEqual, withSubmittedValues } from './statsFields.js';
-import { createSignup } from './signup.js';
+import { createSignup, needsSignup } from './signup.js';
 import { howItWorks, bindHowItWorks } from './howItWorks.js';
 import { renderRehearsal, progressKey } from './rehearsal.js';
 import './style.css';
@@ -54,8 +54,10 @@ let accountSecurity=null;
 let passwordSetup=false, codeLogin=false;
 let authIntent='login', signupActive=false, screenDirty=false, clockPending=false;
 const signup = createSignup({session, run, getBusy:()=>busy, safe: value=>safe(value), finish: async()=>{
-  if(profile?.stats?.signup_version===3)await session.post('/api/v1/signup/complete',{});
-  await load(); signupActive=false; screenDirty=false; nav.resetTo('dashboard');
+  if(profile?.stats?.signup_version===3&&!profile.stats.signup_submitted)await session.post('/api/v1/signup/complete',{});
+  await load();
+  if(needsSignup(journey?.user))throw new Error('Verification is still pending. Check your progress here.');
+  signupActive=false; screenDirty=false; nav.resetTo('dashboard');
 }});
 // The currently-displayed non-dashboard screen's own data, and why it can't
 // be shown when it can't (ineligible, or eligible but not on this build yet
@@ -305,6 +307,7 @@ function bindChrome(current) {
 }
 
 async function resumeSignup() {
+  if(signupActive)return;
   if(authIntent==='signup'||journey.user.signup_version===3&&!journey.user.signup_submitted){
     if(preview||journey.user.journey_state==='onboarding'){signupActive=true;await signup.begin();}
     else {authIntent='login';message='Your account already exists. Your profile is available from Home.';}
@@ -394,6 +397,10 @@ async function load() {
   const [nextJourney,nextProfile]=await Promise.all([session.get('/api/v1/journey/status'),session.get('/api/v1/profile')]);
   journey=nextJourney;profile=nextProfile;
   try{accountSecurity=await session.get('/api/v1/auth/password/status');}catch{accountSecurity=null;}
+  if(needsSignup(journey?.user)){
+    if(!signupActive){await signup.begin();signupActive=true;avatarSheetOpen=false;}
+    return;
+  }
   if (journey?.async_rehearsal?.start_request) {
     const req=journey.async_rehearsal.start_request;
     await session.post(req.path,req.body);
@@ -460,4 +467,4 @@ wireHardwareBack(native, nav, () => {
   if (window.confirm('Exit DhaShu?')) import('@capacitor/app').then(({App})=>App.exitApp());
 });
 render();
-run(async()=>{if(await session.restore()){await load();if(!preview){const status=await session.get('/api/v1/auth/password/status');if(!status.password_set){if(status.can_set)passwordSetup=true;else{phone=status.phone;codeLogin=true;journey=null;profile=null;message='Set your login password: request a fresh code once.';}return;}}if(profile?.stats?.signup_version===3&&!profile.stats.signup_submitted){signupActive=true;await signup.begin();}}});
+run(async()=>{if(await session.restore()){await load();if(!preview){const status=await session.get('/api/v1/auth/password/status');if(!status.password_set){if(status.can_set)passwordSetup=true;else{phone=status.phone;codeLogin=true;journey=null;profile=null;message='Set your login password: request a fresh code once.';}return;}}if(!signupActive&&profile?.stats?.signup_version===3&&!profile.stats.signup_submitted){await signup.begin();signupActive=true;}}});
