@@ -23,7 +23,7 @@ test('verification reads only own status and binds with root/context signature',
 
 test('compact checklist uses received identity, flags age difference and never invents clearance',()=>{
   const html=render({safe,data:{enabled:true,environment:'preproduction',bundle:{declared_age:34,consented:true,pan_state:'not_shared'},digilocker:{session:{state:'complete',identity:{name:'<private>',age:42,dob:'1984-01-01',document_address:'<address>'}}},results:[{operation:'fir_result',environment:'preproduction',state:'needs_review',message:'Review needed'}]}});
-  assert.match(html,/Review age/);assert.match(html,/profile says 34/);assert.match(html,/Add your declared employer/);
+  assert.match(html,/Review age/);assert.match(html,/profile says 34/);assert.match(html,/Waiting for DigiLocker PAN or verified mobile/);
   assert.doesNotMatch(html,/<private>|<address>|None found|Live face match/);
   assert.match(html,/Setup needed/);assert.match(html,/View document details/);
 });
@@ -53,4 +53,16 @@ test('an unrelated avatar outage does not block verification reads',async()=>{
 test('verified mobile allows employment lookup without PAN or DigiLocker mobile',()=>{
  const html=render({safe,data:{enabled:true,bundle:{consented:true,pan_state:'not_shared',employer_declared:true,employment_identifier_available:true,mobile_available:false},results:[]}});
  assert.match(html,/Starting in the background/);assert.doesNotMatch(html,/PAN wasn|Mobile wasn/);
+});
+
+
+test('employment no longer asks for an employer and preserves owner-only result text',()=>{
+ const html=render({safe,data:{enabled:true,bundle:{enabled:true,consented:true},digilocker:{session:{identity:{age:30}}},results:[{operation:'current_employer',state:'history_available',message:'Latest recorded employer: Example Ltd',received_at:'2026-11-15T06:00:00Z'}]}});
+ assert.match(html,/Example Ltd/);assert.match(html,/Received/);
+ assert.doesNotMatch(html,/name="employer"|Save employer/);
+});
+
+test('interrupted processing stops the spinner and exposes recovery guidance',()=>{
+ const data={results:[{operation:'fir_result',state:'processing',recovery_required:true,message:'Support must reconcile'}]};
+ assert.equal(processing(data),false);assert.match(render({safe,data}),/Support must reconcile/);
 });

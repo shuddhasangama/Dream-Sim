@@ -23,6 +23,20 @@ class EmploymentLookupTests(unittest.TestCase):
         self.assertEqual(employment_lookup.assess({'result':[]},{})[0],'not_confirmed')
 
 class EmploymentWorkflowTests(BundleTests):
+    def test_no_employer_declaration_still_queues_once(self):
+        self.session()
+        row=db.fetch_one(self.conn,'DigiLockerSession',id=self.sid)
+        identity=self.protection.open(row['protected_result']);identity['_bundle']['employer']=''
+        self.conn.execute('UPDATE "DigiLockerSession" SET protected_result=? WHERE id=?',(self.protection.seal(identity),self.sid));self.conn.commit()
+        bgv_bundle.schedule(self.conn)
+        details_id=bgv_bundle.request_id(self.sid,'digilocker_details')
+        evidence={'provider_response':{'http_status':200,'json':self.details()}}
+        self.conn.execute('UPDATE "BgvRequest" SET state=?,protected_result=? WHERE id=?',('needs_review',self.protection.seal(evidence),details_id));self.conn.commit()
+        for _ in range(3):bgv_bundle.schedule(self.conn)
+        rows=db.fetch_all(self.conn,'BgvRequest',operation='current_employer')
+        self.assertEqual(len(rows),1)
+        self.assertNotIn('employer',self.protection.open(rows[0]['protected_input'])['declared'])
+
     def test_pan_only_history_call_and_saved_projection(self):
         self.session();bgv_bundle.schedule(self.conn)
         details_id=bgv_bundle.request_id(self.sid,'digilocker_details')

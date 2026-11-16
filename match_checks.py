@@ -36,7 +36,7 @@ def validate(body):
 def public(user):
     summary=user.get('_match_checks') or {'shared':False,'checks':[]}
     return {'shared':summary['shared'],'sandbox':summary.get('sandbox',False),
-            'checks':[{k:r.get(k) for k in ('key','label','status','status_label','checked_on')} for r in summary.get('checks',[])]}
+            'checks':[{k:r.get(k) for k in ('key','label','status','status_label','checked_on')} for r in summary.get('checks',[]) if r.get('key')!='employment']}
 
 def attach(conn,users,now=None):
     now=now or datetime.now(timezone.utc)

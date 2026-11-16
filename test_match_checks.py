@@ -30,8 +30,9 @@ class MatchCheckTests(unittest.TestCase):
   self.evidence()
   with patch('bgv_app.Client.execute') as vendor:
    user=checks.attach(self.conn,[self.user()],self.now)[0];public=checks.public(user);vendor.assert_not_called()
-  self.assertTrue(public['shared']);self.assertTrue(public['sandbox']);self.assertEqual(len(public['checks']),3)
+  self.assertTrue(public['shared']);self.assertTrue(public['sandbox']);self.assertEqual(len(public['checks']),2)
   self.assertEqual(public['checks'][0]['checked_on'],'2026-11-02')
+  self.assertNotIn('employment',[r['key'] for r in public['checks']])
   text=json.dumps(public)
   for private in ('PRIVATE_INPUT','PRIVATE_BODY','SHOULD_NOT_APPEAR','case_check_id','checked_at','parent_request_id'):self.assertNotIn(private,text)
   self.assertTrue(checks.fits(self.owner(verified_only=True),user,self.now))

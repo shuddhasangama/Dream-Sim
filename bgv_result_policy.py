@@ -36,7 +36,7 @@ def duration(start,end):
     years,months_left=divmod(months,12);days=(end-anchor(months)).days
     return ', '.join(f'{n} {unit}'+('s' if n!=1 else '') for n,unit in ((years,'year'),(months_left,'month'),(days,'day')) if n) or '0 days'
 
-def employment(body,summary,comparison_state):
+def employment(body,summary,comparison_state,declared_employer=True):
     if summary.get('result_code')!=200:return 'unavailable',{'message':'Employment data is unavailable from this source.'}
     data=body.get('employmentSummary',{}) if isinstance(body,dict) else {}
     recent=data.get('recent_employer_data') or {};recent=recent if isinstance(recent,dict) else {}
@@ -49,6 +49,8 @@ def employment(body,summary,comparison_state):
         period=f' ({start:%d %b %Y} to {end:%d %b %Y}; {duration(start,end)})' if start and end and end>=start else ''
         if start and end and end>=start:history['duration_days']=(end-start).days
         return 'history_available',{'employment_record':history,'message':f'Last recorded employer: {name}{period}. This historical record does not establish your current employment status.'}
+    if name and summary.get('is_employed') is True and not declared_employer:
+        return 'record_available',{'employment_record':history,'message':f'The source reports a current employer: {name}. No employer declaration was provided for comparison.'}
     if name and summary.get('is_employed') is True:
         return 'employment_mismatch',{'employment_record':history,'message':f'The source reports {name}; it does not confirm your declared current employer.'}
     return 'not_confirmed',{'employment_record':history,'message':'No current employer was confirmed by this source. This does not mean you are not working.'}

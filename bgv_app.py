@@ -69,6 +69,8 @@ def view(conn, uid):
                 'environment': row['environment'], 'updated_at': row['updated_at'], 'parent_request_id':row.get('parent_request_id'),
                 **json.loads(row['summary_json'])}
             item = latest[key]
+            from verification_progress import request_progress
+            item.update(request_progress(row,protection=Protection()))
             if enabled and row['environment']==cfg.environment and row['state']=='queued':
                 op=Protection().open(row['protected_input']).get('provider_operation',row['operation'])
                 pause=signzy_guard.blocked(conn,cfg,op)
@@ -101,8 +103,6 @@ def submit(conn, uid, body):
             if values.get('caseCategory') != 'criminal' or values.get('matchType') != 'exact':
                 raise ValueError('Phase 1 requires explicit criminal exact matching')
         declared = binding(uid, body.get('declared', {}))['declared_fields']
-        if operation == 'current_employer' and not declared.get('employer', '').strip():
-            raise ValueError()
         if len(json.dumps(body)) > 12000:
             raise ValueError()
     except (ValueError, TypeError, KeyError, AttributeError):
@@ -211,7 +211,7 @@ def reproject_saved(conn,uid):
     cfg=config();protection=Protection();changed=0
     if cfg.environment!='preproduction':raise ValueError('Saved-result pilot repair is sandbox-only')
     for row in db.fetch_all(conn,'BgvRequest',user_id=uid,environment=cfg.environment):
-        if row['operation'] not in {*RESULTS.values(),'current_employer'} or row['state'] not in ('needs_review','pending','verified','partially_verified','not_confirmed','history_available','employment_mismatch','unavailable') or not row.get('protected_result'):continue
+        if row['operation'] not in {*RESULTS.values(),'current_employer'} or row['state'] not in ('needs_review','pending','verified','partially_verified','not_confirmed','history_available','record_available','employment_mismatch','unavailable') or not row.get('protected_result'):continue
         if row.get('case_check_id') and db.fetch_all(conn,'BgvReview',case_check_id=row['case_check_id']):continue
         if os.getenv('DHASHU_BGV_POLICY_ENABLED')=='1':
             key={'individual_result':'criminal_court','fir_result':'fir','current_employer':'current_employer'}[row['operation']]
@@ -229,8 +229,10 @@ def reproject_saved(conn,uid):
         else:
             from signzy.verification import evaluate
             comparison=evaluate(evidence)[0]
-            state,extra=bgv_result_policy.employment(provider.get('json'),summary,comparison)
+            state,extra=bgv_result_policy.employment(provider.get('json'),summary,comparison,bool(evidence.get('binding',{}).get('declared_fields',{}).get('employer')))
         public={**json.loads(row['summary_json']),**extra}
+        from verification_progress import record_dates
+        record_dates(public,state,stamp())
         encoded=json.dumps(public)
         if state==row['state'] and encoded==row['summary_json']:continue
         with auth_sessions.transaction(conn):
@@ -322,8 +324,10 @@ def work_one(conn):
                 state,extra=employment_lookup.assess(item['provider_response'].get('json'),data['declared'])
                 public.update(extra)
             elif row['operation']=='current_employer':
-                state,extra=bgv_result_policy.employment(item['provider_response'].get('json'),summary,state)
+                state,extra=bgv_result_policy.employment(item['provider_response'].get('json'),summary,state,bool(data.get('declared',{}).get('employer')))
                 public.update(extra)
+        from verification_progress import record_dates
+        record_dates(public,state,stamp())
         with auth_sessions.transaction(conn):
             auth_sessions.sql(conn, 'UPDATE "BgvRequest" SET state=?,summary_json=?,updated_at=? WHERE id=?',
                 (state, json.dumps(public), stamp(), row['id']))

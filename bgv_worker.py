@@ -50,7 +50,13 @@ def run(once=False):
         pool.submit(avatar_loop,stop)
         try:
             while True:
-                if not bgv_step():time.sleep(5)
+                try:
+                    processed=bgv_step()
+                except Exception as error:
+                    import logging
+                    logging.error('BGV worker iteration failed: %s',type(error).__name__)
+                    processed=False
+                if not processed:time.sleep(5)
         finally:stop.set()
 
 

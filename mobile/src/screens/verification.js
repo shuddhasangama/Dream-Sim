@@ -9,9 +9,9 @@ export async function load(session) {
 const FACE_WORK=['queued_create','creating','queued_get','retrieving'];
 const DOCUMENT_WORK=['creating','retrieving'];
 const CHECK_WORK=['queued','processing','result_available'];
-export function processing(data){return DOCUMENT_WORK.includes(data?.digilocker?.session?.state)||FACE_WORK.includes(data?.face?.state)||['queued','submitting'].includes(data?.avatar?.state)||(data?.results||[]).some(r=>CHECK_WORK.includes(r.state));}
+export function processing(data){return (DOCUMENT_WORK.includes(data?.digilocker?.session?.state)&&!data?.digilocker?.session?.recovery_required)||FACE_WORK.includes(data?.face?.state)||['queued','submitting'].includes(data?.avatar?.state)||(data?.results||[]).some(r=>CHECK_WORK.includes(r.state)&&!r.recovery_required);}
 export function canAutoRefresh(data){return !data?.avatar?._stagedSelfie&&!data?._verificationEditing;}
-const labels={history_available:'History found',employment_mismatch:'Doesn’t match',not_confirmed:'Not confirmed',queued:'Confirming',processing:'Confirming',pending:'Awaiting provider',result_available:'Retrieving result',
+const labels={record_available:'Record received',history_available:'History found',employment_mismatch:'Doesn’t match',not_confirmed:'Not confirmed',queued:'Confirming',processing:'Confirming',pending:'Awaiting provider',result_available:'Retrieving result',
   verified:'Verified',partially_verified:'Review needed',needs_review:'Review needed',unavailable:'Check unavailable',
   outcome_unknown:'Support review',reviewed_satisfied:'Reviewed',reviewed_needs_review:'Review needed',reviewed_not_satisfied:'Follow-up needed',waived:'Exception recorded'};
 export function render({data,safe,busy=false}) {
@@ -23,30 +23,32 @@ export function render({data,safe,busy=false}) {
     const r=results.find(r=>r.operation===child)||results.find(r=>r.operation===op);
     const reviewed=data.plan?.checks?.find(c=>c.key===key||c.check_key===key);
     const state=reviewed?.state?.startsWith('reviewed_')?reviewed.state:r?.state;
-    return {status:labels[state]||'Not started',running:CHECK_WORK.includes(state),tone:state==='verified'||state==='reviewed_satisfied'?'good':state==='needs_review'||state==='unavailable'||state==='employment_mismatch'?'attention':'waiting',
+    return {status:labels[state]||'Not started',running:CHECK_WORK.includes(state)&&!r?.recovery_required,verified_at:r?.verified_at,received_at:r?.received_at,tone:state==='verified'||state==='reviewed_satisfied'?'good':state==='needs_review'||state==='unavailable'||state==='employment_mismatch'?'attention':'waiting',
       text:r?.message||(identity&&bundle.consented?'Starting in the background':'Waiting for DigiLocker and consent')};
   }
   const employer=check('current_employer',null,'current_employer'),court=check('individual_search','individual_result','criminal_court'),fir=check('fir_search','fir_result','fir');
   if(!results.some(r=>r.operation==='current_employer')) {
     employer.status='Waiting for details';
-    employer.text=!bundle.employer_declared?'Add your declared employer below':!bundle.employment_identifier_available?'Waiting for DigiLocker PAN or verified mobile':'Starting in the background';
+    employer.text=bundle.employment_blocker || (!bundle.employment_identifier_available?'Waiting for DigiLocker PAN or verified mobile':'Starting in the background');
   }
+  const dateText=(value)=>{const d=new Date(value);return value&&!Number.isNaN(d.getTime())?d.toLocaleString():null;};
+  const dated=(value,info)=>{const verified=dateText(info?.verified_at),received=dateText(info?.received_at);return `${value}${verified?` · Verified ${verified}`:received?` · Received ${received}`:''}`;};
   const row=(name,value,status,tone='waiting',running=false)=>`<div class="bgv-row"><div class="bgv-row-copy"><span class="bgv-label">${safe(name)}</span><div class="bgv-value">${safe(value)}</div></div><span class="bgv-badge ${tone}">${running?'<span class="bgv-progress-dot" aria-hidden="true"></span>':''}${safe(status)}</span></div>`;
   return `<div class="bgv-compact"><header><span class="bgv-label">STAGE 1 · BEFORE YOU MEET</span><h1>Your verification</h1><p>Share once. Follow your checks here.</p></header>
     ${verificationPayment.render(data.payment,safe,busy)}
     ${identity?`<section class="card bgv-document-complete"><h2>DigiLocker <span class="bgv-badge good">Details received</span></h2><p class="hint">Aadhaar shared · PAN ${bundle.pan_state==='received'?'received':bundle.pan_state==='pending'?'being retrieved':'optional'}</p></section>`:data.payment?.required&&!data.payment.can_begin?'<p class="hint">Complete test payment to connect DigiLocker.</p>':digilocker.render(data.digilocker,safe,true)}
     <p class="bgv-live-status" role="status">${data._statusError?safe(data._statusError):processing(data)?'<span class="bgv-progress-dot" aria-hidden="true"></span> Checks are running in the background. Status updates automatically.':'Follow each check below.'}</p>
     <section class="card bgv-checklist" aria-label="Verification checklist" aria-live="polite">
-      ${row('Name',identity?'Received securely · revealed to matches later':'Share from DigiLocker',identity?'Received':'Not started',identity?'good':'waiting')}
-      ${row('Age / date of birth',identity?`${identity.age} · ${identity.dob}${ageMismatch?` (profile says ${bundle.declared_age})`:''}`:'From Aadhaar',ageMismatch?'Review age':identity?'Received':'Not started',ageMismatch?'attention':identity?'good':'waiting')}
-      ${row('Document address',identity?'Received from Aadhaar':'From Aadhaar',identity?'Received':'Not started',identity?'good':'waiting')}
-      ${row('Current employer',employer.text,employer.status,employer.tone,employer.running)}
-      ${row('Criminal court',court.text,court.status,court.tone,court.running)}
-      ${row('FIR check',fir.text,fir.status,fir.tone,fir.running)}
-      ${row('Identity / live face',data.face?.message||(s?.reference_photo_available?'Document photo ready · Face comparison available':'Waiting for document photo'),data.face?.state==='matched'?(data.face.operation==='liveness_secure'?'Live face checked':'Face matched'):data.face?.state==='not_matched'?'Doesn’t match':data.face?.state==='unknown'?'Check unavailable':data.face?'Pending':'Setup needed',data.face?.state==='not_matched'?'attention':data.face?.state==='matched'?'good':'waiting')}
+      ${row('Name',identity?dated('Received securely · revealed to matches later',s?.field_verifications?.name):'Share from DigiLocker',identity?'Received':'Not started',identity?'good':'waiting')}
+      ${row('Age / date of birth',identity?dated(`${identity.age} · ${identity.dob}${ageMismatch?` (profile says ${bundle.declared_age})`:''}`,s?.field_verifications?.dob):'From Aadhaar',ageMismatch?'Review age':identity?'Received':'Not started',ageMismatch?'attention':identity?'good':'waiting')}
+      ${row('Document address',identity?dated('Received from Aadhaar',s?.field_verifications?.document_address):'From Aadhaar',identity?'Received':'Not started',identity?'good':'waiting')}
+      ${row('Current employer',dated(employer.text,employer),employer.status,employer.tone,employer.running)}
+      ${row('Criminal court',dated(court.text,court),court.status,court.tone,court.running)}
+      ${row('FIR check',dated(fir.text,fir),fir.status,fir.tone,fir.running)}
+      ${row('Identity / live face',dated(data.face?.message||(s?.reference_photo_available?'Document photo ready · Face comparison available':'Waiting for document photo'),{verified_at:data.face?.state==='matched'?data.face?.checked_at:null}),data.face?.state==='matched'?(data.face.operation==='liveness_secure'?'Live face checked':'Face matched'):data.face?.state==='not_matched'?'Doesn’t match':data.face?.state==='unknown'?'Check unavailable':data.face?'Pending':'Setup needed',data.face?.state==='not_matched'?'attention':data.face?.state==='matched'?'good':'waiting')}
     </section><p class="hint">${identity?'Your name and age have been updated from DigiLocker. Age is calculated from the confirmed Aadhaar DOB.':'Your name and age will update automatically from confirmed DigiLocker details.'} Your name is revealed later in the matching journey.</p>
     ${identity?`<details class="bgv-details"><summary>View document details</summary><p>${safe(identity.name)}</p><p>${safe(identity.document_address)}</p><p class="hint">Age is calculated from Aadhaar DOB. The document address does not confirm your current residence. Received details are not a comparison against your profile declarations.</p><p>PAN: ${safe(({received:'Identifier received from issued-document listing',pending:'Retrieving available documents',not_shared:'Not shared through DigiLocker',unavailable:'Retrieval needs support review',needs_review:'Document identifier needs review'})[bundle.pan_state]||'Not requested in this consent session')}</p></details>`:''}
-    ${identity&&bundle.enabled&&(!bundle.consented||!bundle.employer_declared)?`<form id="bgv-bundle-form" class="card"><h2>${bundle.consented?'Current employer':'Continue background checks'}</h2><label>Declared current employer (optional for Court/FIR)<input name="employer" maxlength="200" autocomplete="organization"></label><label class="bgv-consent"><input type="checkbox" name="consent" required> ${safe(bundle.consent_text)}</label><button type="submit" class="primary">${bundle.consented?'Save employer and continue':'Start relevant checks'}</button><p class="hint">Employment lookup uses your DigiLocker PAN or verified mobile. DOB alone is not used. Court/FIR run separately.</p></form>`:''}
+    ${identity&&bundle.enabled&&!bundle.consented?`<form id="bgv-bundle-form" class="card"><h2>Continue background checks</h2><label class="bgv-consent"><input type="checkbox" name="consent" required> ${safe(bundle.consent_text)}</label><button type="submit" class="primary">Start relevant checks</button><p class="hint">Employment screening uses available PAN or verified mobile. An employer name is not required.</p></form>`:''}
     ${identity&&s.can_request_photo?`<details class="bgv-details"><summary>Share a fresh DigiLocker session including PAN</summary>${digilocker.render(data.digilocker,safe,true)}</details>`:''}
     ${results.filter(r=>r.can_check_again&&r.state==='pending').map(r=>`<button type="button" class="secondary" data-bgv-poll="${safe(r.id)}">Retrieve ${r.operation==='fir_result'?'FIR':'Court'} result</button>`).join('')}
     <details class="card verification-fold" id="verification-face" ${data._verificationFolds?.includes('verification-face')?'open':''}><summary>Live face verification <span class="bgv-badge ${data.face?.state==='matched'?'good':data.face?.state==='not_matched'?'attention':'waiting'}">${FACE_WORK.includes(data.face?.state)?'Processing':data.face?.state==='matched'?'Complete':data.face?.state==='awaiting_capture'?'Continue capture':data.face?.state==='pending'?'Awaiting result':data.face?.state==='not_matched'?'Doesn’t match':['unknown','outcome_unknown','unavailable'].includes(data.face?.state)?'Needs attention':'To do'}</span></summary>
@@ -83,7 +85,7 @@ export function bind(root,ctx) {
   const form=root.querySelector('#bgv-bundle-form');
   form?.addEventListener('submit',event=>{
     event.preventDefault();
-    const body={session_id:ctx.data.bundle.session_id,consent:form.elements.consent.checked,consent_version:ctx.data.bundle.consent_version,employer:form.elements.employer.value.trim()};
+    const body={session_id:ctx.data.bundle.session_id,consent:form.elements.consent.checked,consent_version:ctx.data.bundle.consent_version};
     run(async()=>{await session.post('/api/v1/verification/bundle',body);await refresh();});
   });
 }

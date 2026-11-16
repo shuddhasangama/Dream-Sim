@@ -81,10 +81,14 @@ def view(conn, uid):
             state = 'expired'
         item = {k:row[k] for k in ('id','expires_at','updated_at')}
         item['state'] = state
+        from verification_progress import stalled
+        item['recovery_required']=stalled(row) or state=='outcome_unknown'
         if state=='awaiting_consent' and row['attempts']==0:
             item['consent_url'] = Protection().open(row['protected_session'])['url']
         if state == 'complete':
-            item['identity'] = {k:v for k,v in Protection().open(row['protected_result']).items() if not k.startswith('_')}
+            saved=Protection().open(row['protected_result'])
+            item['identity'] = {k:v for k,v in saved.items() if not k.startswith('_')}
+            item['field_verifications']={key:{'status':'received','received_at':saved.get('_received_at'),'verified_at':None} for key in ('name','dob','document_address')}
         item['reference_photo_available']=bool(row.get('protected_photo'))
         photo=Protection().open(row['protected_photo']) if row.get('protected_photo') else {}
         item['portrait_image_available']=bool(photo.get('image_base64'))
@@ -203,6 +207,7 @@ def complete(conn, uid, sid, body):
         if status == 200 and not summary.get('error_code'):
             try:
                 identity = projection(evidence[0]['provider_response']['json'])
+                identity['_received_at']=now().isoformat()
                 if row['consent_version']==BUNDLE_VERSION:
                     import json
                     declared=json.loads(db.fetch_one(conn,'User',id=uid)['stats_json'] or '{}')

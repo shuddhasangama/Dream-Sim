@@ -97,8 +97,8 @@ def schedule(conn):
             import employment_lookup
             waiting_details=detail_request and detail_request['state'] in ('queued','processing','pending')
             employment_inputs=None if waiting_details else employment_lookup.inputs(conn,uid,identity,details)
-            if employment_inputs and bundle.get('employer'):
-                queue(conn,row,bundle,'current_employer',employment_inputs,{'employer':bundle['employer'],'name':identity['name']})
+            if employment_inputs:
+                queue(conn,row,bundle,'current_employer',employment_inputs,{'name':identity['name'],**({'employer':bundle['employer']} if bundle.get('employer') else {})})
         except ApiError:
             # Disabled plan / existing work is not permission to retry a paid call.
             continue
@@ -155,4 +155,8 @@ def view(conn,uid):
     elif bundle.get('pan_scope'):result['pan_state']='pending'
     import employment_lookup
     result['employment_identifier_available']=bool(employment_lookup.inputs(conn,uid,value,data))
+    if detail and detail['state'] in ('queued','processing','pending'):
+        result['employment_blocker']='Waiting for document retrieval to finish. Completed checks stay saved.'
+    try:bgv_policy.check_for(conn,uid,'current_employer',cfg.environment)
+    except ApiError:result['employment_blocker']='Employment screening is not enabled in your assigned verification plan.'
     return result
