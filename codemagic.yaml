@@ -82,6 +82,7 @@ workflows:
         bundle_identifier: com.dhashu.app
       vars:
         BUNDLE_ID: "com.dhashu.app"
+	APP_STORE_CONNECT_ALTOOL_ADDITIONAL_ARGUMENTS: "--use-old-altool"
         # road-fixes-clock-spec.md §7.8: a convenience switch for this
         # build only — it does NOT replace the server-side gate. The
         # server's own journey/status simulated_clock flag still has to
