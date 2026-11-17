@@ -1,0 +1,94 @@
+[
+  {
+    "code": "IN",
+    "name": "India",
+    "dial": "91",
+    "enabled": true,
+    "lengths": [
+      10
+    ]
+  },
+  {
+    "code": "US",
+    "name": "United States",
+    "dial": "1",
+    "enabled": false,
+    "lengths": [
+      10
+    ]
+  },
+  {
+    "code": "CA",
+    "name": "Canada",
+    "dial": "1",
+    "enabled": false,
+    "lengths": [
+      10
+    ]
+  },
+  {
+    "code": "GB",
+    "name": "United Kingdom",
+    "dial": "44",
+    "enabled": false,
+    "lengths": [
+      10
+    ]
+  },
+  {
+    "code": "AU",
+    "name": "Australia",
+    "dial": "61",
+    "enabled": false,
+    "lengths": [
+      9
+    ]
+  },
+  {
+    "code": "SG",
+    "name": "Singapore",
+    "dial": "65",
+    "enabled": false,
+    "lengths": [
+      8
+    ]
+  },
+  {
+    "code": "AE",
+    "name": "United Arab Emirates",
+    "dial": "971",
+    "enabled": false,
+    "lengths": [
+      9
+    ]
+  },
+  {
+    "code": "ES",
+    "name": "Spain",
+    "dial": "34",
+    "enabled": false,
+    "lengths": [
+      9
+    ]
+  },
+  {
+    "code": "MY",
+    "name": "Malaysia",
+    "dial": "60",
+    "enabled": false,
+    "lengths": [
+      9,
+      10
+    ]
+  },
+  {
+    "code": "BR",
+    "name": "Brazil",
+    "dial": "55",
+    "enabled": false,
+    "lengths": [
+      10,
+      11
+    ]
+  }
+]

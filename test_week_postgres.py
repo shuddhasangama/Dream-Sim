@@ -74,3 +74,26 @@ class PostgresWeekTests(unittest.TestCase):
         self.assertEqual(results[0],results[1])
         self.assertEqual(len(db.fetch_all(self.conn,'MatchBatch')),1)
         self.assertEqual(len(db.fetch_all(self.conn,'Match')),1)
+
+    def test_concurrent_fresh_preparation_is_reciprocal_per_slot(self):
+        import json
+        from unittest.mock import patch
+        for uid,gender in [('owner','male'),('partner','female'),('stranger','male')]:
+            self.conn.execute('UPDATE "User" SET journey_state=%s,stats_json=%s WHERE id=%s',('dating',json.dumps({'city':'Bengaluru','gender':gender}),uid))
+            if uid!='owner':
+                self.conn.execute('INSERT INTO "Account" (id,user_id,created_at,auth_enabled,verified_phone) VALUES (%s,%s,0,1,1)',(uid,uid))
+        self.conn.execute('UPDATE "Account" SET verified_phone=1')
+        def prepare(uid):
+            conn=self.connect()
+            try:return week_service.prepare(conn,uid,self.clock)
+            finally:conn.close()
+        with patch('async_rehearsal.enabled',return_value=False), patch('fixed_test_pairs.configured',return_value={}):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+                list(ex.map(prepare,['owner','partner','stranger']))
+        rows=db.fetch_all(self.conn,'Match')
+        self.assertTrue(rows)
+        for row in rows:
+            reciprocal=[r for r in rows if r['user_id']==row['candidate_id'] and r['candidate_id']==row['user_id'] and r['slot']==row['slot']]
+            self.assertEqual(len(reciprocal),1)
+            competing=[r for r in rows if r['candidate_id']==row['candidate_id'] and r['slot']==row['slot']]
+            self.assertEqual(len(competing),1)

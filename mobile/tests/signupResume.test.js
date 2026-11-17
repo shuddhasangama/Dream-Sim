@@ -18,3 +18,8 @@ test('server progress restores Stats and exposes verification without discarding
  assert.match(html,/Step 2 of 4/);
  assert.match(html,/signup-verification/);
 });
+
+test('saved Stats exposes REACH while keeping signup available',async()=>{
+ const signup=createSignup({session:{get:async path=>path==='/api/v1/signup/state'?{modern:true,next_step:2}:{}},run:async f=>f(),safe:String,finish:async()=>{}});
+ await signup.begin();assert.match(signup.render(),/signup-reach/);
+});

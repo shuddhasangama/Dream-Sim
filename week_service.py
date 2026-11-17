@@ -58,7 +58,7 @@ def prepare(conn, uid, clock):
                                'Your assigned test pair needs operator setup. Run test_pairs_admin.py.', 409)
         existing = db.fetch_all(conn, 'Match', user_id=uid, week=clock.week)
         batch = db.fetch_one(conn, 'MatchBatch', user_id=uid, week=clock.week)
-        if batch:
+        if batch and (existing or clock.day_index >= 2):
             return sorted(existing, key=lambda r: r['slot'])
         if clock_module.phase(clock) == 'before_week_start' and not async_rehearsal.enabled():
             raise ApiError('week_not_started', 'The matching week has not opened.', 409)
@@ -71,7 +71,11 @@ def prepare(conn, uid, clock):
             locked = {uid for r in active for uid in (r['user_a'], r['user_b'])}
             recent = {r['candidate_id'] for r in db.fetch_all(conn, 'Match', user_id=uid)
                       if max(1, clock.week - 8) <= r['week'] < clock.week}
-            for m in cadence.generate_week_matches(user, pool, clock.week, locked, recent):
+            generated = cadence.generate_week_matches(user, pool, clock.week, locked, recent)
+            if not async_rehearsal.enabled():
+                # New entrants after Tuesday preview REACH, but wait until next week.
+                generated = reciprocal_offer(conn, user, pool, locked, recent, clock)
+            for m in generated:
                 sql(conn, '''INSERT INTO "Match"
                     (id,user_id,candidate_id,week,slot,revealed_at,window_closes_at)
                     VALUES (?,?,?,?,?,?,?)''',
@@ -79,9 +83,39 @@ def prepare(conn, uid, clock):
                      m['slot'], str(m['revealed_at']), str(m['window_closes_at'])))
         # Persist even an empty result, so polling/pool changes cannot reshuffle a
         # user's week. Adopt existing legacy rows without changing their choices.
-        sql(conn, 'INSERT INTO "MatchBatch" (id,user_id,week,generated_at) VALUES (?,?,?,?)',
+        if not batch:
+            sql(conn, 'INSERT INTO "MatchBatch" (id,user_id,week,generated_at) VALUES (?,?,?,?)',
             (f'{uid}:{clock.week}', uid, clock.week, str(clock)))
         return sorted(db.fetch_all(conn, 'Match', user_id=uid, week=clock.week), key=lambda r: r['slot'])
+
+
+def reciprocal_offer(conn, user, pool, locked, recent, clock):
+    import matching
+    if clock.day_index >= 2:
+        return []
+    rows = db.fetch_all(conn, 'Match', week=clock.week)
+    # One reciprocal opportunity per slot, at most three sequential opportunities.
+    offers = []
+    chosen = set()
+    for slot in (1,2,3):
+        close = clock_module.checkpoint(clock.week, clock_module.MATCH_CLOSE_BY_SLOT[slot])
+        if clock >= close: continue
+        occupied = {value for row in rows if row['slot']==slot
+                    for value in (row['user_id'], row['candidate_id'])}
+        if user['user_id'] in occupied: continue
+        candidates = matching.eligible_candidates(user, pool, locked | occupied, recent | chosen)
+        candidates = [c for c in candidates if signup_verification.matching_satisfied(
+            db.fetch_one(conn, 'Account', user_id=c['user_id']))
+            and not db.fetch_one(conn,'Match',user_id=c['user_id'],candidate_id=user['user_id'],week=clock.week)]
+        if not candidates or not signup_verification.matching_satisfied(db.fetch_one(conn,'Account',user_id=user['user_id'])):
+            continue
+        partner = sorted(candidates, key=lambda c:c['user_id'])[0]['user_id']
+        reveal = max(clock, clock_module.checkpoint(clock.week, clock_module.MATCH_REVEAL_BY_SLOT[slot]))
+        sql(conn, 'INSERT INTO "Match" (id,user_id,candidate_id,week,slot,revealed_at,window_closes_at) VALUES (?,?,?,?,?,?,?)',
+            (f'{partner}:{clock.week}:{slot}',partner,user['user_id'],clock.week,slot,str(reveal),str(close)))
+        offers.append(dict(candidate_id=partner,slot=slot,revealed_at=reveal,window_closes_at=close))
+        chosen.add(partner)
+    return offers
 
 
 def decide(conn, uid, match_id, action, pass_reason, clock):

@@ -81,7 +81,7 @@ class AuthenticationTests(RouteTestCase):
         with mock.patch.dict('os.environ', {'DHASHU_TESTER_NO_OTP': 'true', 'DHASHU_TESTER_USER_IDS': 'owner,other'}):
             self.conn.execute('UPDATE Account SET auth_enabled = 0 WHERE user_id = ?', ('other',))
             self.conn.commit()
-            for phone in ('+919876543211', '+15550009999'):
+            for phone in ('+919876543211', '+919000009999'):
                 self.assertEqual(self.post('tester', {'phone': phone}).status_code, 403)
             tokens = self.post('tester', {'phone': '+919876543210'}).json['data']
             with mock.patch.dict('os.environ', {'DHASHU_TESTER_USER_IDS': 'other'}):
@@ -117,7 +117,7 @@ class AuthenticationTests(RouteTestCase):
     def test_unknown_and_unapproved_accounts_never_issue_tokens(self):
         self.conn.execute('UPDATE Account SET auth_enabled = 0 WHERE user_id = ?', ('other',))
         self.conn.commit()
-        for destination in ('+15550000000', '+919876543211'):
+        for destination in ('+919000000000', '+919876543211'):
             challenge = self.challenge(destination=destination)
             result = self.post('verify', {'challenge_id': challenge, 'code': '123456'})
             self.assertEqual(result.status_code, 401)
@@ -154,7 +154,7 @@ class AuthenticationTests(RouteTestCase):
 
     def test_contact_change_during_challenge_cannot_authenticate(self):
         challenge = self.challenge()
-        self.conn.execute('UPDATE Account SET phone = ? WHERE user_id = ?', ('+15550000000', 'owner'))
+        self.conn.execute('UPDATE Account SET phone = ? WHERE user_id = ?', ('+919000000000', 'owner'))
         self.conn.commit()
         self.assertEqual(self.post('verify', {'challenge_id': challenge, 'code': '123456'}).status_code, 401)
         self.assertEqual(db.fetch_all(self.conn, 'AuthSession'), [])
@@ -175,8 +175,8 @@ class AuthenticationTests(RouteTestCase):
         self.challenge()
         self.assertEqual(self.post('request', {'channel': 'phone', 'destination': '+919876543210'}).status_code, 429)
         for i in range(18):
-            self.assertEqual(self.post('request', {'channel': 'phone', 'destination': f'+1555000{i:04d}'}).status_code, 202)
-        self.assertEqual(self.post('request', {'channel': 'phone', 'destination': '+15559999999'}).status_code, 429)
+            self.assertEqual(self.post('request', {'channel': 'phone', 'destination': f'+91900000{i:04d}'}).status_code, 202)
+        self.assertEqual(self.post('request', {'channel': 'phone', 'destination': '+919099999999'}).status_code, 429)
         with mock.patch.object(sessions, 'now', return_value=sessions.now() + 601):
             self.challenge()
 

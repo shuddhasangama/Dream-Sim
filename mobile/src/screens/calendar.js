@@ -12,7 +12,8 @@ export function render(ctx) {
   const { alignment, overlap = [], valid_slots = [], my_slots = [], payment } = data;
   const booking = data.booking;
 
-  return `<section class="intro"><span class="eyebrow">CALENDAR</span><h1>Confirm Date</h1><p>Set preferences, select slots, then confirm an overlap.</p></section>
+  const preferencesOnly = ctx.preferencesOnly;
+  return `<section class="intro"><span class="eyebrow">CALENDAR</span><h1>${preferencesOnly?"Date preferences":"Confirm Date"}</h1><p>${preferencesOnly?"Save your budget, diet and cuisines.":"Set preferences, select slots, then confirm an overlap."}</p></section>
 
     <details class="card" ${alignment.my_missing.length ? 'open' : ''}><summary><strong>${alignment.my_missing.length ? 'Date preferences' : '✓ Date preferences saved'}</strong></summary>
       ${alignment.my_missing.length ? `<p class="warn">Still needed: ${alignment.my_missing.map(safe).join(', ')}</p>` : ''}
@@ -34,7 +35,7 @@ export function render(ctx) {
       ${booking.snapshot ? `<p>${booking.snapshot.neighbourhoods.map(p => safe(p.name)).join(', ')} · ${booking.snapshot.cuisines.map(safe).join(', ')} · ${booking.snapshot.budget_bands.map(safe).join(', ')}</p>` : ''}
       <p class="hint">This saves your date preferences. It does not reserve a table or collect a restaurant deposit.</p></section>` : ''}
 
-    <section class="card">
+    ${preferencesOnly ? '<p class="hint">Preferences saved here carry into your date calendar.</p>' : `<section class="card">
       <h2>${my_slots.length ? '✓ Your availability saved' : 'Your weekend availability'}</h2>
       <p class="hint">${data.partner_submitted ? 'Your match has submitted theirs too.' : "Waiting on your match to submit theirs."}</p>
       <form id="availability-form">
@@ -46,7 +47,7 @@ export function render(ctx) {
     ${data.current_plan_id ? `<section class="card guidance"><p>A time is already set.</p><button id="view-plan" class="primary" type="button">View date plan <span aria-hidden="true">→</span></button></section>`
       : data.editable && overlap.length ? `<section class="card"><h2>You're both free</h2>${overlap.map((s) => `<div class="slot"><span>${safe(s.day)} · ${safe(MEAL_LABELS[s.meal_slot] || s.meal_slot)}</span><button class="primary confirm-slot" data-day="${safe(s.day)}" data-meal="${safe(s.meal_slot)}" type="button" ${booking && !booking.ready ? 'disabled' : ''} style="width:auto;margin:0;">Confirm</button></div>`).join('')}</section>`
       : `<section class="card"><p class="hint">No overlap yet — once you've both submitted availability, matching times show up here.</p></section>`}
-    ${payment && payment.enforced && !payment.satisfied ? `<p class="warn">This is a beta simulation — no real payment is charged.</p>` : ''}`;
+    ${payment && payment.enforced && !payment.satisfied ? `<p class="warn">This is a beta simulation — no real payment is charged.</p>` : ''}`} `;
 }
 
 function asArray(v) { return Array.isArray(v) ? v : v ? [v] : []; }

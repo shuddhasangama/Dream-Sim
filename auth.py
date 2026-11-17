@@ -13,7 +13,7 @@ import auth_sessions as sessions
 import db
 
 CHALLENGE_SECONDS = 600
-GENERIC_SENT = 'If this contact belongs to an approved beta account, a code will arrive shortly.'
+GENERIC_SENT = 'If delivery is available for this contact, a code will arrive shortly.'
 
 
 def enabled():
@@ -30,7 +30,8 @@ def normalize(channel, value, stored=False):
         value = value.strip()
         if stored and re.fullmatch(r'[1-9][0-9]{7,14}', value):
             value = '+' + value
-        return value if re.fullmatch(r'\+[1-9][0-9]{7,14}', value) else None
+        from phone_country import allowed
+        return value if re.fullmatch(r'\+[1-9][0-9]{7,14}', value) and (stored or allowed(value)) else None
     return None
 
 
@@ -93,10 +94,11 @@ def start_challenge(conn, channel, destination, kind, signup=False):
     if account or (signup and channel=='phone' and kind=='mobile' and not matches):
         try:
             provider_sid = auth_delivery.start(channel, destination)
-        except auth_delivery.DeliveryUnavailable:
-            # Same status/body shape as unknown contact, without provider
-            # details. Operators get only a generic warning.
-            current_app.logger.warning('OTP delivery unavailable')
+        except auth_delivery.DeliveryUnavailable as exc:
+            current_app.logger.warning('OTP delivery unavailable: http_status=%s provider_code=%s signup=%s',
+                                       exc.http_status, exc.provider_code, signup)
+            if signup:
+                return None, failure('We could not send the SMS. Please try again shortly or contact support.', 503, 'otp_delivery_failed')
     with sessions.transaction(conn):
         sessions.sql(conn, 'DELETE FROM "AuthChallenge" WHERE expires_at < ?', (sessions.now() - 86400,))
         if account:
@@ -243,7 +245,7 @@ def register_auth(app, get_db):
             return error
         destination = normalize(body['channel'], body['destination'])
         if destination is None:
-            return failure('Enter a valid email or phone with country code, for example +91 followed by the number.')
+            return failure('Enter +91 followed by exactly 10 digits. Only India is enabled.')
         result, error = start_challenge(get_db(), body['channel'], destination, 'mobile')
         return error if error else (jsonify(result), 202)
 
@@ -252,7 +254,7 @@ def register_auth(app, get_db):
         body,error=payload(('channel','destination'))
         if error:return error
         destination=normalize(body['channel'],body['destination'])
-        if body['channel']!='phone' or destination is None:return failure('Use your own phone number including country code.')
+        if body['channel']!='phone' or destination is None:return failure('Enter your own Indian mobile number: +91 followed by exactly 10 digits.')
         result,error=start_challenge(get_db(),'phone',destination,'mobile',signup=True)
         if error:return error
         result['message']='If SMS delivery is available, a code will arrive shortly.'
@@ -265,7 +267,7 @@ def register_auth(app, get_db):
             return error
         phone = normalize('phone', body['phone'])
         if phone is None:
-            return failure('Include a valid phone number with country code.')
+            return failure('Enter +91 followed by exactly 10 digits. Only India is enabled.')
         conn = get_db()
         if not sessions.throttle(conn, [key('tester-ip:' + (request.remote_addr or 'unknown'))], 20, 600):
             return failure('Please wait before trying again.', 429, 'rate_limited')

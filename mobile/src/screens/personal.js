@@ -12,16 +12,17 @@ export function render({data,safe,statsOnly=false}) {
  <label>Vertical position<input id="portrait-y" type="range" min="0" max="1" step="0.01" value="0.5"></label>
  <button type="button" id="portrait-save">Save portrait</button></div>
  ${data.photo?'<button type="button" id="portrait-remove">Remove photo</button>':''}
-`}<form id="personal-form"><h2>Ethnicity / cultural background</h2><p>Optional, up to two. Separate from nationality; shown on your match profile.</p>
+`}<form id="personal-form"><details><summary><strong>Ethnicity / cultural background</strong> · ${safe((data.ethnicity||[]).join(", ")||"Optional")}</summary><p>Optional, up to two. Separate from nationality; shown on your match profile.</p>
  ${(data.ethnicity_options||[]).map(v=>`<label class="checkbox-row"><input type="checkbox" name="ethnicity" value="${safe(v)}" ${(data.ethnicity||[]).includes(v)?'checked':''}> ${safe(v)}</label>`).join('')}
+ </details><details><summary><strong>Health &amp; accessibility</strong></summary>
  ${h.consent?'<button type="button" id="health-withdraw">Withdraw health disclosure</button>':''}
- <h2>Health &amp; accessibility</h2><p>Optional and self-declared. Share only what you are comfortable showing to potential matches. This is not a medical assessment. An unanswered profile does not mean no conditions.</p>
+ <p>Optional and self-declared. Share only what you are comfortable showing to potential matches. This is not a medical assessment. An unanswered profile does not mean no conditions.</p>
  ${options('categories',h.categories||[])}
  <label>What would you like a potential partner to know? <textarea name="note" maxlength="500">${safe(h.note||'')}</textarea></label>
  <label class="checkbox-row"><input name="share_health" type="checkbox" ${h.consent?'checked':''}> I consent to displaying these details to potential matches and using the selected categories for matching.</label>
  <p class="hint">You can withdraw disclosure at any time. Previously viewed information cannot be recalled.</p>
  <p>Partner preferences are managed privately in REACH.</p>
- <button type="submit" class="primary">${statsOnly?'Save background & health':'Save Bio'}</button></form>
+ </details><button type="submit" class="primary">${statsOnly?'Save background & health':'Save Bio'}</button></form>
  ${data._saved?'<p role="status">Saved ✓</p>':''}${data._error?`<p role="alert" class="warn">${safe(data._error)}</p>`:''}`;
 }
 export function bind(root,ctx) {

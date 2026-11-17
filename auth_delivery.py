@@ -14,7 +14,11 @@ import urllib.request
 
 
 class DeliveryUnavailable(Exception):
-    pass
+    def __init__(self, message, *, http_status=None, provider_code=None):
+        super().__init__(message)
+        self.http_status = http_status
+        self.provider_code = provider_code
+
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -46,10 +50,19 @@ def _post(resource, body):
             return result
     except urllib.error.HTTPError as exc:
         code = exc.code
-        exc.close()
+        provider_code = None
+        try:
+            payload = json.loads(exc.read(65536))
+            value = payload.get('code') if isinstance(payload, dict) else None
+            if isinstance(value, int) and not isinstance(value, bool):
+                provider_code = value
+        except (ValueError, OSError):
+            pass
+        finally:
+            exc.close()
         if resource == 'VerificationCheck' and code in (400, 404):
             return {'status': 'denied'}
-        raise DeliveryUnavailable('Verification service unavailable.') from None
+        raise DeliveryUnavailable('Verification service unavailable.', http_status=code, provider_code=provider_code) from None
     except (urllib.error.URLError, TimeoutError, OSError, ValueError, http.client.HTTPException):
         raise DeliveryUnavailable('Verification service unavailable.') from None
 

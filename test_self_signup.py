@@ -14,6 +14,14 @@ class SelfSignupTests(RouteTestCase):
     def setUp(self):
         super().setUp()
         for p in [patch.dict(app_module.app.config,{'AUTH_ENABLED':True}),patch.dict(os.environ,{'SIGNZY_ENV':'preproduction','DHASHU_BILLING_MODE':'disabled','SIGNZY_RECEIPT_ENCRYPTION_KEY':Fernet.generate_key().decode()}),patch.object(auth_delivery,'configured',return_value=True),patch.object(auth_delivery,'start',side_effect=lambda *args:'VE'+uuid.uuid4().hex),patch.object(auth_delivery,'check',return_value=True)]:p.start();self.addCleanup(p.stop)
+    def test_failed_sms_does_not_claim_code_sent_or_create_account(self):
+        with patch.object(auth_delivery,'start',side_effect=auth_delivery.DeliveryUnavailable('unavailable',http_status=403,provider_code=60203)):
+            result=self.client.post('/api/v1/auth/signup/request',json={'channel':'phone','destination':'+919000000001'})
+        self.assertEqual(result.status_code,503)
+        self.assertEqual(result.json['error']['code'],'otp_delivery_failed')
+        self.assertEqual(db.fetch_all(self.conn,'Account'),[])
+        self.assertEqual(db.fetch_all(self.conn,'AuthChallenge'),[])
+
     def signup(self,phone='+919000000001'):
         r=self.client.post('/api/v1/auth/signup/request',json={'channel':'phone','destination':phone})
         self.assertEqual(r.status_code,202,r.json)
@@ -69,6 +77,9 @@ class SelfSignupTests(RouteTestCase):
             self.assertEqual(r.status_code,200,r.json)
             data=self.client.get('/api/v1/signup/state',headers=h).json['data']
             self.assertEqual(data['next_step'],2);self.assertEqual(data['values']['city'],city)
+            reach=self.client.get('/api/v1/reach',headers=h)
+            self.assertEqual(reach.status_code,200,reach.json)
+            self.assertIn('counts',reach.json['data'])
             row=db.fetch_one(self.conn,'User',id=uid);self.assertTrue(row['active_bgv_case_id'])
             case=db.fetch_one(self.conn,'BgvCase',id=row['active_bgv_case_id'])
             self.assertEqual(case['city_code'],['BLR','DEL','BOM'][i])

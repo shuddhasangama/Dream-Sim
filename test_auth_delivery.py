@@ -51,6 +51,17 @@ class DeliveryTests(unittest.TestCase):
                     delivery.start('email', 'tester@example.test')
                 self.assertNotIn('sensitive', str(caught.exception))
 
+    def test_provider_error_has_only_safe_diagnostics(self):
+        error=urllib.error.HTTPError('https://verify.twilio.com',403,'private',{},
+            io.BytesIO(json.dumps({'code':60203,'message':'private phone and secret'}).encode()))
+        with mock.patch.object(delivery.urllib.request,'build_opener') as factory:
+            factory.return_value.open.side_effect=error
+            with self.assertRaises(delivery.DeliveryUnavailable) as caught:
+                delivery.start('phone','+919000000001')
+        self.assertEqual(caught.exception.http_status,403)
+        self.assertEqual(caught.exception.provider_code,60203)
+        self.assertNotIn('private',str(caught.exception))
+
     def test_no_configuration_cannot_send(self):
         with mock.patch.dict(os.environ, {'TWILIO_AUTH_TOKEN': ''}), mock.patch.object(delivery.urllib.request, 'build_opener') as factory:
             with self.assertRaises(delivery.DeliveryUnavailable):

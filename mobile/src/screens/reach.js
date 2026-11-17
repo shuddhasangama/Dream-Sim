@@ -115,6 +115,7 @@ export function render(ctx) {
         <div class="p-reach-verified">${data.counting_unverified ? 'Counting everyone, verified or not' : 'Verified only'}</div>
       </div>
     </div>
+    <p class="hint">REACH shows potential compatibility, not a reserved date. New Wednesday–Sunday entrants join matching next week.</p>
     ${counts?.no_realistic_matches ? '<p class="warn">No realistic matches yet at your current filters.</p>' : ''}
 
     <div class="p-reach-hint"><span>Tap a filter to loosen it</span>

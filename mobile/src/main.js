@@ -1,3 +1,4 @@
+import {normalizePhone, countryOptions} from './phoneCountry.js';
 import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { Session, classify } from './session.js';
 import { previewTransport } from './preview.js';
@@ -7,6 +8,7 @@ import * as boundariesScreen from './screens/boundaries.js';
 import * as reachScreen from './screens/reach.js';
 import * as weekScreen from './screens/week.js';
 import * as calendarScreen from './screens/calendar.js';
+import * as alignScreen from './screens/align.js';
 import * as planScreen from './screens/plan.js';
 import * as ceremonyScreen from './screens/ceremony.js';
 import * as identityScreen from './screens/identity.js';
@@ -111,6 +113,7 @@ const screens = {
   reach: reachScreen,
   week: weekScreen,
   calendar: calendarScreen,
+  align: alignScreen,
   boundaries: boundariesScreen,
   plan: planScreen,
   ceremony: ceremonyScreen,
@@ -193,7 +196,8 @@ function render() {
         if(preview&&!new URLSearchParams(location.search).has('passwordFlow')){passwordSetup=false;await resumeSignup();}
       });
     } else {
-      phone=String(fields.get('phone')||'').trim();
+      try { phone=normalizePhone(fields.get('phone'), String(fields.get('country')||'IN')); }
+      catch(error) { message=error.message; render(); return; }
       if(authIntent==='login'&&!codeLogin){const password=String(fields.get('password')||'');run(async()=>{await session.passwordLogin(phone,password);await load();await resumeSignup();});}
       else run(async()=>{const result=authIntent==='signup'?await session.requestCode(phone,true):await session.recoveryCode(phone);challenge=result.challenge_id;message='If delivery is available for this contact, a code will arrive shortly.';});
     }
@@ -317,11 +321,11 @@ function signin() {
   const passwordLogin=authIntent==='login'&&!codeLogin&&!challenge;
   return `${howItWorks(safe)}<section class="intro"><span class="eyebrow">A LITTLE CLOSER</span><h1>${challenge?'Check your messages':'Welcome to<br>DhaShu.'}</h1><p>${challenge?'Enter your verification code.':authIntent==='signup'?'Start with your own phone number.':'Sign in with your password.'}</p></section>
     ${!challenge?`<div class="auth-options" role="group" aria-label="Choose how to enter"><button type="button" class="${authIntent==='login'?'primary':'secondary'}" data-auth-intent="login">Log in</button><button type="button" class="${authIntent==='signup'?'primary':'secondary'}" data-auth-intent="signup">Sign up</button></div>`:''}
-    <form id="signin-form" class="card"><label for="credential">${challenge?'Verification code':authIntent==='signup'?'Phone number':'Phone number'}</label>
-    ${challenge?'<input id="credential" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,10}" maxlength="10" required>':`<input id="credential" name="phone" type="tel" autocomplete="username" maxlength="254" required placeholder="${authIntent==='signup'?'+91 followed by your number':'+91 followed by your number'}" value="${safe(phone)}">`}
+    <form id="signin-form" class="card">${!challenge?`<label for="phone-country">Country code</label><select id="phone-country" name="country">${countryOptions()}</select>`:''}<label for="credential">${challenge?'Verification code':authIntent==='signup'?'Phone number':'Phone number'}</label>
+    ${challenge?'<input id="credential" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,10}" maxlength="10" required>':`<input id="credential" name="phone" type="tel" autocomplete="username" maxlength="32" inputmode="tel" required placeholder="10-digit mobile number" value="${safe(phone.startsWith('+91')?phone.slice(3):phone)}">`}
     ${passwordLogin?'<label>Password<input name="password" type="password" autocomplete="current-password" maxlength="128" required></label>':''}
     <button class="primary" ${busy?'disabled':''}>${challenge||passwordLogin?'Sign in':authIntent==='signup'?'Send SMS code':'Send recovery code'} <span aria-hidden="true">→</span></button>
-    ${challenge?'<button type="button" id="change" class="secondary">Change contact / request a new code</button>':passwordLogin?'<button type="button" id="use-code" class="text-button">First password / forgot password? Use a code</button>':'<p class="hint">SMS requires your registered phone number and country code.</p>'}</form>`;
+    ${challenge?'<button type="button" id="change" class="secondary">Change contact / request a new code</button>':passwordLogin?'<button type="button" id="use-code" class="text-button">First password / forgot password? Use a code</button>':'<p class="hint">India (+91) is currently supported. Enter your 10-digit mobile number.</p>'}</form>`;
 }
 
 // ── generic fallback (§1: never a blank screen) ───────────────────────────

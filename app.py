@@ -962,7 +962,7 @@ def reach_pool(user: dict) -> tuple[list[dict], bool]:
     the headline, the per-filter deltas, the whatif — is computed from
     the one list this returns, so they cannot disagree with each other.
     """
-    everyone = load_pool()
+    everyone = [u for u in load_pool() if u.get("gender") and u.get("city") and u.get("visions") and u.get("journey_state") in ("onboarding", "dating")]
     if user["bgv_status"] == "verified":
         return [u for u in everyone if u["bgv_status"] == "verified"], False
     return everyone, True
@@ -4661,7 +4661,7 @@ def _api_week_state(user):
             'prepared': prepared,
             'fixed_test_pair': user['user_id'] in week_service.fixed_test_pairs.configured(),
             'prepare_request': {'method': 'POST', 'path': '/api/v1/week/prepare', 'body': {}}
-                if mode == 'dating' and not prepared and (async_rehearsal.enabled() or clock_module.phase(clock) != 'before_week_start') else None,
+                if mode == 'dating' and (not prepared or (not rows and clock.day_index < 2)) and (async_rehearsal.enabled() or clock_module.phase(clock) != 'before_week_start') else None,
             'schedule': {'grid': week_map.grid(clock, personal_debrief=personal_debrief,
                                                 personal_pool_return=personal_pool_return),
                          'legend': week_map.legend()},

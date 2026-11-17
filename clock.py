@@ -92,7 +92,8 @@ def real_time_clock(now: datetime | None = None) -> SimulationClock:
     through app.py's get_clock(), which is the one place SIMULATED is
     actually branched on — this function exists so that branch has a real
     reading to fall back to, not so callers pick between the two."""
-    now = now or datetime.now()
+    from zoneinfo import ZoneInfo
+    now = now or datetime.now(ZoneInfo("Asia/Kolkata"))
     elapsed = (now.date() - WEEK_ONE_MONDAY).days
     if elapsed < 0:
         return SimulationClock(1, 0, 0)

@@ -197,7 +197,7 @@ def set_ignored(user: dict[str, Any], name: str, ignore: bool) -> dict[str, Any]
     prefs = user["preferences"]
     current = ignored_set(prefs)
     current = current | {name} if ignore else current - {name}
-    tags = list(prefs["fixed"]["dealbreakers"])
+    tags = list(prefs.get("fixed", {}).get("dealbreakers", []))
 
     if name in IGNORABLE_DEALBREAKERS and not ignore:
         if name not in tags:
@@ -232,7 +232,7 @@ def active_filter_names(user: dict[str, Any]) -> list[str]:
     off = ignored_set(prefs)
     names = [lever for lever in IGNORABLE_LEVERS
              if lever in prefs["adjustable"] and lever not in off]
-    names += [tag for tag in prefs["fixed"]["dealbreakers"] if tag not in off and tag not in RETIRED_DEALBREAKERS]
+    names += [tag for tag in prefs.get("fixed", {}).get("dealbreakers", []) if tag not in off and tag not in RETIRED_DEALBREAKERS]
     return names
 
 
@@ -370,7 +370,7 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     if not match_checks.fits(user_a,user_b):return False
     if not health_fits(user_a, user_b):
         return False
-    if user_a["gender"] == user_b["gender"]:
+    if not user_a.get("gender") or not user_b.get("gender") or user_a["gender"] == user_b["gender"]:
         return False
 
     # The visions come before the filters. Filters are preferences a
@@ -379,16 +379,16 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     if not visions_compatible(user_a, user_b):
         return False
 
-    prefs = user_a["preferences"]
+    prefs = user_a.get("preferences") or {}
     off = ignored_set(prefs)
 
-    for tag in prefs["fixed"]["dealbreakers"]:
+    for tag in prefs.get("fixed", {}).get("dealbreakers", []):
         if tag in off or tag in RETIRED_DEALBREAKERS:
             continue
         if not _dealbreaker_satisfied(tag, user_b):
             return False
 
-    adj = prefs["adjustable"]
+    adj = prefs.get("adjustable", {})
     b_stats = user_b["stats"]
 
     # 2026-09-04, user's rule: only filters the user actually keyed in
@@ -410,7 +410,7 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
         if not (lo <= value <= hi):
             return False
 
-    if "distance_km" not in off:
+    if "distance_km" in adj and "distance_km" not in off:
         dist_lo, dist_hi = adj["distance_km"]
         distance = city_distance_km(user_a["city"], user_b["city"])
         if not (dist_lo <= distance <= dist_hi):
@@ -835,7 +835,7 @@ def filter_states(user: dict[str, Any], pool: list[dict[str, Any]]) -> list[dict
     # holds it. One they have not set is simply already on Any, and a row
     # that only appears once you hold the filter can never be the row you
     # use to start holding it.
-    held = set(prefs["fixed"]["dealbreakers"])
+    held = set(prefs.get("fixed", {}).get("dealbreakers", []))
     names += list(IGNORABLE_DEALBREAKERS)
 
     out = []

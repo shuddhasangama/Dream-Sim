@@ -1,4 +1,5 @@
 import * as verification from './screens/verification.js';
+import * as reach from './screens/reach.js';
 import * as vision from './signupVision.js';
 import * as chemistry from './screens/chemistry.js';
 import * as signupStats from './signupStats.js';
@@ -12,7 +13,7 @@ export const SIGNUP_STEPS = ['Vision', 'Stats', 'Chemistry', 'Verification'];
 // Initial persistence still uses the existing protected profile APIs.
 export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
   let step = 0, data = null, dirty = false, error = '', draft = [];
-  let visionDraft = null, modern=false;
+  let visionDraft = null, modern=false, reachData=null, showingReach=false;
   const key = () => SIGNUP_STEPS[step].toLowerCase();
   async function load() {
     data = step===3 ? await verification.load(session) : step===1&&modern?await session.get('/api/v1/signup/state'):await session.get(`/api/v1/profile/${key()}`);
@@ -31,16 +32,17 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
     }};
   }
   return {
-    async begin() { step=0;data=null;visionDraft=null;const status=await session.get('/api/v1/signup/state');modern=!!status.modern;if(modern)step=status.next_step;await load(); },
+    async begin() { showingReach=false;reachData=null;step=0;data=null;visionDraft=null;const status=await session.get('/api/v1/signup/state');modern=!!status.modern;if(modern)step=status.next_step;await load(); },
     async refreshStatus() {
-      if(step!==3||!verification.canAutoRefresh(data)||document.activeElement?.closest?.('form')||document.querySelector('#avatar-consent:checked'))return false;
+      if(showingReach||step!==3||!verification.canAutoRefresh(data)||document.activeElement?.closest?.('form')||document.querySelector('#avatar-consent:checked'))return false;
       const folds=[...document.querySelectorAll('.verification-fold[open]')].map(e=>e.id);
       try{const next=await verification.load(session);
-      if(step!==3||!verification.canAutoRefresh(data))return false;
+      if(showingReach||step!==3||!verification.canAutoRefresh(data))return false;
       if(!data.digilocker?.session?.identity&&next.digilocker?.session?.identity&&next.avatar?.can_capture&&!folds.includes('verification-avatar'))folds.push('verification-avatar');
       data={...next,_verificationFolds:folds};return true;}catch(error){if(error?.status===401)throw error;data={...data,_statusError:'Status updates paused. Check your connection.'};return step===3;}
     },
     render() {
+      if(showingReach)return `<button id="signup-reach-back" type="button">Back to signup</button><p class="hint">Potential matches only. Complete your profile and verification to join matching. New Wednesday–Sunday entrants join next week.</p>${reach.render({data:reachData,safe})}`;
       const body = !data ? '<p>Loading your profile…</p>'
         : step === 0 ? vision.render(ctx())
         : step === 2 ? chemistry.render(ctx())
@@ -57,6 +59,7 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
         <ol class="signup-progress">${SIGNUP_STEPS.map((label,i)=>`<li ${i===step?'aria-current="step"':''}><span class="signup-step-number">${i+1}</span><span>${label}</span></li>`).join('')}</ol></section>
         ${body}${error ? `<p class="warn" role="alert">${safe(error)}</p>` : ''}
         <div class="signup-actions">
+          ${step>1?'<button id="signup-reach" type="button" class="secondary">Explore REACH</button>':''}
           ${step ? '<button id="signup-back" class="secondary" type="button">Previous step</button>' : ''}
           <button id="signup-next" class="primary" type="button">${step===3?'Check approval and continue':'Continue to '+SIGNUP_STEPS[step+1]}</button>
           ${step<3?'<button id="signup-verification" class="secondary" type="button">Go to identity &amp; background checks</button>':'<p class="hint">Your profile stays in setup while verification is pending.</p>'}
@@ -64,6 +67,15 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
         </div>`;
     },
     bind(root) {
+      if(showingReach){
+        reach.bind(root,{session,run,safe,data:reachData,patch:next=>{reachData=next;}});
+        root.querySelector('#signup-reach-back')?.addEventListener('click',()=>run(async()=>{showingReach=false;}));
+        return;
+      }
+      root.querySelector('#signup-reach')?.addEventListener('click',()=>run(async()=>{
+        if(dirty){error='Save your edits before opening REACH.';return;}
+        reachData=await session.get('/api/v1/reach');showingReach=true;
+      }));
       const inputs = ()=>[...root.querySelectorAll('form input, form select, form textarea')];
       if (dirty && draft.length) inputs().forEach((input,i)=>{
         if(draft[i]) { input.value=draft[i].value; input.checked=draft[i].checked; }
