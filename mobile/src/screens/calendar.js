@@ -12,10 +12,11 @@ export function render(ctx) {
   const { alignment, overlap = [], valid_slots = [], my_slots = [], payment } = data;
   const booking = data.booking;
 
-  const preferencesOnly = ctx.preferencesOnly;
-  return `<section class="intro"><span class="eyebrow">CALENDAR</span><h1>${preferencesOnly?"Date preferences":"Confirm Date"}</h1><p>${preferencesOnly?"Save your budget, diet and cuisines.":"Set preferences, select slots, then confirm an overlap."}</p></section>
+  const preferencesOnly = ctx.preferencesOnly || data.preferences_reviewed === false;
+  const neighbourhoods = data.date_neighbourhoods;
+  return `<section class="intro"><span class="eyebrow">CALENDAR</span><h1>${preferencesOnly?"Date preferences":"Confirm Date"}</h1><p>${preferencesOnly?"Review your neighbourhoods, budget, diet and cuisines before choosing availability.":"Set preferences, select slots, then confirm an overlap."}</p></section>
 
-    <details class="card" ${alignment.my_missing.length ? 'open' : ''}><summary><strong>${alignment.my_missing.length ? 'Date preferences' : '✓ Date preferences saved'}</strong></summary>
+    <details class="card" ${preferencesOnly || alignment.my_missing.length ? 'open' : ''}><summary><strong>${alignment.my_missing.length ? 'Date preferences' : '✓ Date preferences saved'}</strong></summary>
       ${alignment.my_missing.length ? `<p class="warn">Still needed: ${alignment.my_missing.map(safe).join(', ')}</p>` : ''}
       ${alignment.partner_missing.length ? `<p class="hint">Waiting on your match for: ${alignment.partner_missing.map(safe).join(', ')}</p>` : ''}
       <form id="alignment-form"><fieldset ${!data.editable ? 'disabled' : ''}>
@@ -24,18 +25,19 @@ export function render(ctx) {
         </div>
         <div class="field"><label>Budget</label><div class="chips">${alignment.options.budget.map((b) => `<label class="checkbox-row"><input type="checkbox" name="budget" value="${safe(b)}" ${asArray(alignment.mine.budget).includes(b) ? 'checked' : ''}> ${safe(b)}</label>`).join('')}</div></div>
         <div class="field"><label>Cuisine</label><div class="chips">${alignment.options.cuisine.map((c) => `<label class="checkbox-row"><input type="checkbox" name="cuisine" value="${safe(c)}" ${asArray(alignment.mine.cuisine).includes(c) ? 'checked' : ''}> ${safe(c)}</label>`).join('')}</div></div>
+        ${neighbourhoods?.options?.length ? `<fieldset><legend>Date neighbourhoods · up to three</legend><p class="hint">Choose where you are comfortable meeting for this date. These can differ from your usual neighbourhood.</p>${neighbourhoods.options.map(p=>`<label class="checkbox-row"><input type="checkbox" name="date_neighbourhood" value="${safe(p.id)}" ${asArray(neighbourhoods.mine).includes(p.id)?'checked':''}> ${safe(p.name)}</label>`).join('')}</fieldset>`:''}
         <button class="secondary" type="submit">Save preferences</button></fieldset>
       </form>
     </details>
 
-    ${booking ? `<section class="card"><h2>Where to meet · choose up to 2 areas</h2><p role="status">${safe(booking.message)}</p><p class="hint">These areas apply to all your selected time slots.</p>
+    ${booking ? `<section class="card"><h2>Where to meet · choose up to 3 areas</h2><p role="status">${safe(booking.message)}</p><p class="hint">These areas apply to all your selected time slots.</p>
       ${booking.market ? `<p class="hint">${safe(booking.market.city)} · Restaurant search will use shared neighbourhoods, within 1–3 km.</p>` : ''}
-      ${booking.editable && booking.neighbourhoods.length ? `<form id="neighbourhood-form"><div class="chips">${booking.neighbourhoods.map(p => `<label class="checkbox-row"><input type="checkbox" name="neighbourhood" value="${safe(p.id)}" ${booking.mine.includes(p.id) ? 'checked' : ''}> ${safe(p.name)}</label>`).join('')}</div><p class="hint">Save the areas you are comfortable meeting in. Only shared choices are shown to your match.</p><button class="secondary" type="submit">Save neighbourhoods</button></form>` : ''}
+      ${booking.editable && booking.neighbourhoods.length && !neighbourhoods?.options?.length ? `<form id="neighbourhood-form"><div class="chips">${booking.neighbourhoods.map(p => `<label class="checkbox-row"><input type="checkbox" name="neighbourhood" value="${safe(p.id)}" ${booking.mine.includes(p.id) ? 'checked' : ''}> ${safe(p.name)}</label>`).join('')}</div><p class="hint">Save the areas you are comfortable meeting in. Only shared choices are shown to your match.</p><button class="secondary" type="submit">Save neighbourhoods</button></form>` : ''}
       ${booking.shared_neighbourhoods?.length ? `<p>Shared areas: ${booking.neighbourhoods.filter(p => booking.shared_neighbourhoods.includes(p.id)).map(p => safe(p.name)).join(', ')}</p>` : ''}
       ${booking.snapshot ? `<p>${booking.snapshot.neighbourhoods.map(p => safe(p.name)).join(', ')} · ${booking.snapshot.cuisines.map(safe).join(', ')} · ${booking.snapshot.budget_bands.map(safe).join(', ')}</p>` : ''}
       <p class="hint">This saves your date preferences. It does not reserve a table or collect a restaurant deposit.</p></section>` : ''}
 
-    ${preferencesOnly ? '<p class="hint">Preferences saved here carry into your date calendar.</p>' : `<section class="card">
+    ${preferencesOnly ? `<p class="hint">Preferences saved here carry into your date calendar. You can edit them until the date is confirmed.</p>${data.preferences_reviewed ? '<button id="choose-availability" class="primary" type="button">Next: choose availability →</button>' : ''}` : `<section class="card">
       <h2>${my_slots.length ? '✓ Your availability saved' : 'Your weekend availability'}</h2>
       <p class="hint">${data.partner_submitted ? 'Your match has submitted theirs too.' : "Waiting on your match to submit theirs."}</p>
       <form id="availability-form">
@@ -55,10 +57,14 @@ function asArray(v) { return Array.isArray(v) ? v : v ? [v] : []; }
 export function bind(root, ctx) {
   const { session, run, patch, navigateTo } = ctx;
   const lockInId = encodeURIComponent(ctx.data.lock_in_id);
+  root.querySelector('#choose-availability')?.addEventListener('click',()=>navigateTo('calendar'));
+  const dateAreas=root.querySelectorAll('[name="date_neighbourhood"]');
+  const limitDateAreas=()=>{const count=[...dateAreas].filter(i=>i.checked).length;dateAreas.forEach(i=>{i.disabled=!ctx.data.editable||!i.checked&&count>=3;});};
+  dateAreas.forEach(i=>i.addEventListener('change',limitDateAreas));limitDateAreas();
   const areas = root.querySelectorAll('input[name="neighbourhood"]');
   const limitAreas = () => {
     const selected = [...areas].filter(input => input.checked).length;
-    areas.forEach(input => { input.disabled = !input.checked && selected >= 2; });
+    areas.forEach(input => { input.disabled = !input.checked && selected >= 3; });
   };
   areas.forEach(input => input.addEventListener('change', limitAreas));
   limitAreas();
@@ -83,6 +89,7 @@ export function bind(root, ctx) {
         diet: form.get('diet'),
         budget: form.getAll('budget'),
         cuisine: form.getAll('cuisine'),
+        ...(ctx.data.date_neighbourhoods?.options?.length ? {neighbourhoods:form.getAll('date_neighbourhood')}:{}),
       };
       patch(await session.put(`/api/v1/lock-ins/${lockInId}/alignment`, body));
       await ctx.refreshJourney();

@@ -65,8 +65,8 @@ def view(conn, uid, lid):
     budgets = [b for b in date_alignment.options_for('budget', market['city'])
                if b in array(stats[0].get('budget')) and b in array(stats[1].get('budget'))]
     slots = calendar_dating.compute_overlap(*(planning.slots(conn, lid, u) for u in users))
-    if any(len(c) > 2 for c in choices):
-        state, message = 'too_many_neighbourhoods', 'Each partner needs to choose at most two neighbourhoods.'
+    if any(len(c) > 3 for c in choices):
+        state, message = 'too_many_neighbourhoods', 'Each partner needs to choose at most three neighbourhoods.'
     elif not choices[index]:
         state, message = 'your_preferences', 'Choose neighbourhoods you are comfortable meeting in.'
     elif not choices[1-index]:
@@ -103,8 +103,8 @@ def update(conn, uid, lid, body):
             raise ApiError('state_conflict', 'Refresh the calendar before saving.', 409)
         chosen = body.get('neighbourhoods')
         valid = {p['id'] for p in current['neighbourhoods']}
-        if not isinstance(chosen, list) or not 1 <= len(chosen) <= 2 or any(not isinstance(p, str) or p not in valid for p in chosen) or len(set(chosen)) != len(chosen):
-            raise ApiError('validation_error', 'Choose one or two listed neighbourhoods.')
+        if not isinstance(chosen, list) or not 1 <= len(chosen) <= 3 or any(not isinstance(p, str) or p not in valid for p in chosen) or len(set(chosen)) != len(chosen):
+            raise ApiError('validation_error', 'Choose one to three listed neighbourhoods.')
         if sorted(chosen) == sorted(current['mine']):
             return
         planning.save(conn, 'BookingPreference', {'id': _id(current['scope'], uid), 'scope_id': current['scope'],

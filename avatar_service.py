@@ -35,14 +35,27 @@ def view(conn,uid):
     if r.get('protected_options') and r.get('expires_at','')>stamp():
         options=Protection().open(r['protected_options'])['options']
     import liveness_secure_service as hosted
-    verified_selfie=hosted.selfie(conn,uid) if hosted.enabled() and (not r or r['state']=='draft') else None
+    live_ready=True
+    try:require_live_selfie(conn,uid)
+    except ApiError:live_ready=False
+    verified_selfie=hosted.selfie(conn,uid) if live_ready and hosted.enabled() and (not r or r['state']=='draft') else None
     return {'verified_selfie_preview':verified_selfie,'enabled':enabled(),'state':r.get('state','not_started'),'consent_version':VERSION,'consent_text':CONSENT,
         'options':options,'selected':r.get('selected_index'),'avatar':public(conn,uid),'verification':'pending',
-        'can_capture':enabled() and r.get('state','draft')=='draft','can_generate':enabled() and r.get('state')=='draft' and bool(r.get('protected_selfie')),
+        'can_capture':enabled() and live_ready and r.get('state','draft')=='draft','can_generate':enabled() and live_ready and r.get('state')=='draft' and bool(r.get('protected_selfie')),
         'message':{'queued':'Two avatars are queued. Refresh to check progress.','submitting':'Generating two avatars. No retry is needed.',
           'unknown':'The outcome needs support review. Another paid run is blocked.','deleted':'Images removed. The generation allowance is not reset.',
           'expired':'Private images expired. The generation allowance is not reset.'}.get(r.get('state'),'Choose one avatar after generation. Signzy verification is pending.')}
+def require_live_selfie(conn,uid):
+    import liveness_secure_service as hosted
+    if not hosted.enabled():return
+    import face_match_service
+    current=hosted.row(conn,uid)
+    _,source=face_match_service.sources(conn,uid)
+    if not current or current['state']!='matched' or not source or current['digilocker_session_id']!=source[0]['id']:
+        raise ApiError('liveness_required','Complete live face verification for your current DigiLocker identity first.',409)
+
 def capture(conn,uid,image):
+    require_live_selfie(conn,uid)
     if not enabled():raise ApiError('avatar_disabled','Avatar generation is not enabled yet.',503)
     if not isinstance(image,str) or len(image)>2_800_000 or not image.startswith(('data:image/jpeg;base64,','data:image/png;base64,','data:image/webp;base64,')):raise ApiError('invalid_image','Use a selfie under 2 MB.')
     try:
@@ -60,6 +73,7 @@ def capture(conn,uid,image):
         if r:value={**r,**value}
         db.insert_row(conn,'AvatarJob',value)
 def queue(conn,uid,body):
+    require_live_selfie(conn,uid)
     if not enabled():raise ApiError('avatar_disabled','Avatar generation is not enabled yet.',503)
     if body.get('consent') is not True or body.get('consent_version')!=VERSION:raise ApiError('consent_required','Confirm avatar consent first.')
     with auth_sessions.transaction(conn):

@@ -31,6 +31,25 @@ class PlanningApiTests(RouteTestCase):
         self.base = '/lock-ins/lock-1'
         self.slot = {'day': 'Sat', 'meal_slot': 'dinner'}
 
+    def test_date_preferences_review_is_pair_scoped_and_persists_areas(self):
+        row=db.fetch_one(self.conn,'User',id='owner')
+        stats=db.load_json_field(row['stats_json'],{});stats['city']='Bangalore'
+        row['stats_json']=json.dumps(stats);db.insert_row(self.conn,'User',row)
+        before=self.request(self.base+'/calendar').json['data']
+        self.assertFalse(before['preferences_reviewed'])
+        self.assertEqual(len(before['date_neighbourhoods']['options']),6)
+        options=before['alignment']['options']
+        body={k:options[k][0] if k=='diet' else [options[k][0]] for k in options}
+        body['neighbourhoods']=['indiranagar','koramangala','mg-road']
+        after=self.request(self.base+'/alignment',method='PUT',body=body)
+        self.assertEqual(after.status_code,200,after.json)
+        self.assertTrue(after.json['data']['preferences_reviewed'])
+        self.assertEqual(after.json['data']['date_neighbourhoods']['mine'],body['neighbourhoods'])
+        self.assertFalse(planning_service.preferences_reviewed(self.conn,'owner','another-pair'))
+        body['neighbourhoods']=['saket']
+        self.assertEqual(self.request(self.base+'/alignment',method='PUT',body=body).status_code,400)
+        self.assertEqual(self.request(self.base+'/calendar').json['data']['date_neighbourhoods']['mine'],['indiranagar','koramangala','mg-road'])
+
     def align(self, uid):
         options = self.request(self.base+'/calendar', uid=uid).json['data']['alignment']['options']
         return self.request(self.base+'/alignment', uid=uid, method='PUT', body={k: options[k][0] if k == 'diet' else [options[k][0]] for k in options})

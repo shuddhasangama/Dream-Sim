@@ -14,6 +14,24 @@ class SelfSignupTests(RouteTestCase):
     def setUp(self):
         super().setUp()
         for p in [patch.dict(app_module.app.config,{'AUTH_ENABLED':True}),patch.dict(os.environ,{'SIGNZY_ENV':'preproduction','DHASHU_BILLING_MODE':'disabled','SIGNZY_RECEIPT_ENCRYPTION_KEY':Fernet.generate_key().decode()}),patch.object(auth_delivery,'configured',return_value=True),patch.object(auth_delivery,'start',side_effect=lambda *args:'VE'+uuid.uuid4().hex),patch.object(auth_delivery,'check',return_value=True)]:p.start();self.addCleanup(p.stop)
+    def test_neighbourhood_catalogue_and_optional_signup_choices(self):
+        import neighbourhood_catalog,launch_cities
+        self.assertEqual(len(launch_cities.CITIES),11)
+        self.assertEqual(set(neighbourhood_catalog.catalogue()),{c['name'] for c in launch_cities.CITIES})
+        self.assertTrue(all(len(p)==6 for p in neighbourhood_catalog.catalogue().values()))
+        uid,h=self.signup();body=self.stats();body['fields']={}
+        self.assertEqual(self.client.put('/api/v1/signup/stats',headers=h,json=body).status_code,200)
+        body['fields']['neighbourhoods']=['indiranagar','koramangala','mg-road']
+        response=self.client.put('/api/v1/signup/stats',headers=h,json=body)
+        self.assertEqual(response.status_code,200,response.json)
+        self.assertEqual(response.json['data']['values']['neighbourhoods'],body['fields']['neighbourhoods'])
+        for picks in [['saket'],['indiranagar']*2,['indiranagar','koramangala','mg-road','whitefield']]:
+            body['fields']['neighbourhoods']=picks
+            self.assertEqual(self.client.put('/api/v1/signup/stats',headers=h,json=body).status_code,400)
+        for key in ['name','dob','gender','city']:
+            body=self.stats();body[key]=''
+            self.assertEqual(self.client.put('/api/v1/signup/stats',headers=h,json=body).status_code,400,key)
+
     def test_failed_sms_does_not_claim_code_sent_or_create_account(self):
         with patch.object(auth_delivery,'start',side_effect=auth_delivery.DeliveryUnavailable('unavailable',http_status=403,provider_code=60203)):
             result=self.client.post('/api/v1/auth/signup/request',json={'channel':'phone','destination':'+919000000001'})

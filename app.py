@@ -4309,7 +4309,7 @@ def _guru_facts(user: dict) -> dict:
     if plan is None:
         mine = set(planning_service.slots(get_db(), active['id'], user['user_id']))
         theirs = set(planning_service.slots(get_db(), active['id'], _partner_id_in_lockin(active, user['user_id'])))
-        return {"aligned": aligned, "married": married, "has_current_plan": False,
+        return {"aligned": aligned, "date_preferences_reviewed": planning_service.preferences_reviewed(get_db(),user["user_id"],active["id"]), "married": married, "has_current_plan": False,
                 "my_slots_saved": bool(mine), "partner_slots_saved": bool(theirs),
                 "overlap": bool(mine & theirs),
                 "dates_completed": active.get("dates_completed",0), **gate_facts}

@@ -87,6 +87,11 @@ def slots(conn, lid, uid):
     return [(r['day'], r['meal_slot']) for r in db.fetch_all(conn, 'Availability', lockin_id=lid, user_id=uid)]
 
 
+def preferences_reviewed(conn, uid, lid):
+    stats=db.load_json_field(db.fetch_one(conn,'User',id=uid)['stats_json'],{})
+    return date_alignment.is_complete(stats) and stats.get('date_preferences_reviewed_scope')==availability_scope(conn,lid)
+
+
 def alignment(conn, uid, lid, body):
     with transition(conn):
         pair(conn, uid, lid)
@@ -98,6 +103,21 @@ def alignment(conn, uid, lid, body):
         if not result['ok']:
             raise ApiError('validation_error', result['error'])
         stats.update(result['stats'])
+        if 'neighbourhoods' in body:
+            import neighbourhood_catalog
+            stats['neighbourhoods']=neighbourhood_catalog.validate(stats.get('city'),body['neighbourhoods'])
+            if not stats['neighbourhoods']:
+                raise ApiError('validation_error','Choose at least one neighbourhood for this date.')
+            import booking_coordination
+            current=booking_coordination.view(conn,uid,lid)
+            if current and current.get('market') and current.get('editable'):
+                valid={p['id'] for p in current['neighbourhoods']}
+                if not set(stats['neighbourhoods']) <= valid:
+                    raise ApiError('validation_error','These neighbourhoods are not supported by the booking market.')
+                save(conn,'BookingPreference',{'id':booking_coordination._id(current['scope'],uid),
+                    'scope_id':current['scope'],'lockin_id':lid,'user_id':uid,'market_id':current['market']['id'],
+                    'places_json':json.dumps(sorted(stats['neighbourhoods'])),'revision':current['revision']+1})
+        stats['date_preferences_reviewed_scope']=availability_scope(conn,lid)
         sql(conn, 'UPDATE "User" SET stats_json=? WHERE id=?', (json.dumps(stats, ensure_ascii=False), uid))
 
 

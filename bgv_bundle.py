@@ -58,11 +58,11 @@ def detail_data(request,protection):
     try:return documents(response.get('json'))
     except ValueError:return None
 
-def schedule(conn):
+def schedule(conn, user_id=None, employment_only=False):
     cfg=bgv_app.config(); protection=bgv_app.Protection()
     from digilocker_photo_cache import purge_expired
     purge_expired(conn)
-    sessions=sorted(db.fetch_all(conn,'DigiLockerSession'),key=lambda r:r['created_at'],reverse=True)
+    sessions=sorted(db.fetch_all(conn,'DigiLockerSession',**({'user_id':user_id} if user_id else {})),key=lambda r:r['created_at'],reverse=True)
     seen=set()
     for row in sessions:
         uid=row['user_id']
@@ -76,7 +76,7 @@ def schedule(conn):
             if identity_check!=row.get('case_check_id'):continue
             from digilocker_photo_cache import cache
             cache(conn,row)
-            for operation in ('individual_search','fir_search'):
+            for operation in (() if employment_only else ('individual_search','fir_search')):
                 inputs={'name':identity['name'],'address':identity['document_address'],'matchType':'exact'}
                 if operation=='individual_search':inputs['caseCategory']='criminal'
                 queue(conn,row,bundle,operation,inputs,{})
@@ -99,11 +99,14 @@ def schedule(conn):
             employment_inputs=None if waiting_details else employment_lookup.inputs(conn,uid,identity,details)
             if employment_inputs:
                 queue(conn,row,bundle,'current_employer',employment_inputs,{'name':identity['name'],**({'employer':bundle['employer']} if bundle.get('employer') else {})})
-        except ApiError:
+        except ApiError as error:
+            import logging
+            logging.warning('BGV scheduling blocked user=%s code=%s',uid,getattr(error,'code',type(error).__name__))
             # Disabled plan / existing work is not permission to retry a paid call.
             continue
+    if employment_only:return
     # Automatic linked result lookups apply only to this explicitly consented workflow.
-    for row in db.fetch_all(conn,'BgvRequest',environment=cfg.environment):
+    for row in db.fetch_all(conn,'BgvRequest',environment=cfg.environment,**({'user_id':user_id} if user_id else {})):
         snapshot=protection.open(row['protected_input'])
         if not snapshot.get('bundle_session_id'):continue
         if row['operation'] in bgv_app.RESULTS and snapshot['inputs'].get('matchType')!='exact':continue
@@ -155,6 +158,16 @@ def view(conn,uid):
     elif bundle.get('pan_scope'):result['pan_state']='pending'
     import employment_lookup
     result['employment_identifier_available']=bool(employment_lookup.inputs(conn,uid,value,data))
+    result['pan_source']='DigiLocker issued PAN document; not Aadhaar'
+    if not result['employment_identifier_available']:
+        result['employment_blocker']='Add your issued PAN document in DigiLocker and share a fresh session including PAN. Aadhaar alone does not supply PAN.' if not data or not data.get('pan') else 'The DigiLocker account name does not match the Aadhaar name. Support must review before PAN can be used.'
+    if not result['consented']:
+        result['employment_blocker']='Confirm the current background-check consent.'
+    try:
+        if bgv_policy.check_for(conn,uid,'identity_details',cfg.environment)!=row.get('case_check_id'):
+            result['employment_blocker']='The DigiLocker session belongs to a different verification plan. Support must reconcile it.'
+    except ApiError:
+        result['employment_blocker']='Your identity verification plan needs support review.'
     if detail and detail['state'] in ('queued','processing','pending'):
         result['employment_blocker']='Waiting for document retrieval to finish. Completed checks stay saved.'
     try:bgv_policy.check_for(conn,uid,'current_employer',cfg.environment)

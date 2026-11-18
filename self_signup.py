@@ -7,15 +7,16 @@ import db
 import auth_sessions
 import onboarding
 import launch_cities
+import neighbourhood_catalog
 import profile_choices
 import stats_edit
 from bgv_app import Protection
 from api_contract import ApiError,json_object
 
 VERSION=3
-TEXT_FIELDS={'profession','employer','neighbourhoods','food_needs','venue_accessibility'}
+TEXT_FIELDS={'profession','employer','food_needs','venue_accessibility'}
 MULTI={'religion','ethnicity','languages','cuisine','budget'}
-FIELDS=(set(stats_edit.ALL_FIELDS)-{'age','children_count'})|TEXT_FIELDS
+FIELDS=(set(stats_edit.ALL_FIELDS)-{'age','children_count'})|TEXT_FIELDS|{'neighbourhoods'}
 
 def create_account(conn,phone):
     """Caller owns AuthChallenge + Account locks; invoked only after provider OTP approval."""
@@ -30,7 +31,7 @@ def create_account(conn,phone):
 def options():
     return {'cities':launch_cities.active(),'metro_catalogue':launch_cities.CITIES,'gender':onboarding.GENDERS_FOR_SIGNUP,
         'fields':onboarding.STAT_OPTIONS,'ranges':{k:v for k,v in onboarding.STAT_RANGES.items() if k not in ('age','children_count')},
-        'health':profile_choices.HEALTH,'max_religions':2,'max_ethnicities':2}
+        'neighbourhoods_by_city':neighbourhood_catalog.catalogue(), 'health':profile_choices.HEALTH,'max_religions':2,'max_ethnicities':2}
 
 def parts(conn,uid):
     user=db.fetch_one(conn,'User',id=uid)
@@ -63,14 +64,16 @@ def save_stats(conn,uid,body):
         if age<18 or age>120:raise ValueError()
     except (TypeError,ValueError):raise ApiError('validation_error','Enter a valid date of birth. You must be 18 or older.')
     city=launch_cities.find(body['city'])
-    if not city or not city['enabled']:raise ApiError('launch_city_required','Choose Bangalore, Delhi or Mumbai.')
+    if not city or not city['enabled']:raise ApiError('launch_city_required','Choose an available launch city.')
     if body['gender'] not in onboarding.GENDERS_FOR_SIGNUP:raise ApiError('validation_error','Choose your gender for matching.')
     fields=body['fields']
     if type(fields) is not dict or set(fields)-FIELDS:raise ApiError('validation_error','Unknown Stats field.')
     clean={}
     for key,value in fields.items():
         if value is None or value=='':continue
-        if key in TEXT_FIELDS:
+        if key == 'neighbourhoods':
+            clean[key]=neighbourhood_catalog.validate(city['name'],value)
+        elif key in TEXT_FIELDS:
             if not isinstance(value,str) or len(value)>200:raise ApiError('validation_error',key+' must be up to 200 characters.')
             clean[key]=value.strip()
         elif key in MULTI:
@@ -125,7 +128,10 @@ def reconcile(conn,uid):
     for r in sorted(db.fetch_all(conn,'BgvRequest',user_id=uid),key=lambda r:r['created_at'],reverse=True):
         if r.get('case_check_id') in ids and r['environment']==case['environment'] and r['operation'] not in latest:latest[r['operation']]=r
     required=['individual_result','fir_result']+(['current_employer'] if stats.get('employment_category')=='Salaried' else [])
-    if any(latest.get(op,{}).get('state')!='verified' for op in required):return
+    import bgv_policy
+    checks=bgv_policy.view(conn,uid).get('checks',[])
+    employment_reviewed=any(c.get('key')=='current_employer' and c.get('state')=='reviewed_satisfied' for c in checks)
+    if any(latest.get(op,{}).get('state')!='verified' and not (op=='current_employer' and employment_reviewed) for op in required):return
     with auth_sessions.transaction(conn):
         auth_sessions.sql(conn,'UPDATE "User" SET bgv_status=?,journey_state=? WHERE id=? AND journey_state=?',('verified','dating',uid,'onboarding'))
 

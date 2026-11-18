@@ -7,11 +7,6 @@ from signzy.verification import normalized
 def inputs(conn,uid,identity,details):
     if details and details.get('pan') and normalized(details.get('name') or '')==normalized(identity['name']):
         return {'pan':details['pan']}
-    account=db.fetch_one(conn,'Account',user_id=uid)
-    if account and account.get('auth_enabled') and account.get('verified_phone'):
-        phone=str(account.get('phone') or '')
-        mobile=phone[3:] if phone.startswith('+91') else phone
-        if re.fullmatch(r'[6-9][0-9]{9}',mobile):return {'mobile':mobile}
     return None
 
 def parsed(value):

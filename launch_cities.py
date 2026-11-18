@@ -7,6 +7,9 @@ CITIES=[
     {'code':'MAA','name':'Chennai','aliases':[],'enabled':False},
     {'code':'CCU','name':'Kolkata','aliases':[],'enabled':False},
     {'code':'PNE','name':'Pune','aliases':[],'enabled':False},
+    {'code':'JAI','name':'Jaipur','aliases':[],'enabled':False},
+    {'code':'CHD','name':'Chandigarh','aliases':[],'enabled':False},
+    {'code':'COK','name':'Kochi','aliases':['Cochin'],'enabled':False},
     {'code':'AMD','name':'Ahmedabad','aliases':[],'enabled':False},
 ]
 def active():return [dict(c) for c in CITIES if c['enabled']]

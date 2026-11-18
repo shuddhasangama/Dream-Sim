@@ -241,13 +241,13 @@ def reproject_saved(conn,uid):
             changed+=result.rowcount
     return changed
 
-def work_one(conn):
+def work_one(conn, request_id=None):
     cfg = config(); protection = Protection()
     with auth_sessions.transaction(conn):
         if db._is_postgres_connection(conn):
             auth_sessions.sql(conn, 'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
         rows = sorted((r for r in db.fetch_all(conn, 'BgvRequest', state='queued', environment=cfg.environment)
-                       if r['operation'] in {*CHECKS,*RESULTS.values(),'digilocker_details'}), key=lambda r:r['created_at'])
+                       if r['operation'] in {*CHECKS,*RESULTS.values(),'digilocker_details'} and (request_id is None or r['id']==request_id)), key=lambda r:r['created_at'])
         rows = [r for r in rows if not signzy_guard.blocked(conn,cfg,protection.open(r['protected_input']).get('provider_operation',r['operation']))]
         if not rows:
             return False
@@ -256,6 +256,12 @@ def work_one(conn):
     # Claim is committed before the external call. Interrupted attempts are never resent automatically.
     try:
         data = protection.open(row['protected_input'])
+        if row['operation']=='current_employer' and not (data['inputs'].get('pan') or data['inputs'].get('panNumber')):
+            with auth_sessions.transaction(conn):
+                auth_sessions.sql(conn,'UPDATE "BgvRequest" SET state=?,summary_json=?,updated_at=? WHERE id=?',
+                    ('unavailable',json.dumps({'message':'PAN is required for employment screening. Share an issued PAN document through DigiLocker; support must reconcile this previous request.'}),stamp(),row['id']))
+            return True
+
         if row['operation'] in RESULTS and (data['inputs'].get('matchType')!='exact' or row['operation']=='individual_search' and data['inputs'].get('caseCategory')!='criminal'):
             with auth_sessions.transaction(conn):
                 auth_sessions.sql(conn,'UPDATE "BgvRequest" SET state=?,summary_json=?,updated_at=? WHERE id=?',

@@ -37,6 +37,13 @@ class EmploymentWorkflowTests(BundleTests):
         self.assertEqual(len(rows),1)
         self.assertNotIn('employer',self.protection.open(rows[0]['protected_input'])['declared'])
 
+    def test_targeted_worker_never_claims_an_unrelated_request(self):
+        self.session();bgv_bundle.schedule(self.conn)
+        before=[(r['id'],r['state']) for r in db.fetch_all(self.conn,'BgvRequest')]
+        with patch('bgv_app.Client.execute',side_effect=AssertionError('Unexpected provider call')):
+            self.assertFalse(bgv_app.work_one(self.conn,request_id='not-present'))
+        self.assertEqual(before,[(r['id'],r['state']) for r in db.fetch_all(self.conn,'BgvRequest')])
+
     def test_pan_only_history_call_and_saved_projection(self):
         self.session();bgv_bundle.schedule(self.conn)
         details_id=bgv_bundle.request_id(self.sid,'digilocker_details')
@@ -58,12 +65,12 @@ class EmploymentWorkflowTests(BundleTests):
         saved=db.fetch_one(self.conn,'BgvRequest',id=row['id']);self.assertEqual(saved['state'],'history_available')
         self.assertEqual(bgv_app.reproject_saved(self.conn,'u1'),0)
         bgv_bundle.schedule(self.conn);self.assertEqual(len(db.fetch_all(self.conn,'BgvRequest',operation='current_employer')),1)
-    def test_only_verified_account_mobile_is_fallback(self):
+    def test_pan_required_even_with_verified_mobile(self):
         identity={'name':'SYNTHETIC PERSON'}
         self.assertIsNone(employment_lookup.inputs(self.conn,'u1',identity,None))
         db.insert_row(self.conn,'Account',{'id':'account','user_id':'u1','auth_enabled':1,'verified_phone':1,'phone':'+919000000001','created_at':'0'})
-        self.assertEqual(employment_lookup.inputs(self.conn,'u1',identity,None),{'mobile':'9000000001'})
+        self.assertIsNone(employment_lookup.inputs(self.conn,'u1',identity,None))
         details={'name':'SYNTHETIC PERSON','pan':'ABCDE1234F'}
         self.assertEqual(employment_lookup.inputs(self.conn,'u1',identity,details),{'pan':'ABCDE1234F'})
         details['name']='Other Person'
-        self.assertEqual(employment_lookup.inputs(self.conn,'u1',identity,details),{'mobile':'9000000001'})
+        self.assertIsNone(employment_lookup.inputs(self.conn,'u1',identity,details))

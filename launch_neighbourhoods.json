@@ -1,0 +1,288 @@
+{
+  "Bangalore": [
+    {
+      "id": "indiranagar",
+      "name": "Indiranagar"
+    },
+    {
+      "id": "koramangala",
+      "name": "Koramangala"
+    },
+    {
+      "id": "mg-road",
+      "name": "MG Road"
+    },
+    {
+      "id": "jayanagar",
+      "name": "Jayanagar"
+    },
+    {
+      "id": "hsr-layout",
+      "name": "HSR Layout"
+    },
+    {
+      "id": "whitefield",
+      "name": "Whitefield"
+    }
+  ],
+  "Delhi": [
+    {
+      "id": "connaught-place",
+      "name": "Connaught Place"
+    },
+    {
+      "id": "hauz-khas",
+      "name": "Hauz Khas"
+    },
+    {
+      "id": "saket",
+      "name": "Saket"
+    },
+    {
+      "id": "greater-kailash",
+      "name": "Greater Kailash"
+    },
+    {
+      "id": "defence-colony",
+      "name": "Defence Colony"
+    },
+    {
+      "id": "janakpuri",
+      "name": "Janakpuri"
+    }
+  ],
+  "Mumbai": [
+    {
+      "id": "bandra-west",
+      "name": "Bandra West"
+    },
+    {
+      "id": "lower-parel",
+      "name": "Lower Parel"
+    },
+    {
+      "id": "bandra-kurla-complex",
+      "name": "Bandra Kurla Complex"
+    },
+    {
+      "id": "powai",
+      "name": "Powai"
+    },
+    {
+      "id": "andheri-west",
+      "name": "Andheri West"
+    },
+    {
+      "id": "malad-west",
+      "name": "Malad West"
+    }
+  ],
+  "Hyderabad": [
+    {
+      "id": "jubilee-hills",
+      "name": "Jubilee Hills"
+    },
+    {
+      "id": "banjara-hills",
+      "name": "Banjara Hills"
+    },
+    {
+      "id": "gachibowli",
+      "name": "Gachibowli"
+    },
+    {
+      "id": "madhapur",
+      "name": "Madhapur"
+    },
+    {
+      "id": "kondapur",
+      "name": "Kondapur"
+    },
+    {
+      "id": "himayatnagar",
+      "name": "Himayatnagar"
+    }
+  ],
+  "Chennai": [
+    {
+      "id": "nungambakkam",
+      "name": "Nungambakkam"
+    },
+    {
+      "id": "adyar",
+      "name": "Adyar"
+    },
+    {
+      "id": "anna-nagar",
+      "name": "Anna Nagar"
+    },
+    {
+      "id": "t-nagar",
+      "name": "T Nagar"
+    },
+    {
+      "id": "velachery",
+      "name": "Velachery"
+    },
+    {
+      "id": "alwarpet",
+      "name": "Alwarpet"
+    }
+  ],
+  "Kolkata": [
+    {
+      "id": "park-street",
+      "name": "Park Street"
+    },
+    {
+      "id": "salt-lake",
+      "name": "Salt Lake"
+    },
+    {
+      "id": "new-town",
+      "name": "New Town"
+    },
+    {
+      "id": "ballygunge",
+      "name": "Ballygunge"
+    },
+    {
+      "id": "alipore",
+      "name": "Alipore"
+    },
+    {
+      "id": "southern-avenue",
+      "name": "Southern Avenue"
+    }
+  ],
+  "Pune": [
+    {
+      "id": "koregaon-park",
+      "name": "Koregaon Park"
+    },
+    {
+      "id": "kalyani-nagar",
+      "name": "Kalyani Nagar"
+    },
+    {
+      "id": "viman-nagar",
+      "name": "Viman Nagar"
+    },
+    {
+      "id": "baner",
+      "name": "Baner"
+    },
+    {
+      "id": "aundh",
+      "name": "Aundh"
+    },
+    {
+      "id": "deccan-gymkhana",
+      "name": "Deccan Gymkhana"
+    }
+  ],
+  "Ahmedabad": [
+    {
+      "id": "bodakdev",
+      "name": "Bodakdev"
+    },
+    {
+      "id": "thaltej",
+      "name": "Thaltej"
+    },
+    {
+      "id": "navrangpura",
+      "name": "Navrangpura"
+    },
+    {
+      "id": "prahlad-nagar",
+      "name": "Prahlad Nagar"
+    },
+    {
+      "id": "satellite",
+      "name": "Satellite"
+    },
+    {
+      "id": "chandkheda",
+      "name": "Chandkheda"
+    }
+  ],
+  "Jaipur": [
+    {
+      "id": "c-scheme",
+      "name": "C Scheme"
+    },
+    {
+      "id": "malviya-nagar",
+      "name": "Malviya Nagar"
+    },
+    {
+      "id": "vaishali-nagar",
+      "name": "Vaishali Nagar"
+    },
+    {
+      "id": "raja-park",
+      "name": "Raja Park"
+    },
+    {
+      "id": "mansarovar",
+      "name": "Mansarovar"
+    },
+    {
+      "id": "bani-park",
+      "name": "Bani Park"
+    }
+  ],
+  "Chandigarh": [
+    {
+      "id": "sector-7",
+      "name": "Sector 7"
+    },
+    {
+      "id": "sector-8",
+      "name": "Sector 8"
+    },
+    {
+      "id": "sector-9",
+      "name": "Sector 9"
+    },
+    {
+      "id": "sector-17",
+      "name": "Sector 17"
+    },
+    {
+      "id": "sector-26",
+      "name": "Sector 26"
+    },
+    {
+      "id": "sector-35",
+      "name": "Sector 35"
+    }
+  ],
+  "Kochi": [
+    {
+      "id": "fort-kochi",
+      "name": "Fort Kochi"
+    },
+    {
+      "id": "panampilly-nagar",
+      "name": "Panampilly Nagar"
+    },
+    {
+      "id": "kakkanad",
+      "name": "Kakkanad"
+    },
+    {
+      "id": "edappally",
+      "name": "Edappally"
+    },
+    {
+      "id": "marine-drive",
+      "name": "Marine Drive"
+    },
+    {
+      "id": "vyttila",
+      "name": "Vyttila"
+    }
+  ]
+}

@@ -122,7 +122,7 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
     def action(headline, body, endpoint=None, cta=None):
         copy = {
             'week': ('Review your matches', 'Choose Like or Pass when a match opens.'),
-            'align_view': ('Date preferences', 'Save your budget, diet and cuisines.'),
+            'align_view': ('Date preferences', 'Review neighbourhoods, budget, diet and cuisines before choosing availability.'),
             'calendar_view': ('Confirm Date', 'Choose your slots, then confirm a shared time.'),
             'plan_view': ('Review your agreement', 'Read the terms and sign for this date.'),
             'boundaries_view': ('Choose your greeting', 'Let your partner know what feels comfortable.'),
@@ -181,12 +181,11 @@ def next_action(milestones: set[str], *, facts: dict[str, Any] | None = None) ->
             return action("Like saved", "Waiting for mutual interest. You can review your week.")
         return action("Waiting for a match", "Your next match will appear here when available.")
 
-    if (d.DATE_SET not in milestones or f.get("has_current_plan") is False) and not f.get("aligned", True):
+    if (d.DATE_SET not in milestones or f.get("has_current_plan") is False) and (not f.get("aligned", True) or f.get("date_preferences_reviewed") is False):
         return action(
-            "Three things before the slot",
-            "Budget, what you eat, and the cuisines you enjoy. They were not asked at sign-up "
-            "because they mean nothing until there is a bill and a table.",
-            "align_view", "Answer them")
+            "Review your date preferences",
+            "Check neighbourhoods, budget, diet and cuisines for this date before choosing your availability.",
+            "align_view", "Review preferences")
 
     if (d.DATE_SET not in milestones or f.get("has_current_plan") is False) and f.get("my_slots_saved"):
         if not f.get("partner_slots_saved"):

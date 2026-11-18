@@ -16,6 +16,11 @@ class AvatarTests(RouteTestCase):
   super().setUp();self.make_user('owner');self.make_user('other')
   p=patch.dict(os.environ,{'DHASHU_AVATAR_ENABLED':'1','OPENAI_API_KEY':'synthetic','SIGNZY_RECEIPT_ENCRYPTION_KEY':Fernet.generate_key().decode()});p.start();self.addCleanup(p.stop)
   b=io.BytesIO();Image.new('RGB',(160,200),'blue').save(b,'JPEG');self.image=service.data_url(b.getvalue())
+ def test_hosted_avatar_requires_matching_current_identity(self):
+  with patch('liveness_secure_service.enabled',return_value=True),patch('liveness_secure_service.row',return_value={'state':'matched','digilocker_session_id':'old'}),patch('face_match_service.sources',return_value=(None,({'id':'current'},{}))):
+   with self.assertRaises(ApiError):service.capture(self.conn,'owner',self.image)
+  self.assertIsNone(service.row(self.conn,'owner'))
+
  def queue(self):
   service.capture(self.conn,'owner',self.image);service.queue(self.conn,'owner',{'consent':True,'consent_version':service.VERSION})
  def test_one_run_and_acceptance_public_only(self):

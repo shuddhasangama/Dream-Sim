@@ -6,6 +6,7 @@ from flask import g, jsonify
 import calendar_dating
 import ceremony
 import date_alignment
+import neighbourhood_catalog
 import dateplan
 import db
 import payments
@@ -61,6 +62,8 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
         return {'lock_in_id': lid, 'clock_mode': 'simulation', 'valid_slots': slot_view(calendar_dating.valid_slots()),
                 'my_slots': slot_view(calendar_dating.compute_overlap(mine, mine)), 'partner_submitted': bool(theirs),
                 'overlap': slot_view(calendar_dating.compute_overlap(mine, theirs)),
+                'preferences_reviewed': service.preferences_reviewed(get_db(),uid(),lid),
+                'date_neighbourhoods': {'options':neighbourhood_catalog.choices(stats.get('city')), 'mine':stats.get('neighbourhoods',[])},
                 'alignment': {'mine': {k: stats.get(k) for k in date_alignment.FIELDS},
                     'my_missing': date_alignment.missing(stats), 'partner_missing': date_alignment.missing(partner_stats),
                     'options': {k: date_alignment.options_for(k, stats.get('city')) for k in date_alignment.FIELDS}},
@@ -119,7 +122,7 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
 
     @api.put('/lock-ins/<lid>/alignment')
     def set_alignment(lid):
-        body = json_object(required={'budget', 'diet', 'cuisine'})
+        body = json_object(required={'budget', 'diet', 'cuisine'}, optional={'neighbourhoods'})
         if not isinstance(body['diet'], str) or any(not isinstance(body[k], list) or not body[k] or any(not isinstance(v, str) for v in body[k]) for k in ('budget', 'cuisine')):
             raise ApiError('validation_error', 'Budget and cuisine require arrays; diet requires text.')
         # Reject unsupported choices instead of silently dropping them.
