@@ -11,8 +11,9 @@ try:
     print('Users:',len(users),'Accounts:',len(accounts))
     print('Journey states:',dict(Counter(r['journey_state'] for r in users)))
     print('Disabled accounts:',sum(not r.get('auth_enabled') for r in accounts))
-    print('Twilio configuration format valid:',auth_delivery.configured())
-    for name in ('TWILIO_ACCOUNT_SID','TWILIO_AUTH_TOKEN','TWILIO_VERIFY_SERVICE_SID'):
+    print('SMS provider:',auth_delivery.provider())
+    print('Selected provider configuration format valid:',auth_delivery.configured())
+    for name in ('MSG91_AUTH_KEY','MSG91_TEMPLATE_ID') if auth_delivery.provider() == 'msg91' else ('TWILIO_ACCOUNT_SID','TWILIO_AUTH_TOKEN','TWILIO_VERIFY_SERVICE_SID'):
         print(name, 'SET' if os.environ.get(name) else 'MISSING')
     for name in ('DHASHU_SIMULATED_CLOCK','DHASHU_ASYNC_TEST','DHASHU_TESTER_NO_OTP','DEMO_MODE'):
         print(name, os.environ.get(name,'NOT SET'))
