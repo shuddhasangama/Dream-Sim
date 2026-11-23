@@ -28,6 +28,7 @@ import { howItWorks, bindHowItWorks } from './howItWorks.js';
 import { renderRehearsal, progressKey } from './rehearsal.js';
 import './style.css';
 import './bone.css';
+import './brand-review.css';
 
 const native = Capacitor.isNativePlatform();
 const preview = import.meta.env.DEV && !Capacitor.isNativePlatform();

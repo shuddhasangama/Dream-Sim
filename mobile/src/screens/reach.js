@@ -105,19 +105,12 @@ export function render(ctx) {
   const fit = counts?.fits_user_filters ?? 0;
   const units = chipUnits(data);
 
-  return `${workVerificationForm(data.work_verification_filter,safe)}${healthForm(data.health_filter, safe)}<section class="intro"><span class="p-eyebrow">REACH · THIS WEEK</span></section>
-    <div class="p-reach-hero">
-      <div class="p-reach-ring" style="background:${reachRingGradient(mutual, fit, 'var(--p-success)', 'var(--p-track)')}">
-        <div class="p-reach-ring-inner"><div><div class="p-reach-num">${safe(mutual)}</div><div class="p-reach-sub">open to you</div></div></div>
-      </div>
-      <div>
-        <div class="p-reach-fit">of ${safe(fit)} who fit</div>
-        <div class="p-reach-verified">${data.counting_unverified ? 'Counting everyone, verified or not' : 'Verified only'}</div>
-      </div>
-    </div>
+  const status=ctx.onboarding ? (ctx.signupStep<3?'Setup incomplete':'Verification not complete') : data.counting_unverified?'Explore before verification':mutual===0?'No matches with current filters':'Potential matches right now';
+  const guidance=ctx.onboarding ? (ctx.signupStep<3?'Finish your profile to continue. You can explore potential compatibility here first.':'Complete any outstanding verification steps. If a check is pending, your progress is saved while it finishes.') : mutual===0?'Review your filters or return as more people join. A zero here does not mean your signup failed.':'These profiles fit your preferences. A date requires mutual interest and confirmation.';
+  return `<section class="reach-review-heading"><span class="p-eyebrow">REACH</span><p class="reach-status">${safe(status)}</p><div class="reach-count">${safe(mutual)}</div><h1>Potential matches right now</h1><p>${safe(fit)} fit your filters · ${data.counting_unverified?'Includes unverified profiles':'Verified profiles only'}</p></section>
+    <p class="reach-guidance" role="status">${safe(guidance)}</p>
     <p class="hint">REACH shows potential compatibility, not a reserved date. New Wednesday–Sunday entrants join matching next week.</p>
-    ${counts?.no_realistic_matches ? '<p class="warn">No realistic matches yet at your current filters.</p>' : ''}
-
+    <details class="reach-extra-filters"><summary>Verification &amp; health preferences</summary>${workVerificationForm(data.work_verification_filter,safe)}${healthForm(data.health_filter, safe)}</details>
     ${data.discovery?`<section class="card"><h2>Available to explore</h2><p>${safe(data.discovery.message)}</p>${data.discovery.profiles.map(p=>`<div class="stat-row"><strong>${safe(p.age)} years · ${safe(p.city)}</strong><span>${safe(p.verification)}</span><p>${p.pillars.map(safe).join(' · ')}</p></div>`).join('')||`<p>${safe(data.discovery.empty_message)}</p>`}<p class="hint">Private preview only. No identity documents or background-check details are shared. After verification, use Week to express interest.</p></section>`:''}
     <div class="p-reach-hint"><span>Tap a filter to loosen it</span>
       <button type="button" class="p-text-link" id="show-all" data-ignore="${all_ignored ? 'false' : 'true'}">${all_ignored ? 'Put them back' : 'Any for everything'}</button>

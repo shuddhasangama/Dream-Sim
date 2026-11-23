@@ -24,7 +24,7 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
     dirty = false; error = ''; draft = [];
   }
   function ctx() {
-    return {session, run, safe, data, busy:getBusy(), onboarding:true, patch(next) {
+    return {session, run, safe, data, busy:getBusy(), onboarding:true, onSaved: async()=>{step=2;await load();}, patch(next) {
       data = next;
       if(step===0&&next._signupVision){visionDraft=next._signupVision;dirty=!!next._signupDirty;draft=[];}
       if(step===2){dirty=!next._saved;draft=[];}
@@ -42,7 +42,7 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
       data={...next,_verificationFolds:folds};return true;}catch(error){if(error?.status===401)throw error;data={...data,_statusError:'Status updates paused. Check your connection.'};return step===3;}
     },
     render() {
-      if(showingReach)return `<button id="signup-reach-back" type="button">Back to signup</button><p class="hint">Potential matches only. Complete your profile and verification to join matching. New Wednesday–Sunday entrants join next week.</p>${reach.render({data:reachData,safe})}`;
+      if(showingReach)return `<button id="signup-reach-back" class="primary" type="button">Continue setup</button>${reach.render({data:reachData,safe,onboarding:true,signupStep:step})}`;
       const body = !data ? '<p>Loading your profile…</p>'
         : step === 0 ? vision.render(ctx())
         : step === 2 ? chemistry.render(ctx())
@@ -53,15 +53,15 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
           ${(data.rows || []).filter(r=>!r.editable).map(r=>`<p class="hint">${safe(r.key.replaceAll('_',' '))}: ${safe(r.value)} · locked by your current journey</p>`).join('')}
           ${data._saved ? '<p class="save-note">Saved.</p>' : ''}
           ${data._error ? `<p class="warn">${safe(data._error)}</p>` : ''}</section>`;
-      return `<section class="card signup-intro"><span class="eyebrow">CREATE YOUR PROFILE</span>
+      return `<section class="card signup-intro" data-signup-step="${step}"><span class="eyebrow">CREATE YOUR PROFILE</span>
         <h2>Step ${step + 1} of 4 · ${SIGNUP_STEPS[step]}</h2>
         <p>Choose what matters to you, then complete your details and verification.</p>
-        <ol class="signup-progress">${SIGNUP_STEPS.map((label,i)=>`<li ${i===step?'aria-current="step"':''}><span class="signup-step-number">${i+1}</span><span>${label}</span></li>`).join('')}</ol></section>
+        <ol class="signup-progress">${SIGNUP_STEPS.map((label,i)=>`<li class="${i<step?'is-complete':''}" ${i===step?'aria-current="step"':''}><span class="signup-step-number">${i<step?'✓':i+1}</span><span>${label}</span></li>`).join('')}</ol></section>
         ${body}${error ? `<p class="warn" role="alert">${safe(error)}</p>` : ''}
         <div class="signup-actions">
           ${step>1?'<button id="signup-reach" type="button" class="secondary">Explore REACH</button>':''}
           ${step ? '<button id="signup-back" class="secondary" type="button">Previous step</button>' : ''}
-          <button id="signup-next" class="primary" type="button">${step===3?'Check approval and continue':'Continue to '+SIGNUP_STEPS[step+1]}</button>
+          ${step===1&&modern?'':`<button id="signup-next" class="primary" type="button">${step===3?'Check approval and continue':'Continue to '+SIGNUP_STEPS[step+1]}</button>`}
           ${step<3?'<button id="signup-verification" class="secondary" type="button">Go to identity &amp; background checks</button>':'<p class="hint">Your profile stays in setup while verification is pending.</p>'}
           ${step>0&&step<3?'<button id="signup-reload" class="text-button" type="button">Discard unsaved edits and reload this step</button>':''}
         </div>`;

@@ -28,15 +28,15 @@ export function render(ctx) {
   const { activities = {}, activity_options = [], buckets = [], custom_activities = [], partner_any = [] } = data;
   const allActivities=[...new Set([...activity_options,...custom_activities])];
 
-  return `<section class="intro"><span class="eyebrow">Chemistry</span><h1>What you'd actually do together</h1>
+  return `<section class="intro chemistry-heading"><span class="eyebrow">Chemistry</span><h1>What you'd actually do together</h1>
     <p class="lede">Choose your own answer. Separately, tell us when your partner’s answer doesn’t matter to you.</p></section>
 
     <form id="activities-form">
       <section class="card">
-        <div class="bucket-legend">${buckets.map((b) => `<span class="bucket-legend-item"><b>${safe(b[1])}</b> ${safe(b[2])}</span>`).join('')}</div>
+        <div class="bucket-legend">${buckets.map((b) => `<span class="bucket-legend-item">${safe(b[2])}</span>`).join('')}</div>
         <div class="activity-table">${allActivities.map((a) => `<details class="activity-row" name="chemistry-activity"><summary>
           <span class="activity-name">${safe(a)}</span><small data-activity-answer> · ${safe(buckets.find(b=>b[0]===activities[a])?.[2]||'Choose your answer')}</small></summary>${custom_activities.includes(a)?`<button type="button" class="text-button" data-remove-activity="${safe(a)}" aria-label="Remove ${safe(a)}">Remove</button>`:''}
-          <span class="activity-buckets">${buckets.map((b) => `<label class="bucket-pick" title="${safe(b[2])}"><input type="radio" aria-label="${safe(a)}: ${safe(b[2])}" name="act__${safe(a)}" value="${safe(b[0])}" ${activities[a] === b[0] ? 'checked' : ''}><span class="bucket-glyph b-${safe(b[0])}">${safe(b[1])} ${safe(b[2])}</span></label>`).join('')}</span>
+          <span class="activity-buckets">${buckets.map((b) => `<label class="bucket-pick" title="${safe(b[2])}"><input type="radio" aria-label="${safe(a)}: ${safe(b[2])}" name="act__${safe(a)}" value="${safe(b[0])}" ${activities[a] === b[0] ? 'checked' : ''}><span class="bucket-glyph b-${safe(b[0])}">${safe(b[2])}<span class="answer-check" aria-hidden="true"> ✓</span></span></label>`).join('')}</span>
           <label class="chemistry-partner-any"><input type="checkbox" name="partner_any" value="${safe(a)}" ${partner_any.includes(a)?'checked':''}> Partner preference doesn’t matter</label>
         </details>`).join('')}</div>
         <div class="chemistry-add"><label for="custom-activity">Add your own activity · ${custom_activities.length}/4</label><div><input id="custom-activity" maxlength="60" placeholder="For example, marathon running" ${custom_activities.length>=4?'disabled':''}><button type="button" id="add-activity" ${custom_activities.length>=4?'disabled':''}>Add activity</button></div><p class="hint">Up to four suggestions. Choose your answer after adding. Suggestions are reviewed before joining the public list.</p></div>
