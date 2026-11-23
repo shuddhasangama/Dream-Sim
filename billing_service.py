@@ -38,6 +38,11 @@ def update(conn, pid, **fields):
 def scope(conn, uid, product, reference):
     if not db.fetch_one(conn, 'User', id=uid):
         raise ApiError('not_found', 'User not found.', 404)
+    if product=='verification' and __import__('discovery').enabled():
+        import discovery
+        readiness=discovery.market(conn,discovery.member(conn,uid).get('city'))
+        if readiness.get('paused') or not all(readiness.get(k) for k in ('discovery','verification','payments')):
+            raise ApiError('city_not_ready','Explore REACH now. Paid verification opens when your city is ready.',409)
     if product in ('verification', 'guru'):
         if reference not in (None, '', uid):
             raise ApiError('invalid_scope', 'This purchase belongs to the signed-in user.')

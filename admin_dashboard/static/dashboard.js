@@ -1,6 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const labels={overview:'Overview',users:'Users',sessions:'Sessions',checks:'Verification & errors',marketing:'Marketing',audit:'Access audit'};
+const labels={overview:'Overview',users:'Users',sessions:'Sessions',checks:'Verification & errors',marketing:'Marketing',audit:'Access audit',activities:'Activity review',markets:'City readiness'};
 let section='overview',page=1,query='',csrf='',busy=false,serial=0,cohort='',cohortLabel='',checkFilter=null,detailId=null,canViewUsers=false;
 function el(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;}
 function date(value){if(value===null||value===undefined||value==='')return '—';let d;if(typeof value==='number'||/^\d{10}(\.\d+)?$/.test(String(value)))d=new Date(Number(value)*1000);else d=new Date(value);if(Number.isNaN(d.valueOf()))return String(value);return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'}).format(d)+' IST';}
@@ -12,6 +12,23 @@ function table(title,rows){const root=$('report');if(title)root.append(el('h2',t
  if(section==='checks'&&k==='checks'){const b=el('button',text,'quiet');b.addEventListener('click',()=>{checkFilter={operation:row.operation,environment:row.environment,state:row.state};page=1;$('page-title').textContent=row.operation+' · '+row.state;load();});td.append(b);}else if(section==='marketing'&&canViewUsers&&['registrations','users'].includes(k)){const b=el('button',text,'quiet');b.addEventListener('click',()=>openCohort(k==='registrations'?'city:'+row.city:'payment:'+row.mode,k==='registrations'?row.city+' registrations':row.mode+' payments'));td.append(b);}else if(section==='overview'&&k==='accounts'&&v!==null){const filter=row.stage!==undefined?'stage:'+row.stage:{'Vision saved':'vision','Stats saved':'stats','Signup submitted':'submitted'}[row.milestone];if(filter){const b=el('button',text,'quiet');b.addEventListener('click',()=>openCohort(filter,row.stage||row.milestone));td.append(b);}else td.textContent=text;}else if(canViewUsers&&k==='user_id'){const b=el('button',text,'quiet');b.addEventListener('click',()=>detail(text));td.append(b);}else if(k==='status'||k==='state'||k==='bgv_status'){const cls=['verified','matched','Access valid'].includes(text)?'good':['pending','queued','Refresh available'].includes(text)?'warn':'';td.append(el('span',text,'status '+cls));}else td.textContent=text;r.append(td);}body.append(r);}t.append(body);wrap.append(t);root.append(wrap);
 }
 function render(data){const root=$('report');root.replaceChildren();
+ if(data.markets){
+   root.append(el('p','Enable dates only after verification, payments, restaurant operations and support are ready. Pausing stops new allocations; existing dates continue.'));
+   for(const item of data.markets){const card=el('form',undefined,'card');card.append(el('h2',item.name));
+     for(const key of ['discovery','verification','payments','restaurants','support','paused']){const label=el('label',human(key));const input=el('input');input.type='checkbox';input.name=key;input.checked=!!item[key];label.append(input);card.append(label);}
+     const button=el('button','Save readiness');card.append(button);card.addEventListener('submit',async e=>{e.preventDefault();button.disabled=true;const values={};for(const input of card.querySelectorAll('input'))values[input.name]=input.checked;
+       try{await api('/api/markets/readiness',{method:'POST',body:JSON.stringify({code:item.id,values})});await load();}catch(error){$('report-error').hidden=false;$('report-error').textContent=error.message;button.disabled=false;}
+     });root.append(card);
+   }
+ }
+ if(data.suggestions){
+   root.append(el('p','Map suggestions to a curated activity. Existing canonical answers win conflicts; previous answers are archived.'));
+   for(const item of data.suggestions){const card=el('div',undefined,'card');card.append(el('h2',item.name),el('p',item.state));
+     const choice=el('select');for(const name of data.activity_options){const option=el('option',name);option.value=name;choice.append(option);}
+     const button=el('button','Approve mapping');button.addEventListener('click',async()=>{button.disabled=true;try{await api('/api/activities/review',{method:'POST',body:JSON.stringify({name:item.name,canonical:choice.value})});await load();}catch(error){$('report-error').hidden=false;$('report-error').textContent=error.message;button.disabled=false;}});
+     card.append(choice,button);root.append(card);
+   }
+ }
  if(data.metrics){const cards=el('div',undefined,'cards');for(const m of data.metrics){const c=el('div',undefined,'card');const number=el(m.filter&&m.value!==null?'button':'p',m.value===null?'Not recorded':Number(m.value).toLocaleString('en-IN'),'metric');if(number.tagName==='BUTTON'){number.type='button';number.setAttribute('aria-label','View '+m.label);number.addEventListener('click',()=>openCohort(m.filter,m.label));}c.append(el('p',m.label,'metric-label'),number,el('p',m.note,'note'));cards.append(c);}root.append(cards);}
  if(data.groups)table('Journey stages',data.groups);if(data.funnel)table('Recorded signup milestones',data.funnel);
  if(cohort||data.account||checkFilter){const back=el('button',data.account?'← Back to list':checkFilter?'← Back to verification counts':'← Back to overview','quiet');back.addEventListener('click',()=>{if(data.account){detailId=null;$('page-title').textContent=cohortLabel||labels[section];load();}else select(checkFilter?'checks':'overview');});root.prepend(back);}if(data.account)table('Account',data.account);if(data.checks)table('Recent verification records',data.checks);

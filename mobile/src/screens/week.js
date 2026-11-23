@@ -40,9 +40,19 @@ export async function ensurePrepared(session, data) {
 export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Week</h1></section><section class="card"><p>Loading…</p></section>';
+  if (data.mode === 'discovery') return discoveryView(ctx);
   if (data.mode === 'post_dating') return postDating(ctx);
   if (data.mode === 'locked_in') return lockedIn(ctx);
   return dating(ctx);
+}
+
+function discoveryView({data,safe}) {
+ const profile=p=>`<p><strong>${safe(p.age)} years · ${safe(p.city)}</strong> <span class="badge">${safe(p.verification)}</span></p><p>${(p.pillars||[]).map(safe).join(' · ')}</p>`;
+ return `<section class="card"><h1>Discover together</h1><p>${safe(data.message)}</p><p class="hint">Up to ${data.quota} profiles per day. Resets at midnight IST. Wednesday onward, new pairings plan for the following weekend. A view or interest does not reserve anyone.</p></section>
+ ${data.proposals.map(p=>`<section class="card"><h2>A mutual connection</h2>${profile(p.profile)}<p>Both of you expressed interest. Confirm to enter an exclusive date cycle. You will choose date preferences and a shared time next.</p><p>Respond by ${safe(new Date(p.expires_at*1000).toLocaleString())}.</p><button data-proposal="${safe(p.id)}" ${p.confirmed?'disabled':''}>${p.confirmed?'Waiting for confirmation':'Confirm pairing'}</button><button data-discovery-id="${safe(p.profile.id)}" data-discovery-action="pass">Decline</button></section>`).join('')}
+ ${data.profiles.map(p=>`<section class="card">${profile(p)}<button data-discovery-id="${safe(p.id)}" data-discovery-action="interest" ${!data.date_ready||p.verification!=='Verified'||p.action==='interest'?'disabled':''}>${p.action==='interest'?'Interest saved privately':'Interested'}</button><button data-discovery-id="${safe(p.id)}" data-discovery-action="pass">Pass for now</button><button data-discovery-id="${safe(p.id)}" data-discovery-action="block">Block</button></section>`).join('')}
+ ${!data.profiles.length&&!data.proposals.length?`<section class="card"><p>${safe(data.empty_message)}</p><button data-week-nav="reach">Review REACH filters</button></section>`:''}
+ ${data.passed?.length?`<details class="card"><summary>Reconsider profiles I passed</summary><p>This only resets your own pre-date pass. Blocks and previous dates stay excluded.</p>${data.passed.map((id,i)=>`<button data-discovery-id="${safe(id)}" data-discovery-action="reset">Reconsider passed profile ${i+1}</button>`).join('')}</details>`:''}`;
 }
 
 function postDating(ctx) {
@@ -326,6 +336,15 @@ const VIDEO_PLACEHOLDER = '<p class="hint tw-video-placeholder">The explainer vi
 
 export function bind(root, ctx) {
   const { session, run, patch, navigateTo, refreshJourney, journey } = ctx;
+  root.querySelectorAll('[data-discovery-action]').forEach(button=>button.addEventListener('click',()=>run(async()=>{
+    await session.post('/api/v1/discovery/decision',{candidate_id:button.dataset.discoveryId,action:button.dataset.discoveryAction});
+    patch(await session.get('/api/v1/week'));
+  })));
+  root.querySelectorAll('[data-proposal]').forEach(button=>button.addEventListener('click',()=>run(async()=>{
+    await session.post('/api/v1/discovery/confirm',{proposal_id:button.dataset.proposal});
+    await refreshJourney();patch(await session.get('/api/v1/week'));
+  })));
+
 
   root.querySelectorAll('.p-day-btn').forEach((btn) => btn.addEventListener('click', () => run(async () => {
     selectedDay = Number(btn.dataset.day);

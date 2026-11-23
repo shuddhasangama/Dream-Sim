@@ -14,6 +14,8 @@ def state(conn,user,clock):
     pairs=[r for r in db.fetch_all(conn,'LockIn') if uid in (r['user_a'],r['user_b'])]
     if any(r['status']=='active' for r in pairs):
         return {'locked':True,'reason':LOCK_REASON}
+    if __import__('discovery').enabled():
+        return {'locked':False,'reason':None}
     matches=db.fetch_all(conn,'Match',user_id=uid,week=clock.week)
     if not matches:
         return {'locked':False,'reason':None}

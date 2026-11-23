@@ -71,7 +71,7 @@ test('invalid stats stay on the step and preserve the entered value for correcti
   await expect(page.getByRole('heading',{name:'Step 1 of 4 · Vision'})).toBeVisible();
 });
 
-for(const [key,label,kids] of [['grow','Family',true],['two','We Two',false],['explore','Travel',false]])test(`signup offers ${label} with live pillar preview`,async({page})=>{
+for(const [key,label,kids] of [['grow','Family',true],['two','Together',false],['explore','Travel Partner',false]])test(`signup offers ${label} with live pillar preview`,async({page})=>{
  await enter(page);await page.getByRole('button',{name:label,exact:true}).click();
  await expect(page.locator('[data-signup-plan="'+key+'"]')).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('[data-signup-pillar="Kids"]')).toBeChecked({checked:kids});
@@ -80,10 +80,10 @@ for(const [key,label,kids] of [['grow','Family',true],['two','We Two',false],['e
 });
 test('signup needs an explicit plan and custom choices have no history or duplicate travel toggle',async({page})=>{
  await enter(page);await expect(page.locator('#tester-login')).toHaveCount(0);await expect(page.locator('.verify-pill')).toHaveCount(0);
- await page.getByRole('button',{name:'Continue to Stats'}).click();await expect(page.getByRole('alert')).toContainText('Choose your Twogether Plan');
- await page.getByRole('button',{name:'Custom',exact:true}).click();await expect(page.locator('[data-signup-choice]:checked')).toHaveCount(0);await expect(page.getByText('Travel together (optional)',{exact:true})).toHaveCount(0);
- await page.getByRole('button',{name:'Family',exact:true}).click();await page.getByRole('button',{name:'We Two',exact:true}).click();await expect(page.locator('[data-signup-pillar="Kids"]')).not.toBeChecked();
- await page.getByRole('button',{name:'Travel',exact:true}).click();await expect(page.locator('[data-signup-pillar="Cohabitate"]')).not.toBeChecked();
+ await page.getByRole('button',{name:'Continue to Stats'}).click();await expect(page.getByRole('alert')).toContainText('Choose your Together Plan');
+ await page.getByRole('button',{name:'Custom',exact:true}).click();await expect(page.locator('[data-signup-choice]:checked')).toHaveCount(1);await expect(page.getByText('Travel together (optional)',{exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Family',exact:true}).click();await page.getByRole('button',{name:'Together',exact:true}).click();await expect(page.locator('[data-signup-pillar="Kids"]')).not.toBeChecked();
+ await page.getByRole('button',{name:'Travel Partner',exact:true}).click();await expect(page.locator('[data-signup-pillar="Cohabitate"]')).not.toBeChecked();
 });
 for(const width of [320,390])test(`focus panel aligns plans and pillars at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:844});await enter(page);
@@ -92,8 +92,9 @@ for(const width of [320,390])test(`focus panel aligns plans and pillars at ${wid
  await expect(page.locator('[data-signup-plan="two"]')).toHaveAttribute('aria-pressed','true');
  await page.getByRole('switch',{name:'Include Kids',exact:true}).check();
  await expect(page.locator('[data-signup-plan="grow"]')).toHaveAttribute('aria-pressed','true');
- await expect(page.locator('[data-signup-choice]')).toHaveCount(4);
- await page.locator('[data-signup-choice][value="Pets"]').uncheck();
+ await expect(page.locator('[data-signup-choice]')).toHaveCount(2);
+ await expect(page.locator('[data-signup-choice][value="Emotional"]')).toBeDisabled();
+ await page.locator('[data-signup-choice][value="Physical"]').check();
  await expect(page.locator('[data-signup-plan="grow"]')).toHaveAttribute('aria-pressed','true');
  await page.locator('[data-signup-focus="Intimacy"]').click();
  await expect(page.locator('[data-signup-choice]')).toHaveCount(2);

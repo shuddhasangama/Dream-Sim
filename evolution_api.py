@@ -79,13 +79,13 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         # (declare_change()'s own gate — surfaced ahead of time so the
         # UI can show why it's locked rather than just disabling it).
         return jsonify(goals=g.api_user['visions'],element_keys=vision.VISION_ELEMENT_KEYS,
-            presets=profile_choices.TEMPLATES, signup_presets=vision_plans.PRESETS, signup_pillar_options=vision_plans.OPTIONS,
+            presets=profile_choices.TEMPLATES, signup_presets=vision_plans.PRESETS, signup_pillar_options={k:(v if k=='Intimacy' else []) for k,v in vision_plans.OPTIONS.items()},
             schema_version=g.api_user['stats'].get('vision_schema_version',1),
             template_key=g.api_user['stats'].get('vision_template','custom'),
             template_label=profile_choices.template_label(g.api_user['stats'],g.api_user['visions']),
             kids_intent=g.api_user['stats'].get('kids_intent','undecided'),
-            pillar_options={k:list(v) for k,v in (vision_plans.OPTIONS if g.api_user['stats'].get('vision_schema_version')==2 else vision.PILLAR_OPTIONS).items()},
-            detail_explanation=vision.VISION_DETAIL_EXPLANATION,
+            pillar_options={k:(list(v) if k=='Intimacy' else []) for k,v in vision_plans.OPTIONS.items()},
+            detail_explanation='Emotional intimacy is required. Physical intimacy is optional. Other pillars have no detailed choices in this release.',
             rc_open=vision.rc_open(get_clock()),
             entries=db.fetch_all(get_db(),'VisionEntry',user_id=uid()),changes=db.fetch_all(get_db(),'VisionChange',user_id=uid()))
 
@@ -120,7 +120,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         # radio ever came back checked.
         skills=db.load_json_field(db.fetch_one(get_db(),'User',id=uid())['skills_json'],{})
         return jsonify(activities=skills.get('activities',{}), custom_activities=skills.get('custom_activities',[]), partner_any=skills.get('partner_any',[]), max_custom_activities=4,
-            activity_options=onboarding.ACTIVITIES,buckets=onboarding.BUCKETS,
+            activity_options=__import__('activity_catalog').ordered(get_db()),activity_aliases=__import__('activity_catalog').aliases(get_db()),buckets=onboarding.BUCKETS,
             answers=answers,entry_keys=(*chemistry.MANDATORY_KEYS,*chemistry.INTIMACY_MANDATORY_KEYS),
             options={'physical_boundary':chemistry.PHYSICAL_BOUNDARY_OPTIONS,'intimacy_pace':chemistry.INTIMACY_PACE_OPTIONS,'health_openness':chemistry.HEALTH_OPENNESS_OPTIONS},
             pacing=expectations.state(answers,pace.get('updated_at_hours'),expectation_hours(pace)))
@@ -220,7 +220,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
             pillars=body.get('pillars') if modern else item['choices'] if item['choices'] is not None else body.get('pillars')
             if modern:
                 vision_plans.validate(pillars)
-                if vision_plans.plan_for(pillars)!=body['template']:raise ApiError('validation_error','Your Twogether plan must match your selected pillars.')
+                if vision_plans.plan_for(pillars)!=body['template']:raise ApiError('validation_error','Your Together plan must match your selected pillars.')
             if type(pillars) is not dict or any(type(v) is not list or any(type(x) is not str for x in v) for v in pillars.values()):
                 raise ApiError('validation_error','Provide your selected pillars and their choices.')
             if 'travel' in body and type(body['travel']) is not bool:

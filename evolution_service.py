@@ -117,15 +117,22 @@ def save_stats(conn, uid, submitted, situation, clock, strict=False):
 
 
 def save_activities(conn,uid,activities,custom_activities=None,partner_any=None):
-    import chemistry_choices
+    import chemistry_choices,activity_catalog
     with transaction(conn):
         row=db.fetch_one(conn,'User',id=uid)
         previous=db.load_json_field(row['skills_json'],{})
         custom_activities=custom_activities if custom_activities is not None else [x for x in previous.get('custom_activities',[]) if x in (activities or {})]
         partner_any=partner_any if partner_any is not None else [x for x in previous.get('partner_any',[]) if x in (activities or {})]
+        # A formerly custom activity may now be curated. Keep its answer and
+        # indifference setting while removing only the obsolete custom marker.
+        if type(custom_activities) is list:
+            custom_activities=[x for x in custom_activities if x not in onboarding.ACTIVITIES]
         clean=chemistry_choices.validate(activities,custom_activities,partner_any)
         skills=onboarding.build_skills(clean['activities'])
         skills.update(custom_activities=clean['custom_activities'],partner_any=clean['partner_any'])
+        skills['activity_alias_archive']=previous.get('activity_alias_archive',{})
+        activity_catalog.queue(conn,clean['custom_activities'])
+        skills=activity_catalog.normalize(skills,activity_catalog.aliases(conn))
         row['skills_json']=json.dumps(skills,ensure_ascii=False)
         db.insert_row(conn,'User',row)
 

@@ -62,6 +62,9 @@ from generate_users import (
 ACTIVITIES = [
     "Cooking", "Hiking", "Salsa", "Tennis", "Yoga", "Photography",
     "Board games", "Live gigs", "Cycling", "Pottery", "Stand-up", "Scuba diving",
+    "Running", "Swimming", "Badminton", "Football", "Cricket", "Basketball",
+    "Fitness training", "Reading", "Movies", "Music", "Painting", "Gardening",
+    "Travel", "Volunteering", "Gaming", "Walking",
 ]
 
 BUCKETS = [

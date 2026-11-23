@@ -74,7 +74,7 @@ export function createSignup({session, run, safe, finish, getBusy=()=>false}) {
       }
       root.querySelector('#signup-reach')?.addEventListener('click',()=>run(async()=>{
         if(dirty){error='Save your edits before opening REACH.';return;}
-        reachData=await session.get('/api/v1/reach');showingReach=true;
+        reachData=await session.get('/api/v1/reach');if(reachData.discovery?.prepare_request)reachData={...reachData,discovery:await session.post('/api/v1/discovery/prepare',{})};showingReach=true;
       }));
       const inputs = ()=>[...root.querySelectorAll('form input, form select, form textarea')];
       if (dirty && draft.length) inputs().forEach((input,i)=>{

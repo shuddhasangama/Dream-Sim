@@ -46,10 +46,11 @@ export function editableFieldsForm(data, safe, formId) {
   const declared = open.filter((r) => r.group !== 'verified' && !MULTI_STATS.includes(r.key));
   if (!open.length) return '<div class="hint">Nothing is editable right now. These open again after the date.</div>';
   const err = (key) => (data._fieldErrors?.[key] ? `<span class="warn field-error" role="alert" data-error-for="${safe(key)}">${safe(data._fieldErrors[key])}</span>` : '');
-  const cell = (r) => `<label class="field-cell">
+  const cell = (r) => `<label class="field-cell" ${r.key==='children_count'?'data-children-count':''} ${r.key==='children_count'&&rows.find(x=>x.key==='has_children')?.value!=='Yes'?'hidden':''}>
       <span class="field-label">${safe(label(r.key))}</span>
       ${options[r.key] ? `<select name="${safe(r.key)}"><option value="">Not set</option>${options[r.key].map((o) => `<option value="${safe(o)}" ${String(r.value) === o ? 'selected' : ''}>${safe(o)}</option>`).join('')}</select>`
         : `<input type="number" inputmode="numeric" name="${safe(r.key)}" value="${r.value ?? ''}" min="${ranges[r.key]?.[0] ?? ''}" max="${ranges[r.key]?.[1] ?? ''}" placeholder="${safe(STAT_UNITS[r.key] || '')}">`}
+      ${ranges[r.key]?`<small class="hint">${ranges[r.key][0]}–${ranges[r.key][1]} ${safe(STAT_UNITS[r.key]||'')}</small>`:''}
       ${err(r.key)}
     </label>`;
   const reverifyNote = verified.map((r) => r.warning).find(Boolean);
@@ -73,6 +74,7 @@ export function editableFieldsForm(data, safe, formId) {
         ${err(r.key)}
       </div>`;
     }).join('')}
+${data._fieldErrors?`<p role="alert" class="warn">Please correct ${Object.keys(data._fieldErrors).map(k=>safe(label(k))).join(', ')} above.</p>`:''}
     <button class="btn-save" type="submit">Save changes</button>
   </form>`;
 }

@@ -32,6 +32,20 @@ class AdminDashboardTests(unittest.TestCase):
   with patch('time.time',return_value=self.now):
    return self.client.post('/api/login',json={'email':email,'password':self.password,'code':security.code(self.secret,self.now//30)},headers={'Origin':'http://localhost'})
  def csrf(self):return self.client.get('/api/session').get_json()['csrf']
+ def test_owner_controls_require_csrf_and_support_cannot_change_readiness(self):
+  self.login();headers={'Origin':'http://localhost','X-CSRF-Token':self.csrf()}
+  body={'code':'BLR','values':dict(discovery=True,verification=True,payments=True,restaurants=False,support=True,paused=False)}
+  self.assertEqual(self.client.post('/api/markets/readiness',json=body,headers={'Origin':'http://localhost'}).status_code,403)
+  self.assertEqual(self.client.post('/api/markets/readiness',json=body,headers=headers).status_code,200)
+  markets=self.client.get('/api/reports/markets').get_json()['markets']
+  self.assertFalse(next(x for x in markets if x['id']=='BLR')['ready'])
+  import activity_catalog
+  activity_catalog.queue(self.conn,['Sprinting'])
+  response=self.client.post('/api/activities/review',json={'name':'Sprinting','canonical':'Running'},headers=headers)
+  self.assertEqual(response.status_code,200,response.text)
+  self.conn.execute('UPDATE "AdminIdentity" SET role=?',('support',));self.conn.commit()
+  self.assertEqual(self.client.get('/api/reports/markets').status_code,403)
+  self.assertEqual(self.client.post('/api/activities/review',json={'name':'Sprinting','canonical':'Running'},headers=headers).status_code,403)
  def test_rfc_totp(self):
   self.assertEqual(security.code(self.secret,1),'287082')
   self.assertIsNone(security.counter_for(self.secret,'\u0661'*6))

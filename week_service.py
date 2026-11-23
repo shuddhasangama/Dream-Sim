@@ -46,6 +46,10 @@ def eligible_user(conn, uid):
 
 
 def prepare(conn, uid, clock):
+    import discovery
+    if discovery.enabled():
+        discovery.prepare(conn,uid,discovery.cycle_for(clock))
+        return []
     with transition(conn):
         user = eligible_user(conn, uid)
         if active_for(conn, uid):
@@ -119,6 +123,8 @@ def reciprocal_offer(conn, user, pool, locked, recent, clock):
 
 
 def decide(conn, uid, match_id, action, pass_reason, clock):
+    if __import__('discovery').enabled():
+        raise ApiError('discovery_required','Update the app and use daily discovery to choose a pairing.',409)
     if action not in ('interest', 'pass'):
         raise ApiError('validation_error', 'Action must be interest or pass.')
     if pass_reason is not None and (not isinstance(pass_reason, str) or len(pass_reason) > 1000):

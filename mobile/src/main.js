@@ -391,6 +391,7 @@ async function loadScreen(key, params) {
   screenData = await session.get(surface.request.path);
   // A screen may finish loading with a one-off setup step (Week: prepare).
   // Done here — on navigation — never from render().
+  if(key==='reach'&&screenData.discovery?.prepare_request)screenData={...screenData,discovery:await session.post('/api/v1/discovery/prepare',{})};
   if (key === 'week') screenData = await weekScreen.ensurePrepared(session, screenData);
 }
 async function reloadCurrent() {

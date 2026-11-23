@@ -568,7 +568,7 @@ main.container.has-tabbar{padding:14px 20px 120px}
 .match-panels details{min-width:0}.match-panels summary{font-weight:700;cursor:pointer;padding:12px 2px}
 .match-panels details[open]{grid-column:1/-1}.match-panels .stat-grid{padding:8px}
 /* Accessibility: safe areas, keyboard scrolling and zoom without a trapped viewport. */
-#app {padding-top:env(safe-area-inset-top);}
+#app {padding-top:0;} /* The brand bar already owns the top safe-area inset. */
 body {overscroll-behavior-y:auto;}
 .container {min-width:0;}
 .card,.p-card,.pair-context,form {min-width:0;overflow-wrap:anywhere;}
@@ -616,3 +616,11 @@ input,select,textarea {max-width:100%;min-width:0;font-size:16px;}
 .avatar-flow [hidden]{display:none!important}
 
 #password-form label,#member-email-form label{display:block;margin:14px 0}#password-form input,#member-email-form input{display:block;margin-top:7px}#signin-form input[type="password"]{display:block;margin:7px 0 14px}.p-sheet{max-height:85dvh;overflow-y:auto}
+
+/* Compact, labelled Chemistry choices; do not clip the text to an icon circle. */
+details.activity-row {display:block;padding:14px 0;border-bottom:1px solid var(--border);}
+details.activity-row summary {cursor:pointer;min-height:44px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+details.activity-row .activity-buckets {display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0;}
+details.activity-row .bucket-glyph {width:auto;height:auto;border-radius:12px;padding:10px;display:block;font-size:14px;white-space:normal;}
+details.activity-row .bucket-pick {margin:0;min-width:0;}
+details.activity-row .chemistry-partner-any {display:flex;gap:8px;align-items:center;}

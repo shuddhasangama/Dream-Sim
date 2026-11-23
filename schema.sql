@@ -1145,3 +1145,47 @@ CREATE TABLE IF NOT EXISTS "MemberEmailChallenge" (
  destination TEXT NOT NULL, provider_sid TEXT NOT NULL, expires_at BIGINT NOT NULL,
  attempts INTEGER NOT NULL DEFAULT 0, consumed_at BIGINT
 );
+
+-- Reviewed names never expand the curated activity list automatically.
+CREATE TABLE IF NOT EXISTS "ActivityAlias" (
+ id TEXT PRIMARY KEY, canonical TEXT NOT NULL, reviewed_by TEXT NOT NULL, updated_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "ActivitySuggestion" (
+ id TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending',
+ canonical TEXT, reviewed_by TEXT, updated_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "DiscoveryMarket" (
+ id TEXT PRIMARY KEY, discovery INTEGER NOT NULL DEFAULT 0,
+ verification INTEGER NOT NULL DEFAULT 0, payments INTEGER NOT NULL DEFAULT 0,
+ restaurants INTEGER NOT NULL DEFAULT 0, support INTEGER NOT NULL DEFAULT 0,
+ paused INTEGER NOT NULL DEFAULT 0, updated_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "DiscoveryExposure" (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES "User"(id),
+ candidate_id TEXT NOT NULL REFERENCES "User"(id), day TEXT NOT NULL, created_at BIGINT NOT NULL,
+ UNIQUE(user_id,candidate_id,day)
+);
+CREATE TABLE IF NOT EXISTS "DiscoveryDecision" (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES "User"(id),
+ candidate_id TEXT NOT NULL REFERENCES "User"(id), action TEXT NOT NULL,
+ updated_at BIGINT NOT NULL, UNIQUE(user_id,candidate_id)
+);
+CREATE TABLE IF NOT EXISTS "DiscoveryProposal" (
+ id TEXT PRIMARY KEY, user_a TEXT NOT NULL REFERENCES "User"(id),
+ user_b TEXT NOT NULL REFERENCES "User"(id), cycle INTEGER NOT NULL,
+ state TEXT NOT NULL, confirm_a INTEGER NOT NULL DEFAULT 0, confirm_b INTEGER NOT NULL DEFAULT 0,
+ expires_at BIGINT NOT NULL, created_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "DiscoveryAllocation" (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES "User"(id), cycle INTEGER NOT NULL,
+ proposal_id TEXT NOT NULL REFERENCES "DiscoveryProposal"(id), UNIQUE(user_id,cycle)
+);
+CREATE TABLE IF NOT EXISTS "DiscoveryEvent" (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES "User"(id),
+ candidate_id TEXT REFERENCES "User"(id), action TEXT NOT NULL, created_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "DiscoveryBlock" (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES "User"(id),
+ candidate_id TEXT NOT NULL REFERENCES "User"(id), UNIQUE(user_id,candidate_id)
+);

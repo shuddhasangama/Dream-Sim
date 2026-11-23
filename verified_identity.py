@@ -18,7 +18,9 @@ def owner_identity(conn,uid):
 def apply(conn,uid,sid,identity,environment):
     user=db.fetch_one(conn,'User',id=uid)
     stats=json.loads(user['stats_json'] or '{}')
-    stats.update(age=identity['age'],identity_session_id=sid,identity_environment=environment)
+    if stats.get('declared_age') is not None:
+        stats['identity_age_discrepancy']=stats['declared_age']!=identity['age']
+    stats.update(age=identity['age'],age_band=__import__('onboarding').age_band_for(identity['age']),identity_session_id=sid,identity_environment=environment)
     # Name/DOB stay in the protected identity record. Never put them in public Stats.
     user['stats_json']=json.dumps(stats,ensure_ascii=False)
     db.insert_row(conn,'User',user)

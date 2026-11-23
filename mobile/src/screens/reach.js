@@ -118,6 +118,7 @@ export function render(ctx) {
     <p class="hint">REACH shows potential compatibility, not a reserved date. New Wednesday–Sunday entrants join matching next week.</p>
     ${counts?.no_realistic_matches ? '<p class="warn">No realistic matches yet at your current filters.</p>' : ''}
 
+    ${data.discovery?`<section class="card"><h2>Available to explore</h2><p>${safe(data.discovery.message)}</p>${data.discovery.profiles.map(p=>`<div class="stat-row"><strong>${safe(p.age)} years · ${safe(p.city)}</strong><span>${safe(p.verification)}</span><p>${p.pillars.map(safe).join(' · ')}</p></div>`).join('')||`<p>${safe(data.discovery.empty_message)}</p>`}<p class="hint">Private preview only. No identity documents or background-check details are shared. After verification, use Week to express interest.</p></section>`:''}
     <div class="p-reach-hint"><span>Tap a filter to loosen it</span>
       <button type="button" class="p-text-link" id="show-all" data-ignore="${all_ignored ? 'false' : 'true'}">${all_ignored ? 'Put them back' : 'Any for everything'}</button>
     </div>
@@ -269,6 +270,10 @@ export function bind(root, ctx) {
     patch({ ...data, _stats: await session.get('/api/v1/profile/stats') });
   }));
   root.querySelector('#cancel-stats-edit')?.addEventListener('click', () => run(async () => patch({ ...data, _stats: null })));
+  const children=root.querySelector('[data-children-count]');
+  root.querySelector('[name="has_children"]')?.addEventListener('change',e=>{if(children)children.hidden=e.target.value!=='Yes';});
+  const firstError=root.querySelector('[data-error-for]');
+  if(firstError){firstError.closest('label')?.querySelector('input,select')?.focus();firstError.scrollIntoView?.({block:'center'});}
   root.querySelector('#inline-stats-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     run(async () => {

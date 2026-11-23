@@ -26,7 +26,7 @@ export function render(ctx) {
   const { data, safe } = ctx;
   if (!data) return '<section class="intro"><h1>Chemistry</h1></section><section class="card"><p>Loading…</p></section>';
   const { activities = {}, activity_options = [], buckets = [], custom_activities = [], partner_any = [] } = data;
-  const allActivities=[...activity_options,...custom_activities];
+  const allActivities=[...new Set([...activity_options,...custom_activities])];
 
   return `<section class="intro"><span class="eyebrow">Chemistry</span><h1>What you'd actually do together</h1>
     <p class="lede">Choose your own answer. Separately, tell us when your partner’s answer doesn’t matter to you.</p></section>
@@ -34,12 +34,12 @@ export function render(ctx) {
     <form id="activities-form">
       <section class="card">
         <div class="bucket-legend">${buckets.map((b) => `<span class="bucket-legend-item"><b>${safe(b[1])}</b> ${safe(b[2])}</span>`).join('')}</div>
-        <div class="activity-table">${allActivities.map((a) => `<div class="activity-row">
-          <span class="activity-name">${safe(a)}</span>${custom_activities.includes(a)?`<button type="button" class="text-button" data-remove-activity="${safe(a)}" aria-label="Remove ${safe(a)}">Remove</button>`:''}
-          <span class="activity-buckets">${buckets.map((b) => `<label class="bucket-pick" title="${safe(b[2])}"><input type="radio" aria-label="${safe(a)}: ${safe(b[2])}" name="act__${safe(a)}" value="${safe(b[0])}" ${activities[a] === b[0] ? 'checked' : ''}><span class="bucket-glyph b-${safe(b[0])}">${safe(b[1])}</span></label>`).join('')}</span>
+        <div class="activity-table">${allActivities.map((a) => `<details class="activity-row" name="chemistry-activity"><summary>
+          <span class="activity-name">${safe(a)}</span><small data-activity-answer> · ${safe(buckets.find(b=>b[0]===activities[a])?.[2]||'Choose your answer')}</small></summary>${custom_activities.includes(a)?`<button type="button" class="text-button" data-remove-activity="${safe(a)}" aria-label="Remove ${safe(a)}">Remove</button>`:''}
+          <span class="activity-buckets">${buckets.map((b) => `<label class="bucket-pick" title="${safe(b[2])}"><input type="radio" aria-label="${safe(a)}: ${safe(b[2])}" name="act__${safe(a)}" value="${safe(b[0])}" ${activities[a] === b[0] ? 'checked' : ''}><span class="bucket-glyph b-${safe(b[0])}">${safe(b[1])} ${safe(b[2])}</span></label>`).join('')}</span>
           <label class="chemistry-partner-any"><input type="checkbox" name="partner_any" value="${safe(a)}" ${partner_any.includes(a)?'checked':''}> Partner preference doesn’t matter</label>
-        </div>`).join('')}</div>
-        <div class="chemistry-add"><label for="custom-activity">Add your own activity · ${custom_activities.length}/4</label><div><input id="custom-activity" maxlength="60" placeholder="For example, marathon running" ${custom_activities.length>=4?'disabled':''}><button type="button" id="add-activity" ${custom_activities.length>=4?'disabled':''}>Add activity</button></div><p class="hint">Up to four. Choose your answer after adding.</p></div>
+        </details>`).join('')}</div>
+        <div class="chemistry-add"><label for="custom-activity">Add your own activity · ${custom_activities.length}/4</label><div><input id="custom-activity" maxlength="60" placeholder="For example, marathon running" ${custom_activities.length>=4?'disabled':''}><button type="button" id="add-activity" ${custom_activities.length>=4?'disabled':''}>Add activity</button></div><p class="hint">Up to four suggestions. Choose your answer after adding. Suggestions are reviewed before joining the public list.</p></div>
         <button class="primary" type="submit">Save chemistry</button>
         ${data._saved ? '<p class="save-note">Saved.</p>' : ''}
         ${data._error ? `<p class="warn">${safe(data._error)}</p>` : ''}
@@ -66,10 +66,15 @@ export function bind(root, ctx) {
     for(const [key,value] of form.entries())if(key.startsWith('act__'))activities[key.slice(5)]=value;
     return {activities,partner_any:form.getAll('partner_any'),custom_activities:[...(data.custom_activities||[])]};
   }
+  root.querySelectorAll('.activity-row').forEach(row=>row.addEventListener('change',event=>{
+    if(event.target.type==='radio')row.querySelector('[data-activity-answer]').textContent=' · '+(data.buckets.find(b=>b[0]===event.target.value)?.[2]||'');
+  }));
   root.querySelector('#add-activity')?.addEventListener('click',()=>run(async()=>{
-    const next=read(),name=root.querySelector('#custom-activity').value.trim();
+    const next=read();let name=root.querySelector('#custom-activity').value.trim();
     if(!name)return;
     const canonical=x=>x.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim();
+    const approved=data.activity_aliases?.[canonical(name)];
+    if(approved){patch({...data,...next,_saved:false,_error:`Use the listed activity: ${approved}.`});return;}
     if(next.custom_activities.length>=4||[...(data.activity_options||[]),...next.custom_activities].some(x=>canonical(x)===canonical(name))){patch({...data,...next,_saved:false,_error:'Add up to four distinct activities not already listed.'});return;}
     patch({...data,...next,custom_activities:[...next.custom_activities,name],_saved:false,_error:null});
   }));
@@ -81,11 +86,9 @@ export function bind(root, ctx) {
     run(async () => {
       const submitted=read(),picked=submitted.activities;
 
-      console.info('[chemistry] PUT /api/v1/profile/chemistry/activities request', { activities: picked });
       let putResult;
       try {
         putResult = await session.put('/api/v1/profile/chemistry/activities', submitted);
-        console.info('[chemistry] PUT response', putResult);
       } catch (err) {
         // A validation_error (e.g. below the server's sort-at-least-N
         // minimum) carries the server's own explanation — shown here,
@@ -108,14 +111,13 @@ export function bind(root, ctx) {
       let confirmed;
       try {
         confirmed = await session.get('/api/v1/profile/chemistry');
-        console.info('[chemistry] confirmation GET response', confirmed);
       } catch (err) {
         console.error('[chemistry] confirmation GET failed', err);
         patch({ ...putResult, ...submitted, activities: picked, _saved: false, _error: 'Saved, but could not confirm — reload to check.' });
         return;
       }
 
-      if (!activitiesEqual(confirmed.activities, picked)||JSON.stringify([...(confirmed.custom_activities||[])].sort())!==JSON.stringify([...submitted.custom_activities].sort())||JSON.stringify([...(confirmed.partner_any||[])].sort())!==JSON.stringify([...submitted.partner_any].sort())) {
+      if (!activitiesEqual(confirmed.activities, putResult.activities)||JSON.stringify([...(confirmed.custom_activities||[])].sort())!==JSON.stringify([...(putResult.custom_activities||[])].sort())||JSON.stringify([...(confirmed.partner_any||[])].sort())!==JSON.stringify([...(putResult.partner_any||[])].sort())) {
         console.error('[chemistry] MISMATCH: server read-back does not match what was submitted', {
           submitted: picked, read_back: confirmed.activities,
         });

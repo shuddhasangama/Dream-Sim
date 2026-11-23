@@ -10,7 +10,7 @@ import auth_sessions
 import db
 from . import reports, security
 
-SECTIONS = {'overview','users','sessions','checks','marketing','audit'}
+SECTIONS = {'overview','users','sessions','checks','marketing','audit','activities','markets'}
 PERMISSIONS = {'owner':SECTIONS,'support':{'overview','users','sessions','checks'},'marketing':{'marketing'}}
 
 def create_app():
@@ -96,6 +96,45 @@ def create_app():
         response=jsonify(ok=True)
         for name in (cookie,csrf_cookie):response.delete_cookie(name,path='/',secure=not local,httponly=name==cookie,samesite='Strict')
         return response
+
+    @app.get('/api/reports/markets')
+    def discovery_markets():
+        if g.admin['role']!='owner':return jsonify(error='Owner access required.'),403
+        import discovery,launch_cities
+        return jsonify(markets=[dict(name=c['name'],**discovery.market(get_db(),c['name'])) for c in launch_cities.CITIES],generated_at=int(time.time()))
+
+    @app.post('/api/markets/readiness')
+    def discovery_market_update():
+        if g.admin['role']!='owner':return jsonify(error='Owner access required.'),403
+        from api_contract import ApiError
+        import discovery
+        body=request.get_json(silent=True)
+        if type(body) is not dict or set(body)!={'code','values'}:return jsonify(error='Provide city and readiness.'),400
+        try:
+            discovery.configure_market(get_db(),body['code'],body['values'])
+            with auth_sessions.transaction(get_db()):security.audit(get_db(),g.admin['admin_id'],'market_readiness',str(body['code']))
+        except ApiError as exc:return jsonify(error=exc.message),exc.status
+        return jsonify(ok=True)
+
+    @app.get('/api/reports/activities')
+    def activity_report():
+        if g.admin['role']!='owner':return jsonify(error='Owner access required.'),403
+        import activity_catalog,onboarding
+        return jsonify(suggestions=db.fetch_all(get_db(),'ActivitySuggestion'),activity_options=onboarding.ACTIVITIES,generated_at=int(time.time()))
+
+    @app.post('/api/activities/review')
+    def activity_review():
+        if g.admin['role']!='owner':return jsonify(error='Owner access required.'),403
+        from api_contract import ApiError
+        import activity_catalog
+        body=request.get_json(silent=True)
+        if type(body) is not dict or set(body)!={'name','canonical'}:return jsonify(error='Provide suggestion and canonical activity.'),400
+        try:
+            activity_catalog.review(get_db(),body['name'],body['canonical'],g.admin['admin_id'])
+            with auth_sessions.transaction(get_db()):
+                security.audit(get_db(),g.admin['admin_id'],'activity_alias_review',body['name'])
+        except ApiError as exc:return jsonify(error=exc.message),exc.status
+        return jsonify(ok=True)
 
     @app.get('/api/reports/<section>')
     def report(section):

@@ -133,8 +133,8 @@ def validate_pillars(pillars: dict[str, list[str]]) -> dict[str, Any]:
         return {"ok": False, "error": "Unknown pillar."}
     if any(k not in INTIMACY_KINDS for k in intimacy):
         return {"ok": False, "error": "Unknown intimacy kind."}
-    if not intimacy:
-        return {"ok": False, "error": "Intimacy is mandatory — pick Emotional, Physical, or both."}
+    if "Emotional" not in intimacy:
+        return {"ok": False, "error": "Emotional intimacy is required. Physical intimacy is optional."}
 
     selected_others = []
     for key in OTHER_VISION_KEYS:
@@ -143,7 +143,7 @@ def validate_pillars(pillars: dict[str, list[str]]) -> dict[str, Any]:
         subs = pillars[key]
         if any(s not in PILLAR_OPTIONS[key] for s in subs):
             return {"ok": False, "error": f"Unknown sub-selection for {key}."}
-        if key == "Travel together" or key == "Kids" and not subs:
+        if key == "Travel together" or key in ("Kids", "Cohabitate") and not subs:
             selected_others.append(key)
             continue
         if not subs:

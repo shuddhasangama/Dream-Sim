@@ -6,7 +6,8 @@ test('Basics required and date preferences precede remaining sections',()=>{
  const html=signup({safe:String,data:{values:{},options:{}}});
  const labels=['Basics · required','Date preferences · optional','Work &amp; education','Background &amp; family','Lifestyle','Health &amp; accessibility'];
  for(let i=1;i<labels.length;i++)assert.ok(html.indexOf(labels[i])>html.indexOf(labels[i-1]));
- for(const field of ['name','dob','gender','city'])assert.match(html,new RegExp(`name="${field}"[^>]*required`));
+ assert.doesNotMatch(html,/name="(?:name|dob)"/);
+ for(const field of ['age','gender','city'])assert.match(html,new RegExp(`name="${field}"[^>]*required`));
 });
 test('Neighbourhoods come only from selected city and restore checked choices',()=>{
  const opts={neighbourhoods_by_city:{Bangalore:[{id:'indiranagar',name:'Indiranagar'}],Delhi:[{id:'saket',name:'Saket'}]}};

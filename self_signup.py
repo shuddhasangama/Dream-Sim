@@ -48,21 +48,33 @@ def state(conn,uid):
     identity=verified_identity.owner_identity(conn,uid)
     values={k:stats.get(k) for k in FIELDS}
     values.update(name=identity['name'] if identity else claims.get('name',''),dob=identity['dob'] if identity else claims.get('dob',''),
+        age=identity['age'] if identity else stats.get('declared_age',stats.get('age','')),
         gender=stats.get('gender',''),city=stats.get('city',''),health=stats.get('health_shared',{}))
     skills=db.load_json_field(user['skills_json'],{})
     step=0 if stats.get('vision_schema_version')!=2 else 1 if not stats.get('signup_stats_saved') else 2 if len(skills.get('activities',{}))<onboarding.MIN_SORTED else 3
     return {'version':VERSION,'modern':modern,'next_step':step,'submitted':bool(stats.get('signup_submitted')),'admitted':user['bgv_status']=='verified' and user['journey_state']=='dating',
-        'identity_confirmed':bool(identity),'values':values,'options':options()}
+        'identity_confirmed':bool(identity),'age_discrepancy':bool(stats.get('identity_age_discrepancy')),'values':values,'options':options()}
 
 def save_stats(conn,uid,body):
     from datetime import datetime
-    if set(body)!={'name','dob','gender','city','fields','health'}:raise ApiError('validation_error','Provide identity, launch city and your declared details.')
-    if not isinstance(body['name'],str) or not 1<=len(body['name'].strip())<=200:raise ApiError('validation_error','Enter your name as on Aadhaar.')
-    try:
-        born=date.fromisoformat(body['dob']);today=date.today()
-        age=today.year-born.year-((today.month,today.day)<(born.month,born.day))
-        if age<18 or age>120:raise ValueError()
-    except (TypeError,ValueError):raise ApiError('validation_error','Enter a valid date of birth. You must be 18 or older.')
+    modern_fields={'age','gender','city','fields','health'}
+    legacy_fields={'name','dob','gender','city','fields','health'}
+    modern=set(body)==modern_fields
+    if not modern and set(body)!=legacy_fields:
+        raise ApiError('validation_error','Provide age, gender, city and your declared details.')
+    if modern:
+        age=body['age']
+        if type(age) is not int or not 18<=age<=120:
+            raise ApiError('validation_error','Enter your age as a whole number from 18 to 120.')
+    else:
+        # Existing installed clients can finish signup during the release rollout.
+        if not isinstance(body['name'],str) or not 1<=len(body['name'].strip())<=200:
+            raise ApiError('validation_error','Enter your name as on Aadhaar.')
+        try:
+            born=date.fromisoformat(body['dob']);today=date.today()
+            age=today.year-born.year-((today.month,today.day)<(born.month,born.day))
+            if age<18 or age>120:raise ValueError()
+        except (TypeError,ValueError):raise ApiError('validation_error','Enter a valid date of birth. You must be 18 or older.')
     city=launch_cities.find(body['city'])
     if not city or not city['enabled']:raise ApiError('launch_city_required','Choose an available launch city.')
     if body['gender'] not in onboarding.GENDERS_FOR_SIGNUP:raise ApiError('validation_error','Choose your gender for matching.')
@@ -93,7 +105,7 @@ def save_stats(conn,uid,body):
     shared['disclosure']=health['disclosure']
     import verified_identity
     identity=verified_identity.owner_identity(conn,uid)
-    if identity and (body['name'].strip()!=identity['name'] or body['dob']!=identity['dob']):raise ApiError('identity_owned_field','Your name and DOB are set by confirmed DigiLocker details.',409)
+    if identity and not modern and (body['name'].strip()!=identity['name'] or body['dob']!=identity['dob']):raise ApiError('identity_owned_field','Your name and DOB are set by confirmed DigiLocker details.',409)
     with auth_sessions.transaction(conn):
         user,stats=parts(conn,uid)
         if stats.get('signup_version')!=VERSION or stats.get('signup_submitted'):raise ApiError('signup_closed','Use profile editing for an existing submitted profile.',409)
@@ -101,11 +113,12 @@ def save_stats(conn,uid,body):
             if db.fetch_all(conn,'DigiLockerSession',user_id=uid) or db.fetch_all(conn,'BgvRequest',user_id=uid):raise ApiError('market_locked','Your verification has started for this city. Contact support to change it.',409)
             user['active_bgv_case_id']=None
         for field in FIELDS:stats.pop(field,None)
-        stats.update(clean,health_shared=shared,city=city['name'],gender=body['gender'],signup_stats_saved=True,age=identity['age'] if identity else age,age_band=onboarding.age_band_for(identity['age'] if identity else age))
+        stats.update(clean,declared_age=age,declared_gender=body['gender'],health_shared=shared,city=city['name'],gender=body['gender'],signup_stats_saved=True,age=identity['age'] if identity else age,age_band=onboarding.age_band_for(identity['age'] if identity else age))
         user['stats_json']=json.dumps(stats,ensure_ascii=False);db.insert_row(conn,'User',user)
         draft=db.fetch_one(conn,'EnrollmentDraft',id=uid)
         payload=db.load_json_field(draft['payload_json'],{})
-        payload['identity_claims']=Protection().seal({'name':body['name'].strip(),'dob':body['dob']})
+        if not modern:
+            payload['identity_claims']=Protection().seal({'name':body['name'].strip(),'dob':body['dob']})
         draft.update(payload_json=json.dumps(payload),revision=draft['revision']+1);db.insert_row(conn,'EnrollmentDraft',draft)
     import signup_markets
     signup_markets.ensure(conn,uid)
@@ -160,7 +173,7 @@ def register(api,get_db):
         return jsonify(state(get_db(),actor()))
     @api.put('/signup/stats')
     def signup_stats():
-        body=json_object(required={'name','dob','gender','city','fields','health'})
+        body=json_object(required={'gender','city','fields','health'},optional={'age','name','dob'})
         return jsonify(save_stats(get_db(),actor(),body))
     @api.post('/signup/complete')
     def signup_complete():

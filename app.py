@@ -963,6 +963,9 @@ def reach_pool(user: dict) -> tuple[list[dict], bool]:
     the one list this returns, so they cannot disagree with each other.
     """
     everyone = [u for u in load_pool() if u.get("gender") and u.get("city") and u.get("visions") and u.get("journey_state") in ("onboarding", "dating")]
+    if __import__("discovery").enabled():
+        import discovery
+        everyone=[u for u in everyone if discovery.market(get_db(),u["city"])["discovery"] and not discovery.excluded(get_db(),user["user_id"],u["user_id"])]
     if user["bgv_status"] == "verified":
         return [u for u in everyone if u["bgv_status"] == "verified"], False
     return everyone, True
@@ -1101,6 +1104,7 @@ def _reach_state(user_id: str) -> dict:
         "filters": filters,
         "sliders": _merge_sliders(build_sliders(fresh, pool), filters),
         "counting_unverified": counting_unverified,
+        "discovery": __import__("discovery").snapshot(get_db(),user_id,__import__("discovery").cycle_for(get_clock())) if __import__("discovery").enabled() else None,
         # round3-fixes-spec.md §4.3: the web route (below) has always
         # passed this to its template; the JSON API never did, so a
         # locked lever (its stat not filled in yet — e.g. height, weight,
@@ -4629,6 +4633,9 @@ def _api_match_detail(user, match_id):
 
 
 def _api_week_state(user):
+    import discovery
+    if discovery.enabled() and user['journey_state'] in ('onboarding','dating') and not week_service.active_for(get_db(),user['user_id']):
+        return discovery.snapshot(get_db(),user['user_id'],discovery.cycle_for(get_clock()))
     state = _api_journey_state(user)
     if 'verified' not in state['milestones']:
         raise ApiError('verification_required', 'Background verification must clear first.', 403)
@@ -4719,6 +4726,9 @@ def _api_journey_state(user):
     if rehearsal.get('stage') == 'date' and rehearsal.get('my_ready'):
         result['next_action'].update(headline='Simulated date finished',
             body='Waiting for your partner before Debrief opens.', destination=None, cta=None)
+    if __import__('discovery').enabled() and user['journey_state'] in ('onboarding','dating'):
+        for surface in result['surfaces']:
+            if surface['key']=='week':surface.update(eligible=True,blocked_reason=None,api_available=True,request={'method':'GET','path':'/api/v1/week'})
     result['own_avatar']=__import__('avatar_service').public(get_db(),user['user_id'])
     return result
 

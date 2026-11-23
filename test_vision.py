@@ -48,7 +48,7 @@ class AdditiveOnlyGuardrailTests(unittest.TestCase):
 # A minimal, always-valid starting Vision — Intimacy (Physical) + Travel
 # together — used as the base fixture across the tests below so each one
 # only has to describe what it is actually testing.
-BASE_VISION = [{"key": "Intimacy", "stance": ["Physical"]}, {"key": "Travel together", "stance": None}]
+BASE_VISION = [{"key": "Intimacy", "stance": ["Emotional"]}, {"key": "Travel together", "stance": None}]
 
 
 class PillarOptionsTests(unittest.TestCase):
@@ -77,12 +77,15 @@ class ValidatePillarsTests(unittest.TestCase):
     both call before accepting any mutation."""
 
     def test_a_minimal_valid_vision_passes(self):
-        self.assertTrue(validate_pillars({"Intimacy": ["Physical"], "Travel together": []})["ok"])
+        self.assertTrue(validate_pillars({"Intimacy": ["Emotional", "Physical"], "Travel together": []})["ok"])
+
+    def test_physical_only_is_not_valid_for_new_edits(self):
+        self.assertFalse(validate_pillars({"Intimacy":["Physical"],"Travel together":[]})["ok"])
 
     def test_intimacy_is_mandatory(self):
         result = validate_pillars({"Travel together": []})
         self.assertFalse(result["ok"])
-        self.assertIn("Intimacy is mandatory", result["error"])
+        self.assertIn("Emotional intimacy is required", result["error"])
 
     def test_at_least_two_pillars_overall(self):
         result = validate_pillars({"Intimacy": ["Emotional"]})
@@ -93,7 +96,7 @@ class ValidatePillarsTests(unittest.TestCase):
         blocked = validate_pillars({"Intimacy": ["Emotional"], "Kids": ["Naturally"]})
         self.assertFalse(blocked["ok"])
         self.assertIn("naturally needs Physical", blocked["error"])
-        allowed = validate_pillars({"Intimacy": ["Physical"], "Kids": ["Naturally"]})
+        allowed = validate_pillars({"Intimacy": ["Emotional", "Physical"], "Kids": ["Naturally"]})
         self.assertTrue(allowed["ok"], allowed["error"])
 
     def test_kids_surrogacy_or_adoption_do_not_require_physical(self):
@@ -107,23 +110,22 @@ class ValidatePillarsTests(unittest.TestCase):
                 self.assertTrue(result["ok"], result["error"])
 
     def test_kids_can_be_a_simple_pillar(self):
-        result = validate_pillars({"Intimacy": ["Physical"], "Kids": []})
+        result = validate_pillars({"Intimacy": ["Emotional", "Physical"], "Kids": []})
         self.assertTrue(result["ok"], result["error"])
 
-    def test_cohabitate_needs_at_least_one_sub_selection(self):
-        result = validate_pillars({"Intimacy": ["Physical"], "Cohabitate": []})
-        self.assertFalse(result["ok"])
-        self.assertIn("Cohabitate needs at least one sub-selection", result["error"])
+    def test_cohabitate_details_are_optional_for_future_release(self):
+        result = validate_pillars({"Intimacy": ["Emotional", "Physical"], "Cohabitate": []})
+        self.assertTrue(result["ok"],result["error"])
 
     def test_travel_together_needs_none(self):
-        result = validate_pillars({"Intimacy": ["Physical"], "Travel together": []})
+        result = validate_pillars({"Intimacy": ["Emotional", "Physical"], "Travel together": []})
         self.assertTrue(result["ok"], result["error"])
 
     def test_unknown_pillar_is_refused(self):
-        self.assertFalse(validate_pillars({"Intimacy": ["Physical"], "Relocation": []})["ok"])
+        self.assertFalse(validate_pillars({"Intimacy": ["Emotional", "Physical"], "Relocation": []})["ok"])
 
     def test_unknown_sub_selection_is_refused(self):
-        result = validate_pillars({"Intimacy": ["Physical"], "Kids": ["Cloning"]})
+        result = validate_pillars({"Intimacy": ["Emotional", "Physical"], "Kids": ["Cloning"]})
         self.assertFalse(result["ok"])
 
 
@@ -138,7 +140,7 @@ class AddDetailTests(unittest.TestCase):
         self.assertEqual(by_key["Kids"], ["Adoption"])
 
     def test_adds_travel_together_with_no_sub_selection(self):
-        vision_json = [{"key": "Intimacy", "stance": ["Physical"]}]  # Travel not yet present
+        vision_json = [{"key": "Intimacy", "stance": ["Emotional"]}]  # Travel not yet present
         result = add_detail(vision_json, "Travel together")
         self.assertTrue(result["ok"], result["error"])
         by_key = {v["key"]: v["stance"] for v in result["vision_json"]}
