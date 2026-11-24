@@ -34,6 +34,9 @@ export class Session {
     this.send = send; this.vault = vault; this.now = now;
     this.tokens = null; this.flight = null; this.generation = 0;
     this.cookieAuth = cookieAuth === true;
+    // Token rotation/revocation endpoints. Only the emulator dev build swaps
+    // these (devLogin.js, local harness); every other build uses the real ones.
+    this.paths = {refresh: '/api/v1/auth/refresh', logout: '/api/v1/auth/logout'};
   }
   async raw(path, method = 'GET', body, token) {
     // IDs contain ':' and '|'; screens may percent-encode those characters.
@@ -107,7 +110,7 @@ export class Session {
         if (!refreshToken) throw new ApiError('Please sign in again.', 401);
         this.tokens = null;
         await this.vault.clear();
-        const result = await this.raw('/api/v1/auth/refresh', 'POST', {refresh_token: refreshToken});
+        const result = await this.raw(this.paths.refresh, 'POST', {refresh_token: refreshToken});
         await this.accept(result, epoch);
       } catch (e) {
         this.tokens = null; await this.vault.clear();
@@ -149,7 +152,7 @@ export class Session {
       try { await this.send('/logout', 'POST'); return true; } catch { return false; }
     }
     if (token) {
-      try { await this.raw('/api/v1/auth/logout', 'POST', {}, token); }
+      try { await this.raw(this.paths.logout, 'POST', {}, token); }
       catch (e) { if (e.status !== 401) return false; }
     }
     return true;
