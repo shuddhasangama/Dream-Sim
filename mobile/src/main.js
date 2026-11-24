@@ -2,6 +2,8 @@ import {normalizePhone, countryOptions} from './phoneCountry.js';
 import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { Session, classify } from './session.js';
 import { previewTransport } from './preview.js';
+import { resolveApiConfig } from './apiConfig.js';
+import { sameOriginTransport } from './localTransport.js';
 import { createNav, primaryTabs, secondaryTabs, labelFor, wireHardwareBack, wireKeyboardScroll, PRIMARY_TAB_KEYS } from './nav.js';
 import * as homeScreen from './screens/home.js';
 import * as boundariesScreen from './screens/boundaries.js';
@@ -31,26 +33,32 @@ import './bone.css';
 import './brand-review.css';
 
 const native = Capacitor.isNativePlatform();
-const preview = import.meta.env.DEV && !Capacitor.isNativePlatform();
+// Which server (if any) this build talks to: see apiConfig.js. Release
+// builds get the origin only from VITE_API_BASE_URL (validated at build
+// time by vite.config.js and again here).
+const apiConfig = resolveApiConfig({dev:import.meta.env.DEV, native, mode:import.meta.env.MODE, baseUrl:import.meta.env.VITE_API_BASE_URL});
+const preview = apiConfig.kind === 'preview';
+const localProxy = apiConfig.kind === 'local-proxy';
 // road-fixes-clock-spec.md §7.8: a build-time convenience switch, never
 // the sole gate (screens still require journey.simulated_clock from the
 // server too — see week.js). Preview always allows it through: it never
 // talks to a real backend, so there's nothing this would protect there.
-const simulatedClockBuild = preview || String(import.meta.env.DHASHU_SIMULATED_CLOCK).toLowerCase() === 'true';
+// The local backend gates it with its own DHASHU_SIMULATED_CLOCK.
+const simulatedClockBuild = preview || localProxy || String(import.meta.env.DHASHU_SIMULATED_CLOCK).toLowerCase() === 'true';
 const Vault = registerPlugin('SessionVault');
-const API = 'https://dream-sim-production.up.railway.app';
+const API = apiConfig.baseUrl;
 let temporary = null;
 const vault = native ? {
   read:async () => (await Vault.read()).value,
   write:async value => Vault.write({value}),
   clear:async () => Vault.clear(),
 } : {read:async()=>temporary,write:async value=>{temporary=value;},clear:async()=>{temporary=null;}};
-const transport = preview ? previewTransport() : async (path,method,data,token) => {
-  if (!native) throw new Error('Please use the installed DhaShu app.');
+const transport = preview ? previewTransport() : localProxy ? sameOriginTransport() : async (path,method,data,token) => {
+  if (!native || apiConfig.kind !== 'remote') throw new Error('Please use the installed DhaShu app.');
   return CapacitorHttp.request({url:API+path,method,data,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},
     connectTimeout:15000,readTimeout:15000,disableRedirects:true,responseType:'json'});
 };
-const session = new Session(transport,vault);
+const session = new Session(transport,vault,undefined,{cookieAuth:localProxy});
 const root = document.querySelector('#app');
 let challenge=null, phone='', busy=false, message='', journey=null, profile=null;
 let accountSecurity=null;
@@ -173,7 +181,7 @@ function render() {
       ${signedIn&&!signupActive&&!passwordSetup?'<button type="button" id="profile-settings" class="text-button" aria-label="Profile and settings">Settings</button>':''}<span class="brandmark"><span class="brand-glyph" aria-hidden="true"><svg viewBox="22 22 56 56"><path d="M34 28h14a22 22 0 0 1 0 44H34z" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="46" cy="50" r="5" fill="#E8735A"/></svg></span><span class="brand-name">DhaShu</span></span>
       ${signedIn&&!signupActive&&!passwordSetup ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
     </header>
-    ${preview?'<aside class="preview">Local preview · no messages sent · code 123456</aside>':''}
+    ${apiConfig.badge?`<aside class="preview" data-api-mode="${safe(apiConfig.kind)}">${safe(apiConfig.badge)}${localProxy&&!signedIn?' · <a href="/pool">sign in at /pool</a>':''}</aside>`:''}
     ${passwordSetup ? `<main class="container"><section class="card"><h1>Set your password</h1><p>Next time, sign in with your phone number and this password.</p><form id="password-form"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="hint">Use 12 or more characters. A memorable passphrase works well.</p><button class="primary" ${busy?'disabled':''}>Save password and continue</button><button type="button" id="password-new-code" class="text-button">Request a new verification code</button></form></section></main>` : signedIn ? signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${signin()}</main>`}
     <p id="notice" role="status" class="notice">${safe(message)}</p>
     ${busy?'<div class="loading" role="status">Please wait…</div>':''}
@@ -473,4 +481,4 @@ wireHardwareBack(native, nav, () => {
   if (window.confirm('Exit DhaShu?')) import('@capacitor/app').then(({App})=>App.exitApp());
 });
 render();
-run(async()=>{if(await session.restore()){await load();if(!preview){const status=await session.get('/api/v1/auth/password/status');if(!status.password_set){if(status.can_set)passwordSetup=true;else{phone=status.phone;codeLogin=true;journey=null;profile=null;message='Set your login password: request a fresh code once.';}return;}}if(!signupActive&&profile?.stats?.signup_version===3&&!profile.stats.signup_submitted){await signup.begin();signupActive=true;}}});
+run(async()=>{if(await session.restore()){await load();if(!preview&&!localProxy){const status=await session.get('/api/v1/auth/password/status');if(!status.password_set){if(status.can_set)passwordSetup=true;else{phone=status.phone;codeLogin=true;journey=null;profile=null;message='Set your login password: request a fresh code once.';}return;}}if(!signupActive&&profile?.stats?.signup_version===3&&!profile.stats.signup_submitted){await signup.begin();signupActive=true;}}});

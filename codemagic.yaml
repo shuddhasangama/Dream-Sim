@@ -10,6 +10,9 @@ workflows:
         - dhashu-upload
       vars:
         DHASHU_SIMULATED_CLOCK: "false"
+        # The ONLY place the release server address lives (mobile/src/apiConfig.js).
+        # `npm run build` fails loudly if this is missing, non-https or private.
+        VITE_API_BASE_URL: "https://dream-sim-production.up.railway.app"
     scripts:
       - name: Install npm dependencies
         script: cd "$CM_BUILD_DIR/mobile" && npm ci
@@ -46,6 +49,9 @@ workflows:
       java: 21
       vars:
         DHASHU_SIMULATED_CLOCK: "false"
+        # The ONLY place the release server address lives (mobile/src/apiConfig.js).
+        # `npm run build` fails loudly if this is missing, non-https or private.
+        VITE_API_BASE_URL: "https://dream-sim-production.up.railway.app"
     scripts:
       - name: Install npm dependencies
         script: cd "$CM_BUILD_DIR/mobile" && npm ci
@@ -89,6 +95,9 @@ workflows:
         # be true too before the app will show any clock-stepping
         # controls at all (mobile/src/main.js and week.js).
         DHASHU_SIMULATED_CLOCK: "false"
+        # The ONLY place the release server address lives (mobile/src/apiConfig.js).
+        # `npm run build` fails loudly if this is missing, non-https or private.
+        VITE_API_BASE_URL: "https://dream-sim-production.up.railway.app"
     scripts:
       - name: Show working directory
         script: pwd && ls -la
