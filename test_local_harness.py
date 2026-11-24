@@ -372,5 +372,14 @@ class StartupTests(unittest.TestCase):
         self.assertNotIn('LOCAL HARNESS', production_shape.stderr)
 
 
+class DeploymentConfigTests(unittest.TestCase):
+    def test_no_deployment_config_sets_the_harness_flag(self):
+        for name in ('Procfile', 'codemagic.yaml', '.railwayignore', 'service_entrypoint.py'):
+            self.assertNotIn(harness.FLAG, (REPO / name).read_text(encoding='utf-8'), name)
+        for pattern in ('railway*.json', 'railway*.toml', 'nixpacks*', 'Dockerfile*'):
+            for path in REPO.glob(pattern):
+                self.assertNotIn(harness.FLAG, path.read_text(encoding='utf-8'), path.name)
+
+
 if __name__ == '__main__':
     unittest.main()
