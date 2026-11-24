@@ -177,6 +177,8 @@ def register(app, get_db) -> bool:
         user_id = body.get('user_id') if isinstance(body, dict) else None
         if not isinstance(user_id, str) or not USER_ID.fullmatch(user_id):
             return failure('Choose a local user.', 400, 'validation_error')
+        if not SEEDED_USER_ID.fullmatch(user_id):
+            abort(404)  # only seeded/synthetic profiles (u_*, test_*), same 404 as a missing user
         conn = get_db()
         with sessions.transaction(conn):
             if not sessions.sql(conn, 'SELECT id FROM "User" WHERE id = ?', (user_id,)).fetchone():

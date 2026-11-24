@@ -178,6 +178,23 @@ class RequestTests(HarnessAppCase):
         self.assertTrue(tokens['session_id'].startswith('harness_'))
         self.assertTrue(sessions.valid_token(tokens['access_token']) and sessions.valid_token(tokens['refresh_token']))
 
+    def test_cannot_log_in_as_an_existing_non_seeded_user(self):
+        # These rows EXIST locally, but only u_* / test_* profiles may be used.
+        names = ('member-42', 'U_0003', 'xu_1', 'tester_1', 'test-1', 'u', 'test_blr_20260921_f01')
+        for name, user in zip(names, generate_users.generate_users(len(names), seed=5)):
+            row = app_module.onboarding.build_user_row(user_id=name, city=user['city'], gender=user['gender'],
+                                                       stats=user['stats'], visions=user['visions'], activities={})
+            row['journey_state'] = 'dating'
+            db.insert_row(self.conn, 'User', row)
+        _app, client = self.active_app()
+        with self.assertNoLogs('dhashu.local_harness', level='WARNING'):
+            for name in names[:-1]:
+                self.assertEqual(self.login(client, name).status_code, 404, name)
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) FROM "AuthSession"').fetchone()[0], 0)
+        seeded = self.login(client, 'test_blr_20260921_f01')
+        self.assertEqual(seeded.status_code, 200)
+        self.assertEqual(seeded.get_json()['user_id'], 'test_blr_20260921_f01')
+
     def test_cannot_log_in_as_a_non_existent_or_malformed_user(self):
         _app, client = self.active_app()
         self.assertEqual(self.login(client, 'u_9999').status_code, 404)
