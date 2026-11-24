@@ -229,10 +229,17 @@ class RequestTests(HarnessAppCase):
             self.assertNotIn(secret, line)
 
     def test_users_lists_seeded_ids_only(self):
+        # Non-seeded local rows (a real-style member id, look-alikes) must never be offered.
+        for name, user in zip(('test_blr_20260921_f01', 'member-42', 'u', 'xu_1', 'U_0003', 'tester_1', 'test-1'),
+                              generate_users.generate_users(7, seed=9)):
+            row = app_module.onboarding.build_user_row(user_id=name, city=user['city'], gender=user['gender'],
+                                                       stats=user['stats'], visions=user['visions'], activities={})
+            row['journey_state'] = 'dating'
+            db.insert_row(self.conn, 'User', row)
         _app, client = self.active_app()
         body = client.get('/api/v1/dev/users').get_json()
-        self.assertEqual(body['users'], [{'user_id': 'u_0001', 'journey_state': 'dating'},
-                                         {'user_id': 'u_0002', 'journey_state': 'dating'}])
+        self.assertEqual([u['user_id'] for u in body['users']], ['test_blr_20260921_f01', 'u_0001', 'u_0002'])
+        self.assertEqual(body['users'][1], {'user_id': 'u_0001', 'journey_state': 'dating'})
 
     def test_refresh_rotates_harness_tokens_and_rejects_reuse_and_real_tokens(self):
         _app, client = self.active_app()

@@ -44,6 +44,7 @@ RAILWAY_MARKERS = ('RAILWAY_ENVIRONMENT', 'RAILWAY_ENVIRONMENT_NAME', 'RAILWAY_E
                    'RAILWAY_PUBLIC_DOMAIN', 'RAILWAY_PRIVATE_DOMAIN', 'RAILWAY_STATIC_URL')
 FORWARDING_HEADERS = ('X-Forwarded-For', 'X-Forwarded-Host', 'X-Real-IP', 'Forwarded')
 USER_ID = re.compile(r'[A-Za-z0-9_:.-]{1,64}')
+SEEDED_USER_ID = re.compile(r'(u|test)_[A-Za-z0-9_:.-]{1,60}')
 CONFIG_KEY = 'LOCAL_HARNESS_ACTIVE'
 
 log = logging.getLogger('dhashu.local_harness')
@@ -163,8 +164,11 @@ def register(app, get_db) -> bool:
     @app.get('/api/v1/dev/users')
     def local_harness_users():
         _require()
-        rows = sessions.sql(get_db(), 'SELECT id, journey_state FROM "User" ORDER BY id LIMIT 200').fetchall()
-        return jsonify(users=[{'user_id': row['id'], 'journey_state': row['journey_state']} for row in rows])
+        # Seeded/synthetic profiles only (generate_users.py u_*, fixed test pairs test_*);
+        # any other local User row is never offered by the picker.
+        rows = sessions.sql(get_db(), 'SELECT id, journey_state FROM "User" ORDER BY id').fetchall()
+        seeded = [row for row in rows if SEEDED_USER_ID.fullmatch(row['id'])][:200]
+        return jsonify(users=[{'user_id': row['id'], 'journey_state': row['journey_state']} for row in seeded])
 
     @app.post('/api/v1/dev/login-as')
     def local_harness_login_as():
