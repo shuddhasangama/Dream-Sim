@@ -60,9 +60,12 @@ def issue(conn, user_id, kind='mobile'):
         return issue_in_transaction(conn, user_id, kind)
 
 
-def issue_in_transaction(conn, user_id, kind='mobile', tester=False):
+def issue_in_transaction(conn, user_id, kind='mobile', tester=False, harness=False):
+    if tester and harness:
+        raise ValueError('A session is either a tester or a local harness session')
     timestamp = now()
-    sid, access = ('tester_' if tester else '') + uuid.uuid4().hex, secrets.token_urlsafe(32)
+    prefix = 'tester_' if tester else 'harness_' if harness else ''
+    sid, access = prefix + uuid.uuid4().hex, secrets.token_urlsafe(32)
     access_seconds = ACCESS_SECONDS if kind == 'mobile' else WEB_SECONDS
     expires = timestamp + (SESSION_SECONDS if kind == 'mobile' else WEB_SECONDS)
     sql(conn, '''INSERT INTO "AuthSession"
@@ -86,7 +89,15 @@ def tester_allowed(user_id):
             and user_id in {v.strip() for v in os.environ.get('DHASHU_TESTER_USER_IDS', '').split(',') if v.strip()})
 
 
-def session_allowed(row):
+def session_allowed(row, harness=False):
+    """Local harness sessions (local_harness.py) are valid only on the harness
+    path and only while the harness is active; they are never accepted by the
+    real sign-in path. Every other session is never accepted by the harness path."""
+    if row['id'].startswith('harness_'):
+        import local_harness
+        return harness and local_harness.active()
+    if harness:
+        return False
     return not row['id'].startswith('tester_') or tester_allowed(row['user_id'])
 
 
@@ -101,7 +112,9 @@ def authenticate(conn, token, kind='mobile'):
     return dict(row) if row and session_allowed(row) else None
 
 
-def refresh(conn, token):
+def refresh(conn, token, harness=False):
+    """harness=True: local_harness.py only. Seeded local users have no Account
+    row, so the Account check is replaced by session_allowed(harness=True)."""
     if not valid_token(token):
         return None
     token_hash = digest(token)
@@ -116,9 +129,10 @@ def refresh(conn, token):
                       (old['session_id'],)).fetchone()
         old = sql(conn, 'SELECT * FROM "AuthRefresh" WHERE id = ?', (token_hash,)).fetchone()
         timestamp = now()
-        if not session or not session_allowed(session) or session['revoked_at'] is not None or session['expires_at'] <= timestamp:
+        if not session or not session_allowed(session, harness) or session['revoked_at'] is not None or session['expires_at'] <= timestamp:
             return None
-        account = sql(conn, 'SELECT id FROM "Account" WHERE user_id = ? AND auth_enabled = 1', (session['user_id'],)).fetchone()
+        account = (sql(conn, 'SELECT id FROM "User" WHERE id = ?', (session['user_id'],)).fetchone() if harness else
+                   sql(conn, 'SELECT id FROM "Account" WHERE user_id = ? AND auth_enabled = 1', (session['user_id'],)).fetchone())
         if not account:
             return None
         if old['consumed_at'] is not None:
