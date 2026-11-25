@@ -16113,6 +16113,28 @@
           }
         }
       }
+    },
+    "/profile/background-prompt/dismiss": {
+      "post": {
+        "x-generated": true,
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

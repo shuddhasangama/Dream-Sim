@@ -199,6 +199,13 @@ export function render(ctx) {
         <div><div class="p-next-up-eyebrow">YOUR STATUS${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div><p>${safe(nextUp.body)}</p></div>
       </div>`) : '<div class="p-card p-next-up-empty">Nothing due — enjoy your week</div>'}
 
+    ${journey.background_prompt ? `<section class="p-card background-prompt" role="status" aria-label="Background details">
+      <h2>Please confirm your background details</h2>
+      <p>Your ethnicity / cultural background is empty. It is optional — add it if you would like it on your match profile.</p>
+      <button type="button" class="primary" id="background-prompt-review">Review background</button>
+      <button type="button" class="text-button" id="background-prompt-dismiss">Not now</button>
+    </section>` : ''}
+
     <button type="button" class="secondary" id="home-guru">Explore with Guru</button>
     <div class="p-rings-row">
       ${RING_DEFS.map((r) => `<button type="button" class="p-ring-btn ${selectedRing === r.key ? 'is-selected' : ''}" data-ring="${r.key}">
@@ -249,6 +256,16 @@ export function bind(root, ctx) {
     selectedRing = btn.dataset.ring;
   })));
 
+  // One-time background prompt (DHASHU_ETHNICITY_PROMPT): Review opens the Stats
+  // editor where Background & health lives; "Not now" dismisses it for good.
+  root.querySelector('#background-prompt-review')?.addEventListener('click', () => run(async () => {
+    selectedRing = 'stats';
+    const [stats,details]=await Promise.all([session.get('/api/v1/profile/stats'),session.get('/api/v1/profile/personal')]);personalData=details;ctx.setDashboardStats(stats);
+  }));
+  root.querySelector('#background-prompt-dismiss')?.addEventListener('click', () => run(async () => {
+    await session.post('/api/v1/profile/background-prompt/dismiss', {});
+    ctx.journey.background_prompt = false;
+  }));
   root.querySelector('[data-open-editor]')?.addEventListener('click', () => run(async () => {
     const key = selectedRing;
     if (key === 'stats') { const [stats,details]=await Promise.all([session.get('/api/v1/profile/stats'),session.get('/api/v1/profile/personal')]);personalData=details;ctx.setDashboardStats(stats); return; }
