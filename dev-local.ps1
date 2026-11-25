@@ -74,7 +74,7 @@ switch ($Part) {
     }
     & $Py -m pytest -q -p no:cacheprovider @Rest
   }
-  'web' { & $Py app.py }
+  'web' { $env:DHASHU_FLASK_DEBUG = '1'; & $Py app.py }   # debugger/reloader: local only, loopback-bound
   'worker' {
     foreach ($k in $Worker.Keys) { Set-Item -Path "Env:$k" -Value $Worker[$k] }
     & $Py -u bgv_worker.py

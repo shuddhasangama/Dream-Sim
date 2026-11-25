@@ -4787,4 +4787,7 @@ register_api(
 
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    # Local development server only (Railway runs gunicorn via service_entrypoint.py).
+    # The Werkzeug debugger can execute code, so it is opt-in (dev-local.ps1 web sets
+    # DHASHU_FLASK_DEBUG=1) and the server binds to loopback only.
+    app.run(host="127.0.0.1", port=5000, debug=os.environ.get("DHASHU_FLASK_DEBUG", "0") == "1")
