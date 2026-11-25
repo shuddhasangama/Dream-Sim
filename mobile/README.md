@@ -39,9 +39,26 @@ Studio (`npm run android`) and run the **debug** variant.
 - Release builds keep `usesCleartextTraffic="false"` and are https-only.
 - An emulator build can only point at those three hosts. It can never point
   at a real server.
-- **Limitation:** the local backend has secure sign-in turned off, and the app
-  has no `/pool` page, so the emulator build reaches the backend but can't
-  sign in yet.
+- **Signing in:** the emulator build's sign-in screen shows **Pick a local
+  user**. It lists the seeded users and signs you in as the one you tap.
+  - This needs the backend running locally with `DHASHU_LOCAL_HARNESS=1`
+    (backend `local_harness.py`).
+  - The backend issues the same access and refresh tokens as the real login.
+  - The picker exists only in `emulator` builds. Release bundles contain no
+    trace of it, which `tests/devLogin.test.js` checks.
+  - The backend side works only with secure sign-in off, with no production
+    settings present, and only for requests from this laptop. Otherwise it
+    returns 404.
+
+  Quick start, from the repo root:
+
+  ```powershell
+  .\dev-local.ps1 web    # backend with DHASHU_LOCAL_HARNESS=1 from .env.local
+  ```
+
+  Then, in `mobile\`, run `npm run sync:emulator` and
+  `cd android; .\gradlew.bat installDebug` with Java 21. Open DhaShu in the
+  emulator and pick a user.
 
 ### Release builds
 

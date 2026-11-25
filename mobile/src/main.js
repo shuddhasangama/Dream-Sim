@@ -62,6 +62,9 @@ const session = new Session(transport,vault,undefined,{cookieAuth:localProxy});
 const root = document.querySelector('#app');
 let challenge=null, phone='', busy=false, message='', journey=null, profile=null;
 let accountSecurity=null;
+// Emulator dev build only: the local-harness user picker (devLogin.js). Stays
+// null in every other build; Vite removes the import and all uses below.
+let devLogin=null, devPicker={users:null,error:''};
 let passwordSetup=false, codeLogin=false;
 let authIntent='login', signupActive=false, screenDirty=false, clockPending=false;
 const signup = createSignup({session, run, getBusy:()=>busy, safe: value=>safe(value), finish: async()=>{
@@ -182,7 +185,7 @@ function render() {
       ${signedIn&&!signupActive&&!passwordSetup ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
     </header>
     ${apiConfig.badge?`<aside class="preview" data-api-mode="${safe(apiConfig.kind)}">${safe(apiConfig.badge)}${localProxy&&!signedIn?' · <a href="/pool">sign in at /pool</a>':''}</aside>`:''}
-    ${passwordSetup ? `<main class="container"><section class="card"><h1>Set your password</h1><p>Next time, sign in with your phone number and this password.</p><form id="password-form"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="hint">Use 12 or more characters. A memorable passphrase works well.</p><button class="primary" ${busy?'disabled':''}>Save password and continue</button><button type="button" id="password-new-code" class="text-button">Request a new verification code</button></form></section></main>` : signedIn ? signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${signin()}</main>`}
+    ${passwordSetup ? `<main class="container"><section class="card"><h1>Set your password</h1><p>Next time, sign in with your phone number and this password.</p><form id="password-form"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="hint">Use 12 or more characters. A memorable passphrase works well.</p><button class="primary" ${busy?'disabled':''}>Save password and continue</button><button type="button" id="password-new-code" class="text-button">Request a new verification code</button></form></section></main>` : signedIn ? signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${import.meta.env.MODE==='emulator'&&devLogin?devLogin.pickerHtml(devPicker,safe):''}${signin()}</main>`}
     <p id="notice" role="status" class="notice">${safe(message)}</p>
     ${busy?'<div class="loading" role="status">Please wait…</div>':''}
     ${signedIn && !signupActive ? '' : '<footer>Connection. Clarity. Together.</footer>'}`;
@@ -193,6 +196,11 @@ function render() {
   });
   root.querySelector('#use-code')?.addEventListener('click',()=>{codeLogin=true;message='Use a code to set or reset your password.';render();});
   root.querySelector('#password-new-code')?.addEventListener('click',()=>{passwordSetup=false;codeLogin=true;challenge=null;journey=null;profile=null;message='Enter your phone number for a fresh code.';render();});
+  if(import.meta.env.MODE==='emulator'&&devLogin&&!signedIn)devLogin.bindPicker(root,{
+    onPick:id=>run(async()=>{await devLogin.loginAs(session,id);screenDirty=false;await load();await resumeSignup();}),
+    onRetry:()=>run(loadDevUsers),
+  });
+  if(import.meta.env.MODE==='emulator'&&devLogin&&!signedIn&&devPicker.users===null&&!devPicker.error&&!busy)setTimeout(()=>run(loadDevUsers));
   const form=root.querySelector('#signin-form');
   form?.addEventListener('submit', e=>{
     e.preventDefault(); if(busy)return;
@@ -481,4 +489,15 @@ wireHardwareBack(native, nav, () => {
   if (window.confirm('Exit DhaShu?')) import('@capacitor/app').then(({App})=>App.exitApp());
 });
 render();
-run(async()=>{if(await session.restore()){await load();if(!preview&&!localProxy){const status=await session.get('/api/v1/auth/password/status');if(!status.password_set){if(status.can_set)passwordSetup=true;else{phone=status.phone;codeLogin=true;journey=null;profile=null;message='Set your login password: request a fresh code once.';}return;}}if(!signupActive&&profile?.stats?.signup_version===3&&!profile.stats.signup_submitted){await signup.begin();signupActive=true;}}});
+// Emulator dev build only (see devLogin.js); removed from all other builds.
+async function loadDevUsers(){
+  if(import.meta.env.MODE!=='emulator'||!devLogin)return;
+  try{devPicker={users:await devLogin.loadUsers(session),error:''};}
+  catch(e){devPicker={users:null,error:(e?.message||'Local users unavailable.')+' Is the backend running with DHASHU_LOCAL_HARNESS=1?'};}
+}
+run(async()=>{if(import.meta.env.MODE==='emulator'){devLogin=await import('./devLogin.js');devLogin.enableHarnessSession(session);}
+  let restored=false;
+  try{restored=await session.restore();}
+  catch(e){if(import.meta.env.MODE!=='emulator')throw e;}  // emulator: a stale local token just shows the picker
+  if(import.meta.env.MODE==='emulator'&&!restored)await loadDevUsers();
+  if(restored){await load();if(!preview&&!localProxy&&import.meta.env.MODE!=='emulator'){const status=await session.get('/api/v1/auth/password/status');if(!status.password_set){if(status.can_set)passwordSetup=true;else{phone=status.phone;codeLogin=true;journey=null;profile=null;message='Set your login password: request a fresh code once.';}return;}}if(!signupActive&&profile?.stats?.signup_version===3&&!profile.stats.signup_submitted){await signup.begin();signupActive=true;}}});

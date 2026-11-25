@@ -24,6 +24,7 @@ from flask import Flask, abort, g, jsonify, redirect, render_template, request, 
 
 import auth
 import auth_sessions
+import local_harness
 import bgv
 import brand
 import cadence
@@ -402,6 +403,11 @@ def current_user() -> dict | None:
     if auth.enabled():
         active = auth.resolve(get_db)
         return load_user(active["user_id"]) if active else None
+    # Local harness only (local_harness.py): a harness bearer token from the
+    # emulator. Inert unless DHASHU_LOCAL_HARNESS is active for this request.
+    handled, harness_user_id = local_harness.bearer_user_id(get_db)
+    if handled:
+        return load_user(harness_user_id) if harness_user_id else None
     user_id = session.get("user_id")
     return load_user(user_id) if user_id else None
 
@@ -4744,6 +4750,9 @@ import relationship_service
 import road_service
 
 auth.register_auth(app, get_db)
+# Refuses to boot if DHASHU_LOCAL_HARNESS=1 is combined with any production
+# marker; registers /api/v1/dev/* only when the local harness is active.
+local_harness.register(app, get_db)
 import billing_api
 billing_api.register_web(app, get_db, current_user)
 import waitlist_api
