@@ -23,6 +23,9 @@ def enabled():
 
 
 def normalize(channel, value, stored=False):
+    if stored and isinstance(value, str) and value.startswith('enc1:'):
+        import member_crypto   # sec-enc: stored phones may be encrypted
+        value = member_crypto.open_value(value)
     if not isinstance(value, str) or len(value) > 254:
         return None
     if channel == 'email':

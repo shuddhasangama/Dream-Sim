@@ -90,8 +90,10 @@ def users(c, query='', page=1, filter_name=''):
     if query:
         escaped=query.lower().replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
         phone=''.join(x for x in query if x.isdigit())
-        where=" WHERE (LOWER(a.user_id) LIKE ? ESCAPE '\\' OR REPLACE(REPLACE(COALESCE(a.phone,''),'+',''),' ','')=?)"
-        args=['%'+escaped+'%',phone or '-']
+        import member_crypto   # sec-enc: encrypted phones are found by their blind index
+        index=member_crypto.blind_index('+'+phone) if phone else None
+        where=" WHERE (LOWER(a.user_id) LIKE ? ESCAPE '\\' OR REPLACE(REPLACE(COALESCE(a.phone,''),'+',''),' ','')=? OR a.phone_index=?)"
+        args=['%'+escaped+'%',phone or '-',index or '-']
     if filter_name:
         condition,values=cohort(c,filter_name)
         where+=(' AND ' if where else ' WHERE ')+condition
@@ -101,7 +103,8 @@ def users(c, query='', page=1, filter_name=''):
     for row in result[:50]:
         try: stats=json.loads(row.pop('stats_json') or '{}')
         except (ValueError,TypeError): stats={}
-        phone=''.join(x for x in str(row.pop('phone') or '') if x.isdigit())
+        import member_crypto
+        phone=''.join(x for x in str(member_crypto.open_quiet(row.pop('phone'),'') or '') if x.isdigit())
         row['auth_enabled']=bool(row['auth_enabled']);row['verified_phone']=bool(row['verified_phone'])
         output.append({**row,'phone':'•••• '+phone[-4:] if phone else 'Not set','city':str(stats.get('city') or 'Not set')[:80],
             'signup_flow':'Current signup' if stats.get('signup_version')==3 else 'Existing / beta'})

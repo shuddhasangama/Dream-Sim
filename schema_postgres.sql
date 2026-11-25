@@ -656,6 +656,8 @@ CREATE TABLE IF NOT EXISTS "Account" (
     user_id         TEXT NOT NULL REFERENCES "User"(id),
     email           TEXT,
     phone           TEXT,
+    -- sec-enc: HMAC blind index of the canonical phone (lookup/uniqueness when phone is encrypted).
+    phone_index     TEXT,
     password_hash   TEXT,
     auth_enabled    INTEGER NOT NULL DEFAULT 0 CHECK (auth_enabled IN (0, 1)),
     verified_email  INTEGER NOT NULL DEFAULT 0 CHECK (verified_email IN (0, 1)),
@@ -1077,7 +1079,11 @@ CREATE TABLE IF NOT EXISTS "BgvCaseCheck" (
  UNIQUE (case_id,check_definition_id)
 );
 CREATE TABLE IF NOT EXISTS "SecurityEvent" (
- id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT, created_at BIGINT NOT NULL
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    detail      TEXT,
+    created_at  BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_security_event_user ON "SecurityEvent" (user_id, created_at);
 

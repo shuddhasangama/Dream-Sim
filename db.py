@@ -383,6 +383,8 @@ NO_SILENT_REPLACE = {"Account"}
 UNIQUE_INDEXES = [
     ("uq_account_email", "Account", "email"),
     ("uq_account_phone", "Account", "phone"),
+    # sec-enc: encrypted phones are never equal, so uniqueness moves to the blind index.
+    ("uq_account_phone_index", "Account", "phone_index"),
 ]
 
 # perf-rowlock: partial unique indexes (name, table, column, WHERE). One ACTIVE
@@ -643,6 +645,8 @@ def insert_row(conn: Any, table: str, row: dict[str, Any]) -> Any:
     otherwise the primary-key id.
     """
     _check_table(table)
+    import member_crypto
+    row = member_crypto.seal_row(table, row)   # sec-enc: encrypt member fields when enabled
 
     table_name = _table_name(conn, table)
 
@@ -725,15 +729,23 @@ def fetch_all(
 
     if where:
         placeholder = _placeholder(conn)
-        clause = " AND ".join(
-            f"{column} = {placeholder}"
-            for column in where
-        )
-        sql += f" WHERE {clause}"
-        values = tuple(where.values())
+        import member_crypto
+        parts, params = [], []
+        for column, value in where.items():
+            index = member_crypto.blind_index(value) if (table, column) == ("Account", "phone") else None
+            if index:
+                # sec-enc: an encrypted phone never equals its plain value; match the blind index too.
+                parts.append(f"(phone = {placeholder} OR phone_index = {placeholder})")
+                params += [value, index]
+            else:
+                parts.append(f"{column} = {placeholder}")
+                params.append(value)
+        sql += " WHERE " + " AND ".join(parts)
+        values = tuple(params)
 
     cur = _execute(conn, sql, values)
-    return [_row_to_dict(row) for row in cur.fetchall()]
+    import member_crypto
+    return [member_crypto.open_row(table, _row_to_dict(row)) for row in cur.fetchall()]  # sec-enc
 
 
 def fetch_one(

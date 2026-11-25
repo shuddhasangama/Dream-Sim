@@ -82,7 +82,7 @@ class BaselineMigrationTests(unittest.TestCase):
         self.assertEqual(actual[0] ^ expected[0], set())
         self.assertEqual(actual[1] ^ expected[1], set())
         version = self.control.execute(f'SELECT version_num FROM "{migrated}".alembic_version').fetchall()
-        self.assertEqual([r['version_num'] for r in version], ['0004_security_event'])
+        self.assertEqual([r['version_num'] for r in version], ['0005_account_phone_index'])
 
     def test_upgrade_is_idempotent_and_stamp_adopts_an_existing_database(self):
         existing = self.init_db_schema()

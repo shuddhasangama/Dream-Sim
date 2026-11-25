@@ -7,6 +7,7 @@ import argparse
 import uuid
 
 import auth
+import member_crypto   # sec-enc
 import auth_sessions as sessions
 import db
 
@@ -50,15 +51,17 @@ def manage(conn, user_id, action, email=None, phone=None, apply=False):
         if apply:
             account_id = existing['id'] if existing else uuid.uuid4().hex
             if not existing:
-                sessions.sql(conn, '''INSERT INTO "Account" (id, user_id, email, phone, auth_enabled, verification_required, created_at)
-                    VALUES (?, ?, ?, ?, 1, 1, ?)''',
-                    (account_id, user_id, contacts['email'], contacts['phone'], str(sessions.now())))
+                sessions.sql(conn, '''INSERT INTO "Account" (id, user_id, email, phone, phone_index, auth_enabled, verification_required, created_at)
+                    VALUES (?, ?, ?, ?, ?, 1, 1, ?)''',
+                    (account_id, user_id, contacts['email'], member_crypto.seal(contacts['phone']),
+                     member_crypto.blind_index(contacts['phone']), str(sessions.now())))
             else:
                 # Re-approval or contact correction invalidates all old challenges
                 # and sessions. Only a fresh real OTP can establish access.
-                sessions.sql(conn, '''UPDATE "Account" SET email = ?, phone = ?, auth_enabled = 1,
+                sessions.sql(conn, '''UPDATE "Account" SET email = ?, phone = ?, phone_index = ?, auth_enabled = 1,
                     verified_email = 0, verified_phone = 0, verification_required = 1 WHERE id = ?''',
-                    (contacts['email'], contacts['phone'], account_id))
+                    (contacts['email'], member_crypto.seal(contacts['phone']),
+                     member_crypto.blind_index(contacts['phone']), account_id))
             sessions.sql(conn, 'UPDATE "AuthChallenge" SET consumed_at = ? WHERE account_id = ?', (sessions.now(), account_id))
             sessions.sql(conn, 'UPDATE "AuthSession" SET revoked_at = ? WHERE user_id = ?', (sessions.now(), user_id))
         return 'Account approved; fresh OTP sign-in is required.' if apply else 'Would approve this profile for OTP sign-in and revoke its existing sessions.'
