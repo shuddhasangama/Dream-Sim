@@ -69,7 +69,9 @@ def methods(rule):
 
 def member_rules():
     import app as member_app
-    return sorted(member_app.app.url_map.iter_rules(), key=lambda r: (r.rule, methods(r)))
+    # '/__*' routes exist only inside tests and the e2e test server, never in the app.
+    return sorted((r for r in member_app.app.url_map.iter_rules() if not r.rule.startswith('/__')),
+                  key=lambda r: (r.rule, methods(r)))
 
 
 def admin_rules():
