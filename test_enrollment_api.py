@@ -22,8 +22,9 @@ class EnrollmentApiTests(RouteTestCase):
                 mock.patch.object(auth_delivery,'start',return_value='VE'+'a'*32),
                 mock.patch.object(auth_delivery,'check',return_value=True)):
             patch.start();self.addCleanup(patch.stop)
-        self.uid=service.invite(self.conn,'invite@example.test',apply=True)['user_id']
-        r=self.client.post('/api/v1/auth/request',json={'channel':'email','destination':'invite@example.test'})
+        # Member sign-in is phone-only since 66f26c8 (2026-11-07); the invite keeps its email too.
+        self.uid=service.invite(self.conn,'invite@example.test',phone='+919876500001',apply=True)['user_id']
+        r=self.client.post('/api/v1/auth/request',json={'channel':'phone','destination':'+919876500001'})
         self.assertEqual(r.status_code,202,r.json)
         r=self.client.post('/api/v1/auth/verify',json={'challenge_id':r.json['data']['challenge_id'],'code':'123456'})
         self.assertEqual(r.status_code,200,r.json)
@@ -86,7 +87,8 @@ class EnrollmentApiTests(RouteTestCase):
             self.assertEqual(r.status_code,403,r.json)
             self.assertEqual(r.json['error']['code'],'secure_auth_required')
     def test_unverified_or_disabled_account_cannot_write(self):
-        self.conn.execute('UPDATE Account SET verified_email=0');self.conn.commit()
+        # Sign-in verifies the phone (phone-only auth); an unverified account has neither contact verified.
+        self.conn.execute('UPDATE Account SET verified_email=0, verified_phone=0');self.conn.commit()
         self.assertEqual(self.put('vision',sections()['vision'],0).status_code,403)
         self.conn.execute('UPDATE Account SET auth_enabled=0');self.conn.commit()
         self.assertEqual(self.read().status_code,401)

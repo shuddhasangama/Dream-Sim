@@ -36,8 +36,9 @@ class ApiOnlyJourneyTests(RouteTestCase):
                 onboarding.build_visions(**data['vision']),data['activities'],journey_state='dating' if uid!='stranger' else 'onboarding',bgv_status='verified')
             row['preferences_json']=db.json_field({'fixed':{'dealbreakers':[]},'adjustable':{'distance_km':[0,5000]}})
             db.insert_row(self.conn,'User',row)
-            db.insert_row(self.conn,'Account',{'id':uid,'user_id':uid,'email':uid+'@example.test','auth_enabled':1,'verification_required':1,'created_at':'test'})
+            db.insert_row(self.conn,'Account',{'id':uid,'user_id':uid,'email':uid+'@example.test','phone':self.PHONES[uid],'auth_enabled':1,'verification_required':1,'created_at':'test'})
         self.set_clock(week=1,day='Mon',hour=12)
+    PHONES={'owner':'+919876500011','partner':'+919876500012','stranger':'+919876500013'}
     def call(self,path,body=None,uid='owner',method='GET',expected=200):
         r=self.client.open('/api/v1'+path,method=method,json=body,headers=self.headers.get(uid,{}))
         self.assertEqual(r.status_code,expected,(path,r.json))
@@ -49,7 +50,8 @@ class ApiOnlyJourneyTests(RouteTestCase):
         for body in ({'step':'playbook'},{'step':'sign','signed_name':uid,'acks':list(ceremony.ack_keys(kind))},{'step':'face'}):self.post(path,body,uid)
     def test_two_dates_gate_road_married_and_revoked_tokens(self):
         for uid in ('owner','partner','stranger'):
-            challenge=self.post('/auth/request',{'channel':'email','destination':uid+'@example.test'},uid,202)
+            # Member sign-in is phone-only since 66f26c8 (2026-11-07).
+            challenge=self.post('/auth/request',{'channel':'phone','destination':self.PHONES[uid]},uid,202)
             tokens=self.post('/auth/verify',{'challenge_id':challenge['challenge_id'],'code':'123456'},uid)
             self.tokens[uid]=tokens;self.headers[uid]={'Authorization':'Bearer '+tokens['access_token']}
             self.assertEqual(self.call('/me',uid=uid)['user_id'],uid)
