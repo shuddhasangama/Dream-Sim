@@ -27,6 +27,11 @@ test('guided sign up verifies first, prefills and persists edits through all fou
   await page.getByRole('button',{name:'Continue to Chemistry'}).click();
   await expect(page.getByRole('heading',{name:'Step 3 of 4 · Chemistry'})).toBeVisible();
   await expect(page.locator('input[type=radio]:checked').first()).toBeChecked();
+  // vis-chem (2026-11-25): one Save, enabled only when something changed.
+  await expect(page.getByRole('button',{name:'Save chemistry'})).toBeDisabled();
+  const unanswered=page.locator('details.activity-row').filter({hasText:'Choose your answer'}).first();
+  await unanswered.locator('summary').click();
+  await unanswered.locator('label.bucket-pick').filter({has:page.locator('input[value=improve]')}).click();
   await page.getByRole('button',{name:'Save chemistry'}).click();
   await expect(page.getByText('Saved.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Continue to Verification'}).click();

@@ -1,3 +1,4 @@
+import * as leaveGuard from '../leaveGuard.js';
 import * as personal from './personal.js';
 let personalData=null, personalOwner=null;
 // Home (design_handoff_app_ui_pulse/README.md, option "1a Pulse"): replaces
@@ -252,7 +253,9 @@ export function bind(root, ctx) {
   root.querySelector('#p-avatar')?.addEventListener('click', () => navigateTo('avatar'));
   root.querySelector('#p-next-up')?.addEventListener('click', (e) => navigateTo(e.currentTarget.dataset.destination));
 
-  root.querySelectorAll('[data-ring]').forEach((btn) => btn.addEventListener('click', () => run(async () => {
+  // vis-chem: ask BEFORE run(): run() re-renders first, which would drop the unsaved edits.
+  root.querySelectorAll('[data-ring]').forEach((btn) => btn.addEventListener('click', () => (btn.dataset.ring === selectedRing || leaveGuard.confirmLeave()) && run(async () => {
+    leaveGuard.disarm();
     selectedRing = btn.dataset.ring;
   })));
 
@@ -271,7 +274,8 @@ export function bind(root, ctx) {
     if (key === 'stats') { const [stats,details]=await Promise.all([session.get('/api/v1/profile/stats'),session.get('/api/v1/profile/personal')]);personalData=details;ctx.setDashboardStats(stats); return; }
     ctx.toggleFold(key, true);
   }));
-  root.querySelector('#p-close-editor')?.addEventListener('click', () => run(async () => {
+  root.querySelector('#p-close-editor')?.addEventListener('click', () => leaveGuard.confirmLeave() && run(async () => {
+    leaveGuard.disarm();
     if (selectedRing === 'stats') { ctx.setDashboardStats(null); return; }
     ctx.toggleFold(selectedRing, false);
   }));

@@ -34,6 +34,7 @@ import './bone.css';
 import './brand-review.css';
 import {createResumeGuard} from './resume.js';
 import * as accountDeletion from './accountDeletion.js';
+import * as leaveGuard from './leaveGuard.js';
 
 const native = Capacitor.isNativePlatform();
 // Which server (if any) this build talks to: see apiConfig.js. Release
@@ -390,6 +391,8 @@ function genericScreen(key) {
 // still pushes/pops normally, so "← Back" keeps meaning something there.
 function navigateTo(key, params) {
   if (busy) return;
+  if (!leaveGuard.confirmLeave()) return;   // vis-chem: unsaved changes
+  leaveGuard.disarm();
   screenDirty=false;clockPending=false;
   if (DASHBOARD_RING_KEYS.includes(key)) { openHomeRing(key); return; }
   screenData=null; screenBlocked=null; screenUnavailable=false; dashboardStats=null; avatarSheetOpen=false;
@@ -414,6 +417,8 @@ async function loadFold(key) {
 }
 const loadOpenFolds = () => Promise.all(FOLDS.filter(k=>folds[k].open).map(loadFold));
 function goBack() {
+  if (!leaveGuard.confirmLeave()) return;
+  leaveGuard.disarm();
   if (busy) return;
   screenData=null; screenBlocked=null; screenUnavailable=false; dashboardStats=null;
   if (nav.pop()) run(() => loadScreen(nav.current.key, nav.current.params));

@@ -13,6 +13,10 @@ async function openVerification(page){
  await page.getByRole('button',{name:'Sign up',exact:true}).click();await signUpWithCode(page);
  await page.getByRole('button',{name:'Family',exact:true}).click();await page.getByRole('button',{name:'Continue to Stats'}).click();
  await page.getByRole('button',{name:'Continue to Chemistry'}).click();
+ // vis-chem: Save is enabled only after an edit — answer one activity, then save.
+ const unanswered=page.locator('details.activity-row').filter({hasText:'Choose your answer'}).first();
+ await unanswered.locator('summary').click();
+ await unanswered.locator('label.bucket-pick').filter({has:page.locator('input[value=improve]')}).click();
  await page.getByRole('button',{name:'Save chemistry',exact:true}).click();await expect(page.getByText('Saved.',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Continue to Verification'}).click();await expect(page.getByRole('heading',{name:'Step 4 of 4 · Verification'})).toBeVisible();
 }
