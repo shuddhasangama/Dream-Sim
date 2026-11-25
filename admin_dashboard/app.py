@@ -212,6 +212,18 @@ def create_app():
             security.audit(get_db(), g.admin['admin_id'], 'member_' + action, 'users')
         return jsonify(ok=True, locked=action == 'lock')
 
+    @app.get('/api/reports/deletions')
+    def pending_deletions():
+        # feat-delete: owner only, audited; ids and dates only.
+        if g.admin['role'] != 'owner':
+            return jsonify(error='Owner access required.'), 403
+        rows = auth_sessions.sql(get_db(), '''SELECT user_id, deletion_requested_at, deletion_due_at FROM "Account"
+            WHERE deletion_due_at IS NOT NULL ORDER BY deletion_due_at''').fetchall()
+        with auth_sessions.transaction(get_db()):
+            security.audit(get_db(), g.admin['admin_id'], 'report_view', 'deletions')
+        return jsonify(rows=[{'user_id': r['user_id'], 'requested_at': r['deletion_requested_at'], 'due_at': r['deletion_due_at']} for r in rows],
+                       generated_at=int(time.time()))
+
     @app.post('/api/members/lock')
     def member_lock_route():
         return member_lock_change('lock')

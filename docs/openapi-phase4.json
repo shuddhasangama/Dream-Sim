@@ -16156,6 +16156,158 @@
         },
         "operationId": "postProfileBackgroundPromptDismiss"
       }
+    },
+    "/account/deletion": {
+      "post": {
+        "x-generated": true,
+        "operationId": "postAccountDeletion",
+        "responses": {
+          "200": {
+            "description": "Actor-scoped result in the data/error envelope."
+          },
+          "400": {
+            "description": "Invalid strict JSON body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challenge_id": {},
+                  "code": {},
+                  "password": {}
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getAccountDeletion",
+        "responses": {
+          "200": {
+            "description": "Actor-scoped result in the data/error envelope."
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Own account deletion status: scheduled, due date (epoch seconds), grace days."
+      }
+    },
+    "/account/deletion/cancel": {
+      "post": {
+        "x-generated": true,
+        "operationId": "postAccountDeletionCancel",
+        "responses": {
+          "200": {
+            "description": "Actor-scoped result in the data/error envelope."
+          },
+          "400": {
+            "description": "Invalid strict JSON body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account/deletion/code": {
+      "post": {
+        "x-generated": true,
+        "operationId": "postAccountDeletionCode",
+        "responses": {
+          "200": {
+            "description": "Actor-scoped result in the data/error envelope."
+          },
+          "400": {
+            "description": "Invalid strict JSON body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Delete your account — DhaShu{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Delete your account</h1>
+  {% if scheduled %}
+    <p role="status">Your account is scheduled for deletion on <strong>{{ due_date }}</strong>.</p>
+    <p>Until then nobody can see your profile. Cancelling restores everything.</p>
+    <form method="post" action="/account/delete/cancel"><button type="submit" class="primary">Cancel deletion</button></form>
+  {% elif done %}
+    <p role="status">Deletion requested. Your account will be deleted on <strong>{{ due_date }}</strong>. You have been signed out everywhere.</p>
+    <p>Signing in before then lets you cancel.</p>
+  {% else %}
+    <p>Your profile is hidden at once and you are signed out everywhere. After {{ grace_days }} days everything is
+       deleted permanently: your profile, photos, avatars, Guru notes, files and sign-in details. Payment records the law
+       requires us to keep are kept without your personal details.</p>
+    <p>You can cancel by signing in within {{ grace_days }} days.</p>
+    {% if error %}<p role="alert" class="warn">{{ error }}</p>{% endif %}
+    <form method="post" action="/account/delete">
+      <label>Your password <input type="password" name="password" autocomplete="current-password" required maxlength="128"></label>
+      <button type="submit" class="secondary">Delete my account</button>
+    </form>
+    <p class="hint">No password? Use the app: Settings → Delete account, and confirm with a code.</p>
+  {% endif %}
+</section>
+{% endblock %}

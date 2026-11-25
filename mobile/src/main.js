@@ -33,6 +33,7 @@ import './style.css';
 import './bone.css';
 import './brand-review.css';
 import {createResumeGuard} from './resume.js';
+import * as accountDeletion from './accountDeletion.js';
 
 const native = Capacitor.isNativePlatform();
 // Which server (if any) this build talks to: see apiConfig.js. Release
@@ -105,6 +106,7 @@ let folds=newFolds();
 // stage-gated surface (Verify/Relationship/Journey) the floating tab bar
 // has no room for. A plain UI overlay, not server state.
 let avatarSheetOpen=false;
+let deleteFlow=null;      // feat-delete: Settings -> Delete account (null = closed)
 let resumeCovered=false;   // feat-resume: private screens hidden while backgrounded / until the session is re-checked
 const safe = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Bundled up for Home's Stats ring, which reuses this module's editor
@@ -192,7 +194,7 @@ function render() {
       ${signedIn&&!signupActive&&!passwordSetup ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
     </header>
     ${apiConfig.badge?`<aside class="preview" data-api-mode="${safe(apiConfig.kind)}">${safe(apiConfig.badge)}${localProxy&&!signedIn?' · <a href="/pool">sign in at /pool</a>':''}</aside>`:''}
-    ${passwordSetup ? `<main class="container"><section class="card"><h1>Set your password</h1><p>Next time, sign in with your phone number and this password.</p><form id="password-form"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="hint">Use 12 or more characters. A memorable passphrase works well.</p><button class="primary" ${busy?'disabled':''}>Save password and continue</button><button type="button" id="password-new-code" class="text-button">Request a new verification code</button></form></section></main>` : signedIn ? signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${import.meta.env.MODE==='emulator'&&devLogin?devLogin.pickerHtml(devPicker,safe):''}${signin()}</main>`}
+    ${passwordSetup ? `<main class="container"><section class="card"><h1>Set your password</h1><p>Next time, sign in with your phone number and this password.</p><form id="password-form"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="hint">Use 12 or more characters. A memorable passphrase works well.</p><button class="primary" ${busy?'disabled':''}>Save password and continue</button><button type="button" id="password-new-code" class="text-button">Request a new verification code</button></form></section></main>` : signedIn ? journey.account_deletion ? accountDeletion.renderScheduled(journey.account_deletion, safe) : deleteFlow ? accountDeletion.renderConfirm(deleteFlow, safe) : signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${import.meta.env.MODE==='emulator'&&devLogin?devLogin.pickerHtml(devPicker,safe):''}${signin()}</main>`}
     <p id="notice" role="status" class="notice">${safe(message)}</p>
     ${busy?'<div class="loading" role="status">Please wait…</div>':''}
     ${signedIn && !signupActive ? '' : '<footer>Connection. Clarity. Together.</footer>'}`;
@@ -284,6 +286,7 @@ function renderAvatarSheet() {
       ${extra.length ? `<div class="p-sheet-links">${extra.map(t=>`<button type="button" class="p-sheet-link" data-nav="${safe(t.key)}">${safe(t.label)}</button>`).join('')}</div>` : ''}
       <button type="button" id="set-member-password" class="secondary">Set / reset login password</button>
       <button type="button" id="logout" class="secondary" ${busy?'disabled':''}>Sign out</button>
+      <button type="button" id="delete-account" class="text-button">Delete account</button>
     </div>`;
 }
 
@@ -316,6 +319,21 @@ function bindChrome(current) {
     challenge=result.challenge_id;phone=status.phone;codeLogin=true;authIntent='login';journey=null;profile=null;avatarSheetOpen=false;
     message='Enter the SMS code to set or reset your password.';
   }));
+  // feat-delete
+  root.querySelector('#delete-account')?.addEventListener('click',()=>run(async()=>{avatarSheetOpen=false;deleteFlow={...await session.get('/api/v1/account/deletion')};}));
+  root.querySelector('#delete-back')?.addEventListener('click',()=>{deleteFlow=null;render();});
+  root.querySelector('#delete-use-code')?.addEventListener('click',()=>run(async()=>{
+    try{deleteFlow={...deleteFlow,...await session.post('/api/v1/account/deletion/code',{}),_error:null};}catch(e){deleteFlow={...deleteFlow,_error:e.message};}
+  }));
+  const deleted=async(body)=>{
+    try{await accountDeletion.confirm(session,body);}catch(e){deleteFlow={...deleteFlow,_error:e.message};return;}
+    deleteFlow=null;journey=null;profile=null;avatarSheetOpen=false;nav.resetTo('dashboard');
+    await session.logout();
+    message='Deletion requested. You have been signed out everywhere. Sign in within the grace period to cancel.';
+  };
+  root.querySelector('#delete-password-form')?.addEventListener('submit',e=>{e.preventDefault();const f=new FormData(e.target);run(()=>deleted({password:String(f.get('password')||'')}));});
+  root.querySelector('#delete-code-form')?.addEventListener('submit',e=>{e.preventDefault();const f=new FormData(e.target);run(()=>deleted({challenge_id:deleteFlow.challenge_id,code:String(f.get('code')||'')}));});
+  root.querySelector('#delete-cancel')?.addEventListener('click',()=>run(async()=>{await session.post('/api/v1/account/deletion/cancel',{});await load();}));
   root.querySelector('#logout')?.addEventListener('click',()=>run(async()=>{
     journey=null;profile=null;challenge=null;phone='';passwordSetup=false;codeLogin=false;signupActive=false;authIntent='login';screenDirty=false;folds=newFolds();weekSummary=null;avatarSheetOpen=false;nav.resetTo('dashboard');
     const revoked=await session.logout();
