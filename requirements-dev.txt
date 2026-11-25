@@ -1,0 +1,5 @@
+# Development and CI only. Never needed at runtime; not installed on Railway.
+# Install: .venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-dev.txt
+pytest==9.2.0
+pip-audit==2.10.1
+bandit==1.9.4
