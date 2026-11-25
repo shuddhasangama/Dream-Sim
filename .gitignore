@@ -31,3 +31,6 @@ Claude outputs/
 
 # hypothesis example database (local fuzzing cache)
 .hypothesis/
+
+# Screenshots written by the preview Playwright specs (local output, not source)
+/outputs/
