@@ -62,3 +62,53 @@ class FaceFlowTests(RouteTestCase):
    self.assertEqual(self.client.post('/api/v1/profile/face-match',headers=headers['owner'],json=self.body()).status_code,200)
    self.assertEqual(self.client.get('/api/v1/profile/face-match',headers=headers['other']).json['data']['state'],'not_started')
    self.assertEqual(self.client.post('/api/v1/profile/face-match',headers=headers['other'],json=self.body()).status_code,409)
+
+
+class FaceImageOriginTests(FaceFlowTests):
+ """c-facematch: the provider only ever receives image links on an allowed origin."""
+ PROD='https://dream-sim-production.up.railway.app'
+ def capture(self):
+  calls=[]
+  class Client:
+   def __init__(inner,cfg):pass
+   def execute(inner,operation,inputs,**kwargs):
+    calls.append(inputs);kwargs['evidence_sink']({'synthetic':True})
+    return {'face_match_passed':True,'match_percentage':99,'liveness_checked':False}
+  return calls,Client
+ def clean_env(self,**extra):
+  env={k:v for k,v in os.environ.items() if not k.startswith('RAILWAY_') and k not in ('DHASHU_PUBLIC_API_ORIGIN','DHASHU_PROCESS_ROLE','DATABASE_URL','AUTH_PUBLIC_ORIGIN','ADMIN_PUBLIC_ORIGIN','AUTH_ENABLED')}
+  env.update(extra);return patch.dict(os.environ,env,clear=True)
+ def test_local_default_sends_only_local_links(self):
+  with self.clean_env():
+   self.assertEqual(service.face_image_origin(),'http://127.0.0.1:5000')
+   service.queue(self.conn,'owner',self.body());calls,Client=self.capture()
+   self.assertTrue(service.work_one(self.conn,Client))
+  self.assertEqual(len(calls),1)
+  for key in ('firstImage','secondImage'):
+   self.assertTrue(calls[0][key].startswith('http://127.0.0.1:5000/sandbox/face-image/'),calls[0][key])
+  self.assertNotIn('railway.app',str(calls))
+ def test_local_refuses_production_origins_and_never_calls_the_provider(self):
+  for origin in (self.PROD,self.PROD+'/','https://anything.up.railway.app','https://x.railway.app'):
+   with self.subTest(origin=origin),self.clean_env(DHASHU_PUBLIC_API_ORIGIN=origin):
+    with self.assertRaisesRegex(ValueError,'production'):service.face_image_origin()
+  with self.clean_env(DHASHU_PUBLIC_API_ORIGIN=self.PROD):
+   service.queue(self.conn,'owner',self.body());calls,Client=self.capture()
+   self.assertTrue(service.work_one(self.conn,Client))
+  self.assertEqual(calls,[])  # no provider call at all
+  self.assertEqual(service.view(self.conn,'owner')['state'],'unknown')
+  lease=db.fetch_all(self.conn,'FaceImageLease')[0];self.assertEqual((lease['revoked'],lease['protected_images']),(1,''))
+ def test_origin_must_be_an_origin_only(self):
+  for bad in ('ftp://host','http://user:pw@127.0.0.1:5000','http://127.0.0.1:5000/path','http://127.0.0.1:5000?x=1','not a url'):
+   with self.subTest(bad=bad),self.clean_env(DHASHU_PUBLIC_API_ORIGIN=bad):
+    with self.assertRaises(ValueError):service.face_image_origin()
+  with self.clean_env(DHASHU_PUBLIC_API_ORIGIN='https://my-tunnel.example.org'):
+   self.assertEqual(service.face_image_origin(),'https://my-tunnel.example.org')
+ def test_deployed_keeps_the_legacy_default_and_requires_approval(self):
+  with self.clean_env(RAILWAY_ENVIRONMENT='production'):
+   self.assertEqual(service.face_image_origin(),self.PROD)  # unchanged behaviour when unset
+  with self.clean_env(RAILWAY_ENVIRONMENT='production',DHASHU_PUBLIC_API_ORIGIN='https://evil.example'):
+   with self.assertRaisesRegex(ValueError,'Unapproved'):service.face_image_origin()
+  with self.clean_env(RAILWAY_ENVIRONMENT='production',DHASHU_PUBLIC_API_ORIGIN='http://127.0.0.1:5000'):
+   with self.assertRaisesRegex(ValueError,'Unapproved'):service.face_image_origin()
+  with self.clean_env(RAILWAY_ENVIRONMENT='production',DHASHU_PUBLIC_API_ORIGIN='https://api.dhashu.example',DHASHU_APPROVED_PUBLIC_ORIGINS='https://api.dhashu.example'):
+   self.assertEqual(service.face_image_origin(),'https://api.dhashu.example')

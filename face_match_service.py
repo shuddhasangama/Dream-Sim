@@ -62,6 +62,39 @@ def clear_in_transaction(conn,uid):
 def clear(conn,uid):
  with auth_sessions.transaction(conn):
   clear_in_transaction(conn,uid)
+# Origin of the short-lived private image links handed to the face-match provider (c-facematch).
+# Deployed: DHASHU_PUBLIC_API_ORIGIN, defaulting to the legacy deployed origin so a deploy that
+# never set it keeps working; it must be an approved https origin. Local (no production markers):
+# defaults to this laptop and REFUSES any production/Railway address, so a local worker can never
+# point the provider at the live server.
+LEGACY_DEPLOYED_ORIGIN='https://dream-sim-production.up.railway.app'
+LOCAL_DEFAULT_ORIGIN='http://127.0.0.1:5000'
+PRODUCTION_HOST_SUFFIXES=('.railway.app',)
+
+def _origin_only(value):
+ from urllib.parse import urlsplit
+ parts=urlsplit(value.strip())
+ if parts.scheme not in ('http','https') or not parts.hostname or parts.username or parts.password or parts.path not in ('','/') or parts.query or parts.fragment:
+  raise ValueError('DHASHU_PUBLIC_API_ORIGIN must be an origin (scheme://host[:port]) only')
+ return parts.scheme+'://'+parts.netloc,parts
+
+def deployed(env=None):
+ import local_harness
+ return bool(local_harness.production_markers(env))
+
+def face_image_origin(env=None):
+ env=os.environ if env is None else env
+ if deployed(env):
+  origin,parts=_origin_only(env.get('DHASHU_PUBLIC_API_ORIGIN') or LEGACY_DEPLOYED_ORIGIN)
+  approved={LEGACY_DEPLOYED_ORIGIN}|{o.strip().rstrip('/') for o in env.get('DHASHU_APPROVED_PUBLIC_ORIGINS','').split(',') if o.strip()}
+  if parts.scheme!='https' or origin not in approved:raise ValueError('Unapproved private-image origin')
+  return origin
+ origin,parts=_origin_only(env.get('DHASHU_PUBLIC_API_ORIGIN') or LOCAL_DEFAULT_ORIGIN)
+ host=parts.hostname.lower()
+ if origin==LEGACY_DEPLOYED_ORIGIN or host.endswith(PRODUCTION_HOST_SUFFIXES):
+  raise ValueError('Refusing a production image origin while running locally')
+ return origin
+
 def work_one(conn,client_factory=Client):
  cutoff=(datetime.now(timezone.utc)-timedelta(minutes=5)).isoformat()
  with auth_sessions.transaction(conn):
@@ -80,8 +113,7 @@ def work_one(conn,client_factory=Client):
  try:
   images=Protection().open(r['protected_input'])
   with auth_sessions.transaction(conn):db.insert_row(conn,'FaceImageLease',{'id':lease_id,'user_id':r['id'],'protected_images':Protection().seal(images),'expires_at':(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat(),'revoked':0})
-  origin=os.getenv('DHASHU_PUBLIC_API_ORIGIN','https://dream-sim-production.up.railway.app').rstrip('/')
-  if origin!='https://dream-sim-production.up.railway.app':raise ValueError('Unapproved private-image origin')
+  origin=face_image_origin()
   base=origin+'/sandbox/face-image/'+token+'/'
   def sink(value):
    nonlocal evidence
