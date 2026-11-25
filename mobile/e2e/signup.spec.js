@@ -1,12 +1,10 @@
 import {test, expect} from '@playwright/test';
+import {signInMember, signUpWithCode} from './fixtures/auth.js';
 
 async function enter(page, signup=true) {
   await page.goto('/');
-  if(signup) await page.getByRole('button',{name:'Sign up',exact:true}).click();
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
-  await page.getByLabel('Verification code').fill('123456');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  if(signup) { await page.getByRole('button',{name:'Sign up',exact:true}).click(); await signUpWithCode(page); }
+  else await signInMember(page);
 }
 
 test('guided sign up verifies first, prefills and persists edits through all four steps', async({page})=>{

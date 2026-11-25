@@ -1,8 +1,8 @@
 import {test,expect} from '@playwright/test';
+import {signUpWithCode} from './fixtures/auth.js';
 test('own Chemistry answers and partner indifference survive saving; four custom limit',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'Sign up',exact:true}).click();
- await page.getByLabel('Phone number').fill('+15550001111');await page.getByRole('button',{name:'Send SMS code'}).click();
- await page.getByLabel('Verification code').fill('123456');await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await signUpWithCode(page);
  await page.getByRole('button',{name:'Family',exact:true}).click();await page.getByRole('button',{name:'Continue to Stats'}).click();await page.getByRole('button',{name:'Continue to Chemistry'}).click();
  await page.locator('input[name=partner_any][value=Hiking]').check();
  for(const name of ['Marathon running','Singing','Chess','Gardening']){

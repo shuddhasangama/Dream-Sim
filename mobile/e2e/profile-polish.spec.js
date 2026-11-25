@@ -1,11 +1,9 @@
 import {test,expect} from '@playwright/test';
+import {signInMember} from './fixtures/auth.js';
 
 async function login(page) {
   await page.goto('/');
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
-  await page.getByLabel('Verification code').fill('123456');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await signInMember(page);
 }
 
 test('Current Vision is read-only; editors start collapsed; Week video plays',async({page})=>{

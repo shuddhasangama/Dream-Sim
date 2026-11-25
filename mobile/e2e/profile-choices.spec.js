@@ -1,10 +1,8 @@
 import {test,expect} from '@playwright/test';
+import {signInMember} from './fixtures/auth.js';
 test('new Vision templates and optional personal profile persist in preview',async({page})=>{
  await page.goto('/');
- await page.getByLabel('Phone number').fill('+15550001111');
- await page.getByRole('button',{name:'Send SMS code'}).click();
- await page.getByLabel('Verification code').fill('123456');
- await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await signInMember(page);
  await page.locator('[data-open-editor=vision]').click();
  await expect(page.locator('#vision-template-form')).toHaveCount(0);
  await expect(page.locator('fieldset[disabled] input').first()).toBeDisabled();

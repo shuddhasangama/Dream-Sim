@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {signInMember} from './fixtures/auth.js';
 
 test('shared-clock polling refreshes read screens, hides manual jumps, and preserves edited forms',async({page})=>{
   // Substitute only the local preview transport; no backend or real clock changes.
@@ -20,10 +21,7 @@ test('shared-clock polling refreshes read screens, hides manual jumps, and prese
   });
   await page.clock.install();
   await page.goto('/');
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
-  await page.getByLabel('Verification code').fill('123456');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await signInMember(page);
   await expect(page.locator('.accelerated-banner')).toContainText('Mon 12:00');
   await page.locator('.p-tabbar').getByRole('button',{name:'Week',exact:true}).click();
   await expect(page.locator('[data-advance]')).toHaveCount(0);

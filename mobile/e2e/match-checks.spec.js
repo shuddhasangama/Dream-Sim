@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
-async function signIn(page){await page.goto('/');await page.getByLabel('Phone number').fill('+15550001111');await page.getByRole('button',{name:'Send SMS code'}).click();await page.getByLabel('Verification code').fill('123456');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.getByRole('heading',{name:'Hi, Preview'})).toBeVisible();}
+import {signInMember} from './fixtures/auth.js';
+async function signIn(page){await page.goto('/');await signInMember(page);await expect(page.getByRole('heading',{name:'Hi, Preview'})).toBeVisible();}
 const tab=(page,name)=>page.locator('.p-tabbar').getByRole('button',{name,exact:true});
 test('match card has dates, category, statuses and existing decisions',async({page})=>{
  await signIn(page);await tab(page,'Week').click();await page.locator('.p-event-card').filter({hasText:'Match 1'}).getByRole('button').first().click();

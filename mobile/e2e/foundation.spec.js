@@ -1,14 +1,12 @@
 import {test,expect} from '@playwright/test';
+import {signInMember, openCodeSignIn} from './fixtures/auth.js';
 
 // design_handoff_app_ui_pulse/README.md ("Pulse", option 1a): every test
 // below signs in the same way, so this is the one place that changes if
 // sign-in itself ever does.
 async function signIn(page) {
   await page.goto('/');
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
-  await page.getByLabel('Verification code').fill('123456');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await signInMember(page);
   await expect(page.getByRole('heading',{name:'Hi, Preview'})).toBeVisible();
 }
 // The floating tab bar (replaces the old top text nav — see the README's
@@ -40,9 +38,9 @@ test('phone layout, wrong code, dashboard, and sign out without external calls',
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:5173'))external.push(r.url());});
   await page.goto('/');
-  await expect(page.getByRole('button',{name:'Send SMS code'})).toBeEnabled();
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await openCodeSignIn(page);   // a code sign-in, so a wrong code can be tried
+  await expect(page.getByRole('button',{name:'Send recovery code'})).toBeEnabled();
+  await page.getByRole('button',{name:'Send recovery code'}).click();
   await page.getByLabel('Verification code').fill('000000');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await expect(page.locator('#notice')).toContainText('Preview code');
