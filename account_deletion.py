@@ -218,7 +218,8 @@ def _clear_sides(conn, uid):
         for side_kind, ref, side in sides:
             if side_kind == kind:
                 sets = ', '.join(f'"{c.format(s=side)}" = {p}' for c in columns)
-                conn.execute(f'UPDATE "{table}" SET {sets} WHERE "{link[kind]}" = {p}', (*([cleared] * len(columns)), ref))
+                column = link[kind]                      # fixed internal names only (SIDE_TEXT), never request data
+                conn.execute(f'UPDATE "{table}" SET {sets} WHERE "{column}" = {p}', (*([cleared] * len(columns)), ref))
     conn.execute(f'UPDATE "ContactRequest" SET shared_contact = NULL WHERE requester_id = {p}', (uid,))
 
 
