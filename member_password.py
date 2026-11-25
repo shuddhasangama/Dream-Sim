@@ -34,6 +34,7 @@ def login(conn, identifier, password, kind="mobile"):
         current=sessions.sql(conn,'SELECT * FROM "Account" WHERE id=?'+suffix,(a['id'],)).fetchone()
         if not current or not current['auth_enabled'] or current['password_hash']!=a['password_hash'] or not current['verified_'+channel] or auth.normalize(channel,current[channel],stored=True)!=contact:
             return None,auth.failure('Phone number or password was not accepted.',400,'invalid_credentials')
+        client_ip.note_identity(client_ip.client_ip(request),'member:'+a['user_id'])   # sec-ip safety net
         return sessions.issue_in_transaction(conn,a['user_id'],kind),None
 
 def register(app,get_db,payload):

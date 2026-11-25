@@ -93,7 +93,9 @@ def start_challenge(conn, channel, destination, kind, signup=False):
         return None, failure('SMS sign-in is not available for this country yet.', 400, 'country_unavailable')
     if otp_policy.globally_paused(conn):
         return None, failure('Sign-in codes are paused for a short time. Please try again later.', 503, 'otp_paused')
-    if not sessions.throttle(conn, [key('send-ip:' + (client_ip.client_ip(request)))], 20, 600):
+    visitor = client_ip.client_ip(request)
+    client_ip.note_identity(visitor, 'number:' + destination)   # sec-ip safety net: many numbers behind one key
+    if not sessions.throttle(conn, [key('send-ip:' + visitor)], 20, 600):
         return None, failure('Please wait before requesting another code.', 429, 'rate_limited')
     if not sessions.throttle(conn, [key('send-contact:' + channel + ':' + destination)], 1, 60):
         return None, failure('Please wait before requesting another code.', 429, 'rate_limited')
@@ -170,6 +172,7 @@ def verify_challenge(conn, challenge, code, kind):
         verified_column = 'verified_email' if row['channel'] == 'email' else 'verified_phone'
         sessions.sql(conn, 'UPDATE "Account" SET ' + verified_column + ' = 1 WHERE id = ?', (account['id'],))
         result = sessions.issue_in_transaction(conn, account['user_id'], kind)
+        client_ip.note_identity(client_ip.client_ip(request), 'member:' + account['user_id'])
         sessions.sql(conn, 'INSERT INTO "PasswordGrant" (session_id,expires_at) VALUES (?,?)', (result['session_id'],sessions.now()+600))
         return result
 

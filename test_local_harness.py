@@ -240,7 +240,7 @@ class RequestTests(HarnessAppCase):
             tokens = self.login(client, 'u_0002').get_json()
         line = '\n'.join(logs.output)
         self.assertIn('user_id=u_0002', line)
-        self.assertIn('remote_addr=127.0.0.1', line)
+        self.assertIn('peer=127.0.0.1', line)   # sec-ip: label only; the logged value is still the TCP peer
         self.assertRegex(line, r'at=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00')
         for secret in (tokens['access_token'], tokens['refresh_token']):
             self.assertNotIn(secret, line)
