@@ -139,11 +139,30 @@ def create(conn, uid, body):
         stamp = now()
         auth_sessions.sql(conn, 'INSERT INTO "DigiLockerSession" (id,user_id,environment,state,protected_session,protected_result,consent_version,created_at,updated_at,expires_at,attempts,case_check_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
             (sid,uid,cfg.environment,'creating',None,None,body['consent_version'],stamp.isoformat(),stamp.isoformat(),(stamp+timedelta(minutes=30)).isoformat(),0,case_check_id))
+        if async_enabled():
+            # perf-worker: the provider call runs in bgv_worker.py; the app shows
+            # 'creating' and refreshes until the link is ready. Idempotent per session.
+            import provider_jobs
+            provider_jobs.enqueue(conn, 'digilocker_create', uid, sid, 'digilocker_create:'+sid)
+    if async_enabled():
+        return
+    request_link(conn, cfg, sid, body['consent_version'], timeout=20)
+
+
+def async_enabled():
+    """perf-worker: DHASHU_ASYNC_DIGILOCKER=1 moves the consent-link provider call to
+    the worker (default 0 = unchanged: the call happens inside the request)."""
+    return os.getenv('DHASHU_ASYNC_DIGILOCKER', '0') == '1'
+
+
+def request_link(conn, cfg, sid, consent_version, timeout):
+    """The DigiLocker consent-link provider call for session sid (state 'creating')."""
+    protection = Protection()
     evidence = []; summary={}
     try:
-        summary = signzy_guard.execute(conn, cfg, Client(cfg, timeout=20), 'digilocker_create_url', {
+        summary = signzy_guard.execute(conn, cfg, Client(cfg, timeout=timeout), 'digilocker_create_url', {
             'callbackUrl':os.environ['SIGNZY_DIGILOCKER_CALLBACK_BASE'].rstrip('/')+'/'+secrets.token_hex(16),
-            'internalId':'dhashu_'+secrets.token_hex(16), 'serviceName':'DhaShu','includePhoto':True,'includePan':body['consent_version']==BUNDLE_VERSION}, consent_confirmed=True, evidence_sink=evidence.append)
+            'internalId':'dhashu_'+secrets.token_hex(16), 'serviceName':'DhaShu','includePhoto':True,'includePan':consent_version==BUNDLE_VERSION}, consent_confirmed=True, evidence_sink=evidence.append)
         response = evidence[0].get('provider_response') or {}
         if summary.get('http_status') == 200 and not summary.get('error_code'):
             request_id, url = provider_session(response.get('json'))
@@ -234,3 +253,26 @@ def complete(conn, uid, sid, body):
         if state=='complete':
             import verified_identity
             verified_identity.apply(conn,uid,sid,identity,cfg.environment)
+
+
+def _job_run(conn, job):
+    """Worker handler: never replays a call whose outcome is unknown (max_attempts=1)."""
+    row = db.fetch_one(conn, 'DigiLockerSession', id=job['ref'])
+    if not row or row['state'] != 'creating':
+        return   # already handled (or cancelled): nothing to do
+    request_link(conn, configuration(row['user_id']), row['id'], row['consent_version'], timeout=10)
+
+
+def _job_dead(conn, job):
+    """A worker died mid-call: the provider outcome is unknown; tell the member plainly."""
+    row = db.fetch_one(conn, 'DigiLockerSession', id=job['ref'])
+    if row and row['state'] == 'creating':
+        update(conn, row['id'], state='outcome_unknown')
+
+
+def _register_jobs():
+    import provider_jobs
+    provider_jobs.register_kind('digilocker_create', _job_run, on_dead=_job_dead, max_attempts=1, lease=60)
+
+
+_register_jobs()

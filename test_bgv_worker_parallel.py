@@ -14,7 +14,7 @@ class ParallelAvatarTests(TestCase):
             started.set()
             if not release.wait(3):raise AssertionError('Test did not release provider')
             return True
-        with patch.object(worker.db,'get_connection',side_effect=connection),patch.object(worker.avatar_service,'work_one',side_effect=generate),patch.object(worker.face_image_lease,'purge'),patch.object(worker.bgv_bundle,'schedule'),patch.object(worker.liveness_secure_service,'work_one',return_value=False),patch.object(worker.face_match_service,'work_one',return_value=False),patch.object(worker.bgv_app,'work_one',return_value=True) as legal:
+        with patch.object(worker.db,'get_connection',side_effect=connection),patch.object(worker.avatar_service,'work_one',side_effect=generate),patch.object(worker.face_image_lease,'purge'),patch.object(worker.bgv_bundle,'schedule'),patch.object(worker.liveness_secure_service,'work_one',return_value=False),patch.object(worker.face_match_service,'work_one',return_value=False),patch.object(worker.provider_jobs,'work_one',return_value=False),patch.object(worker.bgv_app,'work_one',return_value=True) as legal:
             with ThreadPoolExecutor(max_workers=1) as pool:
                 future=pool.submit(worker.avatar_step)
                 try:

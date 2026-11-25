@@ -1076,6 +1076,16 @@ CREATE TABLE IF NOT EXISTS "BgvCaseCheck" (
  check_definition_id TEXT NOT NULL, provider TEXT NOT NULL,
  UNIQUE (case_id,check_definition_id)
 );
+CREATE TABLE IF NOT EXISTS "ProviderJob" (
+ id TEXT PRIMARY KEY, kind TEXT NOT NULL, user_id TEXT NOT NULL, ref TEXT NOT NULL,
+ idempotency_key TEXT NOT NULL UNIQUE,
+ state TEXT NOT NULL DEFAULT 'queued' CHECK (state IN ('queued','running','succeeded','failed','dead')),
+ attempts INTEGER NOT NULL DEFAULT 0, max_attempts INTEGER NOT NULL DEFAULT 3,
+ run_after BIGINT NOT NULL, lease_until BIGINT, last_error TEXT,
+ created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_provider_job_claim ON "ProviderJob" (state, run_after);
+
 CREATE TABLE IF NOT EXISTS "BgvAttempt" (
  id TEXT PRIMARY KEY, request_id TEXT NOT NULL REFERENCES "BgvRequest"(id),
  protected_evidence TEXT NOT NULL, created_at TEXT NOT NULL

@@ -42,6 +42,7 @@ TABLES = {
     "WaitlistEntry", "WaitlistMarket", "WaitlistAudit",
     "BgvEvidence",
     "BgvRequest",
+    "ProviderJob",
     "RestaurantBooking", "RestaurantEvent",
     "BookingPreference", "BookingSnapshot",
     "BillingPurchase", "BillingEntitlement", "BillingEvent",

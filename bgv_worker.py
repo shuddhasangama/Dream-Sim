@@ -8,6 +8,8 @@ import avatar_service
 import face_image_lease
 import face_match_service
 import liveness_secure_service
+import provider_jobs
+import digilocker_signup  # noqa: F401 — registers the digilocker_create job kind
 
 def avatar_step():
     """Own connection: a slow image call must not block legal/identity checks."""
@@ -24,6 +26,7 @@ def bgv_step(once=False):
         processed=liveness_secure_service.work_one(conn)
         processed=face_match_service.work_one(conn) or processed
         if once:processed=avatar_service.work_one(conn) or processed
+        processed=provider_jobs.work_one(conn) or processed   # perf-worker: background provider calls
         return bgv_app.work_one(conn) or processed
     finally:db.release(conn)
 
