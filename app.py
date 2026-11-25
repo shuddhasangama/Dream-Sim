@@ -131,6 +131,9 @@ abuse_guard.register(app)
 # sec-ip: warn when running on Railway without a trusted-proxy mode (docs/CLIENT_IP.md).
 import client_ip
 client_ip.startup_check()
+# dec-pay: refuse unsafe billing settings in production (live keys required; no test keys).
+import billing_catalog
+billing_catalog.startup_check()
 # c-security-suite: strip secret-bearing keys from any API JSON response (second layer).
 import response_trim
 response_trim.register(app)
@@ -3804,7 +3807,7 @@ def _payment_scope(user: dict, purpose: str) -> str | None:
 
 def _has_paid(user_id: str, purpose: str, scope_id: str) -> bool:
     import billing_catalog
-    if billing_catalog.pilot_user(user_id):
+    if billing_catalog.real_billing(user_id):   # dec-pay: live mode = Razorpay entitlements for everyone
         import billing_service
         return billing_service.legacy_entitled(get_db(),user_id,purpose,scope_id)
     rows = db.fetch_all(get_db(), "Payment", user_id=user_id)
@@ -3853,8 +3856,8 @@ def pay_confirm(purpose):
     """The stub gateway. Writes a Payment row and marks it paid; no money
     moves and the screen says so."""
     import billing_catalog
-    if billing_catalog.pilot_user(current_user()['user_id']):
-        abort(403, 'Simulated payment confirmation is disabled during gateway testing.')
+    if billing_catalog.real_billing(current_user()['user_id']):   # dec-pay: never a free bypass of real billing
+        abort(403, 'Simulated payment confirmation is disabled while real billing is on.')
     if purpose not in payments.PURPOSES:
         abort(404)
     user = current_user()
