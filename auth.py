@@ -82,10 +82,19 @@ def start_challenge(conn, channel, destination, kind, signup=False):
         return None, failure('Use your registered phone number for SMS verification.')
     if not auth_delivery.configured():
         return None, failure('Sign-in delivery is not configured yet.', 503, 'auth_unavailable')
+    import otp_policy
+    # sec-otp: only allowed countries; the global breaker and the per-number daily limit
+    # apply to every request (known number or not), so they reveal nothing about accounts.
+    if not otp_policy.country_allowed(destination):
+        return None, failure('SMS sign-in is not available for this country yet.', 400, 'country_unavailable')
+    if otp_policy.globally_paused(conn):
+        return None, failure('Sign-in codes are paused for a short time. Please try again later.', 503, 'otp_paused')
     if not sessions.throttle(conn, [key('send-ip:' + (client_ip.client_ip(request)))], 20, 600):
         return None, failure('Please wait before requesting another code.', 429, 'rate_limited')
     if not sessions.throttle(conn, [key('send-contact:' + channel + ':' + destination)], 1, 60):
         return None, failure('Please wait before requesting another code.', 429, 'rate_limited')
+    if not sessions.throttle(conn, [key('send-contact-day:' + channel + ':' + destination)], otp_policy.per_number_day(), 86400):
+        return None, failure('Daily code limit reached for this number. Try again tomorrow.', 429, 'rate_limited')
     matches = [dict(row) for row in db.fetch_all(conn, 'Account')
                if normalize(channel, row.get(channel), stored=True) == destination]
     # Canonical duplicates fail closed instead of guessing the account owner.
@@ -94,6 +103,7 @@ def start_challenge(conn, channel, destination, kind, signup=False):
     provider_sid = None
     if account or (signup and channel=='phone' and kind=='mobile' and not matches):
         try:
+            otp_policy.record_send(conn)
             provider_sid = auth_delivery.start(channel, destination)
         except auth_delivery.DeliveryUnavailable as exc:
             current_app.logger.warning('OTP delivery unavailable: http_status=%s provider_code=%s signup=%s',
