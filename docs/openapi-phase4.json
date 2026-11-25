@@ -16119,7 +16119,27 @@
         "x-generated": true,
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Actor-scoped result in the data/error envelope."
+          },
+          "400": {
+            "description": "Invalid strict JSON body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -16133,7 +16153,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "postProfileBackgroundPromptDismiss"
       }
     }
   },

@@ -164,11 +164,21 @@ def merged(existing, required, optional):
     return result
 
 
+def stub(path, method):
+    """A new route's operation, with the contract every operation carries (operationId, 200, 400, 401)."""
+    words = [w for w in re.split(r'[^A-Za-z0-9]+', path) if w and not w.startswith('{')]
+    op_id = method + ''.join(w[:1].upper() + w[1:] for w in words)
+    error = {'content': {'application/json': {'schema': {'$ref': '#/components/schemas/Error'}}}}
+    return {'x-generated': True, 'operationId': op_id, 'responses': {
+        '200': {'description': 'Actor-scoped result in the data/error envelope.'},
+        '400': {'description': 'Invalid strict JSON body.', **error},
+        '401': {'description': 'Authentication required.', **error}}}
+
+
 def build(doc):
     doc = json.loads(json.dumps(doc))
     for (path, method), sets in sorted(collect().items()):
-        operation = doc.setdefault('paths', {}).setdefault(path, {}).setdefault(
-            method, {'x-generated': True, 'responses': {'200': {'description': 'OK'}}})
+        operation = doc.setdefault('paths', {}).setdefault(path, {}).setdefault(method, stub(path, method))
         body = operation.setdefault('requestBody', {})
         body['required'] = True
         content = body.setdefault('content', {}).setdefault('application/json', {})
