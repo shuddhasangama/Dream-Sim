@@ -15,11 +15,16 @@ def json_object(*, required=(), optional=()):
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         raise ApiError('validation_error', 'Body must be a JSON object.')
+    import request_schemas   # cq-pydantic: strict typed schema built from the declared fields
     if not set(required) <= body.keys() or body.keys() - set(required) - set(optional):
         raise ApiError('validation_error', 'Expected required fields: ' +
                        ', '.join(sorted(required)) + '; optional fields: ' +
-                       ', '.join(sorted(optional)))
-    return body
+                       ', '.join(sorted(optional)), request_schemas.status())
+    try:
+        return request_schemas.validate(body, required, optional)
+    except request_schemas.ValidationError as exc:
+        raise ApiError('validation_error', 'Invalid request: ' + request_schemas.describe(exc) + '.',
+                       request_schemas.status()) from None
 
 
 def allowlist(row, fields):

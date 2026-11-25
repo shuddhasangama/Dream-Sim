@@ -10,7 +10,7 @@ export class ApiError extends Error {
 //                authed(); tell the user plainly and drop them back to sign-in.
 //   conflict   — 409: already processed, or this client is stale. Never
 //                retry the mutation — re-fetch state and say so plainly.
-//   validation — 400: the server's own message, verbatim. Never invented copy.
+//   validation — 400 or 422 (cq-pydantic): the server's own message, verbatim. Never invented copy.
 //   network    — connection/timeout (status 0): offer a retry, change nothing.
 //   error      — anything else: the server's message as-is.
 export function classify(e) {
@@ -18,7 +18,7 @@ export function classify(e) {
   const status = e?.status ?? 0;
   if (status === 401) return { kind: 'auth', message, retry: false };
   if (status === 409) return { kind: 'conflict', message: message || 'The state has changed. Review the refreshed screen.', retry: false };
-  if (status === 400) return { kind: 'validation', message, retry: false };
+  if (status === 400 || status === 422) return { kind: 'validation', message, retry: false };
   if (status === 0) return { kind: 'network', message, retry: true };
   return { kind: 'error', message, retry: false };
 }
