@@ -88,7 +88,9 @@ def prepare(conn, uid, clock):
             raise ApiError('week_not_started', 'The matching week has not opened.', 409)
         if not existing:
             reserved = fixed_test_pairs.configured()
-            pool = [from_user_row(r) for r in db.fetch_all(conn, 'User', journey_state='dating') if r['id'] not in reserved]
+            import account_deletion   # feat-delete: never matched once deletion is requested
+            hidden = account_deletion.hidden_ids(conn)
+            pool = [from_user_row(r) for r in db.fetch_all(conn, 'User', journey_state='dating') if r['id'] not in reserved and r['id'] not in hidden]
             import match_checks
             pool=match_checks.attach(conn,pool)
             active = db.fetch_all(conn, 'LockIn', status='active')

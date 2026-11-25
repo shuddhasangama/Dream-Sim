@@ -670,6 +670,9 @@ CREATE TABLE IF NOT EXISTS "Account" (
     -- member cannot sign in and every session is revoked. NULL = not locked.
     locked_at       BIGINT,
     lock_reason     TEXT,
+    -- feat-delete: set when the member asks to be deleted; the purge runs at deletion_due_at.
+    deletion_requested_at BIGINT,
+    deletion_due_at       BIGINT,
     created_at      TEXT NOT NULL,
     UNIQUE (user_id)
 );
@@ -1082,6 +1085,13 @@ CREATE TABLE IF NOT EXISTS "BgvCaseCheck" (
  check_definition_id TEXT NOT NULL, provider TEXT NOT NULL,
  UNIQUE (case_id,check_definition_id)
 );
+CREATE TABLE IF NOT EXISTS "DeletionRecord" (
+    id               TEXT PRIMARY KEY,
+    purged_at        BIGINT NOT NULL,
+    rows_deleted     INTEGER NOT NULL,
+    rows_anonymised  INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "MemberLockEvent" (
     id          TEXT PRIMARY KEY,
     user_id     TEXT NOT NULL,

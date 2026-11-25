@@ -28,6 +28,7 @@ PUBLIC = {
     'auth_refresh': 'refresh-token rotation',
     'auth_tester': 'tester sign-in, operator allow-list only',
     'auth_password_login': 'password sign-in (rate limited)',
+    'delete_account_info': 'how to delete an account (store listings), no data',
     'static': 'static files',
 }
 SERVER_TO_SERVER = {
@@ -42,7 +43,7 @@ RETIRED = {
 }
 ADMIN_PUBLIC = {'/healthz', '/', '/robots.txt', '/api/login', '/static/<path:filename>'}
 ADMIN_OWNER = {'/api/reports/markets', '/api/markets/readiness', '/api/reports/activities', '/api/activities/review',
-               '/api/members/lock', '/api/members/unlock'}
+               '/api/members/lock', '/api/members/unlock', '/api/reports/deletions'}
 
 
 def member_class(rule):
