@@ -8,13 +8,13 @@ Totals: disabled-with-sign-in 12, member 151, member-web 107, public 9, server-t
 
 | Methods | Path | Access | Note |
 |---|---|---|---|
-| GET | `/` | member-web | web session; redirects to sign-in |
+| GET | `/` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
 | GET | `/admin/errors` | disabled-with-sign-in | 404 when secure sign-in is on |
 | GET | `/admin/pairs` | disabled-with-sign-in | 404 when secure sign-in is on |
 | POST | `/admin/reset-walkthrough` | disabled-with-sign-in | 404 when secure sign-in is on |
 | GET,POST | `/admin/reset-week` | disabled-with-sign-in | 404 when secure sign-in is on |
-| GET | `/after-date` | member-web | web session; redirects to sign-in |
-| GET,POST | `/align` | member-web | web session; redirects to sign-in |
+| GET | `/after-date` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET,POST | `/align` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
 | POST | `/api/v1/auth/logout` | member | bearer session; own objects only |
 | POST | `/api/v1/auth/logout-all` | member | bearer session; own objects only |
 | POST | `/api/v1/auth/password/login` | public | password sign-in (rate limited) |
@@ -174,122 +174,122 @@ Totals: disabled-with-sign-in 12, member 151, member-web 107, public 9, server-t
 | GET | `/api/v1/verification/plan` | member | bearer session; own objects only |
 | GET | `/api/v1/week` | member | bearer session; own objects only |
 | POST | `/api/v1/week/prepare` | member | bearer session; own objects only |
-| GET | `/billing` | member-web | web session; redirects to sign-in |
+| GET | `/billing` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
 | POST | `/billing/webhooks/razorpay` | server-to-server | Razorpay webhook, raw-body HMAC |
-| GET | `/bio` | member-web | web session; redirects to sign-in |
-| GET | `/boundaries` | member-web | web session; redirects to sign-in |
-| GET | `/calendar` | member-web | web session; redirects to sign-in |
-| POST | `/calendar/confirm` | member-web | web session; redirects to sign-in |
-| POST | `/calendar/neighbourhoods` | member-web | web session; redirects to sign-in |
-| POST | `/calendar/no-overlap` | member-web | web session; redirects to sign-in |
-| POST | `/calendar/submit` | member-web | web session; redirects to sign-in |
-| GET | `/ceremony/<kind>` | member-web | web session; redirects to sign-in |
-| POST | `/ceremony/<kind>/step` | member-web | web session; redirects to sign-in |
-| GET | `/chemistry` | member-web | web session; redirects to sign-in |
-| POST | `/chemistry/activities` | member-web | web session; redirects to sign-in |
-| POST | `/chemistry/set` | member-web | web session; redirects to sign-in |
-| GET | `/dashboard` | member-web | web session; redirects to sign-in |
-| GET | `/debrief` | member-web | web session; redirects to sign-in |
-| POST | `/debrief/next-step` | member-web | web session; redirects to sign-in |
-| POST | `/debrief/no-show` | member-web | web session; redirects to sign-in |
+| GET | `/bio` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/boundaries` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/calendar` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/calendar/confirm` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/calendar/neighbourhoods` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/calendar/no-overlap` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/calendar/submit` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/ceremony/<kind>` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/ceremony/<kind>/step` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/chemistry` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/chemistry/activities` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/chemistry/set` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/dashboard` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/debrief` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/debrief/next-step` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/debrief/no-show` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
 | POST | `/demo/advance` | disabled-with-sign-in | 404 when secure sign-in is on |
 | POST | `/demo/partner` | disabled-with-sign-in | 404 when secure sign-in is on |
-| GET | `/escalations` | member-web | web session; redirects to sign-in |
-| POST | `/escalations/contact/request` | member-web | web session; redirects to sign-in |
-| POST | `/escalations/contact/respond` | member-web | web session; redirects to sign-in |
-| POST | `/escalations/invite/acknowledge` | member-web | web session; redirects to sign-in |
-| POST | `/escalations/invite/guidance` | member-web | web session; redirects to sign-in |
-| POST | `/escalations/invite/propose` | member-web | web session; redirects to sign-in |
-| POST | `/escalations/invite/respond` | member-web | web session; redirects to sign-in |
-| POST | `/escalations/invite/revoke` | member-web | web session; redirects to sign-in |
-| POST | `/escalations/invite/see-flag` | member-web | web session; redirects to sign-in |
-| POST | `/escalations/invite/trusted-contact` | member-web | web session; redirects to sign-in |
-| GET | `/expectations` | member-web | web session; redirects to sign-in |
-| GET | `/gate` | member-web | web session; redirects to sign-in |
-| POST | `/gate/answer` | member-web | web session; redirects to sign-in |
-| POST | `/gate/ask` | member-web | web session; redirects to sign-in |
-| POST | `/gate/confirm` | member-web | web session; redirects to sign-in |
-| POST | `/gate/consent` | member-web | web session; redirects to sign-in |
-| POST | `/gate/decline` | member-web | web session; redirects to sign-in |
-| POST | `/gate/enter-relationship` | member-web | web session; redirects to sign-in |
-| POST | `/gate/exclusivity-ack` | member-web | web session; redirects to sign-in |
-| POST | `/gate/raise` | member-web | web session; redirects to sign-in |
-| POST | `/gate/respond` | member-web | web session; redirects to sign-in |
-| GET | `/guru` | member-web | web session; redirects to sign-in |
-| GET | `/guru/everything` | member-web | web session; redirects to sign-in |
-| GET | `/journey` | member-web | web session; redirects to sign-in |
-| POST | `/journey/advance` | member-web | web session; redirects to sign-in |
-| GET,POST | `/journey/checkpoint` | member-web | web session; redirects to sign-in |
+| GET | `/escalations` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/escalations/contact/request` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/escalations/contact/respond` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/escalations/invite/acknowledge` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/escalations/invite/guidance` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/escalations/invite/propose` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/escalations/invite/respond` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/escalations/invite/revoke` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/escalations/invite/see-flag` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/escalations/invite/trusted-contact` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/expectations` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/gate` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/gate/answer` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/gate/ask` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/gate/confirm` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/gate/consent` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/gate/decline` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/gate/enter-relationship` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/gate/exclusivity-ack` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/gate/raise` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/gate/respond` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/guru` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/guru/everything` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/journey` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/journey/advance` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET,POST | `/journey/checkpoint` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
 | POST | `/login/<user_id>` | disabled-with-sign-in | 404 when secure sign-in is on |
-| POST | `/logout` | member-web | web session; redirects to sign-in |
-| GET | `/married` | member-web | web session; redirects to sign-in |
-| GET | `/next-level` | member-web | web session; redirects to sign-in |
-| POST | `/next-level/answer` | member-web | web session; redirects to sign-in |
-| POST | `/next-level/open` | member-web | web session; redirects to sign-in |
-| GET,POST | `/onboarding/chemistry` | member-web | web session; redirects to sign-in |
-| GET,POST | `/onboarding/finish` | member-web | web session; redirects to sign-in |
-| POST | `/onboarding/restart` | member-web | web session; redirects to sign-in |
-| GET,POST | `/onboarding/stats` | member-web | web session; redirects to sign-in |
-| GET,POST | `/onboarding/vision` | member-web | web session; redirects to sign-in |
-| GET | `/pay/<purpose>` | member-web | web session; redirects to sign-in |
-| POST | `/pay/<purpose>/confirm` | member-web | web session; redirects to sign-in |
-| GET | `/plan` | member-web | web session; redirects to sign-in |
-| POST | `/plan/cancel` | member-web | web session; redirects to sign-in |
-| POST | `/plan/feedback` | member-web | web session; redirects to sign-in |
-| POST | `/plan/feedback/flags` | member-web | web session; redirects to sign-in |
-| POST | `/plan/selections` | member-web | web session; redirects to sign-in |
-| POST | `/plan/sign` | member-web | web session; redirects to sign-in |
+| POST | `/logout` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/married` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/next-level` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/next-level/answer` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/next-level/open` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET,POST | `/onboarding/chemistry` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET,POST | `/onboarding/finish` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/onboarding/restart` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET,POST | `/onboarding/stats` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET,POST | `/onboarding/vision` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/pay/<purpose>` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/pay/<purpose>/confirm` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/plan` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/plan/cancel` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/plan/feedback` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/plan/feedback/flags` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/plan/selections` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/plan/sign` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
 | GET | `/pool` | disabled-with-sign-in | 404 when secure sign-in is on |
 | GET,POST | `/public/signzy/digilocker/callback/<nonce>` | server-to-server | sandbox acknowledgement only |
 | POST | `/public/waitlist` | server-to-server | public waitlist, origin allow-list + consent + rate limit |
-| GET | `/public/waitlist/config` | member-web | web session; redirects to sign-in |
-| GET | `/reach` | member-web | web session; redirects to sign-in |
-| POST | `/reach/health` | member-web | web session; redirects to sign-in |
-| POST | `/reach/ignore` | member-web | web session; redirects to sign-in |
-| POST | `/reach/set-range` | member-web | web session; redirects to sign-in |
-| POST | `/reach/show-all` | member-web | web session; redirects to sign-in |
-| POST | `/reach/widen` | member-web | web session; redirects to sign-in |
-| POST | `/reach/work-verification` | member-web | web session; redirects to sign-in |
-| GET | `/relationship` | member-web | web session; redirects to sign-in |
-| POST | `/relationship/difference/consent` | member-web | web session; redirects to sign-in |
-| POST | `/relationship/difference/raise` | member-web | web session; redirects to sign-in |
-| POST | `/relationship/difference/resolve` | member-web | web session; redirects to sign-in |
-| POST | `/relationship/expense/check` | member-web | web session; redirects to sign-in |
-| POST | `/relationship/playbook/add-custom` | member-web | web session; redirects to sign-in |
-| POST | `/relationship/romance/idea` | member-web | web session; redirects to sign-in |
-| GET,POST | `/restaurant/<path:pid>` | member-web | web session; redirects to sign-in |
-| GET | `/road` | member-web | web session; redirects to sign-in |
-| GET | `/road/availability` | member-web | web session; redirects to sign-in |
-| POST | `/road/availability/add-free` | member-web | web session; redirects to sign-in |
-| POST | `/road/availability/remove-free` | member-web | web session; redirects to sign-in |
-| POST | `/road/availability/share` | member-web | web session; redirects to sign-in |
-| GET | `/road/obligations` | member-web | web session; redirects to sign-in |
-| POST | `/road/obligations/add` | member-web | web session; redirects to sign-in |
-| POST | `/road/obligations/remove` | member-web | web session; redirects to sign-in |
-| GET | `/road/routine` | member-web | web session; redirects to sign-in |
-| POST | `/road/routine/add` | member-web | web session; redirects to sign-in |
-| POST | `/road/routine/remove` | member-web | web session; redirects to sign-in |
-| GET | `/road/vision` | member-web | web session; redirects to sign-in |
-| POST | `/road/vision/set` | member-web | web session; redirects to sign-in |
-| GET | `/sandbox/face-image/<token>/<kind>` | member-web | web session; redirects to sign-in |
-| GET,POST | `/signin` | member-web | web session; redirects to sign-in |
-| GET,POST | `/signup` | member-web | web session; redirects to sign-in |
+| GET | `/public/waitlist/config` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/reach` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/reach/health` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/reach/ignore` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/reach/set-range` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/reach/show-all` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/reach/widen` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/reach/work-verification` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/relationship` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/relationship/difference/consent` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/relationship/difference/raise` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/relationship/difference/resolve` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/relationship/expense/check` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/relationship/playbook/add-custom` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/relationship/romance/idea` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET,POST | `/restaurant/<path:pid>` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/road` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/road/availability` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/road/availability/add-free` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/road/availability/remove-free` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/road/availability/share` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/road/obligations` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/road/obligations/add` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/road/obligations/remove` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/road/routine` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/road/routine/add` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/road/routine/remove` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/road/vision` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/road/vision/set` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/sandbox/face-image/<token>/<kind>` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET,POST | `/signin` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET,POST | `/signup` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
 | GET | `/static/<path:filename>` | public | static files |
-| GET | `/stats` | member-web | web session; redirects to sign-in |
-| POST | `/stats/reverify` | member-web | web session; redirects to sign-in |
-| POST | `/stats/save` | member-web | web session; redirects to sign-in |
-| GET | `/verify` | member-web | web session; redirects to sign-in |
+| GET | `/stats` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/stats/reverify` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/stats/save` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/verify` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
 | GET | `/verify-contact` | disabled-with-sign-in | 404 when secure sign-in is on |
 | POST | `/verify-contact/check` | disabled-with-sign-in | 404 when secure sign-in is on |
 | POST | `/verify-contact/send` | disabled-with-sign-in | 404 when secure sign-in is on |
 | POST | `/verify/simulate` | disabled-with-sign-in | 404 when secure sign-in is on |
-| POST | `/verify/start` | member-web | web session; redirects to sign-in |
-| GET | `/vibes` | member-web | web session; redirects to sign-in |
-| GET | `/vision` | member-web | web session; redirects to sign-in |
-| POST | `/vision/add` | member-web | web session; redirects to sign-in |
-| POST | `/vision/declare-change` | member-web | web session; redirects to sign-in |
-| GET | `/week` | member-web | web session; redirects to sign-in |
-| POST | `/week/act` | member-web | web session; redirects to sign-in |
+| POST | `/verify/start` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/vibes` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/vision` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/vision/add` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/vision/declare-change` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| GET | `/week` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
+| POST | `/week/act` | member-web | web session; redirects to sign-in; kept (owner decision 2026-11-25) |
 
 ## Removed routes (answer 404)
 

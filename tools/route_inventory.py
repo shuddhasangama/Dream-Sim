@@ -56,7 +56,7 @@ def member_class(rule):
         return 'disabled-with-sign-in', '404 when secure sign-in is on'
     if rule.rule.startswith('/api/v1/'):
         return 'member', 'bearer session; own objects only'
-    return 'member-web', 'web session; redirects to sign-in'
+    return 'member-web', 'web session; redirects to sign-in; kept (owner decision 2026-11-25)'
 
 
 def admin_class(rule):
