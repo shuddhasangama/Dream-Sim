@@ -74,7 +74,12 @@ switch ($Part) {
     }
     & $Py -m pytest -q -p no:cacheprovider @Rest
   }
-  'web' { $env:DHASHU_FLASK_DEBUG = '1'; & $Py app.py }   # debugger/reloader: local only, loopback-bound
+  'web' {
+    # Schema once at startup (perf-init): requests run no DDL.
+    & $Py -c "import db; c=db.get_connection(); db.init_db(c); c.close(); print('Schema ready.')"
+    if ($LASTEXITCODE -ne 0) { throw 'Schema initialisation failed.' }
+    $env:DHASHU_FLASK_DEBUG = '1'; & $Py app.py   # debugger/reloader: local only, loopback-bound
+  }
   'worker' {
     foreach ($k in $Worker.Keys) { Set-Item -Path "Env:$k" -Value $Worker[$k] }
     & $Py -u bgv_worker.py

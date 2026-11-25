@@ -201,7 +201,9 @@ def slot_datetime(week: int, day: str, meal_slot: str) -> str:
 def get_db():
     if "db" not in g:
         g.db = db.get_connection()
-        db.init_db(g.db)
+        # Schema DDL is not per request any more: once per process per database
+        # (DHASHU_SCHEMA_INIT, see db.ensure_schema).
+        db.ensure_schema(g.db)
     return g.db
 
 
