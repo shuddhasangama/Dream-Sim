@@ -1,0 +1,94 @@
+# Project semgrep rules (c-security-suite). Run offline: semgrep --config .semgrep.yml --metrics=off --error
+# Each rule is a mistake that would be a real hole in this codebase. ERROR = fails CI.
+rules:
+  - id: flask-debug-on
+    languages: [python]
+    severity: ERROR
+    message: Flask debug mode exposes an interactive debugger. Use DHASHU_FLASK_DEBUG locally only.
+    pattern-either:
+      - pattern: $APP.run(..., debug=True, ...)
+      - pattern: $APP.debug = True
+
+  - id: tls-verification-disabled
+    languages: [python]
+    severity: ERROR
+    message: TLS certificate verification must never be disabled.
+    pattern-either:
+      - pattern: requests.$M(..., verify=False, ...)
+      - pattern: httpx.$M(..., verify=False, ...)
+      - pattern: ssl._create_unverified_context(...)
+
+  - id: shell-true
+    languages: [python]
+    severity: ERROR
+    message: subprocess with shell=True runs a shell; pass an argument list instead.
+    pattern: subprocess.$M(..., shell=True, ...)
+
+  - id: unsafe-deserialisation
+    languages: [python]
+    severity: ERROR
+    message: pickle/marshal/yaml.load can execute code from data. Use json or yaml.safe_load.
+    pattern-either:
+      - pattern: pickle.load(...)
+      - pattern: pickle.loads(...)
+      - pattern: marshal.loads(...)
+      - pattern: yaml.load(...)
+
+  - id: eval-exec
+    languages: [python]
+    severity: ERROR
+    message: eval/exec run arbitrary code.
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+
+  - id: sql-with-request-data
+    languages: [python]
+    severity: ERROR
+    message: Request data inside SQL text. Pass it as a query parameter instead.
+    patterns:
+      - pattern-either:
+          - pattern: $C.execute(f"...{request.$X}...", ...)
+          - pattern: $C.execute("..." + request.$X + ..., ...)
+          - pattern: $C.execute("..." % request.$X, ...)
+          - pattern: $C.execute(f"...{$BODY[$K]}...", ...)
+
+  - id: template-from-request
+    languages: [python]
+    severity: ERROR
+    message: Rendering a template string built from request data allows template injection.
+    pattern-either:
+      - pattern: render_template_string(<... request.$X ...>, ...)
+      - pattern: flask.render_template_string(<... request.$X ...>, ...)
+
+  - id: markup-from-request
+    languages: [python]
+    severity: ERROR
+    message: Marking request data as safe HTML disables escaping (XSS).
+    pattern-either:
+      - pattern: Markup(<... request.$X ...>)
+      - pattern: markupsafe.Markup(<... request.$X ...>)
+
+  - id: hardcoded-secret-key
+    languages: [python]
+    severity: ERROR
+    message: Secret keys come from the environment, never from source code.
+    patterns:
+      - pattern: $APP.secret_key = "$S"
+      - metavariable-regex:
+          metavariable: $S
+          regex: ^.{8,}$
+    paths:
+      exclude: ['test_*.py', 'tools/load_test/*']
+
+  - id: send-file-from-request
+    languages: [python]
+    severity: ERROR
+    message: A file path taken from the request allows reading arbitrary files.
+    pattern: send_file(<... request.$X ...>, ...)
+
+  - id: jinja-autoescape-off
+    languages: [python]
+    severity: ERROR
+    message: Autoescaping must stay on.
+    pattern: jinja2.Environment(..., autoescape=False, ...)
