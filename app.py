@@ -131,6 +131,9 @@ abuse_guard.register(app)
 # sec-ip: warn when running on Railway without a trusted-proxy mode (docs/CLIENT_IP.md).
 import client_ip
 client_ip.startup_check()
+# dec-pay: refuse unsafe billing settings in production (live keys required; no test keys).
+import billing_catalog
+billing_catalog.startup_check()
 # c-security-suite: strip secret-bearing keys from any API JSON response (second layer).
 import response_trim
 response_trim.register(app)
@@ -422,6 +425,9 @@ def named_for(viewer_id: str, other: dict | None, masked: str = MASKED_NAME) -> 
     unchanged: this hides a name, not a person."""
     if other is None:
         return None
+    import account_deletion   # feat-delete: neutral for a member who asked to be deleted
+    if other.get("user_id") in account_deletion.hidden_ids(get_db()):
+        return {"user_id": other["user_id"], "name": "No longer available", "unavailable": True}
     shown = with_view_fields(other)
     if NAMES_BEFORE_MEETING or _have_met(viewer_id, other["user_id"]):
         import verified_identity
@@ -1032,7 +1038,9 @@ def reach_pool(user: dict) -> tuple[list[dict], bool]:
     the headline, the per-filter deltas, the whatif — is computed from
     the one list this returns, so they cannot disagree with each other.
     """
-    everyone = [u for u in load_pool() if u.get("gender") and u.get("city") and u.get("visions") and u.get("journey_state") in ("onboarding", "dating")]
+    import account_deletion   # feat-delete: a member who asked to be deleted is never shown
+    hidden = account_deletion.hidden_ids(get_db())
+    everyone = [u for u in load_pool() if u.get("gender") and u.get("city") and u.get("visions") and u.get("journey_state") in ("onboarding", "dating") and u["user_id"] not in hidden]
     if __import__("discovery").enabled():
         import discovery
         everyone=[u for u in everyone if discovery.market(get_db(),u["city"])["discovery"] and not discovery.excluded(get_db(),user["user_id"],u["user_id"])]
@@ -3804,7 +3812,7 @@ def _payment_scope(user: dict, purpose: str) -> str | None:
 
 def _has_paid(user_id: str, purpose: str, scope_id: str) -> bool:
     import billing_catalog
-    if billing_catalog.pilot_user(user_id):
+    if billing_catalog.real_billing(user_id):   # dec-pay: live mode = Razorpay entitlements for everyone
         import billing_service
         return billing_service.legacy_entitled(get_db(),user_id,purpose,scope_id)
     rows = db.fetch_all(get_db(), "Payment", user_id=user_id)
@@ -3853,8 +3861,8 @@ def pay_confirm(purpose):
     """The stub gateway. Writes a Payment row and marks it paid; no money
     moves and the screen says so."""
     import billing_catalog
-    if billing_catalog.pilot_user(current_user()['user_id']):
-        abort(403, 'Simulated payment confirmation is disabled during gateway testing.')
+    if billing_catalog.real_billing(current_user()['user_id']):   # dec-pay: never a free bypass of real billing
+        abort(403, 'Simulated payment confirmation is disabled while real billing is on.')
     if purpose not in payments.PURPOSES:
         abort(404)
     user = current_user()
@@ -4812,6 +4820,51 @@ import after_date_service
 import gate_service
 import relationship_service
 import road_service
+
+# ── feat-delete: web account deletion + the public explanation page ──────
+
+@app.get("/delete-account")
+def delete_account_info():
+    """Public: how to delete an account (needed for the Apple and Google store listings)."""
+    import account_deletion
+    return render_template("delete_account_info.html", grace_days=account_deletion.grace_days(),
+                           retention_days=account_deletion.retention_days())
+
+
+def _due_date(epoch):
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(epoch, timezone.utc).strftime("%d %B %Y")
+
+
+@app.route("/account/delete", methods=["GET", "POST"])
+@login_required
+def account_delete():
+    import account_deletion
+    from api_contract import ApiError
+    uid = current_user()["user_id"]
+    state = account_deletion.scheduled(get_db(), uid)
+    ctx = {"grace_days": account_deletion.grace_days(), "scheduled": bool(state),
+           "due_date": _due_date(state["due_at"]) if state else None}
+    if request.method == "POST" and not state:
+        try:
+            account_deletion._confirmed(get_db(), uid, {"password": request.form.get("password", "")})
+            state = account_deletion.request_deletion(get_db(), uid)
+        except ApiError as exc:
+            return render_template("account_delete.html", **ctx, error=exc.message), exc.status
+        except LookupError:
+            return render_template("account_delete.html", **ctx, error="This profile has no sign-in account."), 404
+        session.clear()
+        return render_template("account_delete.html", grace_days=ctx["grace_days"], done=True, due_date=_due_date(state["due_at"]))
+    return render_template("account_delete.html", **ctx)
+
+
+@app.post("/account/delete/cancel")
+@login_required
+def account_delete_cancel():
+    import account_deletion
+    account_deletion.cancel_deletion(get_db(), current_user()["user_id"])
+    return redirect("/account/delete")
+
 
 auth.register_auth(app, get_db)
 # Refuses to boot if DHASHU_LOCAL_HARNESS=1 is combined with any production

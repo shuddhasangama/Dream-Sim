@@ -20,6 +20,22 @@ def guard(get_db):
             raise ApiError('csrf_failed','Refresh the checkout page.',403)
 
 
+def reject_stale(raw):
+    """dec-pay: a signed event older than DHASHU_BILLING_WEBHOOK_MAX_AGE (default 48 h;
+    Razorpay retries for 24 h) is a replay and is refused. created_at is Razorpay's epoch."""
+    import json, os, time
+    try:
+        created=int(json.loads(raw).get('created_at'))
+    except (ValueError,TypeError,AttributeError):
+        raise ApiError('invalid_event','Invalid payment event.') from None
+    try:
+        max_age=max(3600,int(os.environ.get('DHASHU_BILLING_WEBHOOK_MAX_AGE','172800')))
+    except ValueError:
+        max_age=172800
+    if abs(time.time()-created)>max_age:
+        raise ApiError('stale_event','Payment notification is too old.',400)
+
+
 def register(api,get_db):
     @api.get('/billing/config')
     def billing_config():
@@ -71,7 +87,11 @@ def register_web(app,get_db,current_user):
         if request.content_length and request.content_length > 262144:
             return jsonify(error='Notification too large'),413
         try:
-            service.webhook(get_db(),request.get_data(),request.headers.get('X-Razorpay-Signature',''))
+            raw=request.get_data()
+            import billing_razorpay
+            billing_razorpay.verify_webhook(raw,request.headers.get('X-Razorpay-Signature',''))   # unsigned -> 401, nothing parsed
+            reject_stale(raw)                                                                   # replayed old events -> 400
+            service.webhook(get_db(),raw,request.headers.get('X-Razorpay-Signature',''))        # exact duplicates are a no-op there
             return jsonify(received=True)
         except ApiError as exc:
             return jsonify(code=exc.code,error=exc.message),exc.status

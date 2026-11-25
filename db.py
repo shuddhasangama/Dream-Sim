@@ -45,6 +45,7 @@ TABLES = {
     "ProviderJob",
     "SecurityEvent",
     "MemberLockEvent",
+    "DeletionRecord",
     "RestaurantBooking", "RestaurantEvent",
     "BookingPreference", "BookingSnapshot",
     "BillingPurchase", "BillingEntitlement", "BillingEvent",

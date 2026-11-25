@@ -5,6 +5,7 @@ import {inferPlan} from './signupVision.js';
 // API's per-user state does — not just fixed fixtures.
 export function previewTransport() {
   let active = false;
+  let deletionDue = null;   // feat-delete: mirrors /api/v1/account/deletion
   const workCategories=['Salaried','Self-employed','Freelancer','Business owner','Other'];
   let workPreferences={categories:[],include_undisclosed:true,verified_only:false,max_age_days:0};
   let workIgnored=false;
@@ -327,9 +328,20 @@ export function previewTransport() {
     if(path.endsWith('/auth/password/status'))return ok({password_set:true,can_set:true,phone:'+15550001111'});
     if(path.endsWith('/auth/password/set'))return ok({access_token:'preview-access',refresh_token:'preview-refresh',expires_in:900});
     if (path.endsWith('/auth/logout')) { active=false; return ok({logged_out:true}); }
+    if (active && path.endsWith('/account/deletion/code')) return ok({challenge_id:'local-delete'});
+    if (active && path.endsWith('/account/deletion/cancel')) { deletionDue=null; return ok({scheduled:false,due_at:null,grace_days:30}); }
+    if (active && path.endsWith('/account/deletion') && method === 'GET') return ok({scheduled:!!deletionDue,due_at:deletionDue,grace_days:30});
+    if (active && path.endsWith('/account/deletion')) {
+      const okPassword = typeof body.password === 'string' && body.password.length > 0;
+      const okCode = body.challenge_id === 'local-delete' && body.code === '123456';
+      if (!okPassword && !okCode) return {status:400,data:{error:{message:'That password was not accepted.'},data:null}};
+      deletionDue = Math.floor(Date.now() / 1000) + 30 * 86400; active = false;   // every session revoked
+      return ok({scheduled:true,due_at:deletionDue,grace_days:30});
+    }
     if (!active) return {status:401,data:{error:{message:'Sign in again.'},data:null}};
 
     if (path.endsWith('/journey/status')) return ok({
+      ...(deletionDue ? {account_deletion:{due_at:deletionDue}} : {}),
       user:{user_id:'preview-user',display_name:'Preview profile',journey_state:userJourneyState,bgv_status:'verified'},
       stage_indicator:{show:true,current:userJourneyState,label:userJourneyState==='dating'?'Dating':'Relationship',stages:[
         {key:'dating',label:'Dating',state:userJourneyState==='dating'?'current':'done'},{key:'relationship',label:'Relationship',state:userJourneyState==='relationship'?'current':'todo'},
