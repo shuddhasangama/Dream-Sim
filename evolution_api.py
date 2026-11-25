@@ -6,6 +6,7 @@ import expectations
 import onboarding
 import stats_edit
 import vision
+import vision_plans
 import profile_choices
 import json
 import async_rehearsal
@@ -84,7 +85,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
             template_key=g.api_user['stats'].get('vision_template','custom'),
             template_label=profile_choices.template_label(g.api_user['stats'],g.api_user['visions']),
             kids_intent=g.api_user['stats'].get('kids_intent','undecided'),
-            pillar_options={k:(list(v) if k=='Intimacy' else []) for k,v in vision_plans.OPTIONS.items()},
+            pillar_options={k:list(v) for k,v in vision_plans.DETAIL_OPTIONS.items()},
             detail_explanation='Emotional intimacy is required. Physical intimacy is optional. Other pillars have no detailed choices in this release.',
             rc_open=vision.rc_open(get_clock()),
             entries=db.fetch_all(get_db(),'VisionEntry',user_id=uid()),changes=db.fetch_all(get_db(),'VisionChange',user_id=uid()))
@@ -93,6 +94,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
     def vision_detail():
         body=json_object(required={'request_id','pillar'},optional={'sub_selection'})
         if g.api_user['stats'].get('vision_schema_version')==2 and body['pillar']=='Kids' and body.get('sub_selection') is not None:raise ApiError('validation_error','Kids is an option without sub-selections.')
+        if g.api_user['stats'].get('vision_schema_version')==2 and not vision_plans.has_detail(body['pillar']):raise ApiError('validation_error',str(body['pillar'])[:40]+' has no detailed choices to add.')
         return jsonify(service.add_vision_detail(get_db(),uid(),body,get_clock()))
 
     @api.post('/profile/vision/presets')
@@ -104,6 +106,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
     def vision_change():
         body=json_object(required={'request_id','pillar','disclosed_to_partner'},optional={'add','remove'})
         if g.api_user['stats'].get('vision_schema_version')==2 and body['pillar']=='Kids' and (body.get('add') or body.get('remove')):raise ApiError('validation_error','Kids is an option without sub-selections.')
+        if g.api_user['stats'].get('vision_schema_version')==2 and not vision_plans.has_detail(body['pillar']):raise ApiError('validation_error',str(body['pillar'])[:40]+' has no detailed choices to change.')
         return jsonify(service.declare_vision_change(get_db(),uid(),body,get_clock()))
 
     @api.get('/profile/chemistry')

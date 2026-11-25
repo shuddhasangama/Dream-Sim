@@ -231,6 +231,8 @@ export function previewTransport() {
   // rc_open() so the preview enforces the same rules the server does.
   let visionGoals = [{ key: 'Intimacy', stance: ['Emotional', 'Physical'] }, { key: 'Cohabitate', stance: ['Chores split'] }, { key: 'Travel together', stance: null }];
   const PILLAR_OPTIONS = { Intimacy: ['Emotional', 'Physical'], 'Travel together': [], Kids: ['Naturally', 'Surrogacy', 'Adoption'], Cohabitate: ['Chores split', 'Expenses sharing'] };
+  // Mirrors vision_plans.DETAIL_OPTIONS: only items with detail can be added to or changed.
+  const DETAIL_OPTIONS = {Intimacy:['Emotional','Physical'],Kids:[],Cohabitate:[],'Travel together':[]};
   const visionElementKeys = ['Intimacy', 'Kids', 'Cohabitate', 'Travel together'];
   const VISION_EXPLANATION = 'Emotional intimacy is required. Physical intimacy is optional. Other pillars have no detailed choices in this release.';
   let visionEntries = [];
@@ -242,7 +244,7 @@ export function previewTransport() {
   const templates = [{"key": "grow", "label": "Family Together", "description": "Build a shared life with children in the picture.", "choices": {"Intimacy": ["Emotional", "Physical"], "Kids": ["Naturally"], "Cohabitate": ["Chores split", "Expenses sharing"]}, "kids_intent": "want"}, {"key": "two", "label": "Two Together", "description": "Build a shared life without having children.", "choices": {"Intimacy": ["Emotional", "Physical"], "Cohabitate": ["Chores split", "Expenses sharing"]}, "kids_intent": "no"}, {"key": "explore", "label": "Travel Together", "description": "Connection and travel; children and cohabitation remain undecided.", "choices": {"Intimacy": ["Emotional"], "Travel together": []}, "kids_intent": "undecided"}, {"key": "custom", "label": "Custom Together", "description": "Choose your own pillars and preferences.", "choices": null, "kids_intent": "undecided"}];
   let selectedTemplate="custom", kidsIntent="undecided";
   let personalProfile={health:{},openness:{},categories:{"mobility": "Mobility disability / wheelchair use", "physical": "Other physical disability", "sensory": "Sensory disability", "non_visible": "Non-visible disability", "diabetes": "Diabetes", "cancer": "Cancer / cancer history", "trauma": "Trauma / mental health history", "other": "Other health or accessibility needs"},ethnicity:[],ethnicity_options:["South Asian","East Asian","Mixed","Other"],photo:null};
-  const visionRead = () => ({ goals: visionGoals, presets: templates, signup_presets:signupPlans, signup_pillar_options:signupOptions, schema_version:visionSchemaVersion, template_key:selectedTemplate, template_label:templates.find(t=>t.key===selectedTemplate).label, kids_intent:kidsIntent, element_keys: visionElementKeys, pillar_options: {Intimacy:['Emotional','Physical'],Kids:[],Cohabitate:[],'Travel together':[]}, detail_explanation: VISION_EXPLANATION, rc_open: visionRcOpen(), entries: visionEntries, changes: visionChanges });
+  const visionRead = () => ({ goals: visionGoals, presets: templates, signup_presets:signupPlans, signup_pillar_options:signupOptions, schema_version:visionSchemaVersion, template_key:selectedTemplate, template_label:templates.find(t=>t.key===selectedTemplate).label, kids_intent:kidsIntent, element_keys: visionElementKeys, pillar_options: DETAIL_OPTIONS, detail_explanation: VISION_EXPLANATION, rc_open: visionRcOpen(), entries: visionEntries, changes: visionChanges });
   function visionValidate(map) {
     if (!(map.Intimacy || []).includes('Emotional')) return 'Emotional intimacy is required.';
     const others = [];
@@ -459,6 +461,7 @@ export function previewTransport() {
     if (path.endsWith('/profile/vision/details')) {
       const map = visionMap();
       const { pillar, sub_selection: sub } = body;
+      if (!(DETAIL_OPTIONS[pillar] || []).length) return err(`${pillar} has no detailed choices to add.`, 400);
       if (!(pillar in PILLAR_OPTIONS) || (sub && !PILLAR_OPTIONS[pillar].includes(sub))) return err('Unknown pillar or sub-selection.', 400);
       if (pillar in map && (!sub || map[pillar].includes(sub))) return err('That is already part of your Vision.', 400);
       map[pillar] = [...(map[pillar] || []), ...(sub ? [sub] : [])];
@@ -474,6 +477,7 @@ export function previewTransport() {
       if (!visionRcOpen()) return err('This is only editable while Reality Check is open.', 409);
       const map = visionMap();
       const { pillar } = body; const add = body.add || [], remove = body.remove || [];
+      if (!(DETAIL_OPTIONS[pillar] || []).length) return err(`${pillar} has no detailed choices to change.`, 400);
       if (!(pillar in map)) return err('You have not set this pillar yet — use Add Detail instead.', 400);
       if (!add.length && !remove.length) return err('Nothing to change.', 400);
       const before = [...map[pillar]];

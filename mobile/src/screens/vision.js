@@ -24,14 +24,18 @@ export function render(ctx) {
   const error = data._error ? `<p class="warn">${safe(data._error)}</p>` : '';
   const saved = data._saved ? '<p class="save-note">Saved.</p>' : '';
 
-  // Additions: a pillar not selected yet, or a sub-selection not yet held.
-  const addable = element_keys.flatMap((k) => {
-    const opts = pillar_options[k] || [];
-    if (!byKey.has(k)) return opts.length ? opts.map((o) => ({ pillar: k, sub: o })) : [{ pillar: k, sub: '' }];
-    const held = stanceOf(byKey.get(k));
-    return opts.filter((o) => !held.includes(o)).map((o) => ({ pillar: k, sub: o }));
+  // Owner decision (2026-11-25): "Add detail" and "Declare a change" exist only
+  // for items that HAVE detail, read from the server's pillar_options (today:
+  // Intimacy). A pillar with no detailed choices (Kids, Cohabitate, Travel
+  // together) gets neither action, and a panel is not rendered at all when no
+  // item has detail.
+  const hasDetail = (k) => (pillar_options[k] || []).length > 0;
+  const detailKeys = element_keys.filter(hasDetail);
+  const addable = detailKeys.flatMap((k) => {
+    const held = byKey.has(k) ? stanceOf(byKey.get(k)) : [];
+    return pillar_options[k].filter((o) => !held.includes(o)).map((o) => ({ pillar: k, sub: o }));
   });
-  const changeable = goals.filter((g) => (pillar_options[g.key] || []).length);
+  const changeable = goals.filter((g) => hasDetail(g.key));
 
   return `<section class="intro"><span class="eyebrow">VISION</span><h1>Where you're headed</h1></section>
 
@@ -47,17 +51,17 @@ export function render(ctx) {
       ${element_keys.map(k=>`<fieldset><legend><label><input type="checkbox" name="pillar" value="${safe(k)}" ${byKey.has(k)?'checked':''}> ${safe(k)}</label></legend>${(pillar_options[k]||[]).map(o=>`<label class="checkbox-row"><input type="checkbox" data-pillar-choice="${safe(k)}" value="${safe(o)}" ${stanceOf(byKey.get(k)||{}).includes(o)?'checked':''}> ${safe(o)}</label>`).join('')}</fieldset>`).join('')}
       <label>Future children<select name="kids_intent">${[['undecided','Undecided'],['open','Open to children'],['want','Want children'],['no','Do not want additional children']].map(([k,l])=>`<option value="${k}" ${data.kids_intent===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
       <button class="primary" type="submit">Save Vision</button></form>
-    </section>` : `<section class="card"><h2>${safe(data.template_label || 'Your current Vision')}</h2><p>Current choices. Use Add detail or Declare a change below.</p><fieldset disabled>${element_keys.map(k=>`<label class="checkbox-row"><input type="checkbox" ${byKey.has(k)?'checked':''}>${safe(k)}${k==='Intimacy'&&byKey.has(k)?' · '+safe(stanceOf(byKey.get(k)).join(', ')):''}</label>`).join('')}</fieldset></section>`}
+    </section>` : `<section class="card"><h2>${safe(data.template_label || 'Your current Vision')}</h2><p>Current choices.${detailKeys.length ? ' Use Add detail or Declare a change below.' : ''}</p><fieldset disabled>${element_keys.map(k=>`<label class="checkbox-row"><input type="checkbox" ${byKey.has(k)?'checked':''}>${safe(k)}${k==='Intimacy'&&byKey.has(k)?' · '+safe(stanceOf(byKey.get(k)).join(', ')):''}</label>`).join('')}</fieldset></section>`}
 
-    <details class="card vision-editor" data-vision-panel="add" ${ctx.onboarding || data._panels?.add ? 'open' : ''}><summary><strong>Add detail</strong></summary>
+    ${detailKeys.length ? `<details class="card vision-editor" data-vision-panel="add" ${ctx.onboarding || data._panels?.add ? 'open' : ''}><summary><strong>Add detail</strong></summary>
     <p class="hint">A pillar or choice you haven't set yet. This only ever adds — it never removes anything.</p>
     ${addable.length ? `<form id="detail-form">
       <div class="field"><label for="detail-choice">What to add</label>
         <select id="detail-choice" name="choice">${addable.map((a) => `<option value="${safe(a.pillar)}|${safe(a.sub)}">${safe(a.sub ? `${a.pillar} — ${a.sub}` : a.pillar)}</option>`).join('')}</select></div>
       <button class="primary" type="submit">Add</button>
-    </form>` : '<p class="hint">Everything on offer is already part of your Vision.</p>'}</details>
+    </form>` : '<p class="hint">Everything on offer is already part of your Vision.</p>'}</details>` : ''}
 
-    <details class="card vision-editor" data-vision-panel="change" ${ctx.onboarding || data._panels?.change ? 'open' : ''}><summary><strong>Declare a change</strong></summary>
+    ${changeable.length ? `<details class="card vision-editor" data-vision-panel="change" ${ctx.onboarding || data._panels?.change ? 'open' : ''}><summary><strong>Declare a change</strong></summary>
     <p class="hint">A genuine change of mind within a pillar — adding or removing a choice. It must be disclosed to your partner and can't be made silently.</p>
     ${rc_open ? '' : '<p class="warn">Locked right now: changes can only be declared while Reality Check is open (Sunday 9pm to Monday 11am).</p>'}
     ${changeable.length ? `<form id="change-form">
@@ -71,7 +75,7 @@ export function render(ctx) {
       <label class="checkbox-row"><input type="checkbox" name="disclosed_to_partner" required ${rc_open ? '' : 'disabled'}> I've disclosed this to my match</label>
       <button class="secondary" type="submit" ${rc_open ? '' : 'disabled'}>Declare change</button>
     </form>` : '<p class="hint">No pillar with choices to change yet.</p>'}
-    </details>${error}${saved}
+    </details>` : ''}${error}${saved}
     ${changes.length ? `<section class="card"><h2>History</h2>${changes.map((c) => `<div class="clause">${safe(label(c.element_key))}: ${safe(c.from_value)} → ${safe(c.to_value)}</div>`).join('')}</section>` : ''}`;
 }
 
