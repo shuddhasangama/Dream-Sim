@@ -10,6 +10,7 @@ import face_match_service
 import liveness_secure_service
 import provider_jobs
 import digilocker_signup  # noqa: F401 — registers the digilocker_create job kind
+import guru_navigator  # noqa: F401 — registers the guru_reply job kind (DHASHU_ASYNC_GURU)
 
 def avatar_step():
     """Own connection: a slow image call must not block legal/identity checks."""

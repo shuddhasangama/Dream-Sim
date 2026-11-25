@@ -123,6 +123,7 @@ Totals: disabled-with-sign-in 12, member 151, member-web 107, public 9, server-t
 | POST | `/api/v1/profile/avatar/accept` | member | bearer session; own objects only |
 | POST | `/api/v1/profile/avatar/generate` | member | bearer session; own objects only |
 | POST | `/api/v1/profile/avatar/selfie` | member | bearer session; own objects only |
+| POST | `/api/v1/profile/background-prompt/dismiss` | member | bearer session; own objects only |
 | PUT | `/api/v1/profile/bio` | member | bearer session; own objects only |
 | POST | `/api/v1/profile/bio/withdraw` | member | bearer session; own objects only |
 | GET | `/api/v1/profile/chemistry` | member | bearer session; own objects only |
@@ -135,7 +136,6 @@ Totals: disabled-with-sign-in 12, member 151, member-web 107, public 9, server-t
 | POST | `/api/v1/profile/liveness/complete` | member | bearer session; own objects only |
 | GET | `/api/v1/profile/personal` | member | bearer session; own objects only |
 | PUT | `/api/v1/profile/personal` | member | bearer session; own objects only |
-| PUT | `/api/v1/profile/photo` | member | bearer session; own objects only |
 | GET | `/api/v1/profile/stats` | member | bearer session; own objects only |
 | PATCH | `/api/v1/profile/stats` | member | bearer session; own objects only |
 | POST | `/api/v1/profile/stats/reverification` | member | bearer session; own objects only |
@@ -290,6 +290,12 @@ Totals: disabled-with-sign-in 12, member 151, member-web 107, public 9, server-t
 | POST | `/vision/declare-change` | member-web | web session; redirects to sign-in |
 | GET | `/week` | member-web | web session; redirects to sign-in |
 | POST | `/week/act` | member-web | web session; redirects to sign-in |
+
+## Removed routes (answer 404)
+
+| Method | Path | Note |
+|---|---|---|
+| PUT | `/api/v1/profile/photo` | retired 2026-11-25: profile portrait upload (owner decision; the AI avatar replaces it) |
 
 ## Admin app
 

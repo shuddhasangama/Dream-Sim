@@ -36,6 +36,10 @@ SERVER_TO_SERVER = {
 }
 # 404 whenever secure sign-in is on (simulation and local tools).
 DISABLED_WITH_SIGN_IN = ('/pool', '/login/', '/admin', '/demo', '/verify/simulate', '/verify-contact')
+# Routes removed on purpose. Each must answer 404 (test_security_suite.py).
+RETIRED = {
+    ('PUT', '/api/v1/profile/photo'): 'retired 2026-11-25: profile portrait upload (owner decision; the AI avatar replaces it)',
+}
 ADMIN_PUBLIC = {'/healthz', '/', '/robots.txt', '/api/login', '/static/<path:filename>'}
 ADMIN_OWNER = {'/api/reports/markets', '/api/markets/readiness', '/api/reports/activities', '/api/activities/review',
                '/api/members/lock', '/api/members/unlock'}
@@ -97,6 +101,9 @@ def render():
     for rule in members:
         access, note = member_class(rule)
         lines.append(f'| {methods(rule)} | `{rule.rule}` | {access} | {note} |')
+    lines += ['', '## Removed routes (answer 404)', '', '| Method | Path | Note |', '|---|---|---|']
+    for (method, path), note in sorted(RETIRED.items()):
+        lines.append(f'| {method} | `{path}` | {note} |')
     lines += ['', '## Admin app', '', '| Methods | Path | Access |', '|---|---|---|']
     for rule in admin_rules():
         lines.append(f'| {methods(rule)} | `{rule.rule}` | {admin_class(rule)} |')

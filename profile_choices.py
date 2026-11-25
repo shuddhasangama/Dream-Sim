@@ -1,8 +1,5 @@
 """Explicit profile choices. No diagnosis, ethnicity filtering or inferred health state."""
-import base64
-import io
 import json
-from PIL import Image, ImageOps, UnidentifiedImageError
 import db
 import vision
 from api_contract import ApiError
@@ -79,23 +76,6 @@ def validate(body):
     if not body['share_health'] and (cats or note.strip()):
         raise ApiError('validation_error','Consent to share these details, or clear them before saving.')
     return {'consent':body['share_health'],'categories':cats,'note':note.strip()}, {'mode':mode,'categories':accepted if mode=='specific' else [],'include_undisclosed':body['include_undisclosed']}
-
-def photo(data):
-    if data is None: return None
-    if type(data) is not str or len(data)>2800000 or not data.startswith(('data:image/jpeg;base64,','data:image/png;base64,','data:image/webp;base64,')):
-        raise ApiError('validation_error','Choose a JPEG, PNG or WebP photo up to 2 MB.')
-    try:
-        raw=base64.b64decode(data.split(',',1)[1],validate=True)
-        if len(raw)>2000000: raise ValueError()
-        with Image.open(io.BytesIO(raw)) as src:
-            if src.width*src.height>20000000 or min(src.size)<160: raise ValueError()
-            im=ImageOps.exif_transpose(src).convert('RGB')
-            # Strip metadata and standardise dimensions. Client lets the user choose crop.
-            im=ImageOps.fit(im,(480,600))
-            out=io.BytesIO(); im.save(out,format='JPEG',quality=85)
-        return 'data:image/jpeg;base64,'+base64.b64encode(out.getvalue()).decode()
-    except (ValueError, OSError, UnidentifiedImageError, Image.DecompressionBombError):
-        raise ApiError('validation_error','Photo could not be read. Use a clear image between 160 pixels and 20 megapixels.')
 
 def public_profile(conn, user):
     stats=user['stats']; shared=stats.get('health_shared',{})

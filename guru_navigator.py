@@ -10,6 +10,7 @@ import os
 import uuid
 import time
 import guru_provider
+import provider_jobs
 from flask import g, jsonify, request
 import db
 from auth_sessions import sql, transaction
@@ -167,7 +168,9 @@ def state(conn, uid, guidance):
         'ai_available':guru_provider.available(), 'ai_consent':value.get('ai_consent',False), 'history':value['history'], 'memories':value['memories'],
         'remember':value['remember'], 'topics':[{'id':t,'label':TOPICS[t][0]} for t in topics],
         'shared_topics':[{'id':t,'label':TOPICS[t][0]} for t in topics if t in SHARED_TOPICS] if scope else [],
-        'discussions':discussions}
+        'discussions':discussions,
+        'pending_job':({'job_id':value['pending']['job'],'until':int(value['pending']['until'])}
+                       if (value.get('pending') or {}).get('job') else None)}
 
 
 def stage_guidance(user, guidance):
@@ -205,6 +208,11 @@ def send_message(conn,uid,guidance,body,refresh_guidance=None):
                 raise ApiError('request_conflict','This request was already used.',409)
             return
         now=time.time()
+        waiting=value.get('pending') or {}
+        if waiting.get('job') and waiting.get('rid')==rid:
+            if (waiting.get('message'),waiting.get('topic'))!=(message,topic):
+                raise ApiError('request_conflict','This request was already used.',409)
+            return                                     # same request again: still the same pending job
         if value.get('pending',{}).get('until',0)>now:
             raise ApiError('busy','Guru is answering your previous message. Try shortly.',409)
         usage=[x for x in value.get('usage',[]) if x>now-86400]
@@ -212,15 +220,21 @@ def send_message(conn,uid,guidance,body,refresh_guidance=None):
             raise ApiError('rate_limited','Please pause before sending more messages.',429)
         value['usage']=usage+[now]
         token=uuid.uuid4().hex
-        value['pending']={'id':token,'until':now+30}
         binding=account_binding(conn,uid)
+        if async_enabled() and wants_ai(value,message) and guru_provider.available():
+            # perf-worker: the AI reply runs on the worker. The job row holds only an
+            # opaque token; the message stays in this member's encrypted Guru store.
+            job_id=provider_jobs.enqueue(conn,JOB_KIND,uid,token,'guru:'+uid+':'+rid)
+            value['pending']={'id':token,'until':now+ASYNC_SECONDS,'job':job_id,'rid':rid,'message':message,'topic':topic,
+                              'binding':binding,'guidance':{k:guidance.get(k) for k in ('topic_stage','headline','body')}}
+            save_private(conn,uid,value)
+            return
+        value['pending']={'id':token,'until':now+30}
         save_private(conn,uid,value)
     # Never hold a database transaction/lock during an external request.
     answer=respond(message,topic,value['history'],guidance)
     mode='guided'
-    sensitive=any(w in message.lower() for w in ('unsafe','afraid','threat','violence','forced','hurt myself','suicide'))
-    status_question=any(w in message.lower() for w in ('what next','next step','what now','waiting','status'))
-    if value.get('ai_consent') and not sensitive and not status_question:
+    if wants_ai(value,message):
         generated=guru_provider.reply(message,topic,value['history'],value['memories'] if value['remember'] else [],guidance)
         if generated: answer=generated;mode='ai'
     if refresh_guidance:
@@ -238,6 +252,84 @@ def send_message(conn,uid,guidance,body,refresh_guidance=None):
             {'role':'guru','text':answer,'topic':topic,'at':stamp(),'mode':mode}])[-100:]
         current['receipts']=(current['receipts']+[{'id':rid,'text':message,'topic':topic}])[-50:]
         save_private(conn,uid,current)
+
+
+ASYNC_SECONDS = 90
+JOB_KIND = 'guru_reply'
+
+
+def async_enabled():
+    return os.environ.get('DHASHU_ASYNC_GURU', '0') == '1'
+
+
+def wants_ai(value, message):
+    lowered = message.lower()
+    sensitive = any(w in lowered for w in ('unsafe','afraid','threat','violence','forced','hurt myself','suicide'))
+    status_question = any(w in lowered for w in ('what next','next step','what now','waiting','status'))
+    return bool(value.get('ai_consent')) and not sensitive and not status_question
+
+
+def settle(conn, uid, token, answer, mode):
+    """Write the reply for pending request `token`, once. False if already settled or stale."""
+    with write(conn, uid):
+        return _settle_locked(conn, uid, token, answer, mode)
+
+
+def _settle_locked(conn, uid, token, answer, mode):
+    """settle() inside a transaction the caller already holds (with this member's rows locked)."""
+    if True:
+        current = private(conn, uid)
+        pending = current.get('pending') or {}
+        if pending.get('id') != token:
+            return False                                   # already answered or replaced: idempotent no-op
+        current.pop('pending', None)
+        if account_binding(conn, uid) != pending.get('binding'):
+            save_private(conn, uid, current)               # privacy settings changed: never store the answer
+            return False
+        current['history'] = (current['history'] + [
+            {'role': 'user', 'text': pending['message'], 'topic': pending['topic'], 'at': stamp()},
+            {'role': 'guru', 'text': answer, 'topic': pending['topic'], 'at': stamp(), 'mode': mode}])[-100:]
+        current['receipts'] = (current['receipts'] + [{'id': pending['rid'], 'text': pending['message'], 'topic': pending['topic']}])[-50:]
+        save_private(conn, uid, current)
+        return True
+
+
+def guided_answer(value, pending):
+    return respond(pending['message'], pending['topic'], value['history'], pending['guidance'])
+
+
+def _job_run(conn, job):
+    uid, token = job['user_id'], job['ref']
+    value = private(conn, uid)
+    conn.commit()                                          # end the read; no transaction is held during the provider call
+    pending = value.get('pending') or {}
+    if pending.get('id') != token:
+        return                                             # settled by timeout / edited / replaced
+    memories = value['memories'] if value.get('remember') else []
+    generated = guru_provider.reply(pending['message'], pending['topic'], value['history'], memories, pending['guidance'])
+    settle(conn, uid, token, generated or guided_answer(value, pending), 'ai' if generated else 'guided')
+
+
+def _job_dead(conn, job):
+    # Called by provider_jobs.finish() INSIDE its transaction: lock and settle there.
+    uid = job['user_id']
+    db.lock_user_rows(conn, uid, *_partners(conn, uid))
+    value = private(conn, uid)
+    pending = value.get('pending') or {}
+    if pending.get('id') == job['ref']:
+        _settle_locked(conn, uid, job['ref'], guided_answer(value, pending), 'guided')
+
+
+def settle_pending(conn, uid):
+    """App timeout: answer a still-pending async reply in guided mode (the job then no-ops)."""
+    value = private(conn, uid)
+    pending = value.get('pending') or {}
+    if not pending.get('job'):
+        return False
+    return settle(conn, uid, pending['id'], guided_answer(value, pending), 'guided')
+
+
+provider_jobs.register_kind(JOB_KIND, _job_run, on_dead=_job_dead, max_attempts=2, lease=60)
 
 
 def register(api,get_db,journey_state):
@@ -268,6 +360,9 @@ def register(api,get_db,journey_state):
         conn,uid,guidance=context()
         if body['action']=='message':
             send_message(conn,uid,guidance,body,lambda:stage_guidance(g.api_user,journey_state(g.api_user)['next_action']))
+            return jsonify(state(conn,uid,guidance))
+        if body['action']=='settle_pending':
+            settle_pending(conn,uid)
             return jsonify(state(conn,uid,guidance))
         with write(conn, uid):
             value=private(conn,uid)

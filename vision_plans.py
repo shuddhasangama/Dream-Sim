@@ -3,6 +3,15 @@ from api_contract import ApiError
 
 OPTIONS = {'Intimacy': ['Emotional', 'Physical'], 'Kids': [],
     'Cohabitate': ['Chores split', 'Expenses sharing', 'Extended family', 'Pets'], 'Travel together': []}
+# Owner decision (2026-11-25): only items with detail get "Add detail" and
+# "Declare a change". Today that is Intimacy; the others carry no detail.
+DETAIL_OPTIONS = {k: (list(v) if k == 'Intimacy' else []) for k, v in OPTIONS.items()}
+
+
+def has_detail(pillar):
+    return bool(DETAIL_OPTIONS.get(pillar))
+
+
 SETS = {'grow': set(OPTIONS), 'two': {'Intimacy', 'Cohabitate', 'Travel together'},
     'explore': {'Intimacy', 'Travel together'}}
 LABELS = {'grow': 'Family', 'two': 'Together', 'explore': 'Travel Partner', 'custom': 'Custom'}

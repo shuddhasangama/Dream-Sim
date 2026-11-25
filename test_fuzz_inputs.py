@@ -51,7 +51,7 @@ class AuthFuzzTests(SafeAnswers, unittest.TestCase):
 
 
 class MemberFuzzTests(SafeAnswers, RouteTestCase):
-    ROUTES = [('PATCH', '/api/v1/profile/stats'), ('PUT', '/api/v1/profile/photo'), ('POST', '/api/v1/profile/avatar/selfie'),
+    ROUTES = [('PATCH', '/api/v1/profile/stats'), ('PUT', '/api/v1/profile/personal'), ('POST', '/api/v1/profile/avatar/selfie'),
               ('POST', '/api/v1/identity-capture'), ('POST', '/api/v1/reach/set-range'), ('POST', '/api/v1/reach/widen'),
               ('POST', '/api/v1/reach/ignore'), ('POST', '/api/v1/reach/show-all'), ('PUT', '/api/v1/profile/chemistry/activities'),
               ('POST', '/api/v1/discovery/decision')]

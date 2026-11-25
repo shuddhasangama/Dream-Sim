@@ -39,7 +39,7 @@ import client_ip
 log = logging.getLogger('dhashu.abuse')
 
 ALLOWED_METHODS = {'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'}
-UPLOAD_PATHS = ('/api/v1/profile/photo', '/api/v1/profile/avatar/selfie', '/api/v1/identity-capture')
+UPLOAD_PATHS = ('/api/v1/profile/avatar/selfie', '/api/v1/identity-capture')   # /profile/photo retired 2026-11-25
 CATEGORIES = {
     # category: (path prefixes, limit, window seconds)
     'search': (('/api/v1/discovery',), 60, 60),

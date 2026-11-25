@@ -1,3 +1,4 @@
+import {waitForReply} from '../guruWait.js';
 // Private and shared spaces have distinct forms and explicit sharing labels.
 export function renderNavigator(n, safe) {
   if (!n?.enabled) return '';
@@ -5,6 +6,7 @@ export function renderNavigator(n, safe) {
   const button=(action,label)=>`<button type="button" class="secondary" data-private-action="${action}">${label}</button>`;
   return `<section class="card"><h2>Talk with Guru</h2><p role="status"><strong>${n.mode==='ai'?'AI-assisted mode':'Guided mode'}</strong></p><p class="hint">${n.mode==='ai'?'AI-assisted conversation.':'Guided prompts.'} Stage/status answers remain guided, even in AI-assisted mode. Each reply shows which mode produced it. Your last 50 exchanges stay private from your partner. Only messages you submit in a shared conversation go to your partner.</p>
     <form id="guru-private-form"><label for="guru-topic">Explore</label><select id="guru-topic" name="topic">${n.topics.map(t=>`<option value="${safe(t.id)}" ${drafts.topic===t.id?'selected':''}>${safe(t.label)}</option>`).join('')}</select>
+    ${n.pending_job?'<p class="guru-thinking" role="status" aria-live="polite">Guru is thinking…</p>':''}
     <div class="guru-history" aria-label="Private conversation">${n.history.map(m=>`<div class="${m.role==='user'?'p-bubble-user':'p-bubble-guru'}"><strong>${m.role==='user'?'You':m.mode==='ai'?'Guru · AI':'Guru · guided'}</strong><p>${safe(m.text)}</p></div>`).join('')}</div>
     <label for="guru-message">Your thoughts</label><textarea id="guru-message" name="text" maxlength="800" required placeholder="What would you like to explore?">${safe(drafts.text||'')}</textarea><button class="primary">Send privately</button></form>
     ${n.ai_available?`<details><summary>Optional AI responses</summary><p class="hint">When enabled, your message, last 10 exchanges, saved memories and current stage are sent to OpenAI. We disable response storage; provider safety logs may still retain content. Turning this off stops future sends; it cannot recall earlier requests.</p><label class="checkbox-row"><input id="guru-ai" type="checkbox" ${n.ai_consent?'checked':''}> Allow OpenAI-assisted replies</label></details>`:''}
@@ -40,7 +42,13 @@ export function bindNavigator(root,ctx) {
   const update=(next)=>patch({...data,navigator:{...next,_drafts:{topic:data.navigator?._drafts?.topic}}});
   const form=root.querySelector('#guru-private-form');
   form?.addEventListener('input',()=>{const f=new FormData(form);data.navigator._drafts={topic:f.get('topic'),text:f.get('text')};});
-  const privateAction=(body)=>run(async()=>update(await session.post('/api/v1/guru/private',body)));
+  // DHASHU_ASYNC_GURU: a reply on the worker comes back as pending_job; render
+  // "Guru is thinking…" first, then wait for it (or settle in guided mode).
+  const privateAction=(body)=>{
+    let latest=null;
+    return run(async()=>update(latest=await session.post('/api/v1/guru/private',body)))
+      .then(()=>latest?.pending_job ? run(async()=>update(await waitForReply(session,latest.pending_job))) : undefined);
+  };
   root.querySelector('#guru-private-form')?.addEventListener('submit',e=>{
     e.preventDefault();const f=new FormData(e.target);
     privateAction({action:'message',topic:f.get('topic'),text:f.get('text'),request_id:crypto.randomUUID()});

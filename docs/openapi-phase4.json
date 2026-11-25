@@ -10494,54 +10494,6 @@
         }
       }
     },
-    "/profile/photo": {
-      "put": {
-        "operationId": "putProfilePhoto",
-        "summary": "Validate and sanitise portrait to 480x600 JPEG; null removes it",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Actor-scoped profile envelope; sensitive disclosures are opt-in."
-          },
-          "400": {
-            "description": "Invalid fields or values."
-          },
-          "401": {
-            "description": "Authentication required."
-          },
-          "409": {
-            "description": "Current match or relationship holds matching preferences."
-          },
-          "415": {
-            "description": "JSON required."
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "photo": {
-                    "type": "string",
-                    "maxLength": 2800000
-                  }
-                },
-                "additionalProperties": false,
-                "required": [
-                  "photo"
-                ]
-              }
-            }
-          }
-        }
-      }
-    },
     "/profile/vision/template": {
       "put": {
         "operationId": "putVisionTemplate",
@@ -16160,6 +16112,49 @@
             }
           }
         }
+      }
+    },
+    "/profile/background-prompt/dismiss": {
+      "post": {
+        "x-generated": true,
+        "responses": {
+          "200": {
+            "description": "Actor-scoped result in the data/error envelope."
+          },
+          "400": {
+            "description": "Invalid strict JSON body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "operationId": "postProfileBackgroundPromptDismiss"
       }
     }
   },

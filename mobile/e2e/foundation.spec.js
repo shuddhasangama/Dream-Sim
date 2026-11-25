@@ -683,22 +683,24 @@ test('Vision: four pillars only, additive Add Detail, and Declare a Change gated
   await expect(page.getByText('Emotional intimacy is required. Physical intimacy is optional.')).toBeVisible();
   await expect(page.getByText(/Relocation|Career/)).toHaveCount(0);
 
-  // §7.2: Add Detail offers only what is NOT already held (Kids isn't set,
-  // Chores split already is) and actually changes the Vision.
+  // Owner decision (2026-11-25): Add detail / Declare a change only for items that
+  // have detail (pillar_options; today Intimacy). Kids, Cohabitate and Travel
+  // together get neither, even though they are part of this Vision.
   await page.locator('[data-vision-panel=add] summary').click();
   const choice = page.locator('#detail-choice');
-  await expect(choice.locator('option[value="Cohabitate|Chores split"]')).toHaveCount(0);
-  await expect(choice.locator('option[value="Cohabitate|Expenses sharing"]')).toHaveCount(1);
-  await choice.selectOption('Kids|Adoption');
-  await page.getByRole('button',{name:'Add',exact:true}).click();
-  await expect(page.getByText('Saved.')).toBeVisible();
-  await expect(page.locator('.chips').getByText('Kids · Adoption')).toBeVisible();
-  await expect(choice.locator('option[value="Kids|Adoption"]')).toHaveCount(0);
+  for (const pillar of ['Kids','Cohabitate','Travel together']) {
+    await expect(page.locator(`#detail-choice option[value^="${pillar}|"]`)).toHaveCount(0);
+  }
+  // Intimacy already holds both of its details, so there is nothing to add yet.
+  await expect(page.locator('[data-vision-panel=add]')).toContainText('Everything on offer is already part of your Vision.');
 
-  // §7.3: outside Reality Check the change form is locked, with the reason.
+  // §7.3: outside Reality Check the change form is locked, with the reason; and it
+  // lists only the item with detail.
   await page.locator('[data-vision-panel=change] summary').click();
   await expect(page.getByText(/Locked right now/)).toBeVisible();
   await expect(page.getByRole('button',{name:'Declare change'})).toBeDisabled();
+  await expect(page.locator('#change-pillar option')).toHaveText(['Intimacy']);
+  await expect(page.locator('.change-options[data-pillar="Kids"], .change-options[data-pillar="Cohabitate"]')).toHaveCount(0);
 
   // Step the simulated clock to Sunday 22:00 (RC open) and declare one.
   await tabbar(page).getByRole('button',{name:'Week'}).click();
@@ -710,18 +712,20 @@ test('Vision: four pillars only, additive Add Detail, and Declare a Change gated
   await expect(page.getByText(/Locked right now/)).toHaveCount(0);
 
   await page.locator('[data-vision-panel=change]').evaluate(el=>el.open=true);
-  await page.locator('#change-pillar').selectOption('Kids');
-  await page.getByLabel('Add Surrogacy').check();
-  await page.getByLabel("I've disclosed this to my match").check();
-  await page.getByRole('button',{name:'Declare change'}).click();
-  await expect(page.locator('.chips').getByText('Kids · Adoption, Surrogacy')).toBeVisible();
-
-  // A removal that would break the rules is refused with the server's reason:
-  // Kids only (two pillars would remain, fine) — but Intimacy's last kind is not.
-  await page.locator('#change-pillar').selectOption('Intimacy');
-  await page.getByLabel('Remove Emotional').check();
   await page.getByLabel('Remove Physical').check();
   await page.getByLabel("I've disclosed this to my match").check();
   await page.getByRole('button',{name:'Declare change'}).click();
-  await expect(page.getByText('Intimacy is mandatory')).toBeVisible();
+  await expect(page.locator('.chips').getByText('Intimacy · Emotional',{exact:true})).toBeVisible();
+
+  // Additive: what was removed can be added back through Add detail (Intimacy only).
+  await page.locator('[data-vision-panel=add]').evaluate(el=>el.open=true);
+  await expect(choice.locator('option')).toHaveText(['Intimacy — Physical']);
+  await page.getByRole('button',{name:'Add',exact:true}).click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+  await expect(page.locator('.chips').getByText('Intimacy · Emotional, Physical')).toBeVisible();
+
+  // Emotional intimacy is required: it can never be offered for removal.
+  await page.locator('[data-vision-panel=change]').evaluate(el=>el.open=true);
+  await expect(page.getByLabel('Required: Emotional')).toBeDisabled();
+  await expect(page.getByLabel('Remove Emotional')).toHaveCount(0);
 });
