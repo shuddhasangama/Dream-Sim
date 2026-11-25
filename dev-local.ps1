@@ -7,6 +7,7 @@
     .\dev-local.ps1 check      # show which DB the app would connect to
     .\dev-local.ps1 init       # apply schema_postgres.sql + admin schema to dhashu_local
     .\dev-local.ps1 seed       # insert 100 synthetic users (seed 42) into dhashu_local
+    .\dev-local.ps1 migrate    # Alembic DRY RUN: print the SQL for dhashu_local (-Apply to run it)
     .\dev-local.ps1 test       # pytest with DATABASE_URL removed; Postgres tests -> dhashu_test
     .\dev-local.ps1 web        # backend      http://127.0.0.1:5000
     .\dev-local.ps1 worker     # bgv_worker.py (idle: web never queues checks)
@@ -18,9 +19,10 @@
 #>
 param(
   [Parameter(Mandatory = $true, Position = 0)]
-  [ValidateSet('check', 'init', 'seed', 'test', 'web', 'worker', 'admin', 'admin-create', 'admin-reset', 'mobile', 'mobile-test')]
+  [ValidateSet('check', 'init', 'seed', 'test', 'web', 'worker', 'admin', 'admin-create', 'admin-reset', 'migrate', 'mobile', 'mobile-test')]
   [string]$Part,
   [string]$Email = 'owner@local.test',
+  [switch]$Apply,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$Rest = @()
 )
@@ -60,6 +62,11 @@ switch ($Part) {
     & $Py -m admin_dashboard.manage init
   }
   'seed' { & $Py generate_users.py --count 100 --seed 42 --write-db }
+  'migrate' {
+    # Local dhashu_local only (DATABASE_URL guard above). Dry run prints SQL and changes nothing.
+    if ($Apply) { & $Py -m alembic upgrade head; & $Py -m alembic current }
+    else { & $Py -m alembic upgrade head --sql; Write-Host 'DRY RUN only. Re-run with -Apply to migrate dhashu_local.' }
+  }
   'test' {
     $dsn = Join-Path $Root '.venv\dhashu-test-dsn.txt'
     Set-Content -Path $dsn -Value $env:TEST_DATABASE_URL -Encoding ascii -NoNewline

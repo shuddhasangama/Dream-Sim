@@ -288,7 +288,8 @@ def init_db(
             cur.execute(sql)
 
         _commit(conn)
-        reconcile_columns(conn, schema_path)
+        if schema_reconcile_enabled():
+            reconcile_columns(conn, schema_path)
         enforce_unique_indexes(conn)
         widen_contact_channels(conn)
         return
@@ -297,7 +298,8 @@ def init_db(
     sql = path.read_text(encoding="utf-8")
     conn.executescript(sql)
     _commit(conn)
-    reconcile_columns(conn, schema_path)
+    if schema_reconcile_enabled():
+        reconcile_columns(conn, schema_path)
     enforce_unique_indexes(conn)
     widen_contact_channels(conn)
 
@@ -314,6 +316,14 @@ def init_db(
 #   startup     never from requests: the schema was initialised at process
 #               start (service_entrypoint.py / dev-local.ps1).
 #   per_request legacy behaviour (escape hatch only).
+
+def schema_reconcile_enabled() -> bool:
+    """mon-alembic: reconcile_columns() adds missing columns on the fly. It stays on
+    (DHASHU_SCHEMA_RECONCILE=1, default) until Alembic migrations are adopted in
+    production; then set DHASHU_SCHEMA_RECONCILE=0 so schema changes go only
+    through reviewed migrations (docs/MIGRATIONS.md)."""
+    return os.environ.get("DHASHU_SCHEMA_RECONCILE", "1").strip() != "0"
+
 
 SCHEMA_INIT_MODES = ("once", "startup", "per_request")
 _SCHEMA_READY: set = set()
