@@ -388,8 +388,16 @@ class StartupTests(unittest.TestCase):
         self.assertIn("ACTIVE True ['/api/v1/dev/login-as', '/api/v1/dev/logout', '/api/v1/dev/refresh', '/api/v1/dev/users']", local.stdout)
         self.assertIn('LOCAL HARNESS ACTIVE', local.stderr)
         # Through the real app's /api/v1 envelope: same error shape the mobile client parses.
-        self.assertIn('ENVELOPE 400 {"data": null, "error": {"code": "validation_error", "detail": null, '
-                      '"message": "Choose a local user.", "reference": null}}', local.stdout)
+        import json as _json, re as _re
+        line = next(l for l in local.stdout.splitlines() if l.startswith('ENVELOPE '))
+        status, body = line.split(' ', 2)[1:]
+        envelope = _json.loads(body)
+        self.assertEqual(status, '400')
+        self.assertIsNone(envelope['data'])
+        # mon-sentry: 'reference' carries the request id so support can trace the log line.
+        reference = envelope['error'].pop('reference')
+        self.assertRegex(reference, r'^[0-9a-f]{32}$')
+        self.assertEqual(envelope['error'], {'code': 'validation_error', 'detail': None, 'message': 'Choose a local user.'})
         production_shape = self.import_app(RAILWAY_ENVIRONMENT='production')
         self.assertEqual(production_shape.returncode, 0, production_shape.stderr[-2000:])
         self.assertIn('ACTIVE False []', production_shape.stdout)
