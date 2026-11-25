@@ -145,6 +145,12 @@ class EveryScreenRendersTests(RouteTestCase):
                 # feature-off response, not a template crash in a user journey.
                 self.assertIn('not enabled',response.get_data(as_text=True).lower())
                 continue
+            if path.startswith('/api/v1/auth/') and response.status_code==503:
+                # Secure sign-in is off in this suite: auth.secure_boundary answers every
+                # /api/v1/auth/* call with an explicit 503 auth_unavailable (feature off,
+                # not a crash). Any other 5xx, or a 503 without that code, still fails.
+                self.assertEqual((response.get_json(silent=True) or {}).get('error',{}).get('code'),'auth_unavailable',path)
+                continue
             if response.status_code >= 500:
                 broke.append(f"{path} → {response.status_code}")
         self.assertEqual(broke, [], f"{label}: screens returned a server error")
