@@ -111,3 +111,16 @@ Never against production.
 5. **Run Locust** from a separate machine: `-u 225 -r 15 -t 20m --host https://<staging-host>`, then a 2× spike (`-u 450`) for 5 minutes.
 6. **Pass criteria:** p95 < 500 ms for every endpoint except REACH until it's cached; 5xx < 0.5%; no pool timeouts; Postgres connections within the budget; CPU < 75%.
 7. **Record:** the Locust CSVs, Railway metrics (CPU, memory, connections) and the slowest queries (`pg_stat_statements` is available on staging Postgres).
+
+## Guru AI replies on the worker (perf-worker, `DHASHU_ASYNC_GURU`)
+
+Default `0`: the web request calls OpenAI itself (unchanged). With `DHASHU_ASYNC_GURU=1`:
+- `POST /api/v1/guru/private {action:'message'}` reserves the reply and enqueues one
+  `guru_reply` job (idempotent per request id) and returns `pending_job`.
+- The worker (`bgv_worker`) calls OpenAI through the `openai` circuit breaker, with no
+  database transaction held, and writes the answer only if the reply is still pending.
+- The app shows "Guru is thinking…", polls the owner-only `GET /api/v1/jobs/<id>`, and
+  after 25 s asks `settle_pending`, which answers in guided mode; a late job then does
+  nothing. A dead job (2 attempts) also answers in guided mode.
+- Job rows hold only an opaque token: the message stays in the encrypted Guru store.
+Turn it on only when the worker service is running with the same OpenAI settings.
