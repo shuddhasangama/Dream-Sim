@@ -10,3 +10,4 @@ android/.gradle/
 android/**/build/
 *.jks
 *.keystore
+!.env.example

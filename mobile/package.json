@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "dev:local": "vite --host 127.0.0.1 --mode localbackend",
     "build": "vite build",
+    "build:emulator": "vite build --mode emulator",
     "test": "node --test tests/*.test.js",
     "sync": "npm run build && cap sync android",
+    "sync:emulator": "npm run build:emulator && cap sync android",
     "android": "cap open android"
   },
   "dependencies": {

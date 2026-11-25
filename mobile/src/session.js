@@ -26,9 +26,14 @@ export function classify(e) {
 // No automatic mutation retries. Refresh is serialized; a lost response requires
 // OTP again because replaying a consumed refresh credential revokes its family.
 export class Session {
-  constructor(send, vault, now = () => Date.now()) {
+  // cookieAuth: browser + local backend only (apiConfig kind 'local-proxy').
+  // The local backend runs without secure sign-in and identifies the user by
+  // its own same-origin session cookie (set at /pool). No tokens are created,
+  // stored or sent in this mode; every other mode is unchanged.
+  constructor(send, vault, now = () => Date.now(), {cookieAuth = false} = {}) {
     this.send = send; this.vault = vault; this.now = now;
     this.tokens = null; this.flight = null; this.generation = 0;
+    this.cookieAuth = cookieAuth === true;
   }
   async raw(path, method = 'GET', body, token) {
     // IDs contain ':' and '|'; screens may percent-encode those characters.
@@ -85,6 +90,10 @@ export class Session {
     this.tokens = {...value, expiresAt: this.now() + value.expires_in * 1000};
   }
   async restore() {
+    if (this.cookieAuth) {
+      try { await this.raw('/api/v1/me'); return true; }
+      catch (e) { if (e.status === 401) return false; throw e; }
+    }
     const stored = await this.vault.read();
     if (!stored) return false;
     await this.refresh(stored); return true;
@@ -114,6 +123,7 @@ export class Session {
   // worth replaying, and a mutation must never be silently replayed either
   // (see the class docstring — a lost response needs OTP again).
   async authed(path, method, body) {
+    if (this.cookieAuth) return this.raw(path, method, body);
     if (this.flight) await this.flight;
     if (!this.tokens) throw new ApiError('Please sign in.', 401);
     if (this.tokens.expiresAt < this.now() + 30000) await this.refresh();
@@ -134,6 +144,10 @@ export class Session {
     const token = this.tokens?.access_token;
     this.generation++; this.tokens = null;
     await this.vault.clear();
+    if (this.cookieAuth) {
+      // The backend's own web logout clears its session cookie.
+      try { await this.send('/logout', 'POST'); return true; } catch { return false; }
+    }
     if (token) {
       try { await this.raw('/api/v1/auth/logout', 'POST', {}, token); }
       catch (e) { if (e.status !== 401) return false; }
