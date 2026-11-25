@@ -22,3 +22,9 @@ Claude outputs/
 .venv/
 *.apk
 *.aab
+
+# Apple/Android signing material never belongs in git (sec-apple). The files already
+# committed under mobile/ stay tracked until the keys are revoked and replaced (manual).
+*.p8
+*.p12
+*.mobileprovision

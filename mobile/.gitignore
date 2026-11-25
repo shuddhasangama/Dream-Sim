@@ -11,3 +11,8 @@ android/**/build/
 *.jks
 *.keystore
 !.env.example
+
+# Signing material (sec-apple)
+*.p8
+*.p12
+*.mobileprovision
