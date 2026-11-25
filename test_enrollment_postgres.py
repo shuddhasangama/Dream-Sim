@@ -52,6 +52,7 @@ class PostgresEnrollmentTests(unittest.TestCase):
 class PostgresApiOnlyJourneyTests(unittest.TestCase):
     connect=pg.PostgresAuthenticationTests.connect
     cleanup=pg.PostgresAuthenticationTests.cleanup
+    PHONES=e2e.ApiOnlyJourneyTests.PHONES
     setup_profiles=e2e.ApiOnlyJourneyTests.setup_profiles
     call=e2e.ApiOnlyJourneyTests.call
     post=e2e.ApiOnlyJourneyTests.post
