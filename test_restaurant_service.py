@@ -112,7 +112,10 @@ class RestaurantTests(unittest.TestCase):
         # New pair cycle, with no frozen plan.
         self.conn.execute('DELETE FROM DatePlan')
         self.conn.commit()
-        self.assertEqual(self.fixture.choose(places=['indiranagar','jayanagar','koramangala']).status_code,400)
+        # The area limit was raised from two to three in f0623e1 (2026-11-18):
+        # four areas are rejected, three are accepted.
+        self.assertEqual(self.fixture.choose(places=['indiranagar','jayanagar','koramangala','hsr-layout']).status_code,400)
+        self.assertEqual(self.fixture.choose(places=['indiranagar','jayanagar','koramangala']).status_code,200)
 
     def test_browser_csrf_and_render(self):
         from test_segment_efg_routes import app_module
