@@ -69,3 +69,13 @@ def _no_leaked_sqlite_connections():
             "deleted, failing at teardown rather than on the assertion.\n"
             "Fix: self.addCleanup(conn.close) when you open it."
         )
+
+
+@pytest.fixture(autouse=True)
+def _fresh_circuit_breakers():
+    """c-resilience: breakers are per process. Tests that simulate provider
+    outages must not leave a breaker open for the next test."""
+    import resilience
+    resilience.reset_all()
+    yield
+    resilience.reset_all()

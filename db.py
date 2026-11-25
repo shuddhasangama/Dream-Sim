@@ -195,7 +195,9 @@ def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> Any:
                 "is not installed."
             ) from exc
 
-        return psycopg.connect(database_url, row_factory=dict_row)
+        conn = psycopg.connect(database_url, row_factory=dict_row, connect_timeout=5)
+        apply_timeouts(conn)
+        return conn
 
     if db_path != ":memory:":
         db_path = Path(db_path)
@@ -251,11 +253,31 @@ def pool_enabled() -> bool:
             and os.environ.get("DHASHU_DB_POOL", "1").strip() != "0")
 
 
+def db_timeouts() -> tuple[int, int]:
+    """c-resilience: (statement_timeout_ms, lock_timeout_ms) for PostgreSQL sessions.
+    DHASHU_DB_STATEMENT_TIMEOUT_MS (default 15000) and DHASHU_DB_LOCK_TIMEOUT_MS
+    (default 5000); 0 disables. A slow query or a stuck lock fails that one
+    request (503 service_busy) instead of holding a worker and connection forever."""
+    return (_int_setting("DHASHU_DB_STATEMENT_TIMEOUT_MS", 15000, 0, 600000),
+            _int_setting("DHASHU_DB_LOCK_TIMEOUT_MS", 5000, 0, 600000))
+
+
+def apply_timeouts(conn: Any) -> None:
+    """SET (not connect options), so a URL's own options such as search_path stay intact."""
+    statement_ms, lock_ms = db_timeouts()
+    with conn.cursor() as cur:
+        cur.execute("SELECT set_config('statement_timeout', %s, false), set_config('lock_timeout', %s, false)",
+                    (str(statement_ms), str(lock_ms)))
+    conn.commit()
+
+
 def _reset_session(conn: Any) -> None:
-    # Called by the pool on return (after it rolled back any open transaction).
+    # Called by the pool on return (after it rolled back any open transaction):
+    # clear whatever the request set, then restore the standard timeouts.
     with conn.cursor() as cur:
         cur.execute("RESET ALL")
     conn.commit()
+    apply_timeouts(conn)
 
 
 def get_pool() -> Any:
@@ -266,8 +288,8 @@ def get_pool() -> Any:
     with _POOL_LOCK:
         pool = _POOLS.get(url)
         if pool is None:
-            pool = ConnectionPool(url, kwargs={"row_factory": dict_row}, open=True,
-                                  check=ConnectionPool.check_connection,
+            pool = ConnectionPool(url, kwargs={"row_factory": dict_row, "connect_timeout": 5}, open=True,
+                                  check=ConnectionPool.check_connection, configure=apply_timeouts,
                                   reset=_reset_session, name="dhashu", **pool_settings())
             _POOLS[url] = pool
     return pool

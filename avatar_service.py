@@ -1,4 +1,5 @@
 """Owner-bound, one-shot avatar jobs. Original selfie never becomes public."""
+import resilience
 import base64
 import hashlib
 import io
@@ -101,7 +102,7 @@ def generate(key,selfie):
     payload={'model':MODEL,'images':[{'image_url':data_url(selfie)}],'prompt':PROMPT,'n':2,'size':'1024x1024','quality':'low','output_format':'png',
              'safety_identifier':hashlib.sha256(selfie).hexdigest()}
     req=urllib.request.Request('https://api.openai.com/v1/images/edits',data=json.dumps(payload).encode(),headers={'Authorization':'Bearer '+key,'Content-Type':'application/json'},method='POST')
-    with urllib.request.urlopen(req,timeout=240) as response:body=json.loads(response.read(48_000_000))
+    with resilience.call('openai-images', urllib.request.urlopen, req, timeout=240) as response:body=json.loads(response.read(48_000_000))
     if len(body.get('data',[]))!=2:raise ValueError('Incomplete output')
     return [data_url(normalize(base64.b64decode(item['b64_json'],validate=True))) for item in body['data']]
 def work_one(conn,provider=generate):

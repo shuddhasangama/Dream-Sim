@@ -3,6 +3,7 @@
 No local OTP generation or simulation fallback. Never log provider payloads,
 Authorization headers, destination addresses or submitted codes.
 """
+import resilience
 import base64
 import json
 import http.client
@@ -43,7 +44,7 @@ def _post(resource, body):
         headers={'Authorization': 'Basic ' + base64.b64encode(credential).decode(),
                  'Content-Type': 'application/x-www-form-urlencoded'})
     try:
-        with urllib.request.build_opener(NoRedirect()).open(request, timeout=10) as response:
+        with resilience.call('twilio', urllib.request.build_opener(NoRedirect()).open, request, timeout=10) as response:
             result = json.loads(response.read(65536))
             if not isinstance(result, dict):
                 raise DeliveryUnavailable('Verification service unavailable.')
@@ -111,7 +112,7 @@ def _msg91_request(suffix, params):
         method='POST' if not suffix else 'GET',
         headers={'authkey': key, 'Content-Type': 'application/json'})
     try:
-        with urllib.request.build_opener(NoRedirect()).open(request, timeout=10) as response:
+        with resilience.call('msg91', urllib.request.build_opener(NoRedirect()).open, request, timeout=10) as response:
             result = json.loads(response.read(65536))
         if not isinstance(result, dict) or result.get('type') not in ('success', 'error'):
             raise DeliveryUnavailable('MSG91 returned an unexpected response.')

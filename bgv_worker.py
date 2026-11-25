@@ -49,18 +49,37 @@ def run(once=False):
         print('Processed one request.' if bgv_step(once=True) else 'No queued requests.')
         return
     stop=Event()
+    install_shutdown(stop)
     with ThreadPoolExecutor(max_workers=1,thread_name_prefix='avatar') as pool:
         pool.submit(avatar_loop,stop)
         try:
-            while True:
-                try:
-                    processed=bgv_step()
-                except Exception as error:
-                    import logging
-                    logging.error('BGV worker iteration failed: %s',type(error).__name__)
-                    processed=False
-                if not processed:time.sleep(5)
+            loop(stop)
         finally:stop.set()
+
+
+def loop(stop, step=None, idle=5):
+    """Main worker loop. Exits between iterations once `stop` is set, so a deploy's
+    SIGTERM never interrupts a claimed job midway (c-resilience graceful shutdown)."""
+    step=step or bgv_step
+    while not stop.is_set():
+        try:
+            processed=step()
+        except Exception as error:
+            import logging
+            logging.error('BGV worker iteration failed: %s',type(error).__name__)
+            processed=False
+        if not processed:stop.wait(idle)
+
+
+def install_shutdown(stop):
+    """SIGTERM/SIGINT ask the loop to finish its current iteration and exit."""
+    import signal
+    def handle(signum, frame):
+        print('Worker stopping after the current iteration.', flush=True)
+        stop.set()
+    for name in ('SIGTERM','SIGINT'):
+        if hasattr(signal,name):
+            signal.signal(getattr(signal,name),handle)
 
 
 if __name__ == '__main__':

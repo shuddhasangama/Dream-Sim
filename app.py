@@ -263,6 +263,40 @@ def _error_404(exc):
     return _handle(404, exc, log_it=False)
 
 
+def _busy_exceptions():
+    """c-resilience: errors that mean "the database is overloaded right now"."""
+    found = []
+    try:
+        from psycopg_pool import PoolTimeout
+        found.append(PoolTimeout)
+        from psycopg import errors as pg_errors
+        found += [pg_errors.QueryCanceled, pg_errors.LockNotAvailable]
+    except ImportError:
+        pass
+    return found
+
+
+def _service_busy(exc):
+    # Logged only: writing the incident to the database would wait on the very
+    # resource that is exhausted. The member gets a clear, retryable 503.
+    errors.log(errors.describe(request, _current_user_id(), exc, 503))
+    if request.path.startswith('/api/'):
+        response = jsonify(error='The service is busy. Please try again in a moment.', code='service_busy')
+        response.status_code = 503
+    else:
+        # Static page: no template or session lookups, which could need the
+        # database that is busy.
+        response = app.make_response(('<!doctype html><title>Busy</title><h1>We are busy right now</h1>'
+                                      '<p>Please try again in a moment.</p>', 503))
+        response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    response.headers['Retry-After'] = '2'
+    return response
+
+
+for _busy in _busy_exceptions():
+    app.register_error_handler(_busy, _service_busy)
+
+
 @app.errorhandler(Exception)
 def _error_unhandled(exc):
     """Everything that is not a deliberate abort(). This is the one the

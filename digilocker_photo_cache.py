@@ -3,6 +3,7 @@
 File retrieval is a single bounded GET, never a new DigiLocker API submission.
 No AI processing, liveness claim or public photo delivery happens here.
 """
+import resilience
 import base64
 import hashlib
 import io
@@ -18,7 +19,7 @@ MAX_BYTES=2_000_000
 def download(url):
     if not reference({'result':{'photo':url}}):raise ValueError('Unsupported document photo host')
     opener=urllib.request.build_opener(NoRedirect())
-    with opener.open(urllib.request.Request(url,headers={'Accept':'image/jpeg,image/png,image/webp'}),timeout=12) as response:
+    with resilience.call('digilocker-files', opener.open, urllib.request.Request(url,headers={'Accept':'image/jpeg,image/png,image/webp'}), timeout=12) as response:
         if response.status!=200:raise ValueError('Photo unavailable')
         raw=response.read(MAX_BYTES+1)
     if not raw or len(raw)>MAX_BYTES:raise ValueError('Invalid image size')

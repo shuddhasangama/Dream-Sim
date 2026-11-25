@@ -123,7 +123,8 @@ class PostgresPoolTests(unittest.TestCase):
         db.release(conn)
         conn = db.acquire()
         self.assertEqual(self.backend_pid(conn), pid)
-        self.assertEqual(conn.execute('SHOW statement_timeout').fetchone()['statement_timeout'], '0')
+        # Back to the standard session timeout (c-resilience), not the request's own value.
+        self.assertEqual(conn.execute('SHOW statement_timeout').fetchone()['statement_timeout'], '15s')
         self.assertNotEqual(conn.execute('SHOW search_path').fetchone()['search_path'], 'pg_catalog')
         conn.commit(); db.release(conn)
 
