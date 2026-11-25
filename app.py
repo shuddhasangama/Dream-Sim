@@ -124,6 +124,10 @@ observability.register(app)
 # sec-headers: security headers + CSP (HTML report-only by default).
 import security_headers
 security_headers.register(app)
+# c-api-abuse: method allow-list, body limits, JSON-only writes, CORS lock, enumeration
+# detection; rate limits only with DHASHU_ABUSE_LIMITS=1. Before sign-in checks.
+import abuse_guard
+abuse_guard.register(app)
 app.secret_key = os.environ.get("SECRET_KEY") or "dream-sim-local-play-test-only"
 # SECRET_KEY must be set in Railway. The fallback exists so `python app.py`
 # still runs locally; it signs session cookies and is public in this repo,
