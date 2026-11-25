@@ -32,8 +32,7 @@ def consent(conn,uid,body):
         raise ApiError('validation_error','Check your declared employer.')
     bgv_policy.check_for(conn,uid,'identity_details',cfg.environment)
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn,'LOCK TABLE "DigiLockerSession" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, uid)  # perf-rowlock (was a table-wide LOCK TABLE)
         row=latest(conn,uid,cfg.environment)
         if not row or row['id']!=body.get('session_id') or row['state']!='complete':
             raise ApiError('identity_required','Complete the current DigiLocker session first.',409)
@@ -83,7 +82,7 @@ def schedule(conn, user_id=None, employment_only=False):
             details_id=request_id(row['id'],'digilocker_details')
             if bundle.get('pan_scope'):
                 with auth_sessions.transaction(conn):
-                    if db._is_postgres_connection(conn):auth_sessions.sql(conn,'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
+                    db.lock_user_rows(conn, uid)  # perf-rowlock
                     if not db.fetch_one(conn,'BgvRequest',id=details_id):
                         linked=protection.open(row['protected_session'])
                         snapshot={'inputs':{'requestId':linked['requestId']},'declared':{},'bundle_session_id':row['id'],
@@ -123,7 +122,7 @@ def queue(conn,session,bundle,operation,inputs,declared):
     except ApiError:return
     # No automatic reassessment, including after definitive failure or a new consent link.
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):auth_sessions.sql(conn,'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, session['user_id'])  # perf-rowlock
         existing=db.fetch_all(conn,'BgvRequest',user_id=session['user_id'],operation=operation,environment=session['environment'])
         if any(r.get('case_check_id')==case_check and (operation=='current_employer' or bgv_app.Protection().open(r['protected_input'])['inputs'].get('matchType')=='exact') for r in existing):return
         provider_operation='employment_history' if operation=='current_employer' else operation

@@ -143,7 +143,7 @@ def capture(conn, uid, body):
     raw = normalize(body.get('image'))
     encrypted = cipher().encrypt(raw).decode('ascii')
     digest = hashlib.sha256(raw).hexdigest()
-    with transaction(conn):
+    with transaction(conn, uid):
         old = db.fetch_one(conn, 'IdentityCapture', id=uid)
         if old and old['account_binding_sha256'] == account_binding(conn, uid) and old['image_sha256'] == digest and old['status'] in ('captured', 'submitted') and old['image_expires_at'] > stamp():
             return view(conn, uid)  # Network retry; no duplicate or extended retention.
@@ -163,7 +163,7 @@ def capture(conn, uid, body):
 
 
 def remove(conn, uid):
-    with transaction(conn):
+    with transaction(conn, uid):
         row = db.fetch_one(conn, 'IdentityCapture', id=uid)
         if row and row['status'] != 'deleted':
             db.insert_row(conn, 'IdentityCapture', {**row, 'image_ciphertext': None,
@@ -175,7 +175,7 @@ def remove(conn, uid):
 def provider_result(conn, uid, capture_id, provider, reference, result):
     if result not in ('verified', 'rejected') or not provider.strip() or not reference.strip():
         raise ValueError('A provider name, result reference and verified/rejected result are required.')
-    with transaction(conn):
+    with transaction(conn, uid):
         row = db.fetch_one(conn, 'IdentityCapture', id=uid)
         if not row or row['capture_id'] != capture_id or row['status'] != 'submitted' or row['image_expires_at'] <= stamp():
             raise ValueError('Only the current, unexpired submitted capture can receive a result.')

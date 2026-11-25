@@ -16,12 +16,23 @@ from api_contract import ApiError
 
 
 @contextmanager
-def transaction(conn):
+def transaction(conn, uid=None, cid=None, lid=None):
+    """perf-rowlock: lock this member's User row (and, for couple flows, the
+    partner's: cid = Couple id, lid = LockIn id), the same sorted row locks
+    dating/planning transitions take. That closes the edit/lock-in races without
+    the old table-wide LOCK TABLE "User", which serialised every member.
+    Member-independent jobs (e.g. expired-data purges) pass no ids."""
     with auth_sessions.transaction(conn), db.defer_commits(conn):
-        # User is also the first lock used by dating transitions. Serializing
-        # the eligibility read with those writes closes the edit/lock-in race.
-        if db._is_postgres_connection(conn):
-            conn.execute('LOCK TABLE "User" IN SHARE ROW EXCLUSIVE MODE')
+        members = [uid]
+        if cid:
+            couple = db.fetch_one(conn, 'Couple', id=cid)
+            if couple:
+                members += [couple['partner_a_id'], couple['partner_b_id']]
+        if lid:
+            pair = db.fetch_one(conn, 'LockIn', id=lid)
+            if pair:
+                members += [pair['user_a'], pair['user_b']]
+        db.lock_user_rows(conn, *members)
         yield
 
 
@@ -36,7 +47,7 @@ def hours(clock):
 
 
 def save_stats(conn, uid, submitted, situation, clock, strict=False):
-    with transaction(conn):
+    with transaction(conn, uid):
         row = db.fetch_one(conn, 'User', id=uid)
         state = situation()
         stored = db.load_json_field(row['stats_json'], {})
@@ -118,7 +129,7 @@ def save_stats(conn, uid, submitted, situation, clock, strict=False):
 
 def save_activities(conn,uid,activities,custom_activities=None,partner_any=None):
     import chemistry_choices,activity_catalog
-    with transaction(conn):
+    with transaction(conn, uid):
         row=db.fetch_one(conn,'User',id=uid)
         previous=db.load_json_field(row['skills_json'],{})
         custom_activities=custom_activities if custom_activities is not None else [x for x in previous.get('custom_activities',[]) if x in (activities or {})]
@@ -145,7 +156,7 @@ def save_entry(conn,uid,key,value,clock,guard):
     options={'physical_boundary':chemistry.PHYSICAL_BOUNDARY_OPTIONS,'intimacy_pace':chemistry.INTIMACY_PACE_OPTIONS,'health_openness':chemistry.HEALTH_OPENNESS_OPTIONS}
     if key in options and value not in options[key]:
         raise ApiError('validation_error','Choose a listed option.')
-    with transaction(conn):
+    with transaction(conn, uid):
         guard(key)
         old=db.fetch_one(conn,'ChemistryEntry',user_id=uid,key=key)
         if old and old['value']==value:
@@ -181,7 +192,7 @@ def add_vision_detail(conn,uid,body,clock):
     request_id=text(body.get('request_id'),'request_id',80)
     detail_text=sub_selection if sub_selection is not None else pillar
     rid=f'{uid}:{request_id}'
-    with transaction(conn):
+    with transaction(conn, uid):
         old=_vision_replay_or_conflict(conn,'VisionEntry',rid,{'element_key':pillar,'detail_text':detail_text})
         if old is not None:
             return old
@@ -208,7 +219,7 @@ def apply_vision_preset(conn,uid,body,clock):
     request_id=text(body.get('request_id'),'request_id',80)
     rid=f'{uid}:{request_id}'
     content={'element_key':'Marriage','detail_text':'All pillars; Kids: Naturally; additive preset'}
-    with transaction(conn):
+    with transaction(conn, uid):
         old=_vision_replay_or_conflict(conn,'VisionEntry',rid,content)
         if old is not None:
             return old
@@ -243,7 +254,7 @@ def declare_vision_change(conn,uid,body,clock):
     remove=body.get('remove') or []
     request_id=text(body.get('request_id'),'request_id',80)
     rid=f'{uid}:{request_id}'
-    with transaction(conn):
+    with transaction(conn, uid):
         row=db.fetch_one(conn,'User',id=uid)
         vision_json=db.load_json_field(row['vision_json'],[])
         result=vision.declare_change(vision_json,pillar,add,remove,

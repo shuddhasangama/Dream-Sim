@@ -119,8 +119,7 @@ def create(conn, uid, body):
         raise ApiError('validation_error', 'Confirm identity consent before creating a link.') from None
     protection = Protection()
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn, 'LOCK TABLE "DigiLockerSession" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, uid)  # perf-rowlock (was a table-wide LOCK TABLE)
         existing = db.fetch_one(conn, 'DigiLockerSession', id=sid)
         if existing:
             owned(conn, uid, sid)

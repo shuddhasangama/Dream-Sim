@@ -49,6 +49,50 @@ class PostgresWeekTests(unittest.TestCase):
         self.assertEqual(len(db.fetch_all(self.conn,'LockIn')),1)
         self.assertTrue(self.decide(('owner',a))['replayed'])
 
+    def test_forced_interleaving_of_mutual_likes_still_creates_exactly_one_pair(self):
+        """perf-rowlock: make both transactions reach the decision at the same moment.
+        Without row locks neither would see the other's uncommitted like (0 pairs);
+        with them the second waits for the first and sees the committed like."""
+        import threading
+        from unittest import mock
+        a=self.match('owner','partner')
+        b=self.match('partner','owner')
+        barrier=threading.Barrier(2)
+        real=week_service.eligible_user
+        def meet_then_check(conn,uid):
+            try:
+                barrier.wait(timeout=1)   # with row locks only one thread gets here at a time
+            except threading.BrokenBarrierError:
+                pass
+            return real(conn,uid)
+        with mock.patch.object(week_service,'eligible_user',meet_then_check):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+                results=list(ex.map(self.decide,[('owner',a),('partner',b)]))
+        self.assertTrue(all(isinstance(r,dict) for r in results),results)
+        self.assertEqual(len(db.fetch_all(self.conn,'LockIn')),1)
+
+    def test_row_locks_do_not_block_unrelated_members(self):
+        """perf-rowlock: a transaction holding one member must not block another member."""
+        import threading
+        self.conn.execute('INSERT INTO "User" (id,journey_state,bgv_status) VALUES (%s,%s,%s)',('loner','dating','verified'))
+        holder=self.connect()
+        try:
+            with holder.transaction():
+                week_service.lock_users(holder,'owner','partner')
+                done=threading.Event()
+                def other():
+                    conn=self.connect()
+                    try:
+                        with conn.transaction():
+                            week_service.lock_users(conn,'stranger','loner')
+                        done.set()
+                    finally:
+                        conn.close()
+                t=threading.Thread(target=other);t.start();t.join(timeout=3)
+                self.assertTrue(done.is_set(),"unrelated members were blocked by another pair's lock")
+        finally:
+            holder.close()
+
     def test_competing_pairs_cannot_lock_the_same_person_twice(self):
         a=self.match('owner','partner')
         b=self.match('partner','owner')

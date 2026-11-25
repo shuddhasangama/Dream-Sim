@@ -71,8 +71,7 @@ def queue_create(conn, uid, body):
     if body.get('consent') is not True or body.get('consent_version') != VERSION:
         raise ApiError('consent_required', 'Confirm Signzy capture consent.')
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn, 'LOCK TABLE "LivenessSession" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, uid)  # perf-rowlock (was a table-wide LOCK TABLE)
         if row(conn, uid):
             return  # Existing capture reservation is idempotent, including lost responses.
         _, source = face_match_service.sources(conn, uid)

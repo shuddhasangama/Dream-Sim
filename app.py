@@ -1130,7 +1130,7 @@ def reach_work_verification():
     from api_contract import ApiError
     from evolution_service import transaction
     user=current_user()
-    with transaction(get_db()):
+    with transaction(get_db(), user['user_id']):
         fresh=load_user(user['user_id'])
         if reach_locked(fresh):return jsonify(error='REACH preferences are frozen during match review and date planning/debrief.'),403
         try:value=match_checks.validate(request.get_json(silent=True))

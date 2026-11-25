@@ -44,7 +44,7 @@ def block(conn,uid,cid,body,clock):
     start,end=body.get('start'),body.get('end')
     if minutes(start)>=minutes(end):raise ApiError('validation_error','End must be after start; split overnight blocks.')
     label=text(body.get('label'),'label',200)
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         relationship.couple(conn,uid,cid)
         normalized={'category':category,'days':days,'start':start,'end':end,'label':label}
         receipt,fresh=relationship.event(conn,uid,cid,'road','routine',normalized,clock,body.get('request_id'))
@@ -55,7 +55,7 @@ def block(conn,uid,cid,body,clock):
 
 
 def remove_block(conn,uid,cid,rid):
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         relationship.couple(conn,uid,cid);row=road(conn,uid,cid)
         blocks=db.load_json_field(row['routine_json'],[])
         if not any(b['id']==rid for b in blocks):return
@@ -72,7 +72,7 @@ def obligation(conn,uid,cid,body,clock):
     if not valid:raise ApiError('validation_error','Use ordered YYYY-MM-DD dates.')
     if type(body.get('shared')) is not bool:raise ApiError('validation_error','shared must be boolean.')
     title=text(body.get('title'),'title',200)
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         relationship.couple(conn,uid,cid)
         data={'type':kind,'travel_mode':mode,'starts_at':start,'ends_at':end,'title':title,'shared':body['shared']}
         receipt,fresh=relationship.event(conn,uid,cid,'road','obligation',data,clock,body.get('request_id'))
@@ -80,7 +80,7 @@ def obligation(conn,uid,cid,body,clock):
 
 
 def remove_obligation(conn,uid,cid,rid):
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         relationship.couple(conn,uid,cid)
         row=db.fetch_one(conn,'CalendarEntry',id=rid)
         if not row:return
@@ -90,7 +90,7 @@ def remove_obligation(conn,uid,cid,rid):
 
 def share(conn,uid,cid,slots,monday,derive):
     if type(slots) is not list or any(type(s) is not dict or set(s)!={'day','start','end'} or any(not isinstance(v,str) for v in s.values()) for s in slots):raise ApiError('validation_error','slots must contain day/start/end objects.')
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         relationship.couple(conn,uid,cid)
         live={key(s) for daily in availability(conn,uid,cid,monday,derive).values() for s in daily}
         if len({key(s) for s in slots})!=len(slots) or any(key(s) not in live for s in slots):raise ApiError('stale_availability','Share only unique currently available slots.',409)
@@ -98,7 +98,7 @@ def share(conn,uid,cid,slots,monday,derive):
 
 
 def vision_set(conn,uid,cid,body,clock,options):
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         relationship.couple(conn,uid,cid)
         row=db.fetch_one(conn,'User',id=uid);entries=db.load_json_field(row['vision_json'],[])
         selected=next((v for v in entries if v['key']==body.get('key')),None)

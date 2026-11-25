@@ -81,12 +81,26 @@ def stamp():
     return datetime.now(timezone.utc).isoformat()
 
 
+def _partners(conn, uid):
+    """Members uid currently shares Guru with: active lock-in or couple without an exit."""
+    found = set()
+    for row in db.fetch_all(conn, 'LockIn', status='active'):
+        if uid in (row['user_a'], row['user_b']):
+            found |= {row['user_a'], row['user_b']}
+    for row in db.fetch_all(conn, 'Couple', partner_a_id=uid) + db.fetch_all(conn, 'Couple', partner_b_id=uid):
+        if not db.fetch_all(conn, 'Exit', couple_id=row['id']):
+            found |= {row['partner_a_id'], row['partner_b_id']}
+    return found
+
+
 @contextmanager
-def write(conn):
+def write(conn, uid=None):
+    # perf-rowlock: serialise confirmations and edits for this member and their
+    # current partner only (the same sorted User row locks planning uses),
+    # instead of a 7-table LOCK TABLE that serialised every member.
     with transaction(conn):
-        if db._is_postgres_connection(conn):
-            # Same membership locks as planning; serialize confirmations and edits.
-            sql(conn, 'LOCK TABLE "User", "LockIn", "Couple", "Exit", "Account", "GuruPrivate", "GuruDiscussion" IN SHARE ROW EXCLUSIVE MODE')
+        if uid:
+            db.lock_user_rows(conn, uid, *_partners(conn, uid))
         yield
 
 
@@ -183,7 +197,7 @@ def send_message(conn,uid,guidance,body,refresh_guidance=None):
     message=text(body.get('text'));topic=body.get('topic');rid=text(body.get('request_id'),80)
     if not isinstance(topic,str) or topic not in STAGES.get(guidance.get('topic_stage','matching'),STAGES['matching']):
         raise ApiError('stale_stage','Choose a topic available at your current stage.',409)
-    with write(conn):
+    with write(conn, uid):
         value=private(conn,uid)
         previous=next((x for x in value['receipts'] if x['id']==rid),None)
         if previous:
@@ -214,7 +228,7 @@ def send_message(conn,uid,guidance,body,refresh_guidance=None):
         if any(fresh.get(k)!=guidance.get(k) for k in ('topic_stage','headline','body')):
             answer='Your next step changed. '+respond('what next',topic,[],fresh)
             mode='guided'
-    with write(conn):
+    with write(conn, uid):
         current=private(conn,uid)
         if account_binding(conn,uid)!=binding or current.get('pending',{}).get('id')!=token:
             raise ApiError('state_conflict','Your privacy settings or conversation changed. The answer was not saved.',409)
@@ -255,7 +269,7 @@ def register(api,get_db,journey_state):
         if body['action']=='message':
             send_message(conn,uid,guidance,body,lambda:stage_guidance(g.api_user,journey_state(g.api_user)['next_action']))
             return jsonify(state(conn,uid,guidance))
-        with write(conn):
+        with write(conn, uid):
             value=private(conn,uid)
             value.pop('pending',None)  # A deletion/consent edit invalidates any in-flight answer.
             action=body['action']
@@ -292,7 +306,7 @@ def register(api,get_db,journey_state):
     def guru_invite():
         body=json_object(required=('topic',))
         conn,uid,guidance=context()
-        with write(conn):
+        with write(conn, uid):
             scope=active_scope(conn,uid)
             topic=body['topic']
             if not scope or not isinstance(topic,str) or topic not in SHARED_TOPICS or topic not in STAGES.get(guidance.get('topic_stage'),[]):
@@ -316,7 +330,7 @@ def register(api,get_db,journey_state):
     def guru_discussion_action(did):
         body=json_object(required=('action','revision'),optional=('text',))
         conn,uid,guidance=context()
-        with write(conn):
+        with write(conn, uid):
             row=db.fetch_one(conn,'GuruDiscussion',id=did)
             if not allowed_discussion(conn,uid,row): raise ApiError('not_found','Conversation not found.',404)
             value=unpack(row['payload'])

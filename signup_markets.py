@@ -20,7 +20,7 @@ def ensure(conn,uid):
     for check in checks:check.pop('blocked_reason',None)
     definition=json.dumps({'id':pid,'country':'IN','city':code,'checks':checks,'total':147,'currency':None,'approval_gate':'evidence_required'},sort_keys=True,separators=(',',':'))
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):auth_sessions.sql(conn,'LOCK TABLE "BgvCase" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, uid)  # perf-rowlock (was a table-wide LOCK TABLE)
         fresh=db.fetch_one(conn,'User',id=uid)
         if fresh.get('active_bgv_case_id'):return fresh['active_bgv_case_id']
         existing=db.fetch_one(conn,'BgvPolicy',id=pid)

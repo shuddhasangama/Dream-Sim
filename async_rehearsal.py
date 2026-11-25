@@ -41,7 +41,7 @@ def start_intro(conn, uid):
     import week_service
     if not enabled():
         raise ApiError('rehearsal_disabled', 'Test journey is disabled.', 403)
-    with week_service.transition(conn):
+    with week_service.transition(conn, uid):   # perf-rowlock: this member
         week_service.eligible_user(conn, uid)
         if week_service.active_for(conn, uid):
             return
@@ -66,7 +66,7 @@ def save_draft(conn, uid, chosen):
         raise ApiError('rehearsal_disabled', 'Test journey is disabled.', 403)
     # Same lock order as matching: a concurrent mutual-interest action cannot
     # consume a half-written draft or miss a just-saved one.
-    with week_service.transition(conn):
+    with week_service.transition(conn, uid):   # perf-rowlock: this member
         week_service.eligible_user(conn, uid)
         if week_service.active_for(conn, uid):
             raise ApiError('state_conflict', 'You now have a pair. Save availability in the pair calendar.', 409)
@@ -173,7 +173,7 @@ def mark_ready(conn, uid, pid, step):
         raise ApiError('rehearsal_disabled', 'Action-driven rehearsal is disabled.', 403)
     if not isinstance(step, str) or step not in ('date', 'debrief'):
         raise ApiError('validation_error', 'Choose date or debrief readiness.')
-    with planning.transition(conn):
+    with planning.transition(conn, uid, pid=pid):
         pair, plan = planning.owned_plan(conn, uid, pid)
         if plan['status'] != 'confirmed' or db.fetch_one(conn, 'DateResolution', dateplan_id=pid):
             raise ApiError('state_conflict', 'Both agreements must be complete on an unresolved date.', 409)

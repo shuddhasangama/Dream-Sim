@@ -54,7 +54,7 @@ def simulation_allowed(conn,uid):
 def agreement(conn,uid,lid,kind,body,clock):
     if kind not in (ceremony.CONTACT_SHARE,ceremony.HOME_INVITE,ceremony.RELATIONSHIP_ENTRY):
         raise ApiError('not_found','Agreement not found.',404)
-    with transaction(conn):
+    with planning_service.transition(conn, uid, lid=lid):   # perf-rowlock: this couple only
         active=pair(conn,uid,lid)
         if kind==ceremony.HOME_INVITE:
             require_agreement(conn,active,uid,ceremony.CONTACT_SHARE,True)
@@ -105,7 +105,7 @@ def agreement(conn,uid,lid,kind,body,clock):
 def contact_request(conn,uid,lid,channel,clock):
     if channel not in escalations.CONTACT_CHANNELS:
         raise ApiError('validation_error','Unknown contact channel.')
-    with transaction(conn):
+    with planning_service.transition(conn, uid, lid=lid):   # perf-rowlock: this couple only
         active=pair(conn,uid,lid)
         rows=db.fetch_all(conn,'ContactRequest',pair_id=lid,channel=channel)
         old=next((r for r in rows if r['week']==active['week']),None)
@@ -122,7 +122,7 @@ def contact_request(conn,uid,lid,channel,clock):
 def contact_respond(conn,uid,lid,rid,response,clock,contact_value=None):
     if response not in ('accepted','declined','ignored'):
         raise ApiError('validation_error','Unknown response.')
-    with transaction(conn):
+    with planning_service.transition(conn, uid, lid=lid):   # perf-rowlock: this couple only
         active,row=owned(conn,uid,lid,'ContactRequest',rid)
         if row['requester_id']==uid:
             raise ApiError('recipient_required','Only the recipient can respond.',403)
@@ -144,7 +144,7 @@ def invite_propose(conn,uid,lid,body,clock):
     flag=body.get('expectation_flag')
     if flag not in invite_home.EXPECTATION_FLAGS:
         raise ApiError('validation_error','Unknown expectation flag.')
-    with transaction(conn):
+    with planning_service.transition(conn, uid, lid=lid):   # perf-rowlock: this couple only
         active=pair(conn,uid,lid)
         rid=f'{uid}:{request_id}'
         old=db.fetch_one(conn,'HomeInvite',id=rid)
@@ -161,7 +161,7 @@ def invite_propose(conn,uid,lid,body,clock):
 
 
 def invite_action(conn,uid,lid,rid,action,body,clock):
-    with transaction(conn):
+    with planning_service.transition(conn, uid, lid=lid):   # perf-rowlock: this couple only
         active,row=owned(conn,uid,lid,'HomeInvite',rid)
         role='a' if active['user_a']==uid else 'b'
         if action in ('see-flag','respond') and row['requester_id']==uid:
@@ -188,7 +188,7 @@ def invite_action(conn,uid,lid,rid,action,body,clock):
 
 
 def next_level_action(conn,uid,lid,body,clock,open_only=False):
-    with transaction(conn):
+    with planning_service.transition(conn, uid, lid=lid):   # perf-rowlock: this couple only
         active=pair(conn,uid,lid)
         if open_only:
             if not db.fetch_all(conn,'NextLevelThread',pair_id=lid):

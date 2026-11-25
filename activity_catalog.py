@@ -68,7 +68,8 @@ def review(conn, name, canonical, actor):
         raise ApiError('validation_error', 'Curated activities cannot be merged through suggestion review.')
     with auth_sessions.transaction(conn):
         if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn, 'LOCK TABLE "User", "ActivityAlias", "ActivitySuggestion" IN SHARE ROW EXCLUSIVE MODE')
+            # perf-rowlock: admin suggestion review only; one review at a time, member requests unaffected.
+            db.advisory_lock(conn, 'activity-catalog-review')
         suggestion = db.fetch_one(conn, 'ActivitySuggestion', id=identity)
         if not suggestion:
             raise ApiError('not_found', 'Suggestion not found.', 404)

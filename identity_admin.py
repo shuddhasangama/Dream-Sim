@@ -25,7 +25,7 @@ def export(conn, uid, capture_id, output):
     output = Path(output).resolve()
     created = False
     try:
-        with transaction(conn):
+        with transaction(conn, uid):
             row = current(conn, uid, capture_id)
             if not row['image_ciphertext']:
                 raise ValueError('The image has been deleted.')
@@ -56,7 +56,7 @@ def export(conn, uid, capture_id, output):
 def submitted(conn, uid, capture_id, provider, reference):
     if not provider.strip() or not reference.strip():
         raise ValueError('Provider and submission reference are required.')
-    with transaction(conn):
+    with transaction(conn, uid):
         row = current(conn, uid, capture_id)
         if row['status'] != 'captured':
             raise ValueError('Only a captured image can be marked submitted.')

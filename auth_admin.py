@@ -13,8 +13,9 @@ import db
 
 def manage(conn, user_id, action, email=None, phone=None, apply=False):
     with sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            sessions.sql(conn, 'LOCK TABLE "Account" IN SHARE ROW EXCLUSIVE MODE')
+        # perf-rowlock: this member's row + only the contacts being assigned (was LOCK TABLE "Account").
+        db.lock_user_rows(conn, user_id)
+        db.advisory_lock(conn, *[f'account-contact:{k}:{auth.normalize(k, v, stored=True)}' for k, v in (('email', email), ('phone', phone)) if v and auth.normalize(k, v, stored=True)])
         if not db.fetch_one(conn, 'User', id=user_id):
             raise ValueError('No profile exists with this user ID.')
         existing = db.fetch_one(conn, 'Account', user_id=user_id)

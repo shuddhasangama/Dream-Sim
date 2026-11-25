@@ -59,8 +59,7 @@ def assign(conn,uid,country,city,reason):
     if not isinstance(reason,str) or not reason.strip() or len(reason)>500:
         raise ValueError('An operator assignment reason is required')
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn,'LOCK TABLE "BgvCase" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, uid)  # perf-rowlock (was a table-wide LOCK TABLE)
         user=db.fetch_one(conn,'User',id=uid)
         if not user: raise ValueError('Unknown account')
         if user.get('active_bgv_case_id'): raise ValueError('Account already has an active case; explicit reassessment is required')

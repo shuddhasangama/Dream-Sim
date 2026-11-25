@@ -62,7 +62,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         fields=body['fields']
         if type(fields) is not list or not fields or any(not isinstance(k,str) or k not in stats_edit.VERIFIED for k in fields):
             raise ApiError('validation_error','Select verified fields only.')
-        with service.transaction(get_db()):
+        with service.transaction(get_db(), uid()):
             for field in set(fields):
                 key=stats_edit.bgv_field(field)
                 old=db.fetch_one(get_db(),'Verification',user_id=uid(),field=key)
@@ -153,7 +153,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         ethnic=body['ethnicity']
         if type(ethnic) is not list or len(ethnic)>2 or any(v not in onboarding.STAT_OPTIONS['ethnicity'] for v in ethnic):
             raise ApiError('validation_error','Choose up to two listed ethnicities.')
-        with service.transaction(get_db()):
+        with service.transaction(get_db(), uid()):
             row=db.fetch_one(get_db(),'User',id=uid())
             stats=db.load_json_field(row['stats_json'],{})
             stats.update(health_shared=shared,ethnicity=list(dict.fromkeys(ethnic)))
@@ -164,7 +164,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
     @api.post('/profile/bio/withdraw')
     def bio_withdraw():
         json_object()
-        with service.transaction(get_db()):
+        with service.transaction(get_db(), uid()):
             row=db.fetch_one(get_db(),'User',id=uid())
             stats=db.load_json_field(row['stats_json'],{})
             stats['health_shared']={'consent':False,'categories':[],'note':''}
@@ -179,7 +179,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         ethnic=body['ethnicity']
         if type(ethnic) is not list or len(ethnic)>2 or any(type(v) is not str or v not in onboarding.STAT_OPTIONS['ethnicity'] for v in ethnic) or len(set(ethnic))!=len(ethnic):
             raise ApiError('validation_error','Choose up to two listed ethnicities.')
-        with service.transaction(get_db()):
+        with service.transaction(get_db(), uid()):
             row=db.fetch_one(get_db(),'User',id=uid())
             stats=db.load_json_field(row['stats_json'],{})
             preferences=db.load_json_field(row['preferences_json'],{})
@@ -196,7 +196,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
     @api.put('/profile/photo')
     def photo_write():
         data=profile_choices.photo(json_object(required={'photo'})['photo'])
-        with service.transaction(get_db()):
+        with service.transaction(get_db(), uid()):
             if data is None:
                 service.auth_sessions.sql(get_db(),'DELETE FROM "ProfilePhoto" WHERE id=?',(uid(),))
             else:
@@ -212,7 +212,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         modern=version==2
         item=next((t for t in (vision_plans.PRESETS if modern else profile_choices.TEMPLATES) if t['key']==body['template']),None)
         if not item: raise ApiError('validation_error','Choose a listed Vision template.')
-        with service.transaction(get_db()):
+        with service.transaction(get_db(), uid()):
             state=stats_situation(g.api_user)
             if state.get('keenness') or state.get('live_match') or state.get('in_relationship'):
                 raise ApiError('profile_locked','Your current match or relationship holds this Vision. Use the disclosed-change flow or return after the match window.',409)

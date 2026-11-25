@@ -32,7 +32,7 @@ def reset(conn, number, *, apply=False, backup_dir='data/tester-reset-backups'):
     if not 1 <= number <= 10:
         raise ValueError('Pair must be 01 through 10')
     ids = {f'{fixed_test_pairs.PREFIX}{sex}{number:02d}' for sex in ('f', 'm')}
-    with week_service.transition(conn):
+    with week_service.transition(conn, serialize='tester-reset'):   # operator tool
         users = [dict(db.fetch_one(conn, 'User', id=uid) or {}) for uid in sorted(ids)]
         if any(not u or u['bgv_status'] != 'verified' for u in users):
             raise ValueError('Both existing synthetic profiles must already be simulation-verified')

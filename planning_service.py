@@ -21,10 +21,21 @@ sql = auth_sessions.sql
 
 
 @contextmanager
-def transition(conn):
+def transition(conn, uid=None, lid=None, pid=None):
+    """perf-rowlock: serialise only this couple. Locks the acting member and both
+    members of the lock-in (found from lid, or from the date plan pid) as sorted
+    User row locks, the same locks week_service uses, so the two flows can never
+    deadlock. Replaces a 13-table LOCK TABLE that serialised every couple."""
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            sql(conn, 'LOCK TABLE "User", "LockIn", "Availability", "DatePlan", "Ceremony", "Signature", "Payment", "DateOutcome", "DateFeedback", "DateResolution", "ComplianceEvent", "StageGate", "DateCharge" IN SHARE ROW EXCLUSIVE MODE')
+        members = [uid]
+        if pid and not lid:
+            plan = db.fetch_one(conn, 'DatePlan', id=pid)
+            lid = plan['lockin_id'] if plan else None
+        if lid:
+            pair = db.fetch_one(conn, 'LockIn', id=lid)
+            if pair:
+                members += [pair['user_a'], pair['user_b']]
+        db.lock_user_rows(conn, *members)
         yield
 
 
@@ -93,7 +104,7 @@ def preferences_reviewed(conn, uid, lid):
 
 
 def alignment(conn, uid, lid, body):
-    with transition(conn):
+    with transition(conn, uid, lid=lid):
         pair(conn, uid, lid)
         if current_plan(conn, lid):
             raise ApiError('state_conflict', 'Alignment is frozen for the current date.', 409)
@@ -139,7 +150,7 @@ def validate_slots(chosen):
 def availability(conn, uid, lid, chosen):
     parsed = validate_slots(chosen)
     async_rehearsal.require_intro_complete(conn, uid)
-    with transition(conn):
+    with transition(conn, uid, lid=lid):
         pair(conn, uid, lid)
         if current_plan(conn, lid):
             raise ApiError('state_conflict', 'Availability is frozen for the current date.', 409)
@@ -154,7 +165,7 @@ def availability(conn, uid, lid, chosen):
 def confirm(conn, uid, lid, day, meal, slot_datetime, cycle=None):
     if not isinstance(day, str) or not isinstance(meal, str) or (day, meal) not in calendar_dating.valid_slots():
         raise ApiError('validation_error', 'Select a valid weekend slot.')
-    with transition(conn):
+    with transition(conn, uid, lid=lid):
         active = pair(conn, uid, lid)
         existing = current_plan(conn, lid)
         plans = db.fetch_all(conn, 'DatePlan', lockin_id=lid)
@@ -205,7 +216,7 @@ def no_overlap(conn, uid, lid, choice):
     """Existing web recovery, serialized with confirmation; API follows in block 4."""
     if choice not in ('return_to_pool', 'next_weekend'):
         raise ApiError('validation_error', 'Choose a calendar recovery action.')
-    with transition(conn):
+    with transition(conn, uid, lid=lid):
         active = pair(conn, uid, lid)
         if current_plan(conn, lid):
             raise ApiError('state_conflict', 'A date plan already exists.', 409)
@@ -220,7 +231,7 @@ def no_overlap(conn, uid, lid, choice):
 def selections(conn, uid, pid, body):
     if any(value is not None and (not isinstance(value, str) or len(value) > 1000) for value in body.values()):
         raise ApiError('validation_error', 'Selections must be text of at most 1000 characters.')
-    with transition(conn):
+    with transition(conn, uid, pid=pid):
         active, plan = owned_plan(conn, uid, pid)
         if plan['status'] != 'pending_signatures' or db.fetch_all(conn, 'Signature', dateplan_id=pid) or any(r.get('signed_name') for r in db.fetch_all(conn, 'Ceremony', kind=ceremony.DATE_AGREEMENT, scope_id=pid)):
             raise ApiError('state_conflict', 'Selections cannot change after signing begins.', 409)
@@ -241,7 +252,7 @@ def persist_signature(conn, active, pid, uid, flags, now, verified):
 
 def legacy_sign(conn, uid, pid, flags, now, verify_face):
     """Preserve the older HTML checkbox flow, with the same atomic mirror."""
-    with transition(conn):
+    with transition(conn, uid, pid=pid):
         import identity_capture
         if identity_capture.enabled():
             raise ApiError('agreement_required', 'Use the agreement signing flow in the updated app.', 409)
@@ -254,7 +265,7 @@ def legacy_sign(conn, uid, pid, flags, now, verify_face):
 
 
 def agreement(conn, uid, pid, body, now, verify_face, clauses=None):
-    with transition(conn):
+    with transition(conn, uid, pid=pid):
         active, plan = owned_plan(conn, uid, pid)
         require_paid(conn, uid, payments.AGREEMENT, pid)
         state = agreement_state(conn, uid, pid, now)

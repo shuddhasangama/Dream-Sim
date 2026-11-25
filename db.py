@@ -314,6 +314,28 @@ def close_pools() -> None:
 __import__("atexit").register(close_pools)
 
 
+# ── row locks instead of table locks (perf-rowlock) ───────────────────────
+def lock_user_rows(conn: Any, *user_ids: str) -> None:
+    """Lock exactly these members' User rows for the current transaction, in
+    sorted order (every caller uses the same order, so no deadlocks). Replaces
+    table-wide LOCK TABLE, which serialised every member. SQLite: no-op (its
+    BEGIN IMMEDIATE already serialises writers)."""
+    ids = sorted({u for u in user_ids if u})
+    if ids and _is_postgres_connection(conn):
+        with conn.cursor() as cur:
+            cur.execute('SELECT id FROM "User" WHERE id = ANY(%s) ORDER BY id FOR UPDATE', (ids,))
+
+
+def advisory_lock(conn: Any, *names: str) -> None:
+    """Transaction-scoped PostgreSQL advisory locks by name (sorted; no-op on
+    SQLite). For uniqueness that is not one row: e.g. "no second account for
+    this phone" locks just that phone, not the whole Account table."""
+    if _is_postgres_connection(conn):
+        with conn.cursor() as cur:
+            for name in sorted({n for n in names if n}):
+                cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', ('dhashu:' + name,))
+
+
 # ── uniqueness that the schema file cannot safely carry ──────────────────
 # 2026-09-09 (evening), user's rule: "Avoiding duplicates is essential."
 # Account.email and Account.phone had PLAIN indexes, so nothing stopped
@@ -339,6 +361,15 @@ UNIQUE_INDEXES = [
     ("uq_account_phone", "Account", "phone"),
 ]
 
+# perf-rowlock: partial unique indexes (name, table, column, WHERE). One ACTIVE
+# lock-in per member in each position; the cross-position case (a member as
+# user_a in one and user_b in another) is prevented by week_service's row locks
+# (tested in test_week_postgres.py). Same no-crash reporting as above.
+PARTIAL_UNIQUE_INDEXES = [
+    ("uq_lockin_active_user_a", "LockIn", "user_a", "status = 'active'"),
+    ("uq_lockin_active_user_b", "LockIn", "user_b", "status = 'active'"),
+]
+
 
 def enforce_unique_indexes(conn: Any) -> list[dict[str, str]]:
     """Create each unique index if it is missing. Returns what could not
@@ -349,9 +380,9 @@ def enforce_unique_indexes(conn: Any) -> list[dict[str, str]]:
     what we want: an account may carry only one of the two identifiers.
     """
     problems = []
-    for name, table, column in UNIQUE_INDEXES:
+    for name, table, column, where in [(*i, None) for i in UNIQUE_INDEXES] + PARTIAL_UNIQUE_INDEXES:
         target = _table_name(conn, table)
-        sql = f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {target} ({column})'
+        sql = f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {target} ({column})' + (f' WHERE {where}' if where else '')
         try:
             if _is_postgres_connection(conn):
                 with conn.cursor() as cur:

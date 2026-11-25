@@ -44,7 +44,7 @@ def queue(conn,uid,body):
  if not enabled():raise ApiError('face_match_unavailable','Sandbox face comparison is not enabled.',503)
  if body.get('consent') is not True or body.get('consent_version')!=VERSION:raise ApiError('consent_required','Confirm Signzy face-comparison consent.')
  with auth_sessions.transaction(conn):
-  if db._is_postgres_connection(conn):auth_sessions.sql(conn,'LOCK TABLE "FaceMatchJob" IN SHARE ROW EXCLUSIVE MODE')
+  db.lock_user_rows(conn, uid)  # perf-rowlock (was a table-wide LOCK TABLE)
   if db.fetch_one(conn,'FaceMatchJob',id=uid):raise ApiError('face_match_limit','Your comparison is already reserved. Refresh to see its result.',409)
   selfie,reference=sources(conn,uid)
   if not selfie or not reference or selfie['state']=='draft':raise ApiError('images_required','Reserve your avatar generation from the latest selfie and complete DigiLocker first.',409)
