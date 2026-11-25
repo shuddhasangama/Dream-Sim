@@ -19,6 +19,8 @@ SOFT={'account_id':['Account'],'session_id':['AuthSession'],
 
 def q(value):return '"'+value.replace('"','""')+'"'
 def phone(value):
+    import member_crypto   # sec-enc: stored phones may be encrypted
+    value=member_crypto.open_value(value)
     digits=re.sub(r'[^0-9]','',str(value or ''))
     return '+91'+digits if len(digits)==10 else '+'+digits
 

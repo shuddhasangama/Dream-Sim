@@ -276,25 +276,25 @@ function bindStatsEditor(root, ctx) {
       const { fields, errors, entered } = changedFields(e.target, current);
       if (errors) { ctx.setDashboardStats({ ...withSubmittedValues(current, entered), _saved: false, _error: null, _fieldErrors: errors }); return; }
       if (!Object.keys(fields).length) { ctx.setDashboardStats({ ...current, _saved: false, _error: 'Nothing changed yet — edit a field, then save.', _fieldErrors: null }); return; }
-      console.info('[home] PATCH /api/v1/profile/stats request', { fields });
+      console.info('[home] PATCH /api/v1/profile/stats request', { fields: Object.keys(fields) });  // sec-logs: names only
       try { await session.patch('/api/v1/profile/stats', { fields }); }
       catch (err) {
-        console.error('[home] PATCH failed', err);
+        console.error('[home] PATCH failed', err?.message);
         const parsed = fieldErrorsFromServer(err.message, current);
         ctx.setDashboardStats({ ...withSubmittedValues(current, entered), _saved: false, _fieldErrors: parsed.byField, _error: parsed.general || (parsed.byField ? null : 'Could not save — try again.') });
         return;
       }
       let confirmed;
-      try { confirmed = await session.get('/api/v1/profile/stats'); console.info('[home] confirmation GET response', confirmed); }
+      try { confirmed = await session.get('/api/v1/profile/stats'); console.info('[home] confirmation GET response received'); }
       catch (err) {
-        console.error('[home] confirmation GET failed', err);
+        console.error('[home] confirmation GET failed', err?.message);
         ctx.setDashboardStats({ ...withSubmittedValues(current, fields), _saved: false, _error: 'Saved, but could not confirm — reload to check.' });
         return;
       }
       const byKey = Object.fromEntries((confirmed.rows || []).map((r) => [r.key, r.value]));
       const mismatched = Object.keys(fields).filter((k) => !fieldsEqual(byKey[k], fields[k]));
       if (mismatched.length) {
-        console.error('[home] MISMATCH: server read-back does not match what was submitted', { submitted: fields, read_back: byKey, mismatched });
+        console.error('[home] MISMATCH: server read-back does not match what was submitted', { mismatched });  // field names only
         ctx.setDashboardStats({ ...withSubmittedValues(confirmed, fields), _saved: false, _error: "That didn't actually save — the server's own copy doesn't match. Try again, or reload to see what's really there." });
         return;
       }

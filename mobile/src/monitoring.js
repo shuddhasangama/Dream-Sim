@@ -7,7 +7,8 @@
 // and phone numbers masked. Tokens never appear in events.
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const PHONE = /\+?\d[\d\s-]{8,14}\d/g;
+// International (+country code) or Indian mobile (10 digits starting 6-9); not dates/timestamps.
+const PHONE = /(?<![\w+])(?:\+\d{1,3}[\s-]?\d[\d\s-]{6,12}\d|[6-9]\d{4}[\s-]?\d{5})(?![\w-])/g;
 
 export function mask(value) {
   return typeof value === 'string' ? value.replace(EMAIL, '[email]').replace(PHONE, '[phone]') : value;

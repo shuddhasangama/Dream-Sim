@@ -25,6 +25,13 @@ test('400 classifies as validation and surfaces the server message verbatim', ()
   assert.equal(c.message, 'min must not exceed max.');
 });
 
+test('422 (typed schema rejection) also classifies as validation with the server message', () => {
+  const c = classify(new ApiError('Invalid request: consent has the wrong type.', 422));
+  assert.equal(c.kind, 'validation');
+  assert.equal(c.retry, false);
+  assert.equal(c.message, 'Invalid request: consent has the wrong type.');
+});
+
 test('a network failure (status 0, session.js\'s own default) classifies as retryable', () => {
   const c = classify(new ApiError('Connection unavailable. Check your internet and try again.'));
   assert.equal(c.kind, 'network');

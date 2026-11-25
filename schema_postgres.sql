@@ -656,6 +656,8 @@ CREATE TABLE IF NOT EXISTS "Account" (
     user_id         TEXT NOT NULL REFERENCES "User"(id),
     email           TEXT,
     phone           TEXT,
+    -- sec-enc: HMAC blind index of the canonical phone (lookup/uniqueness when phone is encrypted).
+    phone_index     TEXT,
     password_hash   TEXT,
     auth_enabled    INTEGER NOT NULL DEFAULT 0 CHECK (auth_enabled IN (0, 1)),
     verified_email  INTEGER NOT NULL DEFAULT 0 CHECK (verified_email IN (0, 1)),
@@ -664,6 +666,10 @@ CREATE TABLE IF NOT EXISTS "Account" (
     -- existed. Every row written before today keeps the default 0, which
     -- reads as "grandfathered" — see signup_verification.is_required().
     verification_required INTEGER NOT NULL DEFAULT 0 CHECK (verification_required IN (0, 1)),
+    -- feat-lock: set by an owner (admin dashboard) with a required reason; a locked
+    -- member cannot sign in and every session is revoked. NULL = not locked.
+    locked_at       BIGINT,
+    lock_reason     TEXT,
     created_at      TEXT NOT NULL,
     UNIQUE (user_id)
 );
@@ -1076,6 +1082,25 @@ CREATE TABLE IF NOT EXISTS "BgvCaseCheck" (
  check_definition_id TEXT NOT NULL, provider TEXT NOT NULL,
  UNIQUE (case_id,check_definition_id)
 );
+CREATE TABLE IF NOT EXISTS "MemberLockEvent" (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL,
+    action      TEXT NOT NULL CHECK (action IN ('lock', 'unlock')),
+    reason      TEXT NOT NULL,
+    admin_id    TEXT NOT NULL,
+    created_at  BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_member_lock_event_user ON "MemberLockEvent" (user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS "SecurityEvent" (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    detail      TEXT,
+    created_at  BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_security_event_user ON "SecurityEvent" (user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS "ProviderJob" (
  id TEXT PRIMARY KEY, kind TEXT NOT NULL, user_id TEXT NOT NULL, ref TEXT NOT NULL,
  idempotency_key TEXT NOT NULL UNIQUE,

@@ -1,4 +1,5 @@
 """Dedicated admin HTTP application. No member/admin route sharing or public signup."""
+import client_ip
 import hmac
 import os
 import time
@@ -78,7 +79,7 @@ def create_app():
     def login():
         data=request.get_json(silent=True) or {}
         if type(data) is not dict:return jsonify(error='Invalid request.'),400
-        values,issue=security.login(get_db(),data.get('email',''),data.get('password',''),data.get('code',''),request.remote_addr or 'unknown')
+        values,issue=security.login(get_db(),data.get('email',''),data.get('password',''),data.get('code',''),client_ip.client_ip(request))
         if issue:return jsonify(error='Please wait before trying again.' if issue=='throttled' else 'Sign-in details or authenticator code were not accepted.'),429 if issue=='throttled' else 401
         response=jsonify(ok=True)
         response.set_cookie(cookie,values['token'],max_age=8*3600,secure=not local,httponly=True,samesite='Strict',path='/')
@@ -100,6 +101,7 @@ def create_app():
     @app.get('/api/reports/markets')
     def discovery_markets():
         if g.admin['role']!='owner':return jsonify(error='Owner access required.'),403
+        with auth_sessions.transaction(get_db()):security.audit(get_db(),g.admin['admin_id'],'report_view','markets')
         import discovery,launch_cities
         return jsonify(markets=[dict(name=c['name'],**discovery.market(get_db(),c['name'])) for c in launch_cities.CITIES],generated_at=int(time.time()))
 
@@ -119,6 +121,7 @@ def create_app():
     @app.get('/api/reports/activities')
     def activity_report():
         if g.admin['role']!='owner':return jsonify(error='Owner access required.'),403
+        with auth_sessions.transaction(get_db()):security.audit(get_db(),g.admin['admin_id'],'report_view','activities')
         import activity_catalog,onboarding
         return jsonify(suggestions=db.fetch_all(get_db(),'ActivitySuggestion'),activity_options=onboarding.ACTIVITIES,generated_at=int(time.time()))
 
@@ -189,7 +192,33 @@ def create_app():
         with auth_sessions.transaction(get_db()):security.audit(get_db(),g.admin['admin_id'],'user_summary_view','users')
         with reports.connection() as conn:value=reports.user_summary(conn,uid)
         if value is None:return jsonify(error='Account not found.'),404
-        return jsonify({**value,'generated_at':int(time.time()),'timezone':'Asia/Kolkata'})
+        return jsonify({**value,'can_lock':g.admin['role']=='owner','generated_at':int(time.time()),'timezone':'Asia/Kolkata'})
+
+    def member_lock_change(action):
+        # feat-lock: owner only, reason required, revokes sessions on lock, audited.
+        if g.admin['role'] != 'owner':
+            return jsonify(error='Owner access required.'), 403
+        import member_lock
+        body = request.get_json(silent=True)
+        if type(body) is not dict or set(body) != {'user_id', 'reason'} or not isinstance(body['user_id'], str) or not 1 <= len(body['user_id']) <= 128:
+            return jsonify(error='Provide the member and a reason.'), 400
+        try:
+            (member_lock.lock if action == 'lock' else member_lock.unlock)(get_db(), body['user_id'], g.admin['admin_id'], body['reason'])
+        except LookupError as exc:
+            return jsonify(error=str(exc)), 404
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        with auth_sessions.transaction(get_db()):
+            security.audit(get_db(), g.admin['admin_id'], 'member_' + action, 'users')
+        return jsonify(ok=True, locked=action == 'lock')
+
+    @app.post('/api/members/lock')
+    def member_lock_route():
+        return member_lock_change('lock')
+
+    @app.post('/api/members/unlock')
+    def member_unlock_route():
+        return member_lock_change('unlock')
 
     @app.errorhandler(Exception)
     def error(_exception):

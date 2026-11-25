@@ -1,7 +1,9 @@
 """Phone/SMS OTP identity, session integration and secure beta route guards."""
+import client_ip
 import hashlib
 import hmac
 import os
+import time
 import re
 import secrets
 from urllib.parse import urlsplit
@@ -21,6 +23,9 @@ def enabled():
 
 
 def normalize(channel, value, stored=False):
+    if stored and isinstance(value, str) and value.startswith('enc1:'):
+        import member_crypto   # sec-enc: stored phones may be encrypted
+        value = member_crypto.open_value(value)
     if not isinstance(value, str) or len(value) > 254:
         return None
     if channel == 'email':
@@ -81,10 +86,19 @@ def start_challenge(conn, channel, destination, kind, signup=False):
         return None, failure('Use your registered phone number for SMS verification.')
     if not auth_delivery.configured():
         return None, failure('Sign-in delivery is not configured yet.', 503, 'auth_unavailable')
-    if not sessions.throttle(conn, [key('send-ip:' + (request.remote_addr or 'unknown'))], 20, 600):
+    import otp_policy
+    # sec-otp: only allowed countries; the global breaker and the per-number daily limit
+    # apply to every request (known number or not), so they reveal nothing about accounts.
+    if not otp_policy.country_allowed(destination):
+        return None, failure('SMS sign-in is not available for this country yet.', 400, 'country_unavailable')
+    if otp_policy.globally_paused(conn):
+        return None, failure('Sign-in codes are paused for a short time. Please try again later.', 503, 'otp_paused')
+    if not sessions.throttle(conn, [key('send-ip:' + (client_ip.client_ip(request)))], 20, 600):
         return None, failure('Please wait before requesting another code.', 429, 'rate_limited')
     if not sessions.throttle(conn, [key('send-contact:' + channel + ':' + destination)], 1, 60):
         return None, failure('Please wait before requesting another code.', 429, 'rate_limited')
+    if not sessions.throttle(conn, [key('send-contact-day:' + channel + ':' + destination)], otp_policy.per_number_day(), 86400):
+        return None, failure('Daily code limit reached for this number. Try again tomorrow.', 429, 'rate_limited')
     matches = [dict(row) for row in db.fetch_all(conn, 'Account')
                if normalize(channel, row.get(channel), stored=True) == destination]
     # Canonical duplicates fail closed instead of guessing the account owner.
@@ -93,6 +107,7 @@ def start_challenge(conn, channel, destination, kind, signup=False):
     provider_sid = None
     if account or (signup and channel=='phone' and kind=='mobile' and not matches):
         try:
+            otp_policy.record_send(conn)
             provider_sid = auth_delivery.start(channel, destination)
         except auth_delivery.DeliveryUnavailable as exc:
             current_app.logger.warning('OTP delivery unavailable: http_status=%s provider_code=%s signup=%s',
@@ -115,7 +130,7 @@ def start_challenge(conn, channel, destination, kind, signup=False):
 def verify_challenge(conn, challenge, code, kind):
     if not sessions.valid_token(challenge) or not isinstance(code, str) or not re.fullmatch(r'[0-9]{4,10}', code):
         return None
-    if not sessions.throttle(conn, [key('check-ip:' + (request.remote_addr or 'unknown'))], 30, 600):
+    if not sessions.throttle(conn, [key('check-ip:' + (client_ip.client_ip(request)))], 30, 600):
         return None
     with sessions.transaction(conn):
         row = sessions.sql(conn, '''UPDATE "AuthChallenge" SET attempts = attempts + 1
@@ -159,7 +174,30 @@ def verify_challenge(conn, challenge, code, kind):
         return result
 
 
+def pad_response(started):
+    """sec-session: an OTP request for a known number waits on the SMS provider, one for
+    an unknown number does not. Answer no sooner than DHASHU_OTP_MIN_RESPONSE_MS
+    (default 600) after the request started, so timing cannot reveal which numbers
+    have accounts (bodies are already identical)."""
+    try:
+        minimum = max(0, int(os.environ.get('DHASHU_OTP_MIN_RESPONSE_MS', '600'))) / 1000
+    except ValueError:
+        minimum = 0.6
+    remaining = minimum - (time.monotonic() - started)
+    if remaining > 0:
+        time.sleep(remaining)
+
+
 def register_auth(app, get_db):
+    import member_lock
+
+    @app.errorhandler(member_lock.AccountLocked)
+    def account_locked(_exc):
+        # feat-lock: a clear message on every sign-in route (API JSON / web page).
+        if request.path.startswith('/api/'):
+            return failure(member_lock.MESSAGE, 403, 'account_locked')
+        return member_lock.MESSAGE, 403
+
     app.config['AUTH_ENABLED'] = os.environ.get('AUTH_ENABLED', '').lower() in ('1', 'true', 'on')
     app.config['AUTH_PUBLIC_ORIGIN'] = os.environ.get('AUTH_PUBLIC_ORIGIN', '').rstrip('/')
     if app.config['AUTH_ENABLED']:
@@ -246,7 +284,9 @@ def register_auth(app, get_db):
         destination = normalize(body['channel'], body['destination'])
         if destination is None:
             return failure('Enter +91 followed by exactly 10 digits. Only India is enabled.')
+        started = time.monotonic()
         result, error = start_challenge(get_db(), body['channel'], destination, 'mobile')
+        pad_response(started)   # sec-session: same timing for known and unknown numbers
         return error if error else (jsonify(result), 202)
 
     @app.post('/api/v1/auth/signup/request')
@@ -255,7 +295,9 @@ def register_auth(app, get_db):
         if error:return error
         destination=normalize(body['channel'],body['destination'])
         if body['channel']!='phone' or destination is None:return failure('Enter your own Indian mobile number: +91 followed by exactly 10 digits.')
+        started=time.monotonic()
         result,error=start_challenge(get_db(),'phone',destination,'mobile',signup=True)
+        pad_response(started)
         if error:return error
         result['message']='If SMS delivery is available, a code will arrive shortly.'
         return jsonify(result),202
@@ -269,7 +311,7 @@ def register_auth(app, get_db):
         if phone is None:
             return failure('Enter +91 followed by exactly 10 digits. Only India is enabled.')
         conn = get_db()
-        if not sessions.throttle(conn, [key('tester-ip:' + (request.remote_addr or 'unknown'))], 20, 600):
+        if not sessions.throttle(conn, [key('tester-ip:' + (client_ip.client_ip(request)))], 20, 600):
             return failure('Please wait before trying again.', 429, 'rate_limited')
         with sessions.transaction(conn):
             suffix = ' FOR UPDATE' if db._is_postgres_connection(conn) else ''
@@ -296,7 +338,7 @@ def register_auth(app, get_db):
         body, error = payload(('refresh_token',))
         if error:
             return error
-        if not sessions.throttle(get_db(), [key('refresh-ip:' + (request.remote_addr or 'unknown'))], 60, 60):
+        if not sessions.throttle(get_db(), [key('refresh-ip:' + (client_ip.client_ip(request)))], 60, 60):
             return failure('Please wait and try again.', 429, 'rate_limited')
         result = sessions.refresh(get_db(), body['refresh_token'])
         return jsonify(result) if result else failure('Sign in again.', 401, 'authentication_required')

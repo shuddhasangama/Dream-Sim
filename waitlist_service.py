@@ -3,11 +3,12 @@ import hashlib
 import hmac
 import json
 import os
+
+import crypto_keys
 import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from cryptography.fernet import Fernet
 import auth_sessions
 import db
 from api_contract import ApiError
@@ -17,7 +18,7 @@ CONSENT_TEXT = 'Save my details and optional story answers to plan the launch an
 
 def stamp(): return datetime.now(timezone.utc).isoformat()
 
-def cipher(): return Fernet(os.environ['WAITLIST_ENCRYPTION_KEY'].encode())
+def cipher(): return crypto_keys.cipher('WAITLIST_ENCRYPTION_KEY')  # sec-keys: rotation-aware
 
 def digest(value):
     secret = os.environ['WAITLIST_HASH_KEY']

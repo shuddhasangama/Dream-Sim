@@ -90,8 +90,10 @@ def users(c, query='', page=1, filter_name=''):
     if query:
         escaped=query.lower().replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
         phone=''.join(x for x in query if x.isdigit())
-        where=" WHERE (LOWER(a.user_id) LIKE ? ESCAPE '\\' OR REPLACE(REPLACE(COALESCE(a.phone,''),'+',''),' ','')=?)"
-        args=['%'+escaped+'%',phone or '-']
+        import member_crypto   # sec-enc: encrypted phones are found by their blind index
+        index=member_crypto.blind_index('+'+phone) if phone else None
+        where=" WHERE (LOWER(a.user_id) LIKE ? ESCAPE '\\' OR REPLACE(REPLACE(COALESCE(a.phone,''),'+',''),' ','')=? OR a.phone_index=?)"
+        args=['%'+escaped+'%',phone or '-',index or '-']
     if filter_name:
         condition,values=cohort(c,filter_name)
         where+=(' AND ' if where else ' WHERE ')+condition
@@ -101,7 +103,8 @@ def users(c, query='', page=1, filter_name=''):
     for row in result[:50]:
         try: stats=json.loads(row.pop('stats_json') or '{}')
         except (ValueError,TypeError): stats={}
-        phone=''.join(x for x in str(row.pop('phone') or '') if x.isdigit())
+        import member_crypto
+        phone=''.join(x for x in str(member_crypto.open_quiet(row.pop('phone'),'') or '') if x.isdigit())
         row['auth_enabled']=bool(row['auth_enabled']);row['verified_phone']=bool(row['verified_phone'])
         output.append({**row,'phone':'•••• '+phone[-4:] if phone else 'Not set','city':str(stats.get('city') or 'Not set')[:80],
             'signup_flow':'Current signup' if stats.get('signup_version')==3 else 'Existing / beta'})
@@ -158,15 +161,17 @@ def audit_log(c):
 
 
 def user_summary(c, user_id):
-    account=rows(c,'SELECT a.user_id,a.auth_enabled,u.journey_state,u.bgv_status FROM "Account" a JOIN "User" u ON u.id=a.user_id WHERE a.user_id=?',(user_id,))
+    account=rows(c,'SELECT a.user_id,a.auth_enabled,a.locked_at,a.lock_reason,u.journey_state,u.bgv_status FROM "Account" a JOIN "User" u ON u.id=a.user_id WHERE a.user_id=?',(user_id,))
     if not account:return None
+    for item in account:item['locked']=item.get('locked_at') is not None
+    lock_history=rows(c,'SELECT action,reason,admin_id,created_at FROM "MemberLockEvent" WHERE user_id=? ORDER BY created_at DESC LIMIT 20',(user_id,))
     checks=rows(c,'SELECT operation,environment,state,created_at,updated_at FROM "BgvRequest" WHERE user_id=? ORDER BY created_at DESC LIMIT 50',(user_id,))
     for table,label in [('DigiLockerSession','DigiLocker'),('LivenessSession','Hosted liveness'),('FaceMatchJob','Face comparison'),('AvatarJob','Avatar generation')]:
         field='user_id' if table=='DigiLockerSession' else 'id'
         columns='environment,state,created_at,updated_at' if table=='DigiLockerSession' else 'state,created_at,updated_at'
         result=rows(c,'SELECT '+columns+' FROM "'+table+'" WHERE '+field+'=? ORDER BY created_at DESC LIMIT 5',(user_id,))
         for r in result:checks.append({'operation':label,'environment':r.get('environment','not an identity check' if table=='AvatarJob' else 'preproduction'),'state':r['state'],'created_at':r['created_at'],'updated_at':r['updated_at']})
-    return {'account':account,'checks':checks,'errors':rows(c,'SELECT reference,occurred_at,endpoint,error_type FROM "ErrorReport" WHERE user_id=? ORDER BY occurred_at DESC LIMIT 20',(user_id,)),
+    return {'account':account,'lock_history':lock_history,'checks':checks,'errors':rows(c,'SELECT reference,occurred_at,endpoint,error_type FROM "ErrorReport" WHERE user_id=? ORDER BY occurred_at DESC LIMIT 20',(user_id,)),
         'notes':['Private user summary. No identity images, health details, Guru conversations or raw provider records are returned.','Read-only: use established operator procedures for recovery; this page cannot approve checks or repeat paid calls.']}
 
 

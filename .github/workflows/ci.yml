@@ -74,7 +74,7 @@ jobs:
       - run: npm test
 
   security-scans:
-    name: Security scans (pip-audit, npm audit, bandit, gitleaks)
+    name: Security scans (pip-audit, npm audit, bandit, semgrep, gitleaks)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -92,6 +92,16 @@ jobs:
         run: python -m pip_audit -r requirements.txt --progress-spinner off
       - name: bandit (fail on high severity)
         run: python -m bandit -q -r . -x ./.venv,./mobile,./data,./dev-reports,"./Claude outputs" --severity-level high
+      - name: semgrep (project rules, offline, fail on any finding)
+        run: |
+          # Own venv: semgrep's pinned dependencies must not change the scanners above.
+          python -m venv "$RUNNER_TEMP/semgrep"
+          "$RUNNER_TEMP/semgrep/bin/python" -m pip install -q semgrep==1.144.0 pydantic==2.11.9
+          "$RUNNER_TEMP/semgrep/bin/semgrep" scan --config .semgrep.yml --metrics=off --disable-version-check --error             --exclude .venv --exclude mobile --exclude data --exclude dev-reports --exclude "Claude outputs" .
+      - name: OpenAPI and route inventory are current
+        run: |
+          python -m pip install -q -r requirements.txt
+          python tools/gen_openapi_schemas.py --check
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

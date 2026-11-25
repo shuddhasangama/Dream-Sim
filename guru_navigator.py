@@ -48,9 +48,9 @@ SHARED_TOPICS = {'intentions', 'planning', 'sharing', 'build', 'next', 'differen
 
 
 def cipher():
-    from cryptography.fernet import Fernet
+    import crypto_keys
     try:
-        return Fernet(os.environ.get('DHASHU_GURU_ENCRYPTION_KEY', '').encode('ascii'))
+        return crypto_keys.cipher('DHASHU_GURU_ENCRYPTION_KEY')  # sec-keys: rotation-aware
     except (ValueError, UnicodeError):
         raise ApiError('guru_unavailable', 'Secure Guru storage is not configured.', 503) from None
 

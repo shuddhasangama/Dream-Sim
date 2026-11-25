@@ -9,7 +9,7 @@
 <button type="submit">Save Bio</button><button type="button" id="withdraw">Withdraw health disclosure</button></form>
 <p id="bio-status" role="status"></p><p>Withdrawal removes the disclosure; previously viewed information cannot be recalled.</p>
 <a href="/reach">Partner preferences in REACH</a>
-<script>
+<script nonce="{{ csp_nonce() }}">
 let bio;
 const form=document.querySelector('#bio-form'),status=document.querySelector('#bio-status');
 async function call(path,method,body){const r=await fetch('/api/v1/'+path,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const j=await r.json();if(!r.ok)throw Error(j.error?.message||'Could not save. Please sign in and try again.');return j.data||j;}

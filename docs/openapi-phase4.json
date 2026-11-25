@@ -252,11 +252,9 @@
                 "properties": {
                   "advance_hours": {
                     "type": "integer",
-                    "description": "Move the shared clock forward (or back, if negative) this many hours."
-                  },
-                  "week": {
-                    "type": "integer",
-                    "minimum": 1
+                    "description": "Move the shared clock forward (or back, if negative) this many hours.",
+                    "maximum": 1000000,
+                    "minimum": -1000000
                   },
                   "day": {
                     "type": "string",
@@ -274,6 +272,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 23
+                  },
+                  "week": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 },
                 "additionalProperties": false
@@ -550,7 +552,6 @@
               "schema": {
                 "type": "object",
                 "properties": {},
-                "required": [],
                 "additionalProperties": false
               }
             }
@@ -772,7 +773,23 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DecisionInput"
+                "type": "object",
+                "$ref": "#/components/schemas/DecisionInput",
+                "properties": {
+                  "action": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "pass_reason": {
+                    "maxLength": 10000,
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "action"
+                ]
               }
             }
           }
@@ -1089,7 +1106,24 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlanningAlignmentInput"
+                "type": "object",
+                "$ref": "#/components/schemas/PlanningAlignmentInput",
+                "properties": {
+                  "budget": {},
+                  "cuisine": {},
+                  "diet": {},
+                  "neighbourhoods": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "budget",
+                  "cuisine",
+                  "diet"
+                ]
               }
             }
           }
@@ -1205,7 +1239,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlanningAvailabilityInput"
+                "type": "object",
+                "$ref": "#/components/schemas/PlanningAvailabilityInput",
+                "properties": {
+                  "slots": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "slots"
+                ]
               }
             }
           }
@@ -1321,7 +1367,26 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CycleConfirmInput"
+                "type": "object",
+                "$ref": "#/components/schemas/CycleConfirmInput",
+                "properties": {
+                  "cycle": {
+                    "maximum": 1000000,
+                    "minimum": -1000000,
+                    "type": "integer"
+                  },
+                  "day": {},
+                  "meal_slot": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "day",
+                  "meal_slot"
+                ]
               }
             }
           }
@@ -1543,7 +1608,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlanningSelections"
+                "type": "object",
+                "$ref": "#/components/schemas/PlanningSelections",
+                "properties": {
+                  "dietary": {},
+                  "dress": {}
+                },
+                "additionalProperties": false,
+                "required": [
+                  "dietary",
+                  "dress"
+                ]
               }
             }
           }
@@ -1765,7 +1840,33 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlanningStepInput"
+                "type": "object",
+                "$ref": "#/components/schemas/PlanningStepInput",
+                "properties": {
+                  "acks": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  },
+                  "document_sha256": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "signed_name": {
+                    "maxLength": 10000,
+                    "type": "string"
+                  },
+                  "step": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "step"
+                ]
               }
             }
           }
@@ -1987,7 +2088,34 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DateFlagsInput"
+                "type": "object",
+                "$ref": "#/components/schemas/DateFlagsInput",
+                "properties": {
+                  "bill_photo": {
+                    "type": "boolean"
+                  },
+                  "green_flags": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  },
+                  "red_flags": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  },
+                  "share_feedback": {
+                    "type": "boolean"
+                  },
+                  "together_photo": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "green_flags",
+                  "red_flags"
+                ]
               }
             }
           }
@@ -2103,7 +2231,23 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DateDecisionInput"
+                "type": "object",
+                "$ref": "#/components/schemas/DateDecisionInput",
+                "properties": {
+                  "decision": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "reason": {
+                    "maxLength": 10000,
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "decision"
+                ]
               }
             }
           }
@@ -2219,7 +2363,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DateEmptyInput"
+                "type": "object",
+                "$ref": "#/components/schemas/DateEmptyInput",
+                "properties": {},
+                "additionalProperties": false
               }
             }
           }
@@ -2335,7 +2482,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DateEmptyInput"
+                "type": "object",
+                "$ref": "#/components/schemas/DateEmptyInput",
+                "properties": {},
+                "additionalProperties": false
               }
             }
           }
@@ -2451,7 +2601,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DateEmptyInput"
+                "type": "object",
+                "$ref": "#/components/schemas/DateEmptyInput",
+                "properties": {},
+                "additionalProperties": false
               }
             }
           }
@@ -2603,13 +2756,14 @@
                   "fields": {
                     "type": "object",
                     "minProperties": 1,
-                    "description": "Keys from GET profile/stats rows; numbers must be whole, multi-value fields arrays, null clears."
+                    "description": "Keys from GET profile/stats rows; numbers must be whole, multi-value fields arrays, null clears.",
+                    "additionalProperties": true
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "fields"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -3074,19 +3228,20 @@
                 "type": "object",
                 "properties": {
                   "fields": {
-                    "type": "array",
+                    "type": "object",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4000
                     },
-                    "uniqueItems": true
+                    "uniqueItems": true,
+                    "additionalProperties": true
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "fields"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -3167,28 +3322,23 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "pillar": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
                   "request_id": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4000
                   },
-                  "element_key": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  },
-                  "detail_text": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
+                  "sub_selection": {}
                 },
+                "additionalProperties": false,
                 "required": [
-                  "request_id",
-                  "element_key",
-                  "detail_text"
-                ],
-                "additionalProperties": false
+                  "pillar",
+                  "request_id"
+                ]
               }
             }
           }
@@ -3269,38 +3419,37 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "add": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  },
+                  "disclosed_to_partner": {
+                    "const": true,
+                    "type": "boolean"
+                  },
+                  "pillar": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "remove": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  },
                   "request_id": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4000
-                  },
-                  "element_key": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  },
-                  "from_value": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  },
-                  "to_value": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  },
-                  "disclosed_to_partner": {
-                    "const": true
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "request_id",
-                  "element_key",
-                  "from_value",
-                  "to_value",
-                  "disclosed_to_partner"
-                ],
-                "additionalProperties": false
+                  "disclosed_to_partner",
+                  "pillar",
+                  "request_id"
+                ]
               }
             }
           }
@@ -3382,10 +3531,12 @@
                 "type": "object",
                 "properties": {
                   "activities": {
-                    "type": "object",
+                    "type": "array",
                     "additionalProperties": {
                       "type": "string"
-                    }
+                    },
+                    "items": {},
+                    "maxItems": 500
                   },
                   "custom_activities": {
                     "type": "array",
@@ -3403,13 +3554,14 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "Answered activities for which the partner answer is immaterial; independent of own bucket."
+                    "description": "Answered activities for which the partner answer is immaterial; independent of own bucket.",
+                    "maxItems": 500
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "activities"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -3506,10 +3658,10 @@
                     "maxLength": 4000
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "value"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -3606,13 +3758,16 @@
                       "whatsapp",
                       "instagram",
                       "linkedin"
-                    ]
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "channel"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -3711,22 +3866,25 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "contact_value": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
                   "response": {
                     "enum": [
                       "accepted",
                       "declined",
                       "ignored"
-                    ]
-                  },
-                  "contact_value": {
-                    "type": "string",
-                    "maxLength": 200
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "response"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -3817,30 +3975,30 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "request_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  },
-                  "proposed_datetime": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  },
                   "expectation_flag": {
                     "enum": [
                       "social_only",
                       "open_ended",
                       "intimacy_expected"
                     ]
+                  },
+                  "proposed_datetime": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "request_id",
+                  "expectation_flag",
                   "proposed_datetime",
-                  "expectation_flag"
-                ],
-                "additionalProperties": false
+                  "request_id"
+                ]
               }
             }
           }
@@ -4451,7 +4609,6 @@
               "schema": {
                 "type": "object",
                 "properties": {},
-                "required": [],
                 "additionalProperties": false
               }
             }
@@ -4543,27 +4700,24 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "question_key": {
+                  "answer_text": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 4000
                   },
                   "declined": {
                     "type": "boolean"
                   },
-                  "answer_text": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                  "question_key": {
+                    "type": "string",
+                    "minLength": 1,
                     "maxLength": 4000
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "question_key",
-                  "declined"
-                ],
-                "additionalProperties": false
+                  "declined",
+                  "question_key"
+                ]
               }
             }
           }
@@ -5377,56 +5531,31 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "step": {
-                        "enum": [
-                          "playbook",
-                          "face"
-                        ]
-                      },
-                      "document_sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "step"
-                    ],
-                    "additionalProperties": false
+                "type": "object",
+                "properties": {
+                  "acks": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "step": {
-                        "const": "sign"
-                      },
-                      "signed_name": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 4000
-                      },
-                      "acks": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 4000
-                        },
-                        "uniqueItems": true
-                      },
-                      "document_sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "step",
-                      "signed_name",
-                      "acks"
-                    ],
-                    "additionalProperties": false
+                  "document_sha256": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "signed_name": {
+                    "maxLength": 10000,
+                    "type": "string"
+                  },
+                  "step": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "step"
                 ]
               }
             }
@@ -5837,12 +5966,12 @@
                     "maxLength": 4000
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "request_id",
                   "stage",
                   "text"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -5945,10 +6074,10 @@
                     "type": "boolean"
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "consent"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -6047,7 +6176,6 @@
               "schema": {
                 "type": "object",
                 "properties": {},
-                "required": [],
                 "additionalProperties": false
               }
             }
@@ -6139,6 +6267,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "compliant": {
+                    "type": "boolean"
+                  },
                   "request_id": {
                     "type": "string",
                     "minLength": 1,
@@ -6149,27 +6280,24 @@
                     "minLength": 1,
                     "maxLength": 4000
                   },
-                  "week": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
                   "strategy": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4000
                   },
-                  "compliant": {
-                    "type": "boolean"
+                  "week": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
+                "additionalProperties": false,
                 "required": [
+                  "compliant",
                   "request_id",
                   "stage",
-                  "week",
                   "strategy",
-                  "compliant"
-                ],
-                "additionalProperties": false
+                  "week"
+                ]
               }
             }
           }
@@ -6353,56 +6481,31 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "step": {
-                        "enum": [
-                          "playbook",
-                          "face"
-                        ]
-                      },
-                      "document_sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "step"
-                    ],
-                    "additionalProperties": false
+                "type": "object",
+                "properties": {
+                  "acks": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "step": {
-                        "const": "sign"
-                      },
-                      "signed_name": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 4000
-                      },
-                      "acks": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 4000
-                        },
-                        "uniqueItems": true
-                      },
-                      "document_sha256": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "step",
-                      "signed_name",
-                      "acks"
-                    ],
-                    "additionalProperties": false
+                  "document_sha256": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "signed_name": {
+                    "maxLength": 10000,
+                    "type": "string"
+                  },
+                  "step": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "step"
                 ]
               }
             }
@@ -6502,7 +6605,6 @@
               "schema": {
                 "type": "object",
                 "properties": {},
-                "required": [],
                 "additionalProperties": false
               }
             }
@@ -6673,17 +6775,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "request_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
-                  },
                   "category": {
                     "enum": [
                       "work",
                       "fitness",
                       "free"
-                    ]
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   },
                   "days": {
                     "type": "array",
@@ -6694,7 +6794,16 @@
                     },
                     "uniqueItems": true
                   },
+                  "end": {
+                    "type": "string",
+                    "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+                  },
                   "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "request_id": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4000
@@ -6702,21 +6811,17 @@
                   "start": {
                     "type": "string",
                     "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
-                  },
-                  "end": {
-                    "type": "string",
-                    "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "request_id",
                   "category",
                   "days",
+                  "end",
                   "label",
-                  "start",
-                  "end"
-                ],
-                "additionalProperties": false
+                  "request_id",
+                  "start"
+                ]
               }
             }
           }
@@ -6815,7 +6920,6 @@
               "schema": {
                 "type": "object",
                 "properties": {},
-                "required": [],
                 "additionalProperties": false
               }
             }
@@ -6907,32 +7011,26 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "end_date": {
+                    "type": "string",
+                    "format": "date"
+                  },
                   "request_id": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4000
                   },
-                  "type": {
-                    "enum": [
-                      "obligation",
-                      "travel"
-                    ]
-                  },
-                  "title": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000
+                  "shared": {
+                    "type": "boolean"
                   },
                   "start_date": {
                     "type": "string",
                     "format": "date"
                   },
-                  "end_date": {
+                  "title": {
                     "type": "string",
-                    "format": "date"
-                  },
-                  "shared": {
-                    "type": "boolean"
+                    "minLength": 1,
+                    "maxLength": 4000
                   },
                   "travel_mode": {
                     "enum": [
@@ -6941,17 +7039,26 @@
                       "together",
                       null
                     ]
+                  },
+                  "type": {
+                    "enum": [
+                      "obligation",
+                      "travel"
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "request_id",
-                  "type",
-                  "title",
-                  "start_date",
                   "end_date",
-                  "shared"
-                ],
-                "additionalProperties": false
+                  "request_id",
+                  "shared",
+                  "start_date",
+                  "title",
+                  "type"
+                ]
               }
             }
           }
@@ -7050,7 +7157,6 @@
               "schema": {
                 "type": "object",
                 "properties": {},
-                "required": [],
                 "additionalProperties": false
               }
             }
@@ -7169,13 +7275,14 @@
                         "end"
                       ],
                       "additionalProperties": false
-                    }
+                    },
+                    "maxItems": 500
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "slots"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -7266,12 +7373,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "request_id": {
+                  "disclosed_to_partner": {
+                    "type": "boolean"
+                  },
+                  "key": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4000
                   },
-                  "key": {
+                  "request_id": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4000
@@ -7292,18 +7402,18 @@
                         },
                         "uniqueItems": true
                       }
-                    ]
-                  },
-                  "disclosed_to_partner": {
-                    "type": "boolean"
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "request_id",
                   "key",
+                  "request_id",
                   "stance"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -7400,10 +7510,10 @@
                     "maxLength": 4000
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "stage"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -8031,7 +8141,24 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EnrollmentSectionInput"
+                "type": "object",
+                "$ref": "#/components/schemas/EnrollmentSectionInput",
+                "properties": {
+                  "revision": {
+                    "maximum": 1000000,
+                    "minimum": -1000000,
+                    "type": "integer"
+                  },
+                  "values": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "revision",
+                  "values"
+                ]
               }
             }
           }
@@ -8162,7 +8289,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EnrollmentCompleteInput"
+                "type": "object",
+                "$ref": "#/components/schemas/EnrollmentCompleteInput",
+                "properties": {
+                  "revision": {
+                    "maximum": 1000000,
+                    "minimum": -1000000,
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "revision"
+                ]
               }
             }
           }
@@ -9794,24 +9933,26 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "request_id",
-                  "preset"
-                ],
                 "properties": {
-                  "request_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 80
-                  },
                   "preset": {
                     "type": "string",
                     "enum": [
                       "marriage"
-                    ]
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
                   }
-                }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "preset",
+                  "request_id"
+                ]
               }
             }
           }
@@ -9844,18 +9985,21 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "step"
-                ],
-                "additionalProperties": false,
                 "properties": {
                   "step": {
                     "enum": [
                       "date",
                       "debrief"
-                    ]
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   }
-                }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "step"
+                ]
               }
             }
           }
@@ -9962,6 +10106,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {},
                 "additionalProperties": false
               }
             }
@@ -10069,10 +10214,6 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "slots"
-                ],
-                "additionalProperties": false,
                 "properties": {
                   "slots": {
                     "type": "array",
@@ -10091,9 +10232,14 @@
                           "type": "string"
                         }
                       }
-                    }
+                    },
+                    "maxItems": 500
                   }
-                }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "slots"
+                ]
               }
             }
           }
@@ -10290,37 +10436,14 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
                 "properties": {
                   "categories": {
                     "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "uniqueItems": true
-                  },
-                  "share_health": {
-                    "type": "boolean"
-                  },
-                  "note": {
-                    "type": "string",
-                    "maxLength": 500
-                  },
-                  "openness": {
-                    "enum": [
-                      "any",
-                      "specific"
-                    ]
-                  },
-                  "open_categories": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "uniqueItems": true
-                  },
-                  "include_undisclosed": {
-                    "type": "boolean"
+                    "uniqueItems": true,
+                    "maxItems": 500
                   },
                   "ethnicity": {
                     "type": "array",
@@ -10329,16 +10452,41 @@
                     },
                     "uniqueItems": true,
                     "maxItems": 2
+                  },
+                  "include_undisclosed": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "open_categories": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "uniqueItems": true,
+                    "maxItems": 500
+                  },
+                  "openness": {
+                    "enum": [
+                      "any",
+                      "specific"
+                    ]
+                  },
+                  "share_health": {
+                    "type": "boolean"
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "categories",
-                  "share_health",
-                  "note",
-                  "openness",
-                  "open_categories",
+                  "ethnicity",
                   "include_undisclosed",
-                  "ethnicity"
+                  "note",
+                  "open_categories",
+                  "openness",
+                  "share_health"
                 ]
               }
             }
@@ -10378,16 +10526,13 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
                 "properties": {
                   "photo": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": "string",
                     "maxLength": 2800000
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "photo"
                 ]
@@ -10429,26 +10574,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
                 "properties": {
-                  "template": {
-                    "enum": [
-                      "grow",
-                      "two",
-                      "explore",
-                      "custom"
-                    ]
-                  },
-                  "pillars": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "uniqueItems": true
-                    }
-                  },
                   "kids_intent": {
                     "enum": [
                       "want",
@@ -10457,6 +10583,18 @@
                       "undecided"
                     ]
                   },
+                  "pillars": {
+                    "type": "array",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "uniqueItems": true
+                    },
+                    "items": {},
+                    "maxItems": 500
+                  },
                   "schema_version": {
                     "type": "integer",
                     "enum": [
@@ -10464,8 +10602,21 @@
                       2
                     ],
                     "description": "Version 2 uses simple Kids/Travel toggles and validates plan against selected pillars."
-                  }
+                  },
+                  "template": {
+                    "enum": [
+                      "grow",
+                      "two",
+                      "explore",
+                      "custom"
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "travel": {}
                 },
+                "additionalProperties": false,
                 "required": [
                   "template"
                 ]
@@ -10665,23 +10816,27 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "consent": {
+                    "const": true,
+                    "type": "boolean"
+                  },
+                  "consent_version": {
+                    "const": "identity-image-v1",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
                   "image": {
                     "type": "string",
                     "maxLength": 2800000
-                  },
-                  "consent": {
-                    "const": true
-                  },
-                  "consent_version": {
-                    "const": "identity-image-v1"
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "image",
                   "consent",
-                  "consent_version"
-                ],
-                "additionalProperties": false
+                  "consent_version",
+                  "image"
+                ]
               }
             }
           }
@@ -10960,10 +11115,6 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "action"
-                ],
                 "properties": {
                   "action": {
                     "enum": [
@@ -10974,26 +11125,38 @@
                       "save_memory",
                       "delete_memory",
                       "delete_private"
-                    ]
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "memory_id": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "maxLength": 80,
+                    "minLength": 1
                   },
                   "text": {
                     "type": "string",
                     "maxLength": 800
                   },
                   "topic": {
-                    "type": "string"
-                  },
-                  "request_id": {
                     "type": "string",
-                    "maxLength": 80
-                  },
-                  "memory_id": {
-                    "type": "string"
-                  },
-                  "enabled": {
-                    "type": "boolean"
+                    "maxLength": 256,
+                    "minLength": 1
                   }
-                }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "action"
+                ]
               }
             }
           }
@@ -11117,15 +11280,17 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "topic": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1
+                  }
+                },
                 "additionalProperties": false,
                 "required": [
                   "topic"
-                ],
-                "properties": {
-                  "topic": {
-                    "type": "string"
-                  }
-                }
+                ]
               }
             }
           }
@@ -11249,11 +11414,6 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "action",
-                  "revision"
-                ],
                 "properties": {
                   "action": {
                     "enum": [
@@ -11264,17 +11424,26 @@
                       "perspective",
                       "propose",
                       "confirm"
-                    ]
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   },
                   "revision": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "maximum": 1000000
                   },
                   "text": {
                     "type": "string",
                     "maxLength": 800
                   }
-                }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "action",
+                  "revision"
+                ]
               }
             }
           }
@@ -11400,19 +11569,22 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "choice"
-                ],
-                "additionalProperties": false,
                 "properties": {
                   "choice": {
                     "enum": [
                       "continue",
                       "discuss",
                       "end"
-                    ]
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   }
-                }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "choice"
+                ]
               }
             }
           }
@@ -11520,7 +11692,29 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "categories": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  },
+                  "ethnicity": {},
+                  "note": {
+                    "maxLength": 10000,
+                    "type": "string"
+                  },
+                  "share_health": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "categories",
+                  "ethnicity",
+                  "note",
+                  "share_health"
+                ]
               }
             }
           }
@@ -11626,7 +11820,9 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
               }
             }
           }
@@ -11729,7 +11925,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "request_id": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "request_id"
+                ]
               }
             }
           }
@@ -11929,39 +12136,50 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "request_id": {
-                    "type": "string",
-                    "format": "uuid"
+                  "consent": {
+                    "const": true,
+                    "type": "boolean"
+                  },
+                  "consent_version": {
+                    "const": "signzy-checks-v1",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "declared": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "inputs": {
+                    "type": "object",
+                    "additionalProperties": true
                   },
                   "operation": {
                     "enum": [
                       "current_employer",
                       "individual_search",
                       "fir_search"
-                    ]
+                    ],
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   },
-                  "inputs": {
-                    "type": "object"
-                  },
-                  "declared": {
-                    "type": "object"
-                  },
-                  "consent": {
-                    "const": true
-                  },
-                  "consent_version": {
-                    "const": "signzy-checks-v1"
+                  "request_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "maxLength": 256,
+                    "minLength": 1
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "request_id",
-                  "operation",
-                  "inputs",
-                  "declared",
                   "consent",
-                  "consent_version"
-                ],
-                "additionalProperties": false
+                  "consent_version",
+                  "declared",
+                  "inputs",
+                  "operation",
+                  "request_id"
+                ]
               }
             }
           }
@@ -12270,13 +12488,15 @@
                 "properties": {
                   "request_id": {
                     "type": "string",
-                    "format": "uuid"
+                    "format": "uuid",
+                    "maxLength": 256,
+                    "minLength": 1
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "request_id"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -12395,7 +12615,6 @@
               "schema": {
                 "type": "object",
                 "properties": {},
-                "required": [],
                 "additionalProperties": false
               }
             }
@@ -12596,23 +12815,29 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "request_id": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
                   "consent": {
-                    "const": true
+                    "const": true,
+                    "type": "boolean"
                   },
                   "consent_version": {
-                    "const": "digilocker-identity-photo-v2"
+                    "const": "digilocker-identity-photo-v2",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "maxLength": 256,
+                    "minLength": 1
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "request_id",
                   "consent",
-                  "consent_version"
-                ],
-                "additionalProperties": false
+                  "consent_version",
+                  "request_id"
+                ]
               }
             }
           }
@@ -12729,13 +12954,14 @@
                 "type": "object",
                 "properties": {
                   "consent_completed": {
-                    "const": true
+                    "const": true,
+                    "type": "boolean"
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "consent_completed"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -12958,7 +13184,34 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "max_per_person_minor": {
+                    "maximum": 1000000,
+                    "minimum": -1000000,
+                    "type": "integer"
+                  },
+                  "quote_id": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "revision": {
+                    "maximum": 1000000,
+                    "minimum": -1000000,
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "action",
+                  "revision"
+                ]
               }
             }
           }
@@ -13074,7 +13327,30 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "neighbourhoods": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  },
+                  "revision": {
+                    "maximum": 1000000,
+                    "minimum": -1000000,
+                    "type": "integer"
+                  },
+                  "scope": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "neighbourhoods",
+                  "revision",
+                  "scope"
+                ]
               }
             }
           }
@@ -13276,7 +13552,23 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "product": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "reference": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "product"
+                ]
               }
             }
           }
@@ -13392,7 +13684,13 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "accept_recurring": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
               }
             }
           }
@@ -13614,7 +13912,9 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
               }
             }
           }
@@ -13730,7 +14030,9 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
               }
             }
           }
@@ -13858,28 +14160,34 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "session_id",
-                  "consent",
-                  "consent_version"
-                ],
-                "additionalProperties": false,
                 "properties": {
-                  "session_id": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
                   "consent": {
-                    "const": true
+                    "const": true,
+                    "type": "boolean"
                   },
                   "consent_version": {
-                    "const": "digilocker-screening-v3"
+                    "const": "digilocker-screening-v3",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
                   },
                   "employer": {
                     "type": "string",
                     "maxLength": 200
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "maxLength": 256,
+                    "minLength": 1
                   }
-                }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "consent",
+                  "consent_version",
+                  "session_id"
+                ]
               }
             }
           }
@@ -14160,16 +14468,16 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "image"
-                ],
                 "properties": {
                   "image": {
                     "type": "string",
                     "maxLength": 2800000
                   }
-                }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "image"
+                ]
               }
             }
           }
@@ -14218,19 +14526,23 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "consent": {
+                    "const": true,
+                    "type": "boolean"
+                  },
+                  "consent_version": {
+                    "const": "selfie-avatar-v1",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
                 "additionalProperties": false,
                 "required": [
                   "consent",
                   "consent_version"
-                ],
-                "properties": {
-                  "consent": {
-                    "const": true
-                  },
-                  "consent_version": {
-                    "const": "selfie-avatar-v1"
-                  }
-                }
+                ]
               }
             }
           }
@@ -14279,19 +14591,21 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "index"
-                ],
                 "properties": {
                   "index": {
                     "type": "integer",
                     "enum": [
                       0,
                       1
-                    ]
+                    ],
+                    "maximum": 1000000,
+                    "minimum": -1000000
                   }
-                }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "index"
+                ]
               }
             }
           }
@@ -14356,19 +14670,23 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "consent": {
+                    "const": true,
+                    "type": "boolean"
+                  },
+                  "consent_version": {
+                    "const": "selfie-aadhaar-face-match-v1",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
                 "additionalProperties": false,
                 "required": [
                   "consent",
                   "consent_version"
-                ],
-                "properties": {
-                  "consent": {
-                    "const": true
-                  },
-                  "consent_version": {
-                    "const": "selfie-aadhaar-face-match-v1"
-                  }
-                }
+                ]
               }
             }
           }
@@ -14390,15 +14708,17 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1
+                  }
+                },
                 "additionalProperties": false,
                 "required": [
                   "session_id"
-                ],
-                "properties": {
-                  "session_id": {
-                    "type": "string"
-                  }
-                }
+                ]
               }
             }
           }
@@ -14480,19 +14800,23 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "consent": {
+                    "const": true,
+                    "type": "boolean"
+                  },
+                  "consent_version": {
+                    "const": "hosted-liveness-aadhaar-v1",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
                 "additionalProperties": false,
                 "required": [
                   "consent",
                   "consent_version"
-                ],
-                "properties": {
-                  "consent": {
-                    "const": true
-                  },
-                  "consent_version": {
-                    "const": "hosted-liveness-aadhaar-v1"
-                  }
-                }
+                ]
               }
             }
           }
@@ -14552,6 +14876,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {},
                 "additionalProperties": false
               }
             }
@@ -14588,6 +14913,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {},
                 "additionalProperties": false
               }
             }
@@ -14784,7 +15110,37 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "age": {},
+                  "city": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "dob": {},
+                  "fields": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "gender": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "health": {},
+                  "name": {
+                    "maxLength": 10000,
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "city",
+                  "fields",
+                  "gender",
+                  "health"
+                ]
               }
             }
           }
@@ -14822,7 +15178,9 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
               }
             }
           }
@@ -15307,7 +15665,6 @@
               "schema": {
                 "type": "object",
                 "properties": {},
-                "required": [],
                 "additionalProperties": false
               }
             }
@@ -15420,18 +15777,22 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "candidate_id": {
-                    "type": "string"
-                  },
                   "action": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1
+                  },
+                  "candidate_id": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1
                   }
                 },
+                "additionalProperties": false,
                 "required": [
-                  "candidate_id",
-                  "action"
-                ],
-                "additionalProperties": false
+                  "action",
+                  "candidate_id"
+                ]
               }
             }
           }
@@ -15544,13 +15905,15 @@
                 "type": "object",
                 "properties": {
                   "proposal_id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1
                   }
                 },
+                "additionalProperties": false,
                 "required": [
                   "proposal_id"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }

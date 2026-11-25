@@ -97,7 +97,7 @@ export function bind(root, ctx) {
         // re-render — nothing was written, so there is nothing truer to
         // show, and re-picking twelve radios because one save failed is
         // its own kind of broken.
-        console.error('[chemistry] PUT failed', err);
+        console.error('[chemistry] PUT failed', err?.message);
         patch({ ...data, ...submitted, activities: picked, _saved: false, _error: err.message || 'Could not save — try again.' });
         throw err;
       }
@@ -112,15 +112,13 @@ export function bind(root, ctx) {
       try {
         confirmed = await session.get('/api/v1/profile/chemistry');
       } catch (err) {
-        console.error('[chemistry] confirmation GET failed', err);
+        console.error('[chemistry] confirmation GET failed', err?.message);
         patch({ ...putResult, ...submitted, activities: picked, _saved: false, _error: 'Saved, but could not confirm — reload to check.' });
         return;
       }
 
       if (!activitiesEqual(confirmed.activities, putResult.activities)||JSON.stringify([...(confirmed.custom_activities||[])].sort())!==JSON.stringify([...(putResult.custom_activities||[])].sort())||JSON.stringify([...(confirmed.partner_any||[])].sort())!==JSON.stringify([...(putResult.partner_any||[])].sort())) {
-        console.error('[chemistry] MISMATCH: server read-back does not match what was submitted', {
-          submitted: picked, read_back: confirmed.activities,
-        });
+        console.error('[chemistry] MISMATCH: server read-back does not match what was submitted');  // sec-logs: no profile values
         // Keep the user's own picks checked (same reasoning as the PUT
         // failure above) — the error is explicit that this is NOT what
         // the server actually has, so nothing here is dishonest about

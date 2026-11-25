@@ -62,7 +62,7 @@
   <a class="btn-primary" href="{{ url_for('road_availability') }}">Next: Availability &rarr;</a>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
   var typeSelect = document.getElementById('exc-type');
   var travelField = document.getElementById('travel-mode-field');
   function syncTravelField() {
