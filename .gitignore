@@ -15,3 +15,10 @@ commit-message*.txt
 # extract would otherwise have reverted this line and swept a zip into
 # the next `git add -A`.
 Claude outputs/
+
+# Local development only (see docs/LOCAL_SETUP.md). Real local passwords/keys live in
+# .env.local; never commit it. Build outputs (APK/AAB) never belong in git anywhere.
+.env.local
+.venv/
+*.apk
+*.aab
