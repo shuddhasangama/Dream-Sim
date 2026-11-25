@@ -1,4 +1,5 @@
 """Member passwords. OTP-proven setup/reset; existing revocable session machinery."""
+import client_ip
 import auth
 import auth_sessions as sessions
 import db
@@ -21,7 +22,7 @@ def login(conn, identifier, password, kind="mobile"):
     contact=identifier if isinstance(identifier,str) else ''
     channel='phone'
     contact=auth.normalize(channel,contact) or contact.strip().lower()[:254]
-    keys=[auth.key('password-ip:'+(request.remote_addr or 'unknown')),auth.key('password-contact:'+contact.strip().lower())]
+    keys=[auth.key('password-ip:'+(client_ip.client_ip(request))),auth.key('password-contact:'+contact.strip().lower())]
     if not sessions.throttle(conn,keys,10,900):return None,auth.failure('Please wait 15 minutes before trying again.',429,'rate_limited')
     a=account_for(conn,identifier)
     value=password if isinstance(password,str) and len(password)<=128 else ''

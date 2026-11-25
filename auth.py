@@ -1,4 +1,5 @@
 """Phone/SMS OTP identity, session integration and secure beta route guards."""
+import client_ip
 import hashlib
 import hmac
 import os
@@ -81,7 +82,7 @@ def start_challenge(conn, channel, destination, kind, signup=False):
         return None, failure('Use your registered phone number for SMS verification.')
     if not auth_delivery.configured():
         return None, failure('Sign-in delivery is not configured yet.', 503, 'auth_unavailable')
-    if not sessions.throttle(conn, [key('send-ip:' + (request.remote_addr or 'unknown'))], 20, 600):
+    if not sessions.throttle(conn, [key('send-ip:' + (client_ip.client_ip(request)))], 20, 600):
         return None, failure('Please wait before requesting another code.', 429, 'rate_limited')
     if not sessions.throttle(conn, [key('send-contact:' + channel + ':' + destination)], 1, 60):
         return None, failure('Please wait before requesting another code.', 429, 'rate_limited')
@@ -115,7 +116,7 @@ def start_challenge(conn, channel, destination, kind, signup=False):
 def verify_challenge(conn, challenge, code, kind):
     if not sessions.valid_token(challenge) or not isinstance(code, str) or not re.fullmatch(r'[0-9]{4,10}', code):
         return None
-    if not sessions.throttle(conn, [key('check-ip:' + (request.remote_addr or 'unknown'))], 30, 600):
+    if not sessions.throttle(conn, [key('check-ip:' + (client_ip.client_ip(request)))], 30, 600):
         return None
     with sessions.transaction(conn):
         row = sessions.sql(conn, '''UPDATE "AuthChallenge" SET attempts = attempts + 1
@@ -269,7 +270,7 @@ def register_auth(app, get_db):
         if phone is None:
             return failure('Enter +91 followed by exactly 10 digits. Only India is enabled.')
         conn = get_db()
-        if not sessions.throttle(conn, [key('tester-ip:' + (request.remote_addr or 'unknown'))], 20, 600):
+        if not sessions.throttle(conn, [key('tester-ip:' + (client_ip.client_ip(request)))], 20, 600):
             return failure('Please wait before trying again.', 429, 'rate_limited')
         with sessions.transaction(conn):
             suffix = ' FOR UPDATE' if db._is_postgres_connection(conn) else ''
@@ -296,7 +297,7 @@ def register_auth(app, get_db):
         body, error = payload(('refresh_token',))
         if error:
             return error
-        if not sessions.throttle(get_db(), [key('refresh-ip:' + (request.remote_addr or 'unknown'))], 60, 60):
+        if not sessions.throttle(get_db(), [key('refresh-ip:' + (client_ip.client_ip(request)))], 60, 60):
             return failure('Please wait and try again.', 429, 'rate_limited')
         result = sessions.refresh(get_db(), body['refresh_token'])
         return jsonify(result) if result else failure('Sign in again.', 401, 'authentication_required')
