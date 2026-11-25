@@ -50,8 +50,19 @@ class JourneyApiTests(RouteTestCase):
         user=db.fetch_one(self.conn,'User',id='owner')
         stats=db.load_json_field(user['stats_json'],{})
         import date_alignment
+        import planning_service
         with mock.patch.object(date_alignment,'is_complete',return_value=True):
             self.set_clock(day='Wed',hour=18)
+            # Since f0623e1 (2026-11-18) each new date first asks for this date's
+            # preferences to be reviewed: still planning, never the previous debrief.
+            action=self.get().json['data']['next_action']
+            self.assertEqual(action['headline'],'Date preferences')
+            self.assertEqual(action['destination']['key'],'align')
+            self.assertTrue(action['destination']['eligible'])
+            self.assertIsNotNone(action['destination']['request'])
+            # Once this date's preferences are reviewed, Home offers confirming the date.
+            stats['date_preferences_reviewed_scope']=planning_service.availability_scope(self.conn,'lock-1')
+            db.insert_row(self.conn,'User',{**user,'stats_json':json.dumps(stats)})
             action=self.get().json['data']['next_action']
         self.assertEqual(action['headline'],'Confirm Date')
         self.assertEqual(action['destination']['key'],'calendar')
@@ -93,7 +104,10 @@ class JourneyApiTests(RouteTestCase):
         self.make_lockin('stranger', 'partner', lockin_id='private-foreign-pair')
         self.make_plan('private-foreign-pair', plan_id='private-foreign-plan')
         state = self.get().json['data']
-        self.assertEqual(set(state['current_lock_in']), {'id', 'status', 'week', 'dates_completed', 'partner_name', 'partner_summary', 'name_hidden', 'my_vision_label', 'partner_vision_label', 'my_visions'})
+        # my_avatar/partner_avatar: the chosen generated avatar, shared on purpose since 4a69e42.
+        self.assertEqual(set(state['current_lock_in']), {'id', 'status', 'week', 'dates_completed', 'partner_name', 'partner_summary', 'name_hidden', 'my_vision_label', 'partner_vision_label', 'my_visions', 'my_avatar', 'partner_avatar'})
+        for key in ('my_avatar', 'partner_avatar'):  # never more than the public avatar projection
+            self.assertLessEqual(set(state['current_lock_in'][key]), {'photo', 'avatar', 'avatar_status'})
         self.assertEqual(set(state['current_date_plan']), {'id', 'status', 'datetime', 'readiness'})
         body = json.dumps(state)
         for private in ('private-foreign', '@private.test', '+919999999999',
