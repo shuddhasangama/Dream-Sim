@@ -22,6 +22,7 @@ Tokens are never logged.
 """
 from __future__ import annotations
 
+import client_ip
 import logging
 import os
 import re
@@ -104,7 +105,7 @@ def request_allowed() -> bool:
     """Every condition, re-checked per request (the environment can change)."""
     if not current_app.config.get(CONFIG_KEY) or not active():
         return False
-    if request.remote_addr not in LOOPBACK_PEERS:
+    if client_ip.socket_peer(request) not in LOOPBACK_PEERS:   # the real connection, never a header
         return False
     if any(request.headers.get(name) for name in FORWARDING_HEADERS):
         return False
@@ -184,8 +185,8 @@ def register(app, get_db) -> bool:
             if not sessions.sql(conn, 'SELECT id FROM "User" WHERE id = ?', (user_id,)).fetchone():
                 abort(404)
             result = sessions.issue_in_transaction(conn, user_id, 'mobile', harness=True)
-        log.warning('Local harness dev login: user_id=%s at=%s remote_addr=%s', user_id,
-                    datetime.now(timezone.utc).isoformat(timespec='seconds'), request.remote_addr)
+        log.warning('Local harness dev login: user_id=%s at=%s peer=%s', user_id,
+                    datetime.now(timezone.utc).isoformat(timespec='seconds'), client_ip.socket_peer(request))
         return jsonify(result)
 
     @app.post('/api/v1/dev/refresh')

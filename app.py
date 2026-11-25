@@ -128,6 +128,9 @@ security_headers.register(app)
 # detection; rate limits only with DHASHU_ABUSE_LIMITS=1. Before sign-in checks.
 import abuse_guard
 abuse_guard.register(app)
+# sec-ip: warn when running on Railway without a trusted-proxy mode (docs/CLIENT_IP.md).
+import client_ip
+client_ip.startup_check()
 # c-security-suite: strip secret-bearing keys from any API JSON response (second layer).
 import response_trim
 response_trim.register(app)
