@@ -73,6 +73,76 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm test
 
+  playwright-preview:
+    name: Playwright (preview, mocked API)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Preview suite (one worker, one retry)
+        run: npx playwright test --workers=1 --retries=1
+      - name: Upload report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-preview-report
+          path: |
+            mobile/playwright-report/preview
+            mobile/test-results
+          retention-days: 14
+
+  playwright-backend:
+    name: Playwright (two-member journey, local backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install backend (temporary SQLite only; no provider credentials exist in CI)
+        working-directory: .
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Backend journey (one worker, one retry)
+        env:
+          E2E_PYTHON: python
+        run: npx playwright test -c playwright.backend.config.js --workers=1 --retries=1
+      - name: Upload report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-backend-report
+          path: |
+            mobile/playwright-report/backend
+            mobile/test-results
+          retention-days: 14
+
   security-scans:
     name: Security scans (pip-audit, npm audit, bandit, semgrep, gitleaks)
     runs-on: ubuntu-latest
