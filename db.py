@@ -206,6 +206,114 @@ def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> Any:
     return conn
 
 
+# ── connection pool (perf-pool) ────────────────────────────────────────────
+# Opening a PostgreSQL connection costs a TCP + TLS + auth round trip per
+# request. Requests now borrow from a per-process psycopg_pool instead.
+#
+#   DHASHU_DB_POOL          1 (default) pool when DATABASE_URL is PostgreSQL; 0 = old behaviour
+#   DHASHU_DB_POOL_MIN      connections kept open (default 1)
+#   DHASHU_DB_POOL_MAX      hard cap per process (default 10); see docs/SCALING.md budget
+#   DHASHU_DB_POOL_TIMEOUT  seconds to wait for a free connection (default 5), then
+#                           PoolTimeout: a full pool fails fast instead of hanging.
+#
+# Borrow with acquire(), always give back with release(). A connection is
+# checked before it is handed out; on return an unfinished transaction is
+# rolled back and session settings are reset, so nothing leaks between
+# requests. SQLite (local/tests) is unaffected: acquire() = get_connection().
+
+import threading as _threading
+import weakref as _weakref
+
+_POOLS: dict = {}
+_POOL_LOCK = _threading.Lock()
+_POOLED = _weakref.WeakKeyDictionary()   # connection -> pool it came from
+
+
+def _int_setting(name: str, default: int, low: int, high: int) -> int:
+    try:
+        value = int(os.environ.get(name, default))
+    except ValueError:
+        value = default
+    return max(low, min(high, value))
+
+
+def pool_settings() -> dict[str, float]:
+    low = _int_setting("DHASHU_DB_POOL_MIN", 1, 0, 50)
+    high = max(low, _int_setting("DHASHU_DB_POOL_MAX", 10, 1, 100))
+    return {"min_size": low, "max_size": high,
+            "timeout": float(_int_setting("DHASHU_DB_POOL_TIMEOUT", 5, 1, 60))}
+
+
+def pool_enabled() -> bool:
+    url = os.environ.get("DATABASE_URL", "")
+    return (url.startswith(("postgres://", "postgresql://"))
+            and os.environ.get("DHASHU_DB_POOL", "1").strip() != "0")
+
+
+def _reset_session(conn: Any) -> None:
+    # Called by the pool on return (after it rolled back any open transaction).
+    with conn.cursor() as cur:
+        cur.execute("RESET ALL")
+    conn.commit()
+
+
+def get_pool() -> Any:
+    """The pool for the current DATABASE_URL (created on first use, per process)."""
+    from psycopg.rows import dict_row
+    from psycopg_pool import ConnectionPool
+    url = os.environ["DATABASE_URL"]
+    with _POOL_LOCK:
+        pool = _POOLS.get(url)
+        if pool is None:
+            pool = ConnectionPool(url, kwargs={"row_factory": dict_row}, open=True,
+                                  check=ConnectionPool.check_connection,
+                                  reset=_reset_session, name="dhashu", **pool_settings())
+            _POOLS[url] = pool
+    return pool
+
+
+def acquire() -> Any:
+    """Borrow a connection: pooled for PostgreSQL, a fresh one otherwise."""
+    if not pool_enabled():
+        return get_connection()
+    pool = get_pool()
+    conn = pool.getconn()
+    _POOLED[conn] = pool
+    return conn
+
+
+def release(conn: Any) -> None:
+    """Give a connection back (pooled) or close it (not pooled). Never raises."""
+    if conn is None:
+        return
+    try:
+        pool = _POOLED.pop(conn, None)
+    except TypeError:            # e.g. sqlite3 connections cannot be weakly referenced
+        pool = None
+    try:
+        if pool is not None:
+            pool.putconn(conn)
+        else:
+            conn.close()
+    except Exception:            # noqa: BLE001 — releasing must never mask the real error
+        try:
+            conn.close()
+        except Exception:        # noqa: BLE001
+            pass
+
+
+def close_pools() -> None:
+    """Close every pool (process shutdown, tests)."""
+    with _POOL_LOCK:
+        pools = list(_POOLS.values())
+        _POOLS.clear()
+    for pool in pools:
+        pool.close()
+
+
+__import__("atexit").register(close_pools)
+
+
 # ── uniqueness that the schema file cannot safely carry ──────────────────
 # 2026-09-09 (evening), user's rule: "Avoiding duplicates is essential."
 # Account.email and Account.phone had PLAIN indexes, so nothing stopped

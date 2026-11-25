@@ -18,7 +18,7 @@ def record(user_id,kind,user_agent):
     platform='android' if 'android' in ua else 'ios' if 'iphone' in ua or 'ipad' in ua else 'web' if kind=='web' else 'unknown'
     conn=None
     try:
-        conn=db.get_connection()
+        conn=db.acquire()
         with auth_sessions.transaction(conn):
             auth_sessions.sql(conn,'INSERT INTO "UserActivity" (user_id,first_seen_at,last_seen_at,platform,auth_kind) VALUES (?,?,?,?,?) ON CONFLICT (user_id) DO UPDATE SET last_seen_at=excluded.last_seen_at,platform=excluded.platform,auth_kind=excluded.auth_kind WHERE "UserActivity".last_seen_at<?',
                 (user_id,now,now,platform,kind,now-59))
@@ -26,4 +26,4 @@ def record(user_id,kind,user_agent):
         # Analytics must never block successful member authentication.
         logging.getLogger(__name__).warning('Member activity storage unavailable; authentication continues.')
     finally:
-        if conn is not None:conn.close()
+        if conn is not None:db.release(conn)

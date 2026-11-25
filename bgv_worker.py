@@ -11,13 +11,13 @@ import liveness_secure_service
 
 def avatar_step():
     """Own connection: a slow image call must not block legal/identity checks."""
-    conn=db.get_connection()
+    conn=db.acquire()
     try:return avatar_service.work_one(conn)
-    finally:conn.close()
+    finally:db.release(conn)
 
 
 def bgv_step(once=False):
-    conn=db.get_connection()
+    conn=db.acquire()
     try:
         face_image_lease.purge(conn)
         bgv_bundle.schedule(conn)
@@ -25,7 +25,7 @@ def bgv_step(once=False):
         processed=face_match_service.work_one(conn) or processed
         if once:processed=avatar_service.work_one(conn) or processed
         return bgv_app.work_one(conn) or processed
-    finally:conn.close()
+    finally:db.release(conn)
 
 
 def avatar_loop(stop):
