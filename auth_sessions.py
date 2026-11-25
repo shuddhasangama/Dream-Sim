@@ -136,8 +136,12 @@ def refresh(conn, token, harness=False):
         if not account:
             return None
         if old['consumed_at'] is not None:
-            sql(conn, 'UPDATE "AuthSession" SET revoked_at = ? WHERE id = ?',
-                (timestamp, session['id']))
+            # sec-session: a refresh token used twice means it was copied. Revoke EVERY
+            # session of this member (the thief may already hold a newer token) and
+            # record a security event; the member signs in again.
+            sql(conn, 'UPDATE "AuthSession" SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL',
+                (timestamp, session['user_id']))
+            record_security_event(conn, session['user_id'], 'refresh_token_reuse', 'all sessions revoked')
             return None
         if old['expires_at'] <= timestamp or session['kind'] != 'mobile':
             return None
@@ -153,6 +157,17 @@ def refresh(conn, token, harness=False):
                 'token_type': 'Bearer', 'expires_in': access_expiry - timestamp,
                 'refresh_expires_in': refresh_expiry - timestamp,
                 'session_id': session['id'], 'user_id': session['user_id']}
+
+
+def record_security_event(conn, user_id, kind, detail=None):
+    """Persist a security event (inside the caller's transaction) and raise an alert."""
+    sql(conn, 'INSERT INTO "SecurityEvent" (id, user_id, kind, detail, created_at) VALUES (?, ?, ?, ?, ?)',
+        (uuid.uuid4().hex, user_id, kind, detail, now()))
+    try:
+        import alerts
+        alerts.emit('security_event', kind=kind)
+    except Exception:   # noqa: BLE001
+        pass
 
 
 def revoke(conn, session_id, user_id, all_sessions=False):

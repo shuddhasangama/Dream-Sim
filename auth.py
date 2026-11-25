@@ -3,6 +3,7 @@ import client_ip
 import hashlib
 import hmac
 import os
+import time
 import re
 import secrets
 from urllib.parse import urlsplit
@@ -170,6 +171,20 @@ def verify_challenge(conn, challenge, code, kind):
         return result
 
 
+def pad_response(started):
+    """sec-session: an OTP request for a known number waits on the SMS provider, one for
+    an unknown number does not. Answer no sooner than DHASHU_OTP_MIN_RESPONSE_MS
+    (default 600) after the request started, so timing cannot reveal which numbers
+    have accounts (bodies are already identical)."""
+    try:
+        minimum = max(0, int(os.environ.get('DHASHU_OTP_MIN_RESPONSE_MS', '600'))) / 1000
+    except ValueError:
+        minimum = 0.6
+    remaining = minimum - (time.monotonic() - started)
+    if remaining > 0:
+        time.sleep(remaining)
+
+
 def register_auth(app, get_db):
     app.config['AUTH_ENABLED'] = os.environ.get('AUTH_ENABLED', '').lower() in ('1', 'true', 'on')
     app.config['AUTH_PUBLIC_ORIGIN'] = os.environ.get('AUTH_PUBLIC_ORIGIN', '').rstrip('/')
@@ -257,7 +272,9 @@ def register_auth(app, get_db):
         destination = normalize(body['channel'], body['destination'])
         if destination is None:
             return failure('Enter +91 followed by exactly 10 digits. Only India is enabled.')
+        started = time.monotonic()
         result, error = start_challenge(get_db(), body['channel'], destination, 'mobile')
+        pad_response(started)   # sec-session: same timing for known and unknown numbers
         return error if error else (jsonify(result), 202)
 
     @app.post('/api/v1/auth/signup/request')
@@ -266,7 +283,9 @@ def register_auth(app, get_db):
         if error:return error
         destination=normalize(body['channel'],body['destination'])
         if body['channel']!='phone' or destination is None:return failure('Enter your own Indian mobile number: +91 followed by exactly 10 digits.')
+        started=time.monotonic()
         result,error=start_challenge(get_db(),'phone',destination,'mobile',signup=True)
+        pad_response(started)
         if error:return error
         result['message']='If SMS delivery is available, a code will arrive shortly.'
         return jsonify(result),202

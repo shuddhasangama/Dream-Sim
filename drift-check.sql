@@ -537,6 +537,7 @@ WITH expected(table_name, column_name) AS (VALUES
   ('BgvCase','country_code'),
   ('BgvCase','definition_json'),
   ('BgvCaseCheck','id'),
+  ('SecurityEvent','id'),
   ('ProviderJob','id'),
   ('ProviderJob','idempotency_key'),
   ('ProviderJob','state'),

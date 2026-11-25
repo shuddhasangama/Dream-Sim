@@ -43,6 +43,7 @@ TABLES = {
     "BgvEvidence",
     "BgvRequest",
     "ProviderJob",
+    "SecurityEvent",
     "RestaurantBooking", "RestaurantEvent",
     "BookingPreference", "BookingSnapshot",
     "BillingPurchase", "BillingEntitlement", "BillingEvent",

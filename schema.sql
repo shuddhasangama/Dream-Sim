@@ -1082,6 +1082,11 @@ CREATE TABLE IF NOT EXISTS "BgvCaseCheck" (
  check_definition_id TEXT NOT NULL, provider TEXT NOT NULL,
  UNIQUE (case_id,check_definition_id)
 );
+CREATE TABLE IF NOT EXISTS "SecurityEvent" (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT, created_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_security_event_user ON "SecurityEvent" (user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS "ProviderJob" (
  id TEXT PRIMARY KEY, kind TEXT NOT NULL, user_id TEXT NOT NULL, ref TEXT NOT NULL,
  idempotency_key TEXT NOT NULL UNIQUE,

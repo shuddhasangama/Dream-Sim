@@ -4,12 +4,12 @@ import unittest
 from unittest import mock
 
 import auth_delivery
-from test_auth import AuthenticationTests
+import test_auth
 
 
 class OtpPolicyTests(unittest.TestCase):
     def setUp(self):
-        self.f = AuthenticationTests('test_optional_tester_login_and_revocation')
+        self.f = test_auth.AuthenticationTests('test_optional_tester_login_and_revocation')
         self.f.setUp(); self.addCleanup(self.f.doCleanups)
         import alerts
         alerts.reset(); self.addCleanup(alerts.reset)

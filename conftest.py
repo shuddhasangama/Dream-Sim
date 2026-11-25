@@ -79,3 +79,11 @@ def _fresh_circuit_breakers():
     resilience.reset_all(); alerts.reset()
     yield
     resilience.reset_all(); alerts.reset()
+
+
+@pytest.fixture(autouse=True)
+def _no_otp_response_padding(monkeypatch):
+    """sec-session pads OTP-request responses to 600 ms so timing cannot reveal
+    accounts. The suite turns the padding off for speed; test_sec_session.py
+    turns it back on to test it."""
+    monkeypatch.setenv('DHASHU_OTP_MIN_RESPONSE_MS', '0')
