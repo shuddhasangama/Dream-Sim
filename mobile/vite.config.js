@@ -1,7 +1,11 @@
 import {defineConfig, loadEnv} from 'vite';
 import {buildApiOrigin, LOCAL_BACKEND, LOCAL_BACKEND_MODE, LOCAL_PROXY_PATHS} from './src/apiConfig.js';
 
-const ENV_PREFIXES = ['VITE_', 'DHASHU_'];
+// sec-logs: only VITE_* variables reach client code. The two legacy DHASHU_* build
+// settings are passed through BY NAME below, so no other DHASHU_* value from the build
+// environment (e.g. a backend secret on a CI runner) can ever be inlined into the app.
+const ENV_PREFIXES = ['VITE_'];
+const PASSTHROUGH = ['DHASHU_SIMULATED_CLOCK', 'DHASHU_CALENDAR_VIDEO_SRC', 'DHASHU_CALENDAR_VIDEO_POSTER'];
 // index.html carries this placeholder where the API origin belongs in the CSP.
 const CSP_PLACEHOLDER = '__DHASHU_API_ORIGIN__';
 
@@ -10,6 +14,8 @@ export default defineConfig(({command, mode}) => {
   // missing or unsafe for this mode — see apiConfig.js. Release builds need
   // VITE_API_BASE_URL (codemagic.yaml); nothing is guessed.
   const apiOrigin = buildApiOrigin({command, mode, baseUrl: loadEnv(mode, process.cwd(), ENV_PREFIXES).VITE_API_BASE_URL});
+  const legacy = loadEnv(mode, process.cwd(), 'DHASHU_');
+  const passthrough = Object.fromEntries(PASSTHROUGH.map(name => ['import.meta.env.' + name, JSON.stringify(legacy[name] ?? '')]));
   return {
     // road-fixes-clock-spec.md §7.8: DHASHU_SIMULATED_CLOCK is a build-time
     // convenience switch, not a security boundary — the server's own
@@ -19,7 +25,11 @@ export default defineConfig(({command, mode}) => {
     // keep the same env var name the backend uses rather than a renamed one.
     envPrefix: ENV_PREFIXES,
     // The bundle gets exactly the validated origin ('' for preview/local proxy).
-    define: {'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiOrigin)},
+    define: {'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiOrigin), ...passthrough},
+    // sec-logs: release builds drop console.* and debugger statements entirely.
+    build: mode === 'production'
+      ? {rolldownOptions: {output: {minify: {compress: {dropConsole: true, dropDebugger: true}}}}}
+      : undefined,
     // `npm run dev:local`: same-origin proxy to the local Flask backend so its
     // session cookie works without any CORS change on the backend.
     server: mode === LOCAL_BACKEND_MODE

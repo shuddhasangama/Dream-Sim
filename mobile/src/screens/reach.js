@@ -279,11 +279,11 @@ export function bind(root, ctx) {
         patch({ ...data, _stats: { ...data._stats, _saved: false, _error: 'Nothing changed yet — edit a field, then save.', _fieldErrors: null } });
         return;
       }
-      console.info('[reach] PATCH /api/v1/profile/stats request', { fields });
+      console.info('[reach] PATCH /api/v1/profile/stats request', { fields: Object.keys(fields) });  // sec-logs: names only
       try {
         await session.patch('/api/v1/profile/stats', { fields });
       } catch (err) {
-        console.error('[reach] PATCH failed', err);
+        console.error('[reach] PATCH failed', err?.message);
         const parsed = fieldErrorsFromServer(err.message, data._stats);
         patch({ ...data, _stats: { ...withSubmittedValues(data._stats, entered), _saved: false, _fieldErrors: parsed.byField, _error: parsed.general || (parsed.byField ? null : 'Could not save — try again.') } });
         return;
@@ -291,16 +291,16 @@ export function bind(root, ctx) {
       let confirmed;
       try {
         confirmed = await session.get('/api/v1/profile/stats');
-        console.info('[reach] confirmation GET response', confirmed);
+        console.info('[reach] confirmation GET response received');
       } catch (err) {
-        console.error('[reach] confirmation GET failed', err);
+        console.error('[reach] confirmation GET failed', err?.message);
         patch({ ...data, _stats: { ...withSubmittedValues(data._stats, fields), _saved: false, _error: 'Saved, but could not confirm — reload to check.' } });
         return;
       }
       const byKey = Object.fromEntries((confirmed.rows || []).map((r) => [r.key, r.value]));
       const mismatched = Object.keys(fields).filter((k) => !fieldsEqual(byKey[k], fields[k]));
       if (mismatched.length) {
-        console.error('[reach] MISMATCH: server read-back does not match what was submitted', { submitted: fields, read_back: byKey, mismatched });
+        console.error('[reach] MISMATCH: server read-back does not match what was submitted', { mismatched });  // field names only
         patch({ ...data, _stats: { ...withSubmittedValues(confirmed, fields), _saved: false, _error: "That didn't actually save — the server's own copy doesn't match. Try again, or reload to see what's really there." } });
         return;
       }

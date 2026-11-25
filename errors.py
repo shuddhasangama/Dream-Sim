@@ -93,12 +93,32 @@ def describe(request: Any, user_id: str | None, exc: BaseException | None,
     if exc is not None:
         detail["error"] = type(exc).__name__
         try:
-            detail["message"] = str(exc)[:500]
-            detail["traceback"] = "".join(
-                traceback.format_exception(type(exc), exc, exc.__traceback__))[-6000:]
+            detail["message"] = _mask(str(exc))[:500]
+            detail["traceback"] = _mask("".join(
+                traceback.format_exception(type(exc), exc, exc.__traceback__)))[-6000:]
+            detail["fingerprint"] = fingerprint(exc, detail.get("endpoint"))
         except Exception:
             pass
+    # sec-logs: no emails or phone numbers in paths or referrers either (referrer
+    # query strings are dropped entirely).
+    for key in ("path", "referrer"):
+        if isinstance(detail.get(key), str):
+            detail[key] = _mask(detail[key].split("?", 1)[0] if key == "referrer" else detail[key])
     return detail
+
+
+def _mask(text: str) -> str:
+    import observability
+    return observability.mask(text)
+
+
+def fingerprint(exc: BaseException, endpoint: str | None) -> str:
+    """Stable id for 'the same bug': error type + endpoint + innermost frame
+    location. Never includes the message (which may hold personal data)."""
+    import hashlib
+    frames = traceback.extract_tb(exc.__traceback__) if exc.__traceback__ else []
+    where = f"{frames[-1].filename.rsplit('/', 1)[-1].rsplit(chr(92), 1)[-1]}:{frames[-1].lineno}" if frames else ""
+    return hashlib.sha256(f"{type(exc).__name__}|{endpoint}|{where}".encode()).hexdigest()[:12]
 
 
 def log(detail: dict[str, Any]) -> None:

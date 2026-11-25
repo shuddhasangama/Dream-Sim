@@ -26,7 +26,9 @@ from flask import g, request
 
 REQUEST_ID = re.compile(r'[A-Za-z0-9-]{8,64}')
 EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
-PHONE = re.compile(r'(?<!\d)\+?\d[\d\s-]{8,14}\d(?!\d)')
+# International (+country code) or Indian mobile (10 digits starting 6-9, optionally 5+5).
+# Deliberately does not match ISO dates (2026-11-25) or Unix timestamps (17...).
+PHONE = re.compile(r'(?<![\w+])(?:\+\d{1,3}[\s-]?\d[\d\s-]{6,12}\d|[6-9]\d{4}[\s-]?\d{5})(?![\w-])')
 log = logging.getLogger('dhashu.request')
 
 
@@ -77,7 +79,33 @@ def register(app):
             (log.warning if response.status_code >= 500 else log.info)(line)
         return response
 
+    install_log_masking()
     init_sentry()
+
+
+_MASKING_INSTALLED = False
+
+
+def install_log_masking():
+    """sec-logs: mask emails and phone numbers in EVERY log record of the process
+    (any logger, any handler) by wrapping the log record factory once."""
+    global _MASKING_INSTALLED
+    if _MASKING_INSTALLED:
+        return
+    previous = logging.getLogRecordFactory()
+
+    def factory(*args, **kwargs):
+        record = previous(*args, **kwargs)
+        try:
+            message = record.getMessage()
+            masked = mask(message)
+            if masked != message:
+                record.msg, record.args = masked, ()
+        except Exception:   # noqa: BLE001 — logging must never fail
+            pass
+        return record
+    logging.setLogRecordFactory(factory)
+    _MASKING_INSTALLED = True
 
 
 # ── Sentry ──────────────────────────────────────────────────────────────

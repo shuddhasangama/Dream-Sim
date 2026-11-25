@@ -28,7 +28,7 @@ import { CALENDAR_VIDEO } from '../config.js';
 export async function ensurePrepared(session, data) {
   const req = data?.prepare_request;
   if (!req) return data;
-  console.info('[week] preparing this week (automatic, once per load)', req);
+  console.info('[week] preparing this week (automatic, once per load)');
   try {
     return await session.post(req.path, req.body ?? {});
   } catch (err) {
