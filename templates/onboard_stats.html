@@ -180,7 +180,7 @@
   </div>
 </form>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
   // Progressive enhancement only — the cap is enforced in
   // validate_stats(), which refuses with a message.
   document.querySelectorAll('.chip-row[data-cap]').forEach(function (group) {

@@ -99,7 +99,7 @@
   </div>
 </form>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
   // Progressive enhancement only — the cap is enforced in
   // stats_edit.coerce(), which refuses the save with a message. This
   // just stops you picking a third one and finding out afterwards.
