@@ -106,6 +106,9 @@ def excluded(conn, a, b):
 def compatible(conn, a, b, cycle):
     if a['user_id']==b['user_id'] or not complete(a) or not complete(b):
         return False
+    import account_deletion   # feat-delete: never offered once deletion is requested
+    if b['user_id'] in account_deletion.hidden_ids(conn):
+        return False
     if not market(conn,a['city'])['discovery'] or not market(conn,b['city'])['discovery']:
         return False
     if a['bgv_status']=='verified' and b['bgv_status']!='verified':

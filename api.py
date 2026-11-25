@@ -45,6 +45,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         digilocker_api.register(api, evolution['get_db'])
         import guru_navigator
         guru_navigator.register(api, evolution['get_db'], journey_state)
+        import account_deletion   # feat-delete: delete with a grace period
+        account_deletion.register(api, evolution['get_db'])
         import background_prompt   # ethnicity-restore fallback (DHASHU_ETHNICITY_PROMPT)
         background_prompt.register(api, evolution['get_db'])
     if planning is not None:
@@ -111,6 +113,10 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
             state = journey_state(g.api_user)
             if background_prompt.enabled():
                 state = {**state, 'background_prompt': background_prompt.should_show(g.api_user)}
+            import account_deletion
+            pending = account_deletion.scheduled(evolution['get_db'](), g.api_user['user_id']) if evolution else None
+            if pending:
+                state = {**state, 'account_deletion': {'due_at': pending['due_at']}}
             return jsonify(state)
 
         @api.get('/guidance')
