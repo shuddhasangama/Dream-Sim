@@ -1,4 +1,5 @@
 """Optional narration only. No tools, partner-private data or domain mutations."""
+import resilience
 import json
 import os
 from urllib.request import Request, urlopen
@@ -41,7 +42,7 @@ def reply(message,topic,history,memories,guidance):
     req=Request('https://api.openai.com/v1/responses',data=json.dumps(payload).encode('utf-8'),
         headers={'Authorization':'Bearer '+os.environ['OPENAI_API_KEY'],'Content-Type':'application/json'},method='POST')
     try:
-        with urlopen(req,timeout=12) as response:
+        with resilience.call('openai', urlopen, req, timeout=12) as response:
             value=json.loads(response.read(128_000))
         if value.get('status')!='completed': return None
         answer='\n'.join(c['text'] for item in value.get('output',[]) if item.get('type')=='message'

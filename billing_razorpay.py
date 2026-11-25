@@ -1,4 +1,5 @@
 """Small provider adapter. No secrets or provider payloads in error responses."""
+import resilience
 import base64
 import hashlib
 import hmac
@@ -26,9 +27,9 @@ class Razorpay:
             headers={'Authorization': 'Basic '+base64.b64encode((self.key+':'+self.secret).encode()).decode(),
                      'Content-Type': 'application/json', 'User-Agent': 'DhaShuBilling/1.0'})
         try:
-            with urllib.request.urlopen(request, timeout=20) as response:
+            with resilience.call('razorpay', urllib.request.urlopen, request, timeout=20) as response:
                 return json.load(response)
-        except (HTTPError, URLError, TimeoutError, ValueError):
+        except (HTTPError, URLError, TimeoutError, ValueError, resilience.CircuitOpen):
             # A failed response to a write is ambiguous: do not automatically repeat it.
             raise ApiError('provider_unavailable', 'Payment provider response unavailable. Check status before retrying.', 503) from None
 

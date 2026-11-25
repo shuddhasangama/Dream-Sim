@@ -63,7 +63,7 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
 
     @api.before_request
     def authenticate():
-        if request.endpoint == "api_v1.health":
+        if request.endpoint in ("api_v1.health", "api_v1.ready"):
             return None
         g.api_user = current_user()
         if g.api_user is None:
@@ -75,6 +75,15 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
     def health():
         # Liveness only: no database initialization or simulation mutations.
         return jsonify(status="ok", api_version="v1")
+
+    @api.get("/ready")
+    def ready():
+        # mon-health: readiness = can this process reach the database quickly?
+        # Separate connection, never the request pool's hot path; no details leak.
+        import health_checks
+        ok = health_checks.database_ready()
+        return (jsonify(status="ready", api_version="v1") if ok
+                else (jsonify(error="Service not ready.", code="not_ready"), 503))
 
     @api.get("/me")
     def me():
@@ -217,7 +226,7 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
             body = {"data": None, "error": {
                 "code": payload.get("code", codes.get(response.status_code, "internal_error")),
                 "message": payload.get("error", "Request failed."),
-                "detail": payload.get("detail"), "reference": payload.get("reference"),
+                "detail": payload.get("detail"), "reference": payload.get("reference") or g.get("request_id"),
             }}
         else:
             body = {"data": payload, "error": None}

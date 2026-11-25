@@ -118,6 +118,9 @@ app = Flask(__name__)
 # c-scale-budget: registered first so it runs last (after the API envelope).
 import compression
 compression.register(app)
+# mon-sentry: request id first, one JSON log line per request, Sentry only with SENTRY_DSN.
+import observability
+observability.register(app)
 app.secret_key = os.environ.get("SECRET_KEY") or "dream-sim-local-play-test-only"
 # SECRET_KEY must be set in Railway. The fallback exists so `python app.py`
 # still runs locally; it signs session cookies and is public in this repo,
@@ -232,6 +235,15 @@ def _handle(status: int, exc: BaseException | None, log_it: bool):
     if log_it:
         errors.log(detail)
         errors.record(db.acquire, detail, release=db.release)
+        if exc is not None and status >= 500:
+            # mon-sentry: the app handles every exception itself, so report 5xx explicitly
+            # (no-op unless SENTRY_DSN is set; observability.scrub removes personal data).
+            try:
+                import sentry_sdk
+                if sentry_sdk.get_client().is_active():
+                    sentry_sdk.capture_exception(exc)
+            except Exception:   # noqa: BLE001
+                pass
 
     copy = errors.copy_for(status)
     # An API caller gets JSON with the same reference, so a failing fetch
@@ -261,6 +273,40 @@ def _error_404(exc):
     # A mistyped URL is not an incident. Recording every one of them fills
     # the table with crawler noise and buries the errors that matter.
     return _handle(404, exc, log_it=False)
+
+
+def _busy_exceptions():
+    """c-resilience: errors that mean "the database is overloaded right now"."""
+    found = []
+    try:
+        from psycopg_pool import PoolTimeout
+        found.append(PoolTimeout)
+        from psycopg import errors as pg_errors
+        found += [pg_errors.QueryCanceled, pg_errors.LockNotAvailable]
+    except ImportError:
+        pass
+    return found
+
+
+def _service_busy(exc):
+    # Logged only: writing the incident to the database would wait on the very
+    # resource that is exhausted. The member gets a clear, retryable 503.
+    errors.log(errors.describe(request, _current_user_id(), exc, 503))
+    if request.path.startswith('/api/'):
+        response = jsonify(error='The service is busy. Please try again in a moment.', code='service_busy')
+        response.status_code = 503
+    else:
+        # Static page: no template or session lookups, which could need the
+        # database that is busy.
+        response = app.make_response(('<!doctype html><title>Busy</title><h1>We are busy right now</h1>'
+                                      '<p>Please try again in a moment.</p>', 503))
+        response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    response.headers['Retry-After'] = '2'
+    return response
+
+
+for _busy in _busy_exceptions():
+    app.register_error_handler(_busy, _service_busy)
 
 
 @app.errorhandler(Exception)

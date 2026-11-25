@@ -4,6 +4,7 @@ import { Session, classify } from './session.js';
 import { previewTransport } from './preview.js';
 import { resolveApiConfig } from './apiConfig.js';
 import { sameOriginTransport } from './localTransport.js';
+import { startMonitoring } from './monitoring.js';
 import { createNav, primaryTabs, secondaryTabs, labelFor, wireHardwareBack, wireKeyboardScroll, PRIMARY_TAB_KEYS } from './nav.js';
 import * as homeScreen from './screens/home.js';
 import * as boundariesScreen from './screens/boundaries.js';
@@ -489,6 +490,8 @@ wireHardwareBack(native, nav, () => {
   if (window.confirm('Exit DhaShu?')) import('@capacitor/app').then(({App})=>App.exitApp());
 });
 render();
+// mon-sentry: crash reporting only when the build sets VITE_SENTRY_DSN (no-op otherwise).
+if(import.meta.env.VITE_SENTRY_DSN)startMonitoring().catch(()=>{});
 // Emulator dev build only (see devLogin.js); removed from all other builds.
 async function loadDevUsers(){
   if(import.meta.env.MODE!=='emulator'||!devLogin)return;

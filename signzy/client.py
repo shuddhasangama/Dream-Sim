@@ -1,5 +1,6 @@
 """Explicit operation registry; isolated credentials; single request, no retries."""
 from dataclasses import dataclass, field
+import resilience
 import json
 import os
 import base64
@@ -102,7 +103,7 @@ class Client:
             'User-Agent': 'DhaShu-Signzy/0.1'}, method='POST')
         try:
             try:
-                response = urllib.request.build_opener(NoRedirect()).open(request, timeout=self.timeout)
+                response = resilience.call('signzy', urllib.request.build_opener(NoRedirect()).open, request, timeout=self.timeout)
             except urllib.error.HTTPError as exc:
                 response = exc
             with response:
@@ -123,6 +124,12 @@ class Client:
                 raise ValueError('Oversized response')
             parsed = json.loads(raw)
             evidence['provider_response']['json'] = parsed
+        except resilience.CircuitOpen:
+            # c-resilience: the provider is failing, so nothing was sent. The outcome is known.
+            receipt['outcome'] = 'not_sent_provider_circuit_open'
+            receipt.update(action('provider_unavailable'))
+            receipt['retry_automatically'] = False
+            return finish()
         except (urllib.error.URLError, TimeoutError, OSError):
             receipt['outcome'] = 'transport_error_outcome_unknown'
             receipt.update(action('network_error_outcome_unknown'))
