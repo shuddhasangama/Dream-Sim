@@ -106,9 +106,18 @@ jobs:
           GITLEAKS_VERSION: 8.30.1
         run: |
           set -euo pipefail
+          # Download the exact release asset under its own name: the checksums file
+          # refers to it by that name, and sha256sum -c opens the file by that name.
+          asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          sums="gitleaks_${GITLEAKS_VERSION}_checksums.txt"
           base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
-          curl -sSLo gitleaks.tgz "$base/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -sSLo checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
-          grep " gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz\$" checksums.txt | sha256sum -c -
-          tar -xzf gitleaks.tgz gitleaks
-          ./gitleaks git . --log-opts="--all" --redact --no-banner --gitleaks-ignore-path .gitleaksignore
+          work="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$work"
+          cd "$work"
+          curl -fsSL --retry 3 -o "$asset" "$base/$asset"
+          curl -fsSL --retry 3 -o "$sums" "$base/$sums"
+          grep " ${asset}\$" "$sums" > "${asset}.sha256" || { echo "::error::no checksum line for $asset"; exit 1; }
+          sha256sum -c "${asset}.sha256"
+          tar -xzf "$asset" gitleaks
+          cd "$GITHUB_WORKSPACE"
+          "$work/gitleaks" git . --log-opts="--all" --redact --no-banner --gitleaks-ignore-path .gitleaksignore
