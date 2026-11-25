@@ -3,11 +3,12 @@ import base64
 import hashlib
 import hmac
 import os
+
+import crypto_keys
 import secrets
 import struct
 import time
 import uuid
-from cryptography.fernet import Fernet
 from werkzeug.security import check_password_hash, generate_password_hash
 import auth_sessions
 import db
@@ -19,7 +20,7 @@ def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
 def protection():
-    return Fernet(os.environ['ADMIN_TOTP_ENCRYPTION_KEY'].encode())
+    return crypto_keys.cipher('ADMIN_TOTP_ENCRYPTION_KEY')  # sec-keys: rotation-aware
 
 def code(secret, counter):
     key = base64.b32decode(secret + '=' * (-len(secret) % 8))

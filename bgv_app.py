@@ -2,9 +2,10 @@ import signzy_guard
 """Private queued verification. Provider calls run in a separate worker."""
 import json
 import os
+
+import crypto_keys
 import uuid
 from datetime import datetime, timezone, timedelta
-from cryptography.fernet import Fernet
 import auth_sessions
 import db
 import bgv_policy
@@ -28,7 +29,7 @@ def stamp():
 class Protection:
     mode = 'fernet'
     def __init__(self):
-        self.cipher = Fernet(os.environ['SIGNZY_RECEIPT_ENCRYPTION_KEY'].encode())
+        self.cipher = crypto_keys.cipher('SIGNZY_RECEIPT_ENCRYPTION_KEY')  # sec-keys: rotation-aware
     def encrypt(self, raw):
         return self.cipher.encrypt(raw)
     def seal(self, data):

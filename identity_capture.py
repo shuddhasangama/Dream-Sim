@@ -40,9 +40,9 @@ def enabled():
 
 def cipher():
     # Lazy import: disabled deployments do not require a configured key.
-    from cryptography.fernet import Fernet
+    import crypto_keys
     try:
-        return Fernet(os.environ.get('DHASHU_IDENTITY_ENCRYPTION_KEY', '').encode('ascii'))
+        return crypto_keys.cipher('DHASHU_IDENTITY_ENCRYPTION_KEY')  # sec-keys: rotation-aware
     except (ValueError, UnicodeError):
         raise ApiError('identity_unavailable', 'Secure identity storage is not configured.', 503) from None
 
