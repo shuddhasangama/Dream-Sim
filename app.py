@@ -115,6 +115,9 @@ VISION_STANCE_OPTIONS = {
 }
 
 app = Flask(__name__)
+# c-scale-budget: registered first so it runs last (after the API envelope).
+import compression
+compression.register(app)
 app.secret_key = os.environ.get("SECRET_KEY") or "dream-sim-local-play-test-only"
 # SECRET_KEY must be set in Railway. The fallback exists so `python app.py`
 # still runs locally; it signs session cookies and is public in this repo,
