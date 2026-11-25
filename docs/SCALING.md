@@ -62,3 +62,52 @@ Apply after the staging load run (see c-scale-budget) confirms the numbers:
 2. **bgv-worker** service → Variables: `DHASHU_DB_POOL_MAX=4`.
 3. web service → Settings → Scaling → **Replicas = 2**.
 4. Postgres service → check `SHOW max_connections;` in its console matches the budget above.
+
+## Targets and expected peak (c-scale-budget)
+
+| Target | Value |
+|---|---|
+| p95 latency, normal API calls | < 500 ms |
+| Error rate (5xx) | < 0.5% |
+| Members | 1,500 |
+| Expected peak concurrently active | ~15% of members = **225** in the evening peak |
+| Expected peak load | 225 active × ~1 request / 4 s (app polling + navigation) ≈ **55–60 requests/s** |
+| Budget per replica (recommended 2 × 2 workers × 4 threads) | ≥ 30 requests/s each, p95 < 500 ms |
+
+## Local smoke load (2026-11-25)
+
+**Setup:**
+- Laptop (Windows, 12 GB RAM).
+- One waitress process with 8 threads (stands in for one gunicorn worker), against `dhashu_load` on localhost:5433 with 1,600 synthetic members.
+- Pool max 10, `DHASHU_GZIP=1`.
+- Locust: 60 members, 2 minutes, weighted journeys (`tools/load_test/locustfile.py`).
+
+| Endpoint | Requests | p50 | p95 | p99 |
+|---|---|---|---|---|
+| home: profile | 896 | 9 ms | 330 ms | 770 ms |
+| home: journey/status | 896 | 130 ms | 590 ms | 1,400 ms |
+| profile/stats | 299 | 130 ms | 580 ms | 1,400 ms |
+| week | 529 | 150 ms | 670 ms | 1,400 ms |
+| guru | 155 | 110 ms | 660 ms | 1,300 ms |
+| session refresh | 150 | 120 ms | 690 ms | 1,500 ms |
+| **reach** | 480 | **480 ms** | **1,200 ms** | 2,000 ms |
+| **all** | 3,465 | 120 ms | 790 ms | 1,400 ms |
+
+Throughput was **29 requests/s**, with **0 server errors**. The 201 `week` 403s are expected "not eligible this week" answers for some synthetic members, not errors.
+
+**Reading:**
+- **Where the time goes.** No endpoint has an N+1 query problem: query counts per request are constant as members grow. The time is CPU in one Python process (the GIL). REACH and journey status rebuild the full matching pool from all members on every request.
+- **How the production layout helps.** The recommended layout (2 replicas × 2 workers × 4 threads) gives roughly 4× the parallel CPU of this single process.
+- **REACH still needs a cache.** It will exceed 500 ms at p95 until its pool computation is cached. That is the `perf-pagecache` task, recorded for its owners with these numbers.
+
+## Staging run plan (1,500 members), manual
+
+Never against production.
+
+1. **Staging environment.** Create a separate Railway environment named `staging`, with its own Postgres. Copy no production data.
+2. **Deploy.** Deploy `dev/saravanan` there, with `WEB_CONCURRENCY=2`, `GUNICORN_THREADS=4`, pool max 8, 2 replicas, and providers disabled or sandboxed exactly as locally.
+3. **Seed.** Run `tools/load_test/seed_load_db.py` from a staging console. It only accepts `_load` database names on localhost, so first adapt it with a staging-only `--target` guard (a reviewed follow-up), or seed through an admin import.
+4. **Sign-in for load users.** Staging needs a staging-only sign-in for synthetic users. The local harness refuses to start on Railway by design, so add a staging-only variant behind its own setting that can't be set in production, or pre-issue tokens through an admin script.
+5. **Run Locust** from a separate machine: `-u 225 -r 15 -t 20m --host https://<staging-host>`, then a 2× spike (`-u 450`) for 5 minutes.
+6. **Pass criteria:** p95 < 500 ms for every endpoint except REACH until it's cached; 5xx < 0.5%; no pool timeouts; Postgres connections within the budget; CPU < 75%.
+7. **Record:** the Locust CSVs, Railway metrics (CPU, memory, connections) and the slowest queries (`pg_stat_statements` is available on staging Postgres).
