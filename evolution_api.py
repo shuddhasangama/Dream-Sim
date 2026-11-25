@@ -196,15 +196,8 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
             db.insert_row(get_db(),'User',row)
         return personal_read()
 
-    @api.put('/profile/photo')
-    def photo_write():
-        data=profile_choices.photo(json_object(required={'photo'})['photo'])
-        with service.transaction(get_db(), uid()):
-            if data is None:
-                service.auth_sessions.sql(get_db(),'DELETE FROM "ProfilePhoto" WHERE id=?',(uid(),))
-            else:
-                db.insert_row(get_db(),'ProfilePhoto',{'id':uid(),'data_url':data})
-        return personal_read()
+    # PUT /profile/photo retired 2026-11-25 (owner decision: the AI avatar replaces the
+    # uploaded portrait). Portraits saved before stay readable (ProfilePhoto fallback).
 
     @api.put('/profile/vision/template')
     def vision_template_write():

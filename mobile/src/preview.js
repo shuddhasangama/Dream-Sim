@@ -433,7 +433,6 @@ export function previewTransport() {
       if(method==='PUT') personalProfile={...personalProfile,ethnicity:body.ethnicity,health:{consent:body.share_health,categories:body.categories,note:body.note},openness:{mode:body.openness,categories:body.open_categories,include_undisclosed:body.include_undisclosed}};
       return ok(personalProfile);
     }
-    if(path.endsWith('/profile/photo')) {personalProfile.photo=body.photo;return ok(personalProfile);}
     if(path.endsWith('/profile/vision/template')) {
       const modern=body.schema_version===2;
       const item=(modern?signupPlans:templates).find(t=>t.key===body.template);if(!item)return err('Unknown template',400);

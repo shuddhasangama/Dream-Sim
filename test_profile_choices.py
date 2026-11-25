@@ -74,17 +74,17 @@ class ProfileChoicesTests(WeekApiTests):
         body=self.personal();body['ethnicity']=['invalid']
         self.assertEqual(self.request('/profile/personal',method='PUT',body=body).status_code,400)
 
-    def test_photo_sanitized_owned_and_removable(self):
+    def test_portrait_upload_is_retired_but_saved_portraits_still_show(self):
+        # Owner decision 2026-11-25: the AI avatar replaces the uploaded portrait.
         out=io.BytesIO();Image.new('RGB',(800,800),'red').save(out,'PNG')
         encoded='data:image/png;base64,'+base64.b64encode(out.getvalue()).decode()
-        r=self.request('/profile/photo',method='PUT',body={'photo':encoded})
-        self.assertEqual(r.status_code,200,r.json)
-        data=r.json['data']['photo'];img=Image.open(io.BytesIO(base64.b64decode(data.split(',')[1])))
-        self.assertEqual(img.size,(480,600));self.assertFalse(img.getexif())
-        self.assertIsNone(self.request('/profile/personal',uid='partner').json['data']['photo'])
-        self.assertEqual(self.request('/profile/photo',method='PUT',body={'photo':'data:text/html;base64,AAA'}).status_code,400)
-        self.assertEqual(self.request('/profile/photo',method='PUT',body={'photo':None}).status_code,200)
+        self.assertEqual(self.request('/profile/photo',method='PUT',body={'photo':encoded}).status_code,404)
+        self.assertEqual(self.request('/profile/photo',method='PUT',body={'photo':None}).status_code,404)
         self.assertIsNone(db.fetch_one(self.conn,'ProfilePhoto',id='owner'))
+        # a portrait saved before the retirement is still shown (no data is dropped)
+        db.insert_row(self.conn,'ProfilePhoto',{'id':'owner','data_url':'data:image/jpeg;base64,AAAA'});self.conn.commit()
+        self.assertEqual(self.request('/profile/personal').json['data']['photo'],'data:image/jpeg;base64,AAAA')
+        self.assertIsNone(self.request('/profile/personal',uid='partner').json['data']['photo'])
 
     def test_health_matching_unknown_and_multiple_conditions(self):
         a={'preferences':{'health_openness':{'mode':'specific','categories':['diabetes'],'include_undisclosed':False}}}

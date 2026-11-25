@@ -38,6 +38,16 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(public, set(inv.PUBLIC))
 
 
+class RetiredRouteTests(RouteTestCase):
+    def test_every_retired_route_answers_404_even_when_signed_in(self):
+        self.make_user('owner'); self.login('owner')
+        self.assertTrue(inv.RETIRED)
+        for (method, path) in inv.RETIRED:
+            self.assertEqual(self.client.open(path, method=method, json={}).status_code, 404, (method, path))
+            self.assertFalse(any(r.rule == path and method in r.methods for r in inv.member_rules()), path)
+        self.assertIn('## Removed routes (answer 404)', Path('docs/ROUTE_INVENTORY.md').read_text(encoding='utf-8'))
+
+
 class SignedOutTests(unittest.TestCase):
     """Secure sign-in ON (production shape)."""
 

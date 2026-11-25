@@ -31,9 +31,9 @@ class AbuseGuardTests(RouteTestCase):
         self.assertEqual(response.status_code, 413)
         self.assertEqual(self.error_code(response), 'payload_too_large')
         photo = json.dumps({'photo': 'data:image/png;base64,' + 'A' * (2 * 1024 * 1024)})
-        self.assertNotEqual(self.client.put('/api/v1/profile/photo', data=photo, content_type='application/json').status_code, 413)
+        self.assertNotEqual(self.client.post('/api/v1/profile/avatar/selfie', data=photo, content_type='application/json').status_code, 413)
         too_big = json.dumps({'photo': 'A' * (3 * 1024 * 1024 + 10)})
-        self.assertEqual(self.client.put('/api/v1/profile/photo', data=too_big, content_type='application/json').status_code, 413)
+        self.assertEqual(self.client.post('/api/v1/profile/avatar/selfie', data=too_big, content_type='application/json').status_code, 413)
         with mock.patch.dict(os.environ, {'DHASHU_MAX_BODY_BYTES': '100'}):
             self.assertEqual(self.client.post('/api/v1/week/prepare', json={'pad': 'x' * 200}).status_code, 413)
 
