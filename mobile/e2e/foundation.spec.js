@@ -679,7 +679,8 @@ test('Vision: four pillars only, additive Add Detail, and Declare a Change gated
   await page.locator('[data-open-editor]').click();
 
   // §7.1: the explanatory copy, and no Relocation/Career anywhere.
-  await expect(page.getByText('Travel together takes no detail now.')).toBeVisible();
+  // 451efb5 (2026-11-23): curated Vision — only Intimacy carries detail now.
+  await expect(page.getByText('Emotional intimacy is required. Physical intimacy is optional.')).toBeVisible();
   await expect(page.getByText(/Relocation|Career/)).toHaveCount(0);
 
   // §7.2: Add Detail offers only what is NOT already held (Kids isn't set,
