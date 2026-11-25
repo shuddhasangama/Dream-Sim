@@ -2,7 +2,7 @@
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+# datetime: stamp() now delegates to timestamps.utc_now_iso()
 import auth_sessions
 import db
 from api_contract import ApiError
@@ -16,7 +16,26 @@ CHECKS=[
     {'key':'fir','label':'FIR screening','phase':'1b','operations':['fir_search','fir_result'],'cost':50},
 ]
 
-def stamp(): return datetime.now(timezone.utc).isoformat()
+def stamp():
+    import timestamps
+    return timestamps.utc_now_iso()
+
+
+def _lineage_depth(row, by_id):
+    """How many parent hops this BGV request has inside `by_id` (a result-fetch
+    child is newer than the request it was fetched for)."""
+    depth, seen, parent = 0, set(), row.get('parent_request_id')
+    while parent and parent in by_id and parent not in seen:
+        seen.add(parent); depth += 1; parent = by_id[parent].get('parent_request_id')
+    return depth
+
+
+def newest_first(rows):
+    """Deterministic newest-first order. created_at first; on a tie a child request
+    sorts before its parent, then the row id decides (never arbitrary)."""
+    by_id = {r['id']: r for r in rows}
+    return sorted(rows, key=lambda r: (r['created_at'], _lineage_depth(r, by_id), r['id']), reverse=True)
+
 
 def seed(conn):
     """Explicit operator setup; never silently change an existing version."""
@@ -84,15 +103,15 @@ def view(conn,uid):
         check=db.fetch_one(conn,'BgvCaseCheck',case_id=case['id'],check_definition_id=item['key'])
         requests=[r for r in db.fetch_all(conn,'BgvRequest',user_id=uid,case_check_id=check['id']) if r['operation']!='digilocker_details'] if check else []
         sessions=db.fetch_all(conn,'DigiLockerSession',user_id=uid,case_check_id=check['id']) if check else []
-        attempts=sorted(requests+sessions,key=lambda r:r['created_at'],reverse=True)
+        attempts=newest_first(requests+sessions)
         latest=attempts[0] if attempts else None
         entry={'key':item['key'],'label':item['label'],'phase':item['phase'],
             'state':'blocked' if item.get('blocked_reason') else latest['state'] if latest else 'not_started',
             'message':item.get('blocked_reason'), 'provider':check['provider'] if check else None}
-        reviews=sorted(db.fetch_all(conn,'BgvReview',case_check_id=check['id']),key=lambda r:r['created_at'],reverse=True) if check else []
+        reviews=newest_first(db.fetch_all(conn,'BgvReview',case_check_id=check['id'])) if check else []
         if reviews:
             review=reviews[0]
-            attempts=sorted(db.fetch_all(conn,'BgvAttempt',request_id=latest['id']),key=lambda r:r['created_at'],reverse=True) if latest and 'operation' in latest else []
+            attempts=newest_first(db.fetch_all(conn,'BgvAttempt',request_id=latest['id'])) if latest and 'operation' in latest else []
             current_source=attempts[0]['id'] if attempts else latest['id'] if latest else None
             if review['decision']=='waived' or review['source_id']==current_source:
                 entry['review_decision']=review['decision']

@@ -20,7 +20,10 @@ RESULTS = {'individual_search':'individual_result', 'fir_search':'fir_result'}
 RESULT_LABELS = {'individual_result':'Criminal court result', 'fir_result':'FIR result'}
 
 def stamp():
-    return datetime.now(timezone.utc).isoformat()
+    # Strictly increasing within the process (see timestamps.py): rows created back to
+    # back must not tie on created_at.
+    import timestamps
+    return timestamps.utc_now_iso()
 
 class Protection:
     mode = 'fernet'
