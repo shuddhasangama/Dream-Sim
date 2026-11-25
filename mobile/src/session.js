@@ -101,6 +101,21 @@ export class Session {
     if (!stored) return false;
     await this.refresh(stored); return true;
   }
+  // feat-resume: called when the app returns to the foreground, before any private
+  // screen is shown again. true = signed in with a usable access token (refreshed
+  // first if it expired or is about to, while the app was away); false = sign in again.
+  async resume(marginMs = 60000) {
+    if (this.cookieAuth) {
+      try { await this.raw('/api/v1/me'); return true; }
+      catch (e) { if (e.status === 401) return false; throw e; }
+    }
+    if (this.flight) { try { await this.flight; } catch { return false; } }
+    if (!this.tokens) return false;
+    if (this.tokens.expiresAt < this.now() + marginMs) {
+      try { await this.refresh(); } catch { return false; }
+    }
+    return !!this.tokens;
+  }
   async refresh(stored) {
     if (this.flight) return this.flight;
     const epoch = this.generation;

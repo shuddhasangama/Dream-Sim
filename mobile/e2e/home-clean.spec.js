@@ -18,7 +18,7 @@ test('Home bounds avatar, keeps disclosures in Stats and allows changing an acce
  await page.screenshot({path:'../outputs/home-clean.png',fullPage:true});
  await avatar.click();expect(await page.evaluate(()=>window.destination)).toBe('avatar');
  await page.locator('[data-ring=stats]').click();await page.getByRole('button',{name:/Edit stats/}).click();
- await expect(page.getByRole('heading',{name:'Ethnicity / cultural background'})).toBeVisible();await expect(page.getByRole('heading',{name:'Health & accessibility'})).toBeVisible();await expect(page.locator('#portrait-file')).toHaveCount(0);
+ await expect(page.locator('#personal-form summary',{hasText:'Ethnicity / cultural background'})).toBeVisible();await expect(page.locator('#personal-form summary',{hasText:'Health & accessibility'})).toBeVisible();await expect(page.locator('#portrait-file')).toHaveCount(0);
  await page.evaluate(async()=>{
   const flow=await import('/src/screens/avatar.js');const root=document.querySelector('#app');let data={enabled:true,state:'accepted',selected:0,options:[window.avatarPhoto,window.avatarPhoto],avatar:{photo:window.avatarPhoto}};
   const paint=()=>{root.innerHTML=flow.render({data,safe:x=>String(x??'')});flow.bind(root,{data,session:{post:async(path,body)=>({...data,selected:body.index})},run:async fn=>fn(),patch:next=>{data=next;window.selectedAvatar=next.selected;paint();}});};paint();

@@ -32,6 +32,7 @@ import { renderRehearsal, progressKey } from './rehearsal.js';
 import './style.css';
 import './bone.css';
 import './brand-review.css';
+import {createResumeGuard} from './resume.js';
 
 const native = Capacitor.isNativePlatform();
 // Which server (if any) this build talks to: see apiConfig.js. Release
@@ -104,6 +105,7 @@ let folds=newFolds();
 // stage-gated surface (Verify/Relationship/Journey) the floating tab bar
 // has no room for. A plain UI overlay, not server state.
 let avatarSheetOpen=false;
+let resumeCovered=false;   // feat-resume: private screens hidden while backgrounded / until the session is re-checked
 const safe = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Bundled up for Home's Stats ring, which reuses this module's editor
 // exactly as the old Dashboard/REACH inline editors already did.
@@ -179,6 +181,10 @@ function buildCtx() {
 
 function render() {
   const signedIn = !!journey;
+  if (resumeCovered && signedIn) {
+    root.innerHTML = '<main class="container resume-cover" aria-busy="true"><section class="card"><h1>DhaShu</h1><p>Checking your session…</p></section></main>';
+    return;
+  }
   const current = nav.current;
   const tabs = signedIn ? primaryTabs(journey.surfaces) : [];
   root.innerHTML = `<header class="brandbar">
@@ -484,8 +490,18 @@ async function refreshAcceleratedClock() {
   }
 }
 setInterval(refreshAcceleratedClock, 15000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAcceleratedClock();});
-if(native) import('@capacitor/app').then(({App})=>App.addListener('appStateChange',({isActive})=>{if(isActive)refreshAcceleratedClock();}));
+const resumeGuard=createResumeGuard({
+  session,
+  isSignedIn:()=>!!journey,
+  setCovered:value=>{if(resumeCovered!==value){resumeCovered=value;render();}},
+  onResumed:async()=>{await reloadCurrent();},   // reloadCurrent() loads journey + the current screen
+  onSignedOut:async()=>{journey=null;profile=null;screenData=null;message='Your session ended. Please sign in again.';},
+});
+function onForeground(active){
+  resumeGuard.handle(active).then(state=>{if(state==='resumed')refreshAcceleratedClock();}).catch(()=>{});
+}
+document.addEventListener('visibilitychange',()=>{if(!native)onForeground(!document.hidden);});
+if(native) import('@capacitor/app').then(({App})=>App.addListener('appStateChange',({isActive})=>onForeground(isActive)));
 wireHardwareBack(native, nav, () => {
   if (window.confirm('Exit DhaShu?')) import('@capacitor/app').then(({App})=>App.exitApp());
 });

@@ -8,7 +8,7 @@ async function mount(page,mode){
   const active=mode!=='start',setup=mode==='avatar_setup';
   const data={enabled:true,environment:'preproduction',bundle:{consented:true,employer_declared:true,pan_state:active?'received':'pending'},digilocker:{enabled:true,environment:'preproduction',consent_text:'I agree to share my Aadhaar details and available PAN records for verification.',session:active?{state:'complete',identity,reference_photo_available:true}:null},
    results:active?[{operation:'current_employer',state:'processing',environment:'preproduction',message:'Confirming available employment records'},{operation:'individual_result',state:'verified',environment:'preproduction',message:'Exact search completed: zero cases.'},{operation:'fir_result',state:'processing',environment:'preproduction',message:'Retrieving FIR result'}]:[],
-   face:{enabled:true,operation:'liveness_secure',state:active&&!setup?'matched':'not_started',reference_ready:active,can_request:false,message:active?'Liveness and Aadhaar face match passed.':'Complete DigiLocker first.'},
+   face:{enabled:true,operation:'liveness_secure',state:active?'matched':'not_started',reference_ready:active,can_request:false,message:active?'Liveness and Aadhaar face match passed.':'Complete DigiLocker first.'},
    avatar:{enabled:true,state:active&&!setup?'submitting':'not_started',can_capture:!active||setup,options:[]},...(setup?{}:{_verificationFolds:[]})};
   document.querySelector('#app').innerHTML=render({safe,data});
  },mode);
@@ -16,7 +16,8 @@ async function mount(page,mode){
 test('DigiLocker leads; live capture and avatar are minimizable',async({page})=>{
  await mount(page,'start');
  expect(await page.locator('#digilocker-start').evaluate(e=>e.getBoundingClientRect().top)).toBeLessThan(await page.locator('.bgv-checklist').evaluate(e=>e.getBoundingClientRect().top));
- await expect(page.getByText('Aadhaar is required. PAN is optional; salaried employment checks use PAN.')).toBeVisible();
+ // f0623e1 (2026-11-18): PAN became required for employment screening.
+ await expect(page.getByText('Aadhaar is required. PAN is required for employment screening; salaried employment checks use PAN.')).toBeVisible();
  await expect(page.locator('#face-match-refresh,#avatar-refresh')).toHaveCount(0);
  await expect(page.locator('#verification-face')).not.toHaveAttribute('open','');
  await page.locator('#verification-face>summary').click();await expect(page.locator('#verification-face')).toHaveAttribute('open','');
@@ -55,6 +56,8 @@ test('signup status polling makes reads only and never replaces an earlier signu
 });
 
 test('avatar capture is available after Aadhaar while Court or FIR is still running',async({page})=>{
+ // f0623e1: the avatar step follows live face verification (fixture: face matched,
+ // Court/FIR still running) — still available before the background checks finish.
  await mount(page,'avatar_setup');
  await expect(page.locator('#verification-avatar')).toHaveAttribute('open','');
  await expect(page.getByRole('button',{name:'Capture latest selfie',exact:true})).toBeVisible();

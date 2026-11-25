@@ -98,6 +98,12 @@ export function groupedStatRows(rows, order, safe) {
 }
 
 // FormData → {field: value|values[]} for editableFieldsForm's own inputs.
+function isRendered(form, key) {
+  if (form?.elements?.namedItem) return form.elements.namedItem(key) != null;   // real <form>
+  if (Array.isArray(form?.names)) return form.names.includes(key);              // test stand-in
+  return true;                                                                   // unknown shape: old behaviour
+}
+
 function readForm(form) {
   const fields = {};
   for (const [key, value] of new FormData(form).entries()) {
@@ -121,7 +127,11 @@ export function changedFields(form, statsData) {
   const fields = {}, errors = {};
   for (const r of rows.filter((x) => x.editable)) {
     const multi = MULTI_STATS.includes(r.key);
-    if (!(r.key in submitted) && !multi) continue;        // input not rendered
+    // Input not rendered on this form: never sent. A multi-select with no box
+    // ticked submits nothing, so it is only treated as "cleared" when its boxes
+    // ARE on this form — otherwise saving any stat silently erased a multi-select
+    // that lives on another form (ethnicity moved to Background & health).
+    if (!(r.key in submitted) && (!multi || !isRendered(form, r.key))) continue;
     let value = multi ? (submitted[r.key] || []) : submitted[r.key];
     if (multi) { if (!value.length) value = null; }
     else if (typeof value === 'string') value = value.trim() === '' ? null : value.trim();

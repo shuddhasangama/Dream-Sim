@@ -52,3 +52,20 @@ test('a rejected entry is still "changed" on retry (compares to the server value
   const reverted = changedFields(form(untouched), failed);                  // user backs out → nothing to send
   assert.deepEqual(reverted.fields, {});
 });
+
+// Found by the Playwright stats test (2026-11-25): ethnicity moved to the
+// Background & health form, and saving ANY stat from Home sent ethnicity: null,
+// erasing it. A multi-select that is not on the submitted form is never sent.
+test('a multi-select not rendered on this form is never sent (not erased)', () => {
+  const withEthnicity = { ...stats, rows: [...stats.rows, { key: 'ethnicity', value: ['Indian'], editable: true }] };
+  const names = untouched.map(([k]) => k);                       // the form has no ethnicity boxes
+  const r = changedFields({ pairs: with_('diet', 'Vegan'), names }, withEthnicity);
+  assert.deepEqual(r.fields, { diet: 'Vegan' });
+  assert.deepEqual(changedFields({ pairs: untouched, names }, withEthnicity).fields, {});
+});
+
+test('a rendered multi-select with every box unticked is still sent as cleared', () => {
+  const names = [...untouched.map(([k]) => k), 'languages'];
+  const r = changedFields({ pairs: untouched.filter(([k]) => k !== 'languages'), names }, stats);
+  assert.deepEqual(r.fields, { languages: null });
+});

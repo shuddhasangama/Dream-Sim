@@ -1,12 +1,10 @@
 import {test, expect} from '@playwright/test';
+import {signInMember, signUpWithCode} from './fixtures/auth.js';
 
 async function enter(page, signup=true) {
   await page.goto('/');
-  if(signup) await page.getByRole('button',{name:'Sign up',exact:true}).click();
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
-  await page.getByLabel('Verification code').fill('123456');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  if(signup) { await page.getByRole('button',{name:'Sign up',exact:true}).click(); await signUpWithCode(page); }
+  else await signInMember(page);
 }
 
 test('guided sign up verifies first, prefills and persists edits through all four steps', async({page})=>{
@@ -33,10 +31,13 @@ test('guided sign up verifies first, prefills and persists edits through all fou
   await expect(page.getByText('Saved.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Continue to Verification'}).click();
   await expect(page.getByRole('heading',{name:'Step 4 of 4 · Verification'})).toBeVisible();
-  await page.getByRole('button',{name:'Go to Home'}).click();
-  await expect(page.getByRole('heading',{name:'Hi, Preview'})).toBeVisible();
-  await page.locator('[data-ring=stats]').click();
-  await page.locator('[data-open-editor=stats]').click();
+  // d62a86d (2026-11-12): the profile stays in setup while verification is pending,
+  // so the last step no longer offers "Go to Home". The saved edit is checked by
+  // going back to Stats, which reloads it from the server's signup state.
+  await expect(page.getByRole('button',{name:'Go to Home'})).toHaveCount(0);
+  await expect(page.getByText('Your profile stays in setup while verification is pending.')).toBeVisible();
+  await page.getByRole('button',{name:'Previous step'}).click();
+  await page.getByRole('button',{name:'Previous step'}).click();
   await expect(page.locator('input[name=weight_kg]')).toHaveValue('68');
   expect(external).toEqual([]);
 });
@@ -81,7 +82,7 @@ for(const [key,label,kids] of [['grow','Family',true],['two','Together',false],[
 test('signup needs an explicit plan and custom choices have no history or duplicate travel toggle',async({page})=>{
  await enter(page);await expect(page.locator('#tester-login')).toHaveCount(0);await expect(page.locator('.verify-pill')).toHaveCount(0);
  await page.getByRole('button',{name:'Continue to Stats'}).click();await expect(page.getByRole('alert')).toContainText('Choose your Together Plan');
- await page.getByRole('button',{name:'Custom',exact:true}).click();await expect(page.locator('[data-signup-choice]:checked')).toHaveCount(1);await expect(page.getByText('Travel together (optional)',{exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Customise your plan',exact:true}).click();   // 056139e labelawait expect(page.locator('[data-signup-choice]:checked')).toHaveCount(1);await expect(page.getByText('Travel together (optional)',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Family',exact:true}).click();await page.getByRole('button',{name:'Together',exact:true}).click();await expect(page.locator('[data-signup-pillar="Kids"]')).not.toBeChecked();
  await page.getByRole('button',{name:'Travel Partner',exact:true}).click();await expect(page.locator('[data-signup-pillar="Cohabitate"]')).not.toBeChecked();
 });
@@ -98,7 +99,8 @@ for(const width of [320,390])test(`focus panel aligns plans and pillars at ${wid
  await expect(page.locator('[data-signup-plan="grow"]')).toHaveAttribute('aria-pressed','true');
  await page.locator('[data-signup-focus="Intimacy"]').click();
  await expect(page.locator('[data-signup-choice]')).toHaveCount(2);
- const geometry=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth,plans:[...document.querySelectorAll('[data-signup-plan]')].map(e=>Math.round(e.getBoundingClientRect().top)),tiles:[...document.querySelectorAll('.signup-pillar-tile')].map(e=>Math.round(e.getBoundingClientRect().top))}));
- expect(geometry.overflow).toBe(false);expect(new Set(geometry.plans).size).toBe(1);expect(new Set(geometry.tiles).size).toBe(2);
+ const geometry=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth,plans:[...document.querySelectorAll('[data-signup-plan]')].map(e=>Math.round(e.getBoundingClientRect().top)),planLefts:[...document.querySelectorAll('[data-signup-plan]')].map(e=>Math.round(e.getBoundingClientRect().left)),tiles:[...document.querySelectorAll('.signup-pillar-tile')].map(e=>Math.round(e.getBoundingClientRect().top))}));
+ expect(geometry.overflow).toBe(false);// 056139e (Brand Meadows): the plans are one aligned column (flex-direction:column),
+ expect(new Set(geometry.planLefts).size).toBe(1);expect(geometry.plans).toEqual([...geometry.plans].sort((a,b)=>a-b));expect(new Set(geometry.plans).size).toBe(geometry.plans.length);expect(new Set(geometry.tiles).size).toBe(2);
  await page.getByRole('button',{name:'Continue to Stats'}).click();await expect(page.getByRole('heading',{name:'Step 2 of 4 · Stats'})).toBeVisible();
 });

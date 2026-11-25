@@ -1,21 +1,21 @@
 import {test,expect} from '@playwright/test';
+import {signInMember, openCodeSignIn} from './fixtures/auth.js';
 
 // design_handoff_app_ui_pulse/README.md ("Pulse", option 1a): every test
 // below signs in the same way, so this is the one place that changes if
 // sign-in itself ever does.
 async function signIn(page) {
   await page.goto('/');
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
-  await page.getByLabel('Verification code').fill('123456');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await signInMember(page);
   await expect(page.getByRole('heading',{name:'Hi, Preview'})).toBeVisible();
 }
 // The floating tab bar (replaces the old top text nav — see the README's
 // "Global changes" table) and the avatar's profile/settings sheet.
 const tabbar = (page) => page.locator('.p-tabbar');
+// d5325f9 (2026-11-05): the profile/settings sheet opens from the header's
+// "Settings" button; the avatar itself now opens the avatar screen.
 async function openAvatarSheet(page) {
-  await page.locator('#p-avatar').click();
+  await page.locator('#profile-settings').click();
   await expect(page.locator('.p-sheet')).toBeVisible();
 }
 // An event card on Week shows its title AND time in the same button, so a
@@ -40,9 +40,9 @@ test('phone layout, wrong code, dashboard, and sign out without external calls',
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:5173'))external.push(r.url());});
   await page.goto('/');
-  await expect(page.getByRole('button',{name:'Send SMS code'})).toBeEnabled();
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
+  await openCodeSignIn(page);   // a code sign-in, so a wrong code can be tried
+  await expect(page.getByRole('button',{name:'Send recovery code'})).toBeEnabled();
+  await page.getByRole('button',{name:'Send recovery code'}).click();
   await page.getByLabel('Verification code').fill('000000');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await expect(page.locator('#notice')).toContainText('Preview code');
@@ -325,6 +325,8 @@ test('Home: three rings reflect real Vision/Stats/Chemistry progress, and each o
   // "Board games" has no pick yet in the fixture — answering it is a NEW
   // answer, unlike re-picking one already set (which the ring would not
   // count as progress).
+  // 451efb5 (2026-11-23): each activity is a collapsible row; open it first, as a member does.
+  await page.locator('details.activity-row').filter({has:page.locator('.activity-name',{hasText:/^Board games$/})}).locator('summary').click();
   await page.locator('label:has(input[name="act__Board games"][value="good"])').click();
   await page.getByRole('button',{name:'Save chemistry'}).click();
   await expect(page.getByText('Saved.')).toBeVisible();
@@ -343,9 +345,11 @@ test('REACH: hero ring, filter chips, and the picker sheet for a slider (road-fi
   await signIn(page);
   await tabbar(page).getByRole('button',{name:'Reach'}).click();
 
-  await expect(page.getByText('REACH · THIS WEEK')).toBeVisible();
-  await expect(page.locator('.p-reach-num')).toHaveText('1');
-  await expect(page.locator('.p-reach-fit')).toHaveText('of 6 who fit');
+  // 056139e (2026-11-23, Brand Meadows): the hero ring became a count block —
+  // the same two numbers (mutual matches, members who fit) in new places.
+  await expect(page.locator('.reach-review-heading .p-eyebrow')).toHaveText('REACH');
+  await expect(page.locator('.reach-review-heading .reach-count')).toHaveText('1');
+  await expect(page.locator('.reach-review-heading')).toContainText('6 fit your filters');
 
   // Every filter the API returns is a chip — sliders and choices alike,
   // nothing hidden behind a "More filters" split any more.
@@ -467,7 +471,12 @@ test('Editing one unrelated stat sends only that field — untouched Age is neve
   await page.locator('#dashboard-stats-form').getByRole('button',{name:'Save changes'}).click();
   await expect(page.getByText('Saved.')).toBeVisible();
   await expect.poll(()=>patches.length).toBe(2);
-  expect(patches[1]).toContain('"age":31');
+  // sec-logs (2026-11-25): the app log names the fields sent, never their values.
+  // The value is checked where the member sees it ("Saved." only after the server's
+  // read-back matches); "sent as a number" is checked in tests/statsFields.test.js.
+  expect(patches[1]).toContain('age');
+  expect(patches[1]).not.toContain('waist_in');
+  await expect(page.locator('input[name="age"]')).toHaveValue('31');
 });
 
 test('Stats are editable inline from REACH without leaving the screen (round3-fixes-spec.md §3)',async({page})=>{
@@ -483,7 +492,7 @@ test('Stats are editable inline from REACH without leaving the screen (round3-fi
   // A saved stat can unlock a new REACH lever, so saving reloads the
   // REACH screen itself once persistence is confirmed.
   await expect(page.getByRole('button',{name:'Edit your stats'})).toBeVisible();
-  await expect(page.getByText('REACH · THIS WEEK')).toBeVisible();
+  await expect(page.locator('.reach-review-heading')).toBeVisible();   // REACH screen (056139e header)
 });
 
 test('ROAD: reachable at Relationship entry (now behind the avatar sheet), routine/obligations/sharing, shared flag never defaulted (road-fixes-clock-spec.md §1)',async({page})=>{
@@ -670,7 +679,8 @@ test('Vision: four pillars only, additive Add Detail, and Declare a Change gated
   await page.locator('[data-open-editor]').click();
 
   // §7.1: the explanatory copy, and no Relocation/Career anywhere.
-  await expect(page.getByText('Travel together takes no detail now.')).toBeVisible();
+  // 451efb5 (2026-11-23): curated Vision — only Intimacy carries detail now.
+  await expect(page.getByText('Emotional intimacy is required. Physical intimacy is optional.')).toBeVisible();
   await expect(page.getByText(/Relocation|Career/)).toHaveCount(0);
 
   // §7.2: Add Detail offers only what is NOT already held (Kids isn't set,

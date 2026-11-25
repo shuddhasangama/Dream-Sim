@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {signInMember} from './fixtures/auth.js';
 
 test('rehearsal waits, notices partner actions on an unchanged clock, and preserves edits',async({page})=>{
   await page.route('**/src/preview.js',async route=>{
@@ -24,10 +25,7 @@ test('rehearsal waits, notices partner actions on an unchanged clock, and preser
   });
   await page.clock.install();
   await page.goto('/');
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
-  await page.getByLabel('Verification code').fill('123456');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await signInMember(page);
   await expect(page.locator('.rehearsal-banner')).toContainText('at your own pace');
   await page.getByRole('button',{name:'Ready for simulated date',exact:true}).click();
   await expect(page.locator('.rehearsal-banner')).toContainText('Waiting for your partner');
@@ -80,10 +78,7 @@ test('personal intro starts once and reaches minute twelve without offering slot
   });
   await page.clock.install();
   await page.goto('/');
-  await page.getByLabel('Phone number').fill('+15550001111');
-  await page.getByRole('button',{name:'Send SMS code'}).click();
-  await page.getByLabel('Verification code').fill('123456');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await signInMember(page);
   await expect(page.locator('.rehearsal-banner')).toContainText('Next checkpoint');
   await expect(page.locator('#rehearsal-slots')).toHaveCount(0);
   await page.clock.fastForward(720000);
