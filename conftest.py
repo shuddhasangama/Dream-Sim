@@ -75,10 +75,11 @@ def _no_leaked_sqlite_connections():
 def _fresh_circuit_breakers():
     """c-resilience: breakers are per process. Tests that simulate provider
     outages must not leave a breaker open for the next test."""
+    import client_ip
     import resilience, alerts
-    resilience.reset_all(); alerts.reset()
+    resilience.reset_all(); alerts.reset(); client_ip.reset()
     yield
-    resilience.reset_all(); alerts.reset()
+    resilience.reset_all(); alerts.reset(); client_ip.reset()
 
 
 @pytest.fixture(autouse=True)
