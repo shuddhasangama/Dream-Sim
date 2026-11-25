@@ -226,7 +226,7 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
             body = {"data": None, "error": {
                 "code": payload.get("code", codes.get(response.status_code, "internal_error")),
                 "message": payload.get("error", "Request failed."),
-                "detail": payload.get("detail"), "reference": payload.get("reference"),
+                "detail": payload.get("detail"), "reference": payload.get("reference") or g.get("request_id"),
             }}
         else:
             body = {"data": payload, "error": None}

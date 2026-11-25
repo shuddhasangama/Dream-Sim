@@ -118,6 +118,9 @@ app = Flask(__name__)
 # c-scale-budget: registered first so it runs last (after the API envelope).
 import compression
 compression.register(app)
+# mon-sentry: request id first, one JSON log line per request, Sentry only with SENTRY_DSN.
+import observability
+observability.register(app)
 app.secret_key = os.environ.get("SECRET_KEY") or "dream-sim-local-play-test-only"
 # SECRET_KEY must be set in Railway. The fallback exists so `python app.py`
 # still runs locally; it signs session cookies and is public in this repo,
@@ -232,6 +235,15 @@ def _handle(status: int, exc: BaseException | None, log_it: bool):
     if log_it:
         errors.log(detail)
         errors.record(db.acquire, detail, release=db.release)
+        if exc is not None and status >= 500:
+            # mon-sentry: the app handles every exception itself, so report 5xx explicitly
+            # (no-op unless SENTRY_DSN is set; observability.scrub removes personal data).
+            try:
+                import sentry_sdk
+                if sentry_sdk.get_client().is_active():
+                    sentry_sdk.capture_exception(exc)
+            except Exception:   # noqa: BLE001
+                pass
 
     copy = errors.copy_for(status)
     # An API caller gets JSON with the same reference, so a failing fetch

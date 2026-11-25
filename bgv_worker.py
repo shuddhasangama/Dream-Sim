@@ -61,7 +61,11 @@ def loop(stop, step=None, idle=5):
     """Main worker loop. Exits between iterations once `stop` is set, so a deploy's
     SIGTERM never interrupts a claimed job midway (c-resilience graceful shutdown)."""
     step=step or bgv_step
+    next_check=0.0
     while not stop.is_set():
+        if time.monotonic()>=next_check:   # mon-alerts: stuck verification work, every 5 minutes
+            next_check=time.monotonic()+300
+            check_stuck()
         try:
             processed=step()
         except Exception as error:
@@ -69,6 +73,19 @@ def loop(stop, step=None, idle=5):
             logging.error('BGV worker iteration failed: %s',type(error).__name__)
             processed=False
         if not processed:stop.wait(idle)
+
+
+def check_stuck():
+    import alerts
+    conn=None
+    try:
+        conn=db.acquire()
+        alerts.check_stuck_jobs(conn)
+    except Exception as error:
+        import logging
+        logging.error('Stuck-job check failed: %s',type(error).__name__)
+    finally:
+        db.release(conn)
 
 
 def install_shutdown(stop):
