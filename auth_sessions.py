@@ -63,6 +63,10 @@ def issue(conn, user_id, kind='mobile'):
 def issue_in_transaction(conn, user_id, kind='mobile', tester=False, harness=False):
     if tester and harness:
         raise ValueError('A session is either a tester or a local harness session')
+    locked = sql(conn, 'SELECT locked_at FROM "Account" WHERE user_id = ?', (user_id,)).fetchone()
+    if locked and locked['locked_at'] is not None:
+        import member_lock   # feat-lock: no route can start a session for a locked member
+        raise member_lock.AccountLocked(user_id)
     timestamp = now()
     prefix = 'tester_' if tester else 'harness_' if harness else ''
     sid, access = prefix + uuid.uuid4().hex, secrets.token_urlsafe(32)
@@ -105,7 +109,7 @@ def authenticate(conn, token, kind='mobile'):
     if not valid_token(token):
         return None
     row = sql(conn, '''SELECT s.* FROM "AuthSession" s JOIN "User" u ON u.id = s.user_id
-        JOIN "Account" a ON a.user_id = s.user_id AND a.auth_enabled = 1
+        JOIN "Account" a ON a.user_id = s.user_id AND a.auth_enabled = 1 AND a.locked_at IS NULL
         WHERE s.access_hash = ? AND s.kind = ? AND s.revoked_at IS NULL
         AND s.access_expires_at > ? AND s.expires_at > ?''',
         (digest(token), kind, now(), now())).fetchone()
@@ -132,7 +136,7 @@ def refresh(conn, token, harness=False):
         if not session or not session_allowed(session, harness) or session['revoked_at'] is not None or session['expires_at'] <= timestamp:
             return None
         account = (sql(conn, 'SELECT id FROM "User" WHERE id = ?', (session['user_id'],)).fetchone() if harness else
-                   sql(conn, 'SELECT id FROM "Account" WHERE user_id = ? AND auth_enabled = 1', (session['user_id'],)).fetchone())
+                   sql(conn, 'SELECT id FROM "Account" WHERE user_id = ? AND auth_enabled = 1 AND locked_at IS NULL', (session['user_id'],)).fetchone())
         if not account:
             return None
         if old['consumed_at'] is not None:

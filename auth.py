@@ -189,6 +189,15 @@ def pad_response(started):
 
 
 def register_auth(app, get_db):
+    import member_lock
+
+    @app.errorhandler(member_lock.AccountLocked)
+    def account_locked(_exc):
+        # feat-lock: a clear message on every sign-in route (API JSON / web page).
+        if request.path.startswith('/api/'):
+            return failure(member_lock.MESSAGE, 403, 'account_locked')
+        return member_lock.MESSAGE, 403
+
     app.config['AUTH_ENABLED'] = os.environ.get('AUTH_ENABLED', '').lower() in ('1', 'true', 'on')
     app.config['AUTH_PUBLIC_ORIGIN'] = os.environ.get('AUTH_PUBLIC_ORIGIN', '').rstrip('/')
     if app.config['AUTH_ENABLED']:
