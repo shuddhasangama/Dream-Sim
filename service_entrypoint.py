@@ -8,6 +8,20 @@ def command(role):
     if role=='bgv-worker': return [sys.executable,'bgv_worker.py']
     raise ValueError('Unknown DHASHU_PROCESS_ROLE')
 
+def init_schema():
+    """Run schema initialisation once at process start (perf-init), so requests
+    never run DDL. DHASHU_INIT_DB_ON_START=0 skips it (default: on)."""
+    if os.getenv('DHASHU_INIT_DB_ON_START', '1') != '1':
+        return False
+    import db
+    conn = db.get_connection()
+    try:
+        db.init_db(conn)
+    finally:
+        conn.close()
+    print('Schema initialised at startup; requests run no DDL.', flush=True)
+    return True
+
 def prepare_pilot():
     uid=os.getenv('DHASHU_BGV_BOOTSTRAP_USER_ID')
     if not uid: return
@@ -36,7 +50,9 @@ def prepare_pilot():
 if __name__=='__main__':
     role=os.getenv('DHASHU_PROCESS_ROLE','web')
     argv=command(role)
-    if role=='web': prepare_pilot()
+    if role=='web':
+        init_schema()
+        prepare_pilot()
     if role=='admin':
         import db
         from admin_dashboard.manage import initialize

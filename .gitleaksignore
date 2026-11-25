@@ -1,0 +1,8 @@
+# gitleaks: known, reviewed findings (fingerprint = commit:file:rule:line). Values are never stored here.
+# Anything not listed fails the scan. Review again before adding a line.
+#
+# 1) Test-only placeholder Flask secret_key in an isolated test app (not a real secret).
+# 2) Pre-existing Apple App Store Connect key committed in 7a6d3dc (2026-09-16). It is a real key:
+#    revoke/replace it in App Store Connect (manual step, see docs). History is not rewritten.
+4855f0a1d7615cc98ac5f819a32e60c5b52dc27d:test_signzy_digilocker.py:generic-api-key:13
+7a6d3dca6a58547adec4207837c9faac58e4e7e5:mobile/AuthKey_Q43X3LQ2NC.p8:private-key:1

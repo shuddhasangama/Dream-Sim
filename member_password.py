@@ -37,14 +37,14 @@ def login(conn, identifier, password, kind="mobile"):
 
 def register(app,get_db,payload):
     @app.post('/api/v1/auth/password/login')
-    def password_login():
+    def auth_password_login():
         body,error=payload(('identifier','password'))
         if error:return error
         result,error=login(get_db(),body['identifier'],body['password'])
         return error if error else jsonify(result)
 
     @app.get('/api/v1/auth/password/status')
-    def password_status():
+    def auth_password_status():
         if request.headers.get('Authorization') is None:return auth.failure('A bearer token is required.',401,'authentication_required')
         active=auth.resolve(get_db)
         if not active:return auth.failure('Sign in to continue.',401,'authentication_required')
@@ -53,7 +53,7 @@ def register(app,get_db,payload):
         return jsonify(password_set=bool(a['password_hash']),can_set=bool(grant and grant['consumed_at'] is None and grant['expires_at']>sessions.now()),phone=auth.normalize('phone',a['phone'],stored=True))
 
     @app.post('/api/v1/auth/password/set')
-    def password_set():
+    def auth_password_set():
         body,error=payload(('password',))
         if error:return error
         if request.headers.get('Authorization') is None:return auth.failure('A bearer token is required.',401,'authentication_required')

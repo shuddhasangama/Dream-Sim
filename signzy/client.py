@@ -130,8 +130,10 @@ class Client:
             return finish()
         except (ValueError, UnicodeError):
             receipt.update(action('invalid_provider_response'))
-            receipt['outcome'] = 'invalid_or_oversized_response'
             receipt.update(classify(receipt['http_status'], {}))
+            # Set last: classify() returns outcome='request_failed' for HTTP errors,
+            # which must not hide that the body itself was invalid or oversized.
+            receipt['outcome'] = 'invalid_or_oversized_response'
             return finish()
         error = classify(receipt['http_status'], parsed)
         try:

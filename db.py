@@ -288,7 +288,8 @@ def init_db(
             cur.execute(sql)
 
         _commit(conn)
-        reconcile_columns(conn, schema_path)
+        if schema_reconcile_enabled():
+            reconcile_columns(conn, schema_path)
         enforce_unique_indexes(conn)
         widen_contact_channels(conn)
         return
@@ -297,9 +298,71 @@ def init_db(
     sql = path.read_text(encoding="utf-8")
     conn.executescript(sql)
     _commit(conn)
-    reconcile_columns(conn, schema_path)
+    if schema_reconcile_enabled():
+        reconcile_columns(conn, schema_path)
     enforce_unique_indexes(conn)
     widen_contact_channels(conn)
+
+
+# ── schema initialisation off the request path (perf-init) ─────────────────
+# init_db() runs the whole schema script plus column reconciliation. Running
+# it on every request (the old get_db()) cost a full DDL pass per request.
+# The schema cannot change while a process is running (a deploy restarts it),
+# so once per process per database is equivalent and far cheaper.
+#
+# DHASHU_SCHEMA_INIT:
+#   once        (default) first use of each database in this process runs
+#               init_db(); later requests run no DDL at all.
+#   startup     never from requests: the schema was initialised at process
+#               start (service_entrypoint.py / dev-local.ps1).
+#   per_request legacy behaviour (escape hatch only).
+
+def schema_reconcile_enabled() -> bool:
+    """mon-alembic: reconcile_columns() adds missing columns on the fly. It stays on
+    (DHASHU_SCHEMA_RECONCILE=1, default) until Alembic migrations are adopted in
+    production; then set DHASHU_SCHEMA_RECONCILE=0 so schema changes go only
+    through reviewed migrations (docs/MIGRATIONS.md)."""
+    return os.environ.get("DHASHU_SCHEMA_RECONCILE", "1").strip() != "0"
+
+
+SCHEMA_INIT_MODES = ("once", "startup", "per_request")
+_SCHEMA_READY: set = set()
+_SCHEMA_LOCK = __import__("threading").Lock()
+
+
+def schema_init_mode() -> str:
+    mode = os.environ.get("DHASHU_SCHEMA_INIT", "once").strip().lower()
+    return mode if mode in SCHEMA_INIT_MODES else "once"
+
+
+def _schema_key(conn: Any) -> tuple:
+    """Identifies the database a connection points at (never logged)."""
+    if _is_postgres_connection(conn):
+        info = conn.info
+        return ("pg", info.host, info.port, info.dbname,
+                info.get_parameters().get("options", ""))
+    row = conn.execute("PRAGMA database_list").fetchone()
+    return ("sqlite", row[2] if row else "")
+
+
+def ensure_schema(conn: Any) -> bool:
+    """Initialise the schema for this connection's database if this process has
+    not done so yet (per DHASHU_SCHEMA_INIT). Returns True when DDL ran."""
+    mode = schema_init_mode()
+    if mode == "per_request":
+        init_db(conn)
+        return True
+    if mode == "startup":
+        return False
+    key = _schema_key(conn)
+    if key in _SCHEMA_READY:
+        return False
+    with _SCHEMA_LOCK:
+        if key in _SCHEMA_READY:
+            return False
+        init_db(conn)
+        _SCHEMA_READY.add(key)
+    return True
 
 
 # ── keeping an existing database level with the schema file ───────────────

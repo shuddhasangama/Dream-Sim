@@ -3,6 +3,7 @@ from unittest.mock import patch
 import auth_sessions
 import db
 import matching
+import onboarding
 import test_week_api
 from test_segment_efg_routes import RouteTestCase,app_module
 
@@ -15,7 +16,10 @@ class MatchCheckRouteTests(RouteTestCase):
   for uid in ('owner','partner','stranger'):
    self.make_user(uid)
    row=db.fetch_one(self.conn,'User',id=uid);stats=json.loads(row['stats_json']);stats.update(city='Bangalore',gender='male' if uid=='partner' else 'female',employment_category='Freelancer' if uid=='partner' else 'Salaried')
-   row['stats_json']=json.dumps(stats);row['preferences_json']=json.dumps({'fixed':{'dealbreakers':[]},'adjustable':{'distance_km':[0,5000]}});db.insert_row(self.conn,'User',row)
+   row['stats_json']=json.dumps(stats);row['preferences_json']=json.dumps({'fixed':{'dealbreakers':[]},'adjustable':{'distance_km':[0,5000]}})
+   # REACH counts complete profiles only (gender, city AND a vision) since ab658cd (2026-11-17).
+   row['vision_json']=json.dumps(onboarding.build_visions(intimacy_kinds=['Emotional'],other_keys=['Cohabitate'],cohabit_focus=[onboarding.COHABIT_FOCUS[0]],kids_route=[]))
+   db.insert_row(self.conn,'User',row)
    db.insert_row(self.conn,'Account',{'id':uid,'user_id':uid,'auth_enabled':1,'verified_email':1,'email':uid+'@test.example','created_at':'test'})
    self.headers[uid]={'Authorization':'Bearer '+auth_sessions.issue(self.conn,uid)['access_token']}
   self.set_clock(day='Mon',hour=11)

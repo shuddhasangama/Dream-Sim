@@ -136,6 +136,47 @@ class Phase1Tests(unittest.TestCase):
         self.assertIn('active_bgv_case_id',db._existing_columns(self.conn,'User'))
         self.assertIn('case_check_id',db._existing_columns(self.conn,'BgvRequest'))
         self.assertEqual(db.fetch_one(self.conn,'User',id='u1')['bgv_status'],'declared')
+    def test_review_matches_the_child_attempt_even_when_timestamps_tie(self):
+        # Root cause of the 2026-11-25 flake (mon-ci-tasks #1): the request, its
+        # result-fetch child and the attempt can share one created_at. Force that tie:
+        # ordering must stay deterministic (child before parent), not arbitrary.
+        tie='2026-11-25T12:00:00.000000+00:00'
+        bgv_policy.seed(self.conn); cid=bgv_policy.assign(self.conn,'u1','IN','BLR','pilot')
+        with patch.dict(os.environ,{'DHASHU_BGV_POLICY_ENABLED':'1'}),             patch.object(bgv_app,'stamp',return_value=tie),patch.object(bgv_policy,'stamp',return_value=tie):
+            body=self.body(); bgv_app.submit(self.conn,'u1',body)
+            self.work({'caseId':'synthetic_case_123'})
+            child=str(uuid.uuid4()); bgv_app.fetch_result(self.conn,'u1',body['request_id'],child)
+            self.work({'status':1,'cases':[{}],'total':1})
+            requests=db.fetch_all(self.conn,'BgvRequest',user_id='u1')
+            self.assertEqual({r['created_at'] for r in requests},{tie})  # the tie really happened
+            check=db.fetch_one(self.conn,'BgvCaseCheck',case_id=cid,check_definition_id='criminal_court')
+            attempt=db.fetch_all(self.conn,'BgvAttempt',request_id=child)[0]
+            bgv_policy.review(self.conn,check['id'],attempt['id'],'satisfied','Synthetic review note','operator-test')
+            for _ in range(5):  # stable across repeated reads
+                status=next(c for c in bgv_policy.view(self.conn,'u1')['checks'] if c['key']=='criminal_court')
+                self.assertEqual(status['state'],'reviewed_satisfied')
+
+    def test_newest_first_breaks_ties_by_lineage_then_id(self):
+        tie='2026-11-25T12:00:00+00:00'
+        parent={'id':'b-parent','created_at':tie,'parent_request_id':None}
+        child={'id':'a-child','created_at':tie,'parent_request_id':'b-parent'}
+        grandchild={'id':'0-grand','created_at':tie,'parent_request_id':'a-child'}
+        older={'id':'z-old','created_at':'2026-11-25T11:00:00+00:00','parent_request_id':None}
+        for rows in ([parent,child,grandchild,older],[older,grandchild,parent,child],[child,older,parent,grandchild]):
+            self.assertEqual([r['id'] for r in bgv_policy.newest_first(rows)],['0-grand','a-child','b-parent','z-old'])
+        plain=[{'id':'x','created_at':tie},{'id':'y','created_at':tie}]
+        self.assertEqual([r['id'] for r in bgv_policy.newest_first(plain)],['y','x'])
+        self.assertEqual([r['id'] for r in bgv_policy.newest_first(list(reversed(plain)))],['y','x'])
+
+    def test_bgv_stamps_strictly_increase_even_if_the_clock_does_not_move(self):
+        import timestamps
+        frozen=datetime(2026,11,25,12,0,0,tzinfo=timezone.utc)
+        with patch.object(timestamps,'_now',return_value=frozen),patch.object(timestamps,'_last',None):
+            values=[bgv_app.stamp() for _ in range(3)]+[bgv_policy.stamp() for _ in range(3)]
+        self.assertEqual(values,sorted(values))
+        self.assertEqual(len(set(values)),6)
+        self.assertEqual(values[0],frozen.isoformat())
+
     def test_operator_review_bound_to_attempt_and_no_overall_approval(self):
         bgv_policy.seed(self.conn); cid=bgv_policy.assign(self.conn,'u1','IN','BLR','pilot')
         with patch.dict(os.environ,{'DHASHU_BGV_POLICY_ENABLED':'1'}):
