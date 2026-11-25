@@ -58,7 +58,7 @@ def configure_market(conn, code, values):
     fields = {'discovery', 'verification', 'payments', 'restaurants', 'support', 'paused'}
     if code not in {c['code'] for c in launch_cities.CITIES} or type(values) is not dict or set(values)!=fields or any(type(v) is not bool for v in values.values()):
         raise ApiError('validation_error', 'Choose a known city and all readiness switches.')
-    with week_service.transition(conn):
+    with week_service.transition(conn, serialize='discovery-market:'+str(code)):   # admin only
         db.insert_row(conn, 'DiscoveryMarket', dict(id=code, **{k:int(v) for k,v in values.items()}, updated_at=int(time.time())))
 
 
@@ -169,7 +169,7 @@ def snapshot(conn, uid, cycle):
 
 
 def prepare(conn, uid, cycle):
-    with week_service.transition(conn):
+    with week_service.transition(conn, uid, serialize=f'discovery-generation:{cycle}'):   # perf-rowlock: allocation, once per member per cycle
         user=member(conn,uid)
         if not complete(user) or not market(conn,user.get('city'))['discovery'] or unavailable(conn,uid,cycle):
             return snapshot(conn,uid,cycle)
@@ -200,7 +200,7 @@ def prepare(conn, uid, cycle):
 def act(conn, uid, candidate, action, cycle):
     if action not in ('interest','pass','reset','block') or not isinstance(candidate,str):
         raise ApiError('validation_error','Choose interest, pass, reset or block.')
-    with week_service.transition(conn):
+    with week_service.transition(conn, uid, candidate):   # perf-rowlock: these two members only
         user=member(conn,uid);other=member(conn,candidate)
         old=decision(conn,uid,candidate)
         if action=='reset':
@@ -232,7 +232,10 @@ def act(conn, uid, candidate, action, cycle):
 
 
 def confirm(conn, uid, proposal_id, clock):
-    with week_service.transition(conn):
+    # perf-rowlock: lock the actor and both members of this proposal. Competing
+    # proposals that share a member queue on that member's row.
+    peek=db.fetch_one(conn,'DiscoveryProposal',id=proposal_id) if isinstance(proposal_id,str) else None
+    with week_service.transition(conn, uid, *((peek['user_a'],peek['user_b']) if peek else ())):
         row=db.fetch_one(conn,'DiscoveryProposal',id=proposal_id)
         if not row or uid not in (row['user_a'],row['user_b']):
             raise ApiError('not_found','Pairing not found.',404)

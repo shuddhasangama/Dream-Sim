@@ -15,13 +15,31 @@ from generate_users import from_user_row
 sql = auth_sessions.sql
 
 
+def lock_users(conn, *uids):
+    """perf-rowlock: lock exactly these members' User rows (sorted, so two
+    transactions always take them in the same order and cannot deadlock).
+    Replaces the old table-wide LOCK TABLE, which serialised every member."""
+    db.lock_user_rows(conn, *uids)
+
+
+def try_lock_user(conn, uid):
+    """Lock one member's row only if no other transaction holds it (never waits)."""
+    if not db._is_postgres_connection(conn):
+        return True
+    return sql(conn, 'SELECT id FROM "User" WHERE id = ? FOR UPDATE SKIP LOCKED', (uid,)).fetchone() is not None
+
+
 @contextmanager
-def transition(conn):
-    # Conservative beta serialization: includes both users and all candidate
-    # edges. Shared by the HTML and JSON paths; no commit-per-row helpers inside.
+def transition(conn, *uids, serialize=None):
+    # Serialises only the members involved (row locks), shared by the HTML and
+    # JSON paths; no commit-per-row helpers inside.
+    # serialize: optional advisory-lock name for work that allocates across
+    # members (weekly generation). Always taken BEFORE row locks; decisions never
+    # take it, so likes stay row-level and cannot deadlock with generation.
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            sql(conn, 'LOCK TABLE "User", "Match", "LockIn", "MatchBatch" IN SHARE ROW EXCLUSIVE MODE')
+        if serialize and db._is_postgres_connection(conn):
+            sql(conn, 'SELECT pg_advisory_xact_lock(hashtext(?))', ('dhashu:' + serialize,))
+        lock_users(conn, *uids)
         yield
 
 
@@ -50,7 +68,9 @@ def prepare(conn, uid, clock):
     if discovery.enabled():
         discovery.prepare(conn,uid,discovery.cycle_for(clock))
         return []
-    with transition(conn):
+    # Weekly generation allocates partners/slots across members: one generation at a
+    # time per week (rare: once per member per week). Likes are not affected.
+    with transition(conn, uid, serialize=f'week-generation:{clock.week}'):
         user = eligible_user(conn, uid)
         if active_for(conn, uid):
             raise ApiError('reach_locked', 'You are already locked in.', 409)
@@ -113,7 +133,15 @@ def reciprocal_offer(conn, user, pool, locked, recent, clock):
             and not db.fetch_one(conn,'Match',user_id=c['user_id'],candidate_id=user['user_id'],week=clock.week)]
         if not candidates or not signup_verification.matching_satisfied(db.fetch_one(conn,'Account',user_id=user['user_id'])):
             continue
-        partner = sorted(candidates, key=lambda c:c['user_id'])[0]['user_id']
+        # Row lock on the partner (skip anyone another transaction is using, never
+        # wait: no deadlock), then re-check the slot is still free for them.
+        partner = None
+        for candidate in sorted(candidates, key=lambda c:c['user_id']):
+            if try_lock_user(conn, candidate['user_id']) and not db.fetch_one(conn,'Match',user_id=candidate['user_id'],week=clock.week,slot=slot):
+                partner = candidate['user_id']
+                break
+        if partner is None:
+            continue
         reveal = max(clock, clock_module.checkpoint(clock.week, clock_module.MATCH_REVEAL_BY_SLOT[slot]))
         sql(conn, 'INSERT INTO "Match" (id,user_id,candidate_id,week,slot,revealed_at,window_closes_at) VALUES (?,?,?,?,?,?,?)',
             (f'{partner}:{clock.week}:{slot}',partner,user['user_id'],clock.week,slot,str(reveal),str(close)))
@@ -132,7 +160,9 @@ def decide(conn, uid, match_id, action, pass_reason, clock):
     if action == 'interest' and pass_reason:
         raise ApiError('validation_error', 'Pass reason applies only to pass.')
     reason = (pass_reason or '').strip() or None if action == 'pass' else None
-    with transition(conn):
+    # The candidate never changes on a Match row, so it can be read before locking.
+    peek = db.fetch_one(conn, 'Match', id=match_id)   # transition() then owns the commit boundary
+    with transition(conn, uid, peek['candidate_id'] if peek and peek['user_id'] == uid else None):
         row = db.fetch_one(conn, 'Match', id=match_id)
         if row is None or row['user_id'] != uid:
             raise ApiError('not_found', 'Match not found.', 404)

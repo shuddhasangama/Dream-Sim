@@ -118,7 +118,7 @@ def search(snapshot, plan, adapter):
 def act(conn, uid, pid, body):
     if not enabled():
         raise ApiError('not_found', 'Restaurant simulation is not enabled.', 404)
-    with planning.transition(conn):
+    with planning.transition(conn, uid, pid=pid):
         pair, plan = owned(conn, uid, pid)
         row = load(conn, pid)
         if row.get('mode','simulation')!='simulation':

@@ -64,7 +64,7 @@ def capture(conn,uid,image):
         raw=normalize(raw)
     except Exception:raise ApiError('invalid_image','Use a readable JPEG, PNG or WebP selfie under 2 MB.') from None
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):auth_sessions.sql(conn,'LOCK TABLE "AvatarJob" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, uid)  # perf-rowlock (was a table-wide LOCK TABLE)
         r=row(conn,uid)
         if r and r['state']!='draft':raise ApiError('avatar_limit','Your generation run is already reserved. Another capture cannot reset it.',409)
         value={'id':uid,'state':'draft','protected_selfie':Protection().seal({'image':base64.b64encode(raw).decode()}),

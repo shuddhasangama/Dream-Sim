@@ -70,7 +70,7 @@ def state(conn,uid,lid,clock):
 
 
 def action(conn,uid,lid,action,body,clock,today):
-    with transaction(conn):
+    with transaction(conn, uid, lid=lid):
         pair=db.fetch_one(conn,'LockIn',id=lid)
         if not pair or uid not in (pair['user_a'],pair['user_b']):raise ApiError('not_found','Gate not found.',404)
         gate=db.fetch_one(conn,'StageGate',pair_id=lid)

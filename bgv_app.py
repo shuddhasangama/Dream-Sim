@@ -116,8 +116,7 @@ def submit(conn, uid, body):
     snapshot = {'inputs': values, 'declared': declared, 'consent': {'version': VERSION,
                 'text': CONSENT, 'accepted_at': stamp(), 'user_id': uid, 'operation': operation}}
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn, 'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, uid)  # perf-rowlock (was a table-wide LOCK TABLE)
         previous = db.fetch_one(conn, 'BgvRequest', id=rid)
         if previous:
             if previous['user_id'] != uid:
@@ -142,8 +141,7 @@ def fetch_result(conn, uid, source_id, request_id):
     except (ValueError, TypeError, AttributeError):
         raise ApiError('validation_error', 'Use a valid request reference.') from None
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn, 'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, uid)  # perf-rowlock (was a table-wide LOCK TABLE)
         source = db.fetch_one(conn,'BgvRequest',id=source_id,user_id=uid)
         if not source or source['environment'] != cfg.environment:
             raise ApiError('not_found','Search request not found.',404)
@@ -244,12 +242,21 @@ def reproject_saved(conn,uid):
             changed+=result.rowcount
     return changed
 
+def claim_candidates(conn, environment):
+    """perf-rowlock: queued requests this worker may claim, locked FOR UPDATE SKIP
+    LOCKED inside the caller's transaction. Rows another worker is claiming are
+    skipped, never waited on, so two workers never claim the same job."""
+    if db._is_postgres_connection(conn):
+        return [dict(r) for r in auth_sessions.sql(conn,
+            'SELECT * FROM "BgvRequest" WHERE state=? AND environment=? ORDER BY created_at, id FOR UPDATE SKIP LOCKED',
+            ('queued', environment)).fetchall()]
+    return db.fetch_all(conn, 'BgvRequest', state='queued', environment=environment)
+
 def work_one(conn, request_id=None):
     cfg = config(); protection = Protection()
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn, 'LOCK TABLE "BgvRequest" IN SHARE ROW EXCLUSIVE MODE')
-        rows = sorted((r for r in db.fetch_all(conn, 'BgvRequest', state='queued', environment=cfg.environment)
+        queued = claim_candidates(conn, cfg.environment)
+        rows = sorted((r for r in queued
                        if r['operation'] in {*CHECKS,*RESULTS.values(),'digilocker_details'} and (request_id is None or r['id']==request_id)), key=lambda r:r['created_at'])
         rows = [r for r in rows if not signzy_guard.blocked(conn,cfg,protection.open(r['protected_input']).get('provider_operation',r['operation']))]
         if not rows:

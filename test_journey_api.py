@@ -101,7 +101,10 @@ class JourneyApiTests(RouteTestCase):
     def test_pair_rows_are_allowlisted_and_foreign_pairs_do_not_leak(self):
         self.make_lockin('owner', 'partner')
         self.make_plan('lock-1')
-        self.make_lockin('stranger', 'partner', lockin_id='private-foreign-pair')
+        # A member is in at most one active lock-in (perf-rowlock partial unique index),
+        # so the foreign couple is stranger + outsider: their data must never leak to owner.
+        self.make_user('outsider')
+        self.make_lockin('stranger', 'outsider', lockin_id='private-foreign-pair')
         self.make_plan('private-foreign-pair', plan_id='private-foreign-plan')
         state = self.get().json['data']
         # my_avatar/partner_avatar: the chosen generated avatar, shared on purpose since 4a69e42.

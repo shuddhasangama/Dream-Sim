@@ -18,6 +18,32 @@ class ActivityTests(unittest.TestCase):
   self.assertEqual(r['last_seen_at'],self.now);self.assertEqual(r['platform'],'ios');self.assertEqual(r['first_seen_at'],self.now)
   with patch('member_activity.db.get_connection',side_effect=RuntimeError('unavailable')):
    member_activity.record('synthetic-missing','mobile','Android')
+ def test_last_seen_is_written_at_most_once_per_interval(self):
+  member_activity._recent.clear()
+  original=__import__('db').get_connection
+  writes=[]
+  def connect():
+   conn=original(self.path);conn.set_trace_callback(lambda sql:writes.append(sql) if 'UserActivity' in sql else None);return conn
+  def last_seen():return self.conn.execute('SELECT last_seen_at FROM "UserActivity" WHERE user_id=?',('u2',)).fetchone()['last_seen_at']
+  with patch.dict(os.environ,{'DHASHU_LAST_SEEN_INTERVAL':'300'}),patch('member_activity.db.get_connection',side_effect=connect):
+   with patch('member_activity.time.time',return_value=self.now):member_activity.record('u2','mobile','Android')
+   self.assertEqual(last_seen(),self.now);writes.clear()
+   for offset in (1,60,299):                      # same process: skipped in memory, no SQL at all
+    with patch('member_activity.time.time',return_value=self.now+offset):member_activity.record('u2','mobile','Android')
+   self.assertEqual(writes,[]);self.assertEqual(last_seen(),self.now)
+   member_activity._recent.clear()                # another process/replica: the SQL guard holds
+   with patch('member_activity.time.time',return_value=self.now+120):member_activity.record('u2','mobile','Android')
+   self.assertEqual(last_seen(),self.now)
+   # That process remembers +120 in memory, so its next write is due at +420.
+   with patch('member_activity.time.time',return_value=self.now+300):member_activity.record('u2','mobile','Android')
+   self.assertEqual(last_seen(),self.now)
+   with patch('member_activity.time.time',return_value=self.now+420):member_activity.record('u2','mobile','Android')
+   self.assertEqual(last_seen(),self.now+420)      # interval elapsed: written again
+ def test_interval_setting_is_clamped(self):
+  for value,expected in (('300',300),('5',60),('99999',3600),('abc',300)):
+   with patch.dict(os.environ,{'DHASHU_LAST_SEEN_INTERVAL':value}):self.assertEqual(member_activity.interval(),expected)
+  with patch.dict(os.environ,{},clear=False):
+   os.environ.pop('DHASHU_LAST_SEEN_INTERVAL',None);self.assertEqual(member_activity.interval(),300)
  def test_auth_hook_requires_authenticated_session(self):
   from flask import Flask
   import auth

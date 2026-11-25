@@ -139,7 +139,7 @@ def verify_challenge(conn, challenge, code, kind):
         if not current or current['consumed_at'] is not None or current['expires_at']<=sessions.now():return None
         if row['account_id'] is None and kind=='mobile' and row['channel']=='phone':
             # Only signup/request sends a provider challenge for an unknown phone.
-            if db._is_postgres_connection(conn):sessions.sql(conn,'LOCK TABLE "Account" IN SHARE ROW EXCLUSIVE MODE')
+            db.advisory_lock(conn, 'account-contact:phone:'+row['destination'])  # perf-rowlock: only this phone waits
             matches=[r for r in db.fetch_all(conn,'Account') if normalize('phone',r.get('phone'),stored=True)==row['destination']]
             if len(matches)>1 or matches and not matches[0]['auth_enabled']:return None
             if matches:account=matches[0]

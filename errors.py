@@ -113,7 +113,7 @@ def log(detail: dict[str, Any]) -> None:
         pass
 
 
-def record(conn_factory: Any, detail: dict[str, Any]) -> None:
+def record(conn_factory: Any, detail: dict[str, Any], release: Any = None) -> None:
     """Persist the incident so it can be looked up later. Best effort by
     design: the database is exactly the kind of thing that is broken when
     this runs, so a failure here is swallowed after the stderr line has
@@ -147,7 +147,7 @@ def record(conn_factory: Any, detail: dict[str, Any]) -> None:
         # the connection and not closing it."
         if conn is not None:
             try:
-                conn.close()
+                (release or (lambda c: c.close()))(conn)
             except Exception:
                 pass
 

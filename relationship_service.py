@@ -38,7 +38,7 @@ def stage(row,expected):
 
 def idea(conn,uid,cid,body,clock,romance=False):
     value=text(body.get('idea'),'idea')
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         row=couple(conn,uid,cid);stage(row,body.get('stage'))
         _,fresh=event(conn,uid,cid,row['stage'],'romance' if romance else 'idea',{'idea':value},clock,body.get('request_id'))
         if not fresh:return
@@ -51,7 +51,7 @@ def idea(conn,uid,cid,body,clock,romance=False):
 
 def difference(conn,uid,cid,body,clock):
     value=text(body.get('text'),'text')
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         row=couple(conn,uid,cid);stage(row,body.get('stage'))
         receipt,fresh=event(conn,uid,cid,row['stage'],'difference',{'text':value},clock,body.get('request_id'))
         if fresh:
@@ -61,7 +61,7 @@ def difference(conn,uid,cid,body,clock):
 
 
 def difference_action(conn,uid,cid,rid,body,resolve=False):
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         couple(conn,uid,cid)
         row=db.fetch_one(conn,'Difference',id=rid)
         if not row or row['couple_id']!=cid or (row['raised_by']!=uid and not row['consent_to_share']):raise ApiError('not_found','Difference not found.',404)
@@ -76,7 +76,7 @@ def difference_action(conn,uid,cid,rid,body,resolve=False):
 def expense(conn,uid,cid,body,clock):
     if type(body.get('compliant')) is not bool:raise ApiError('validation_error','compliant must be boolean.')
     strategy=text(body.get('strategy'),'strategy',500)
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         row=couple(conn,uid,cid);stage(row,body.get('stage'))
         if type(body.get('week')) is not int or body['week']!=row['stage_week_index']:raise ApiError('stale_week','Use the current stage week.',409)
         result=guru_relationship.expense_check(strategy,body['compliant'])
@@ -105,7 +105,7 @@ def checkpoint_state(conn,uid,cid,source):
 
 
 def checkpoint_step(conn,uid,cid,source,body,clock):
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         info=checkpoint_state(conn,uid,cid,source)
         if not info['payment']['satisfied']:raise ApiError('payment_required','Checkpoint payment prerequisite is not satisfied.',409)
         mine=db.fetch_one(conn,'Ceremony',user_id=uid,kind=ceremony.STAGE_GATE,scope_id=info['scope']) or ceremony.new_state(uid,ceremony.STAGE_GATE,info['scope'],str(clock))
@@ -138,7 +138,7 @@ def checkpoint_step(conn,uid,cid,source,body,clock):
 
 
 def advance(conn,uid,cid,source,clock,today):
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         row=couple(conn,uid,cid)
         target=journey.next_stage(source)
         receipt=db.fetch_one(conn,'JourneyAction',id=f'{cid}:advance:{source}')
@@ -166,7 +166,7 @@ def exit_read(conn,uid,cid,eid):
 
 
 def exit_start(conn,uid,cid,body,clock):
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         row=couple(conn,uid,cid,True)
         existing=db.fetch_all(conn,'Exit',couple_id=cid)
         if existing:return existing[-1]['id']
@@ -177,7 +177,7 @@ def exit_start(conn,uid,cid,body,clock):
 
 
 def exit_action(conn,uid,cid,eid,action,body,clock,today):
-    with transaction(conn):
+    with transaction(conn, uid, cid=cid):
         pair=couple(conn,uid,cid,True);exit_read(conn,uid,cid,eid)
         record=db.fetch_one(conn,'Exit',id=eid)
         rid=eid+':'+action+':'+uid

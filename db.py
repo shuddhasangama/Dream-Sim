@@ -42,6 +42,7 @@ TABLES = {
     "WaitlistEntry", "WaitlistMarket", "WaitlistAudit",
     "BgvEvidence",
     "BgvRequest",
+    "ProviderJob",
     "RestaurantBooking", "RestaurantEvent",
     "BookingPreference", "BookingSnapshot",
     "BillingPurchase", "BillingEntitlement", "BillingEvent",
@@ -206,6 +207,136 @@ def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> Any:
     return conn
 
 
+# ── connection pool (perf-pool) ────────────────────────────────────────────
+# Opening a PostgreSQL connection costs a TCP + TLS + auth round trip per
+# request. Requests now borrow from a per-process psycopg_pool instead.
+#
+#   DHASHU_DB_POOL          1 (default) pool when DATABASE_URL is PostgreSQL; 0 = old behaviour
+#   DHASHU_DB_POOL_MIN      connections kept open (default 1)
+#   DHASHU_DB_POOL_MAX      hard cap per process (default 10); see docs/SCALING.md budget
+#   DHASHU_DB_POOL_TIMEOUT  seconds to wait for a free connection (default 5), then
+#                           PoolTimeout: a full pool fails fast instead of hanging.
+#
+# Borrow with acquire(), always give back with release(). A connection is
+# checked before it is handed out; on return an unfinished transaction is
+# rolled back and session settings are reset, so nothing leaks between
+# requests. SQLite (local/tests) is unaffected: acquire() = get_connection().
+
+import threading as _threading
+import weakref as _weakref
+
+_POOLS: dict = {}
+_POOL_LOCK = _threading.Lock()
+_POOLED = _weakref.WeakKeyDictionary()   # connection -> pool it came from
+
+
+def _int_setting(name: str, default: int, low: int, high: int) -> int:
+    try:
+        value = int(os.environ.get(name, default))
+    except ValueError:
+        value = default
+    return max(low, min(high, value))
+
+
+def pool_settings() -> dict[str, float]:
+    low = _int_setting("DHASHU_DB_POOL_MIN", 1, 0, 50)
+    high = max(low, _int_setting("DHASHU_DB_POOL_MAX", 10, 1, 100))
+    return {"min_size": low, "max_size": high,
+            "timeout": float(_int_setting("DHASHU_DB_POOL_TIMEOUT", 5, 1, 60))}
+
+
+def pool_enabled() -> bool:
+    url = os.environ.get("DATABASE_URL", "")
+    return (url.startswith(("postgres://", "postgresql://"))
+            and os.environ.get("DHASHU_DB_POOL", "1").strip() != "0")
+
+
+def _reset_session(conn: Any) -> None:
+    # Called by the pool on return (after it rolled back any open transaction).
+    with conn.cursor() as cur:
+        cur.execute("RESET ALL")
+    conn.commit()
+
+
+def get_pool() -> Any:
+    """The pool for the current DATABASE_URL (created on first use, per process)."""
+    from psycopg.rows import dict_row
+    from psycopg_pool import ConnectionPool
+    url = os.environ["DATABASE_URL"]
+    with _POOL_LOCK:
+        pool = _POOLS.get(url)
+        if pool is None:
+            pool = ConnectionPool(url, kwargs={"row_factory": dict_row}, open=True,
+                                  check=ConnectionPool.check_connection,
+                                  reset=_reset_session, name="dhashu", **pool_settings())
+            _POOLS[url] = pool
+    return pool
+
+
+def acquire() -> Any:
+    """Borrow a connection: pooled for PostgreSQL, a fresh one otherwise."""
+    if not pool_enabled():
+        return get_connection()
+    pool = get_pool()
+    conn = pool.getconn()
+    _POOLED[conn] = pool
+    return conn
+
+
+def release(conn: Any) -> None:
+    """Give a connection back (pooled) or close it (not pooled). Never raises."""
+    if conn is None:
+        return
+    try:
+        pool = _POOLED.pop(conn, None)
+    except TypeError:            # e.g. sqlite3 connections cannot be weakly referenced
+        pool = None
+    try:
+        if pool is not None:
+            pool.putconn(conn)
+        else:
+            conn.close()
+    except Exception:            # noqa: BLE001 — releasing must never mask the real error
+        try:
+            conn.close()
+        except Exception:        # noqa: BLE001
+            pass
+
+
+def close_pools() -> None:
+    """Close every pool (process shutdown, tests)."""
+    with _POOL_LOCK:
+        pools = list(_POOLS.values())
+        _POOLS.clear()
+    for pool in pools:
+        pool.close()
+
+
+__import__("atexit").register(close_pools)
+
+
+# ── row locks instead of table locks (perf-rowlock) ───────────────────────
+def lock_user_rows(conn: Any, *user_ids: str) -> None:
+    """Lock exactly these members' User rows for the current transaction, in
+    sorted order (every caller uses the same order, so no deadlocks). Replaces
+    table-wide LOCK TABLE, which serialised every member. SQLite: no-op (its
+    BEGIN IMMEDIATE already serialises writers)."""
+    ids = sorted({u for u in user_ids if u})
+    if ids and _is_postgres_connection(conn):
+        with conn.cursor() as cur:
+            cur.execute('SELECT id FROM "User" WHERE id = ANY(%s) ORDER BY id FOR UPDATE', (ids,))
+
+
+def advisory_lock(conn: Any, *names: str) -> None:
+    """Transaction-scoped PostgreSQL advisory locks by name (sorted; no-op on
+    SQLite). For uniqueness that is not one row: e.g. "no second account for
+    this phone" locks just that phone, not the whole Account table."""
+    if _is_postgres_connection(conn):
+        with conn.cursor() as cur:
+            for name in sorted({n for n in names if n}):
+                cur.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', ('dhashu:' + name,))
+
+
 # ── uniqueness that the schema file cannot safely carry ──────────────────
 # 2026-09-09 (evening), user's rule: "Avoiding duplicates is essential."
 # Account.email and Account.phone had PLAIN indexes, so nothing stopped
@@ -231,6 +362,15 @@ UNIQUE_INDEXES = [
     ("uq_account_phone", "Account", "phone"),
 ]
 
+# perf-rowlock: partial unique indexes (name, table, column, WHERE). One ACTIVE
+# lock-in per member in each position; the cross-position case (a member as
+# user_a in one and user_b in another) is prevented by week_service's row locks
+# (tested in test_week_postgres.py). Same no-crash reporting as above.
+PARTIAL_UNIQUE_INDEXES = [
+    ("uq_lockin_active_user_a", "LockIn", "user_a", "status = 'active'"),
+    ("uq_lockin_active_user_b", "LockIn", "user_b", "status = 'active'"),
+]
+
 
 def enforce_unique_indexes(conn: Any) -> list[dict[str, str]]:
     """Create each unique index if it is missing. Returns what could not
@@ -241,9 +381,9 @@ def enforce_unique_indexes(conn: Any) -> list[dict[str, str]]:
     what we want: an account may carry only one of the two identifiers.
     """
     problems = []
-    for name, table, column in UNIQUE_INDEXES:
+    for name, table, column, where in [(*i, None) for i in UNIQUE_INDEXES] + PARTIAL_UNIQUE_INDEXES:
         target = _table_name(conn, table)
-        sql = f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {target} ({column})'
+        sql = f'CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {target} ({column})' + (f' WHERE {where}' if where else '')
         try:
             if _is_postgres_connection(conn):
                 with conn.cursor() as cur:

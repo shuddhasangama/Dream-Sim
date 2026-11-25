@@ -91,7 +91,7 @@ def view(conn, uid, lid):
 
 
 def update(conn, uid, lid, body):
-    with planning.transition(conn):
+    with planning.transition(conn, uid, lid=lid):
         current = view(conn, uid, lid)
         if current is None:
             raise ApiError('not_found', 'Neighbourhood planning is not enabled.', 404)

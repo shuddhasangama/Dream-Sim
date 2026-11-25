@@ -114,7 +114,7 @@ def flags(conn, uid, pid, body, clock, epoch):
     value = {'green_flags':captured['green'], 'red_flags':captured['red'],
         'together_photo':body.get('together_photo',False),'bill_photo':body.get('bill_photo',False),
         'share_feedback':body.get('share_feedback',False)}
-    with planning.transition(conn):
+    with planning.transition(conn, uid, pid=pid):
         pair, plan = owned(conn,uid,pid)
         mine = submission(conn,uid,pid)
         if mine.get('flags') == value:
@@ -143,7 +143,7 @@ def decide(conn,uid,pid,body,clock,epoch):
     if choice!='pass' and reason:
         raise ApiError('validation_error','A reason applies only to pass.')
     reason = guru_dating.capture_pass_reason(reason)['reason'] if choice=='pass' else None
-    with planning.transition(conn):
+    with planning.transition(conn, uid, pid=pid):
         pair,plan=owned(conn,uid,pid)
         mine=submission(conn,uid,pid)
         if mine.get('decision')==choice and mine.get('reason')==reason:
@@ -167,7 +167,7 @@ def decide(conn,uid,pid,body,clock,epoch):
 
 
 def cancel(conn,uid,pid,clock,epoch):
-    with planning.transition(conn):
+    with planning.transition(conn, uid, pid=pid):
         pair,plan=owned(conn,uid,pid)
         done=receipt(conn,pid)
         if done and done['kind']=='cancelled' and done['actor_id']==uid:
@@ -186,7 +186,7 @@ def cancel(conn,uid,pid,clock,epoch):
 
 
 def no_show(conn,uid,pid,clock,epoch):
-    with planning.transition(conn):
+    with planning.transition(conn, uid, pid=pid):
         pair,plan=owned(conn,uid,pid)
         mine=submission(conn,uid,pid)
         if mine.get('no_show_reported'):
@@ -202,7 +202,7 @@ def no_show(conn,uid,pid,clock,epoch):
 
 def reconcile(conn,uid,pid,clock,epoch):
     """Explicit idempotent timeout, never triggered by a new API GET."""
-    with planning.transition(conn):
+    with planning.transition(conn, uid, pid=pid):
         pair,plan=owned(conn,uid,pid)
         if receipt(conn,pid):
             return
@@ -240,7 +240,7 @@ def next_step_state(conn, uid, pid):
 def agree_next_step(conn,uid,pid,choice,clock):
     if choice not in ('continue','discuss','end'):
         raise ApiError('validation_error','Choose another date, discuss, or end the pairing.')
-    with planning.transition(conn):
+    with planning.transition(conn, uid, pid=pid):
         pair,plan=owned(conn,uid,pid)
         mine=submission(conn,uid,pid)
         if receipt(conn,pid):

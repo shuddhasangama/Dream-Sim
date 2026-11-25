@@ -3,3 +3,5 @@
 pytest==9.2.0
 pip-audit==2.10.1
 bandit==1.9.4
+locust==2.47.0
+waitress==3.0.2

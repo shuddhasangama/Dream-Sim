@@ -115,6 +115,9 @@ VISION_STANCE_OPTIONS = {
 }
 
 app = Flask(__name__)
+# c-scale-budget: registered first so it runs last (after the API envelope).
+import compression
+compression.register(app)
 app.secret_key = os.environ.get("SECRET_KEY") or "dream-sim-local-play-test-only"
 # SECRET_KEY must be set in Railway. The fallback exists so `python app.py`
 # still runs locally; it signs session cookies and is public in this repo,
@@ -200,7 +203,7 @@ def slot_datetime(week: int, day: str, meal_slot: str) -> str:
 
 def get_db():
     if "db" not in g:
-        g.db = db.get_connection()
+        g.db = db.acquire()   # pooled for PostgreSQL (perf-pool)
         # Schema DDL is not per request any more: once per process per database
         # (DHASHU_SCHEMA_INIT, see db.ensure_schema).
         db.ensure_schema(g.db)
@@ -228,7 +231,7 @@ def _handle(status: int, exc: BaseException | None, log_it: bool):
     detail = errors.describe(request, _current_user_id(), exc, status)
     if log_it:
         errors.log(detail)
-        errors.record(db.get_connection, detail)
+        errors.record(db.acquire, detail, release=db.release)
 
     copy = errors.copy_for(status)
     # An API caller gets JSON with the same reference, so a failing fetch
@@ -277,7 +280,7 @@ def _error_unhandled(exc):
 def close_db(_exception=None):
     conn = g.pop("db", None)
     if conn is not None:
-        conn.close()
+        db.release(conn)   # back to the pool (rolled back + reset), or closed
 
 
 # ── cosmetic display names (not part of the data model — generate_users.py
@@ -1130,7 +1133,7 @@ def reach_work_verification():
     from api_contract import ApiError
     from evolution_service import transaction
     user=current_user()
-    with transaction(get_db()):
+    with transaction(get_db(), user['user_id']):
         fresh=load_user(user['user_id'])
         if reach_locked(fresh):return jsonify(error='REACH preferences are frozen during match review and date planning/debrief.'),403
         try:value=match_checks.validate(request.get_json(silent=True))

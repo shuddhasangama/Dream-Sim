@@ -33,7 +33,7 @@ def simulate(conn,uid,request_id):
         request_id=str(uuid.UUID(request_id))
     except (ValueError,TypeError,AttributeError):
         raise ApiError('validation_error','A UUID request ID is required.')
-    with transaction(conn):
+    with transaction(conn, uid):
         row=db.fetch_one(conn,'IdentityCapture',id=uid)
         if (not row or row['status'] not in ('captured','submitted') or not row['image_ciphertext']
             or row['image_expires_at']<=identity.stamp()

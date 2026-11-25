@@ -21,8 +21,7 @@ def invite(conn, email=None, phone=None, apply=False):
     if not any(contacts.values()):
         raise ValueError('A real tester-controlled contact is required.')
     with transaction(conn):
-        if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn, 'LOCK TABLE "Account" IN SHARE ROW EXCLUSIVE MODE')
+        db.advisory_lock(conn, *[f'account-contact:{k}:{v}' for k, v in contacts.items() if v])  # perf-rowlock
         for row in db.fetch_all(conn, 'Account'):
             if any(value and auth.normalize(key, row.get(key), stored=True) == value for key, value in contacts.items()):
                 raise ValueError('Contact already belongs to an account; use existing account administration.')
@@ -114,9 +113,8 @@ def write(conn, uid, revision, section=None, body=None):
         raise ApiError('validation_error', 'revision must be a non-negative integer.')
     if section is not None:
         validate(section, body)
-    with transaction(conn):
-        if db._is_postgres_connection(conn):
-            auth_sessions.sql(conn, 'LOCK TABLE "Account" IN SHARE ROW EXCLUSIVE MODE')
+    with transaction(conn, uid):
+        db.lock_user_rows(conn, uid)  # perf-rowlock (was LOCK TABLE "Account")
         row, account = owned(conn, uid)
         if not row:
             raise ApiError('enrollment_closed', 'Existing profiles use profile editing.', 409)

@@ -20,6 +20,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         enrollment_api.register(api, **enrollment)
         import discovery
         discovery.register(api,enrollment['get_db'],get_clock)
+        import provider_jobs
+        provider_jobs.register(api,enrollment['get_db'])
         import self_signup
         self_signup.register(api,enrollment['get_db'])
     if relationship is not None:
