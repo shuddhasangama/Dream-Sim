@@ -28,3 +28,6 @@ Claude outputs/
 *.p8
 *.p12
 *.mobileprovision
+
+# hypothesis example database (local fuzzing cache)
+.hypothesis/
