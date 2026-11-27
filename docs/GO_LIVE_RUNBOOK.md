@@ -11,7 +11,11 @@ This is the day-by-day plan for opening DhaShu to real members, plus what to do 
   - Record the staging numbers in `docs/SCALING.md`.
 - [ ] Settings are reviewed on Railway against the release notes. Encryption keys are in sealed variables, with backups confirmed by two people (`docs/KEY_MANAGEMENT.md`).
 - [ ] Sentry projects (backend and app) receive a test event, and the alert rules route to the on-call phone (`docs/ALERTS.md`).
-- [ ] Twilio: Verify Fraud Guard is on, geo-permissions allow India only, and the spending alert is set.
+- [ ] MSG91 (the SMS provider for sign-up, sign-in and resend):
+  - DLT: the business entity (PE id) and the sender id (header) are registered and approved on the operator DLT portal.
+  - The OTP message template is DLT-approved (DLT template id) and created in MSG91 → OTP → Templates with that DLT template id and the approved sender id; `MSG91_TEMPLATE_ID` on Railway is that MSG91 template id (24 hex).
+  - `MSG91_AUTH_KEY` (MSG91 → Authkey) is in a sealed Railway variable on the **web** service only; any IP whitelist on the key allows Railway.
+  - Account balance is topped up and a low-balance alert is set; a real code reached the owner's phone after deploy.
 - [ ] Razorpay is in live mode with webhooks verified by HMAC (Ramya's sec-pay). **No** test keys in production.
 - [ ] Admin dashboard is behind Cloudflare Access or an IP allow-list. Owner and support accounts exist with authenticator codes. The read-only reporting user is set (`ADMIN_REPORT_DATABASE_URL`).
 - [ ] Backups: a restore drill into a scratch database is done, and the time taken is recorded.
@@ -53,8 +57,8 @@ This is the day-by-day plan for opening DhaShu to real members, plus what to do 
 |---|---|---|
 | Site down or `/ready` failing | Railway: check the deploy logs and the DB status. If the last deploy is the cause, **redeploy the previous release**. | Reconcile any settings added for the release. Never downgrade the database schema. |
 | 5xx spike after deploy | Redeploy the previous release. | Read the Sentry fingerprint; fix forward through the checklist. |
-| OTP not arriving | Check Twilio status and the `circuit_open` / `otp_provider_down` alerts. | If Twilio is down, post a status message. Do not raise OTP limits. |
-| OTP pumping (`otp_global_breaker`) | Leave the breaker paused. Check the Twilio geo report. | Tighten `DHASHU_OTP_COUNTRIES` / `DHASHU_OTP_GLOBAL_PER_HOUR` if needed. |
+| OTP not arriving | Check the MSG91 dashboard (balance, delivery report for the number, template/DLT status) and the `circuit_open` / `otp_provider_down` alerts. | If MSG91 is down, post a status message. Do not raise OTP limits. |
+| OTP pumping (`otp_global_breaker`) | Leave the breaker paused. Check the MSG91 delivery reports for unusual numbers and spend. | Tighten `DHASHU_OTP_COUNTRIES` / `DHASHU_OTP_GLOBAL_PER_HOUR` if needed. |
 | Abuse or scraping (`abuse_spike`) | Identify the route from the event. If `DHASHU_TRUSTED_PROXY` is set, turn on `DHASHU_ABUSE_LIMITS=1`. | Add a Cloudflare WAF rule. |
 | Account compromise reported | Admin dashboard → member → **Lock**, with a reason. This revokes every session. | Investigate. Unlock with a reason; the member signs in again. |
 | Key suspected leaked | Rotate immediately (`docs/KEY_MANAGEMENT.md`), run the re-encryption with `--apply`, then remove the old key. | Treat it as a data incident: notify within legal timelines and keep a record. |

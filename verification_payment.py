@@ -16,7 +16,15 @@ def latest(conn,uid):
     rows=db.fetch_all(conn,'BillingPurchase',user_id=uid,product='verification',mode='sandbox',provider=PROVIDER)
     return max(rows,key=lambda r:r['created_at']) if rows else None
 
+BYPASS={'required':False,'enabled':False,'can_begin':True,'state':'payment_bypass','payment_bypass':True,
+        'message':'Test mode: payments off. Nothing is charged.'}
+
+def refuse_bypass():
+    if catalog.payment_bypass():
+        raise ApiError('payment_bypass','Test mode: payments are off, so there is nothing to pay.',409)
+
 def view(conn,uid):
+    if catalog.payment_bypass():return dict(BYPASS)
     mode=catalog.mode()
     if mode=='disabled':return {'required':False,'enabled':False,'can_begin':True}
     if mode!='sandbox':return {'required':True,'enabled':False,'can_begin':False,'state':'unavailable','message':'Sandbox checkout is unavailable in this billing mode.'}
@@ -34,6 +42,7 @@ def require_paid(conn,uid):
         raise ApiError('verification_payment_required','Complete the test payment before beginning verification.',402)
 
 def start(conn,uid):
+    refuse_bypass()
     if catalog.mode()!='sandbox':raise ApiError('sandbox_only','This checkout is available only in Razorpay test mode.',409)
     gateway=Razorpay()
     if not gateway.key.startswith('rzp_test_'):raise ApiError('sandbox_only','A Razorpay test key is required.',503)
@@ -67,6 +76,7 @@ def start(conn,uid):
     return view(conn,uid)
 
 def complete(conn,uid):
+    refuse_bypass()
     if catalog.mode()!='sandbox':raise ApiError('sandbox_only','Only sandbox payments can be checked here.',409)
     row=latest(conn,uid)
     if not row:raise ApiError('not_found','No verification test payment found.',404)
@@ -83,6 +93,7 @@ def complete(conn,uid):
 
 
 def confirm_provider_payment(conn,uid):
+    refuse_bypass()
     if catalog.mode()!='sandbox':raise ApiError('sandbox_only','Only sandbox payments can be checked here.',409)
     row=latest(conn,uid)
     if not row:raise ApiError('not_found','No verification test payment found.',404)

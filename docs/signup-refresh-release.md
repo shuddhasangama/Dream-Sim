@@ -1,5 +1,7 @@
 # Signup and first-week release — 17 November 2026
 
+> **Update 2026-11-27:** SMS codes now go through **MSG91** (default provider). Twilio is optional and never required. Current steps: `docs/msg91-signup-deployment.md`.
+
 ## Changes
 - Configured country picker: India +91 enabled; other listed countries disabled. Frontend and backend require exactly 10 Indian national digits.
 - Public signup continues creating accounts only after successful OTP validation. A failed signup SMS now returns an actionable error rather than displaying the code-entry screen. Logs include only numeric provider HTTP status/error code, never provider messages, phone numbers or credentials.
@@ -14,7 +16,7 @@
 Work from `C:\DreamContractLocalBKP\ChatGPT\dhashu-employment-release`, not the older dhashu-phase2 checkout.
 Review `git status` and `git diff` before staging. No commit or deployment has been performed by this change.
 Backend changes need Railway deployment; mobile changes need a new Codemagic Android/iOS build and tester update. No new database migration is required.
-Keep valid Twilio credentials. Do not bulk-delete Railway variables. Disable simulation/test-pair settings only when moving the test environment to real weekly operation; check each service/environment intentionally.
+Keep valid MSG91 credentials (MSG91_AUTH_KEY, MSG91_TEMPLATE_ID). Do not bulk-delete Railway variables. Disable simulation/test-pair settings only when moving the test environment to real weekly operation; check each service/environment intentionally.
 
 ## Read-only Railway audit
 Run inside the Dream-Sim service container:
@@ -22,7 +24,7 @@ Run inside the Dream-Sim service container:
 cd /app
 PYTHONPATH=/app /app/.venv/bin/python tools/signup_diagnostics.py
 ```
-A real delivery test is still required after deployment. Ask a tester to request one signup code and compare its time with Dream-Sim logs and Twilio Verify/Debugger logs. An accepted request does not prove handset delivery.
+A real delivery test is still required after deployment. Ask a tester to request one signup code and compare its time with Dream-Sim logs and the MSG91 delivery report. An accepted request does not prove handset delivery.
 
 ## Full user reset — separate from deployment
 This is destructive and includes the formerly protected three accounts. Take a database backup and pause signup access/background jobs before running. Do not let a worker recreate records during the reset.
@@ -37,7 +39,7 @@ Review the table counts, then run the identical command with `--apply`:
 PYTHONPATH=/app /app/.venv/bin/python tools/purge_other_users.py --all-users --expected-users N --apply
 PYTHONPATH=/app /app/.venv/bin/python tools/signup_diagnostics.py
 ```
-Confirm Users: 0 and Accounts: 0; resume services. Sign out on all test devices and start signup again. This script does not fix a Twilio account restriction or carrier delivery problem.
+Confirm Users: 0 and Accounts: 0; resume services. Sign out on all test devices and start signup again. This script does not fix an MSG91 account, DLT template or carrier delivery problem.
 
 ## Acceptance checks
 1. India is selected; 9/11-digit input is rejected; other countries cannot be selected.
@@ -50,7 +52,7 @@ Confirm Users: 0 and Accounts: 0; resume services. Sign out on all test devices 
 8. Check collapsible sections and safe-area spacing on iPhone and Android.
 
 ## Limits
-Live Railway state, Twilio account restrictions and actual SMS delivery have not been inspected from this workspace. No live users have been deleted. Mobile device visual checks remain part of tester acceptance.
+Live Railway state, MSG91 account/DLT status and actual SMS delivery have not been inspected from this workspace. No live users have been deleted. Mobile device visual checks remain part of tester acceptance.
 
 ## Git promotion commands (PowerShell)
 ```powershell

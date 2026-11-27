@@ -12,7 +12,7 @@ import auth_delivery as delivery
 
 class DeliveryTests(unittest.TestCase):
     def setUp(self):
-        self.env = mock.patch.dict(os.environ, {'TWILIO_ACCOUNT_SID': 'AC' + 'a' * 32,
+        self.env = mock.patch.dict(os.environ, {'DHASHU_SMS_PROVIDER': 'twilio', 'TWILIO_ACCOUNT_SID': 'AC' + 'a' * 32,
             'TWILIO_VERIFY_SERVICE_SID': 'VA' + 'b' * 32, 'TWILIO_AUTH_TOKEN': 'test-secret'})
         self.env.start()
         self.addCleanup(self.env.stop)

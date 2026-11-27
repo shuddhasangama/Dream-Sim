@@ -108,7 +108,7 @@ npx playwright test
 npm run build
 ```
 
-The backend tests use isolated test databases; the browser tests use local preview/component fixtures. They do not contact Railway, Twilio or a live BGV provider.
+The backend tests use isolated test databases; the browser tests use local preview/component fixtures. They do not contact Railway, MSG91/Twilio or a live BGV provider.
 
 ## Reverting
 

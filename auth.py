@@ -237,7 +237,8 @@ def register_auth(app, get_db):
         if not os.environ.get('SECRET_KEY') or len(app.secret_key) < 32:
             raise RuntimeError('Secure sign-in requires a strong SECRET_KEY of at least 32 characters.')
         if not auth_delivery.configured():
-            raise RuntimeError('Secure sign-in requires Twilio Verify configuration.')
+            raise RuntimeError('Secure sign-in requires SMS OTP configuration: MSG91_AUTH_KEY and MSG91_TEMPLATE_ID '
+                               '(or DHASHU_SMS_PROVIDER=twilio with the TWILIO_* settings).')
         app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_HTTPONLY=True,
                           SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_NAME='dhashu_auth',
                           MAX_CONTENT_LENGTH=1024 * 1024)

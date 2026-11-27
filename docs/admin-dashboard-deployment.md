@@ -49,7 +49,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 If cryptography is not installed locally, run the same command with `/app/.venv/bin/python` in your existing Railway console. It generates a key only; it changes no database records.
 
-Do not set ADMIN_ALLOW_HTTP, ADMIN_LOCAL_DEMO or ADMIN_LOCAL_DB_PATH in Railway. Do not copy Signzy/OpenAI/Twilio credentials into the admin service. Do not configure the member app's DHASHU_BGV_BOOTSTRAP_USER_ID there. Railway provides PORT. Keep the encryption key stable and stored privately; routine deploys must not rotate it.
+Do not set ADMIN_ALLOW_HTTP, ADMIN_LOCAL_DEMO or ADMIN_LOCAL_DB_PATH in Railway. Do not copy Signzy/OpenAI/MSG91 (or Twilio) credentials into the admin service. Do not configure the member app's DHASHU_BGV_BOOTSTRAP_USER_ID there. Railway provides PORT. Keep the encryption key stable and stored privately; routine deploys must not rotate it.
 
 The admin start role applies additive schemas, creates no administrator automatically, and never seeds simulated users or invokes providers. If shared variables accidentally include a web/worker role override, correct it before deployment.
 

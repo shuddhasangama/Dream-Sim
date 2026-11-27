@@ -1,5 +1,7 @@
 # Phase 3 — email/SMS sign-in and revocable sessions
 
+> **Update 2026-11-27:** SMS codes now go through **MSG91** (default provider). Twilio is optional and never required. Current steps: `docs/msg91-signup-deployment.md`.
+
 ## Scope and status
 
 The beta supports a choice of email OTP or SMS OTP, using Twilio Verify.
