@@ -141,10 +141,14 @@ class PlanningApiTests(RouteTestCase):
         self.assertEqual(self.request(self.base+'/alignment', method='PUT', body={'budget': {}, 'diet': [], 'cuisine': 1}).status_code, 400)
 
     def test_payment_is_required_and_never_granted_by_api(self):
-        with mock.patch.dict(os.environ, {'PAYMENTS_ENABLED': '1'}):
-            self.assertFalse(self.request(self.base+'/calendar').json['data']['payment']['satisfied'])
+        with mock.patch.dict(os.environ, {'DHASHU_FEES_WAIVED': '0', 'PAYMENTS_ENABLED': '0'}):
+            payment=self.request(self.base+'/calendar').json['data']['payment']
+            self.assertFalse(payment['satisfied'])
+            self.assertTrue(payment['enforced'])
             r = self.request(self.base+'/availability', method='PUT', body={'slots': [self.slot]})
             self.assertEqual(r.status_code, 403)
+            self.assertEqual(r.json['error']['code'],'payment_required')
+            self.assertEqual(self.request(self.base+'/calendar',uid='stranger').status_code,404)
             self.assertEqual(db.fetch_all(self.conn, 'Payment'), [])
 
     def test_face_simulation_is_opt_in_and_acks_cannot_be_skipped(self):

@@ -13,9 +13,22 @@ PRODUCTS = {
 }
 
 
+def fees_waived(environ=None):
+    """Explicit, deployment-owned free-pilot policy; fail on ambiguous values."""
+    env = os.environ if environ is None else environ
+    value = env.get('DHASHU_FEES_WAIVED', '0')
+    if not isinstance(value, str):
+        raise RuntimeError('DHASHU_FEES_WAIVED must be true or false.')
+    value = value.strip().lower()
+    if value in ('1', 'true', 'yes', 'on'):
+        return True
+    if value in ('', '0', 'false', 'no', 'off'):
+        return False
+    raise RuntimeError('DHASHU_FEES_WAIVED must be true or false.')
+
+
 def mode():
-    """DHASHU_BILLING_MODE (default 'disabled' = no gateway; the walkthrough's simulated
-    fees apply). 'sandbox' = Razorpay test keys, testers only, Rs 1. 'live_pilot' = live
+    """DHASHU_BILLING_MODE (default 'disabled' = no gateway). 'sandbox' = Razorpay test keys, testers only, Rs 1. 'live_pilot' = live
     keys, testers only, Rs 1. 'live' = owner decision 2026-11-25: real charges at the
     catalogue price for every member (live keys only; see docs/PAYMENTS_GO_LIVE.md)."""
     value = os.getenv('DHASHU_BILLING_MODE', 'disabled')
@@ -81,7 +94,10 @@ def startup_check(environ=None):
     key secret and a webhook secret; test keys and 'sandbox' are refused. Names only in
     the message, never values. Raises RuntimeError; returns None when fine."""
     env = os.environ if environ is None else environ
+    waived = fees_waived(env)
     value = env.get('DHASHU_BILLING_MODE', 'disabled')
+    if value == 'live' and waived:
+        raise RuntimeError('DHASHU_FEES_WAIVED must be false when DHASHU_BILLING_MODE=live.')
     if not production(env) or value == 'disabled':
         return None
     problems = []

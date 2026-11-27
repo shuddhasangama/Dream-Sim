@@ -40,7 +40,7 @@ def prepare_environment(tmp):
         os.environ.pop(name, None)
     os.environ.update({
         'DHASHU_LOCAL_HARNESS': '1', 'DHASHU_SIMULATED_CLOCK': 'true', 'DEMO_MODE': '1',
-        'BETA_DATE_SIMULATION_ENABLED': '1', 'PAYMENTS_ENABLED': '0', 'DHASHU_GURU_AI_ENABLED': '0',
+        'BETA_DATE_SIMULATION_ENABLED': '1', 'DHASHU_FEES_WAIVED': '1', 'DHASHU_GURU_AI_ENABLED': '0',
         'DHASHU_BILLING_MODE': 'sandbox',   # only so /billing renders; its API is stubbed in the browser test
         'SECRET_KEY': 'e2e-local-only-secret-key-not-for-any-deployment-0001',
         'DHASHU_DB_POOL': '0', 'DHASHU_SCHEMA_INIT': 'once',

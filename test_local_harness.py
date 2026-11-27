@@ -305,7 +305,7 @@ class AppIntegrationTests(RouteTestCase):
             return sessions.issue_in_transaction(self.conn, user_id, 'mobile', **kind)
 
     def harness_on(self):
-        stack = [patched_env(**{harness.FLAG: '1', 'PAYMENTS_ENABLED': '0', 'DEMO_MODE': '1', 'DHASHU_SIMULATED_CLOCK': 'true'}),
+        stack = [patched_env(**{harness.FLAG: '1', 'DHASHU_FEES_WAIVED': '1', 'DEMO_MODE': '1', 'DHASHU_SIMULATED_CLOCK': 'true'}),
                  mock.patch.dict(app_module.app.config, {harness.CONFIG_KEY: True})]
         for item in stack:
             item.start()

@@ -161,6 +161,15 @@ def legacy_entitled(conn, uid, purpose, scoped):
     return False
 
 
+def fee_satisfied(conn, uid, purpose, scoped):
+    """The only authority for the four historical fee gates."""
+    if purpose not in ('availability', 'agreement', 'stage_gate', 'guru'):
+        return False
+    if not isinstance(uid, str) or not uid or not isinstance(scoped, str) or not scoped:
+        return False
+    return catalog.fees_waived() or legacy_entitled(conn, uid, purpose, scoped)
+
+
 def apply_payment(conn, row, payment, paid_until=None):
     if payment.get('status') != 'captured':
         return

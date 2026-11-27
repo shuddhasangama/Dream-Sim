@@ -203,7 +203,7 @@ class DateCycleApiTests(RouteTestCase):
 
     def test_late_cancellation_is_charged_once_and_cannot_cancel_started_date(self):
         self.set_clock(day='Sat',hour=18)
-        with mock.patch.dict(os.environ,{'PAYMENTS_ENABLED':'1'}):
+        with mock.patch.dict(os.environ,{'DHASHU_FEES_WAIVED':'0'}):
             for _ in range(2):
                 self.assertEqual(self.request(self.path+'/cancel',method='POST',body={}).status_code,200)
         self.assertEqual(len(db.fetch_all(self.conn,'ComplianceEvent')),1)

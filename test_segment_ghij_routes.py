@@ -225,7 +225,7 @@ class StageGateFeeTests(PairCase):
 
     def setUp(self):
         super().setUp()
-        self._pay = mock.patch.dict(os.environ, {"PAYMENTS_ENABLED": "1"})
+        self._pay = mock.patch.dict(os.environ, {"DHASHU_FEES_WAIVED": "0"})
         self._pay.start()
         self.addCleanup(self._pay.stop)
 
@@ -233,18 +233,25 @@ class StageGateFeeTests(PairCase):
         self.login("u1")
         self.client.get(f"/ceremony/{ceremony.STAGE_GATE}")
         response = self.client.post(f"/ceremony/{ceremony.STAGE_GATE}/step")
-        self.assertIn("/pay/stage_gate", response.headers["Location"])
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(self.cer(ceremony.STAGE_GATE, "u1")["playbook_ack"])
+        with mock.patch.dict(os.environ,{"DHASHU_BILLING_MODE":"sandbox"}):
+            response=self.client.post(f"/ceremony/{ceremony.STAGE_GATE}/step")
+            self.assertEqual(response.status_code,302)
+            self.assertEqual(response.headers['Location'],'/billing')
 
     def test_the_screen_names_the_amount(self):
         self.login("u1")
         body = self.client.get(f"/ceremony/{ceremony.STAGE_GATE}").get_data(as_text=True)
-        self.assertIn("₹2,999", body)
+        self.assertIn("verified payment", body)
+        self.assertNotIn("/pay/", body)
 
     def test_once_paid_the_checkpoint_runs(self):
+        import billing_service
         self.login("u1")
-        self.client.post("/pay/stage_gate/confirm", data={})
-        self.client.get(f"/ceremony/{ceremony.STAGE_GATE}")
-        self.client.post(f"/ceremony/{ceremony.STAGE_GATE}/step")
+        with mock.patch.object(billing_service, 'legacy_entitled', return_value=True):
+            self.client.get(f"/ceremony/{ceremony.STAGE_GATE}")
+            self.client.post(f"/ceremony/{ceremony.STAGE_GATE}/step")
         self.assertTrue(self.cer(ceremony.STAGE_GATE, "u1")["playbook_ack"])
 
 

@@ -557,7 +557,7 @@ def inject_globals():
         "reach_locked": reach_locked(user) if user else False,
         "demo_enabled": demo.is_enabled(),
         "demo_clock": demo.clock_view(get_clock()) if demo.is_enabled() else None,
-        "payments_enabled": payments.is_enabled(),
+        "fees_waived": billing_catalog.fees_waived(),
         "needs_verification": bool(user) and user["bgv_status"] != "verified",
         "health_labels": __import__("profile_choices").HEALTH,
         "nav_links": disclosure.nav_for(reached, reach_locked=reach_locked(user) if user else False),
@@ -1667,7 +1667,7 @@ def calendar_confirm():
         if exc.code == 'alignment_required':
             return redirect(url_for('align_view'))
         if exc.code == 'payment_required':
-            return redirect(url_for('pay_view', purpose=payments.AVAILABILITY))
+            return _payment_required_response()
         abort(exc.status, description=exc.message)
     return redirect(url_for('plan_view'))
 
@@ -3785,9 +3785,7 @@ def demo_partner():
 
 
 # ── Segment D: the four fees ───────────────────────────────────────────
-# No gateway. payments.simulate_gateway_callback() is where Razorpay's
-# webhook lands. The entitlement question is answered in exactly one
-# place — payments.has_paid() — so no screen invents its own rule.
+# Only the explicit waiver or verified Razorpay entitlements clear a gate.
 
 
 def _payment_scope(user: dict, purpose: str) -> str | None:
@@ -3808,71 +3806,25 @@ def _payment_scope(user: dict, purpose: str) -> str | None:
     return None
 
 
-def _has_paid(user_id: str, purpose: str, scope_id: str) -> bool:
-    import billing_catalog
-    if billing_catalog.real_billing(user_id):   # dec-pay: live mode = Razorpay entitlements for everyone
-        import billing_service
-        return billing_service.legacy_entitled(get_db(),user_id,purpose,scope_id)
-    rows = db.fetch_all(get_db(), "Payment", user_id=user_id)
-    return payments.has_paid(rows, user_id, purpose, scope_id)
+def _fee_satisfied(user_id: str, purpose: str, scope_id: str) -> bool:
+    import billing_service
+    return billing_service.fee_satisfied(get_db(), user_id, purpose, scope_id)
+
+
+def _payment_required_response():
+    if billing_catalog.mode() == 'disabled':
+        abort(403, description='Payment is required and checkout is unavailable.')
+    return redirect('/billing')
 
 
 def _require_payment(user: dict, purpose: str):
-    """Returns a redirect to the checkout when this is unpaid, or None to
-    let the caller carry on. Callers use it as an early return."""
-    if not payments.is_enabled():
-        return None
+    """Return a checkout response when a fee is due, or None when satisfied."""
     scope_id = _payment_scope(user, purpose)
     if scope_id is None:
+        abort(403, description='Payment scope is unavailable.')
+    if _fee_satisfied(user["user_id"], purpose, scope_id):
         return None
-    if _has_paid(user["user_id"], purpose, scope_id):
-        return None
-    return redirect(url_for("pay_view", purpose=purpose))
-
-
-@app.route("/pay/<purpose>")
-@login_required
-def pay_view(purpose):
-    import billing_catalog
-    if billing_catalog.pilot_user(current_user()['user_id']):
-        return redirect('/billing')
-    if purpose not in payments.PURPOSES:
-        abort(404)
-    user = current_user()
-    scope_id = _payment_scope(user, purpose)
-    if scope_id is None:
-        return redirect(url_for("week"))
-    paid = _has_paid(user["user_id"], purpose, scope_id)
-    return render_template(
-        "pay.html",
-        view=payments.checkout_view(purpose, scope_id, paid),
-        next_url=request.args.get("next") or url_for("week"),
-        # Entered with ?next= from whatever needed paying for, so that is
-        # the way back — not the Dashboard, and not a dead end.
-        back_to=_link_to_url(request.args.get("next") or url_for("week")),
-    )
-
-
-@app.route("/pay/<purpose>/confirm", methods=["POST"])
-@login_required
-def pay_confirm(purpose):
-    """The stub gateway. Writes a Payment row and marks it paid; no money
-    moves and the screen says so."""
-    import billing_catalog
-    if billing_catalog.real_billing(current_user()['user_id']):   # dec-pay: never a free bypass of real billing
-        abort(403, 'Simulated payment confirmation is disabled while real billing is on.')
-    if purpose not in payments.PURPOSES:
-        abort(404)
-    user = current_user()
-    scope_id = _payment_scope(user, purpose)
-    if scope_id is None:
-        return redirect(url_for("week"))
-
-    row = payments.payment_row(user["user_id"], purpose, scope_id, str(get_clock()))
-    db.insert_row(get_db(), "Payment", payments.simulate_gateway_callback(row, succeeded=True))
-
-    nxt = request.form.get("next") or url_for("week")
-    return redirect(nxt)
+    return _payment_required_response()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -4008,13 +3960,11 @@ def ceremony_view(kind):
     state = _ceremony_state(kind, scope_id)
     meta = ceremony.kind_meta(kind)
 
-    # The fee, if this kind carries one, uses the SAME scope helper the
-    # rest of payments.py uses — a ceremony must never be reachable by a
-    # route the checkout would have stopped.
+    # The ceremony uses the same server-side fee policy as its POST gate.
     fee_gate = None
-    if meta["fee"] and payments.is_enabled():
+    if meta["fee"]:
         fee_scope = _payment_scope(current_user(), meta["fee"])
-        if fee_scope is not None and not _has_paid(current_user()["user_id"], meta["fee"], fee_scope):
+        if fee_scope is None or not _fee_satisfied(current_user()["user_id"], meta["fee"], fee_scope):
             fee_gate = meta["fee"]
 
     ctx = _date_ceremony_context(scope_id) if kind == ceremony.DATE_AGREEMENT else {}
@@ -4034,7 +3984,7 @@ def ceremony_view(kind):
         clauses=ceremony.clauses_for(kind, ctx),
         complete=ceremony.is_complete(state),
         fee_gate=fee_gate,
-        fee_label=payments.amount_label(fee_gate) if fee_gate else None,
+        billing_available=billing_catalog.mode() != 'disabled',
         face_failed=request.args.get("face") == "failed",
         signatories=_ceremony_signatories(peers),
         waiting_on_partner=(
@@ -4503,6 +4453,9 @@ def guru_view():
     if guard is not None:
         return guard
     user = current_user()
+    gate = _require_payment(user, payments.GURU)
+    if gate is not None:
+        return gate
     reached = _milestones_for(user)
     action = guru.next_action(reached, facts=_guru_facts(user))
     # 2026-09-04, user's rule: "Keep this intuitive rather than with
@@ -4531,6 +4484,9 @@ def guru_all_view():
     if guard is not None:
         return guard
     user = current_user()
+    gate = _require_payment(user, payments.GURU)
+    if gate is not None:
+        return gate
     reached = _milestones_for(user)
     return render_template("guru_all.html", cards=guru.cards(reached))
 

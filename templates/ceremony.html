@@ -19,10 +19,9 @@
 {% if fee_gate %}
 <div class="card">
   <div class="section-label">Before you can sign</div>
-  <div class="hint">This one carries a fee of {{ fee_label }}. Nothing is signed until it clears.</div>
-  <a class="btn-primary" href="{{ url_for('pay_view', purpose=fee_gate, next=url_for('ceremony_view', kind=kind)) }}">
-    Go to checkout
-  </a>
+  <div class="hint">A verified payment is required before this step. Nothing is signed until it clears.</div>
+  {% if billing_available %}<a class="btn-primary" href="/billing">Open secure checkout</a>
+  {% else %}<p>Checkout is currently unavailable. Please try again later.</p>{% endif %}
 </div>
 {% endif %}
 

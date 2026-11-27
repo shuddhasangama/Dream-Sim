@@ -165,7 +165,7 @@ class AsyncRehearsalTests(RouteTestCase):
         before=self.state()
         with mock.patch('accelerated_clock.position',side_effect=AssertionError('must not use elapsed clock')):
             self.assertEqual(self.state()['clock'],before['clock'])
-        with mock.patch.dict('os.environ',{'PAYMENTS_ENABLED':'1'}):
+        with mock.patch.dict('os.environ',{'DHASHU_FEES_WAIVED':'0','PAYMENTS_ENABLED':'0'}):
             self.assertEqual(self.request(self.base+'/availability',method='PUT',body={'slots':[self.slot]}).status_code,403)
         self.assertEqual(db.fetch_all(self.conn,'Payment'),[])
         self.make_user('fourth')
@@ -226,7 +226,7 @@ class AsyncRehearsalTests(RouteTestCase):
             self.assertEqual(self.request('/rehearsal/availability',method='PUT',body={'slots':[]}).status_code,409)
             self.base='/lock-ins/'+pair['id']
             for who in ('owner','partner'): self.align(who)
-            with mock.patch.dict('os.environ',{'PAYMENTS_ENABLED':'1'}):
+            with mock.patch.dict('os.environ',{'DHASHU_FEES_WAIVED':'0','PAYMENTS_ENABLED':'0'}):
                 r=self.request(self.base+'/date-plan',method='POST',body=self.slot)
                 self.assertEqual(r.status_code,403,r.json)
             r=self.request(self.base+'/date-plan',method='POST',body=self.slot)

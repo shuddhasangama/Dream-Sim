@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from flask import Flask, g, jsonify, render_template, request
 from werkzeug.exceptions import HTTPException
 import auth_sessions
+import billing_catalog
 import db
 from . import reports, security
 
@@ -15,6 +16,7 @@ SECTIONS = {'overview','users','sessions','checks','marketing','audit','activiti
 PERMISSIONS = {'owner':SECTIONS,'support':{'overview','users','sessions','checks'},'marketing':{'marketing'}}
 
 def create_app():
+    billing_catalog.fees_waived()
     app = Flask(__name__)
     app.config.update(MAX_CONTENT_LENGTH=8192)
     app.json.sort_keys=False
@@ -87,7 +89,7 @@ def create_app():
         return response
 
     @app.get('/api/session')
-    def session():return jsonify(email=g.admin['email'],role=g.admin['role'],sections=sorted(PERMISSIONS.get(g.admin['role'],set())),csrf=request.cookies.get(csrf_cookie,''),expires_at=g.admin['expires_at'],demo=local and os.getenv('ADMIN_LOCAL_DEMO')=='1')
+    def session():return jsonify(email=g.admin['email'],role=g.admin['role'],sections=sorted(PERMISSIONS.get(g.admin['role'],set())),csrf=request.cookies.get(csrf_cookie,''),expires_at=g.admin['expires_at'],demo=local and os.getenv('ADMIN_LOCAL_DEMO')=='1',fees_waived=billing_catalog.fees_waived())
 
     @app.post('/api/logout')
     def logout():

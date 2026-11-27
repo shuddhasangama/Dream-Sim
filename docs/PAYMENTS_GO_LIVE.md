@@ -12,7 +12,7 @@ Owner decision: **real charges, no free pilot.** All of this branch's work used 
 | Success / return | `billing.html` handler → `POST …/refresh` (reconcile with Razorpay) | Access is granted only from the provider's confirmation (reconcile or webhook), never from the browser callback. |
 | Failure / cancel | checkout closed → "Use Check payment"; `cancel-subscription` for Guru | Nothing is assumed paid. |
 | Webhook | `POST /billing/webhooks/razorpay` | HMAC-SHA256 signature required (unsigned or wrong → 401). Events older than `DHASHU_BILLING_WEBHOOK_MAX_AGE` (48 h) → 400. An exact duplicate is a no-op. |
-| Entitlement | `billing_service.entitled` / `legacy_entitled` | In `live` mode every member is checked against real Razorpay entitlements. The simulated `/pay/…/confirm` is refused (403). |
+| Entitlement | `billing_service.entitled` / `fee_satisfied` | A fee gate opens only for a verified Razorpay entitlement or the explicit pilot waiver. The simulated `/pay/*` routes return 404. |
 | Receipt | Razorpay sends its own receipt email/SMS; purchase status on `/billing` | A DhaShu-branded receipt is a possible follow-up. |
 
 ## Settings
@@ -20,7 +20,7 @@ Owner decision: **real charges, no free pilot.** All of this branch's work used 
 | Variable | Values | Default | Notes |
 |---|---|---|---|
 | `DHASHU_BILLING_MODE` | `disabled`, `sandbox`, `live_pilot`, `live` | `disabled` | `live` = real charges at catalogue prices for everyone. |
-| `PAYMENTS_ENABLED` | `1` / `0` | `1` | The **payment gate**: whether paid features require payment at all. |
+| `DHASHU_FEES_WAIVED` | `true` / `false` | `false` | Set `true` only for the free pilot, in both member and admin services. Invalid values fail startup; `true` is refused with `live` billing. |
 | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | | | Live mode requires `rzp_live_…`. |
 | `RAZORPAY_WEBHOOK_SECRET` | 16+ characters | | Must equal the secret in the Razorpay dashboard webhook. |
 | `RAZORPAY_GURU_TEST_PLAN_ID` | `plan_…` | | Guru monthly plan; its amount must match the catalogue. |
@@ -41,7 +41,7 @@ Owner decision: **real charges, no free pilot.** All of this branch's work used 
    - `RAZORPAY_WEBHOOK_SECRET=…`
    - `RAZORPAY_GURU_TEST_PLAN_ID=plan_…`
    - `DHASHU_BILLING_MODE=live`
-   - `PAYMENTS_ENABLED=1`
+   - `DHASHU_FEES_WAIVED=false`
 5. Deploy. If anything is missing, the deploy fails at startup with the variable names; fix and redeploy.
 
 ## ₹1 smoke test (before opening to members)

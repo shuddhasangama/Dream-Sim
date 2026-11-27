@@ -18,7 +18,7 @@ class PostgresPlanningTests(unittest.TestCase):
 
     def setUp(self):
         pg.PostgresAuthenticationTests.setUp(self)
-        patch = mock.patch.dict(os.environ, {'PAYMENTS_ENABLED': '0'})
+        patch = mock.patch.dict(os.environ, {'DHASHU_FEES_WAIVED': '1'})
         patch.start()
         self.addCleanup(patch.stop)
         self.conn.execute('UPDATE "User" SET bgv_status=%s WHERE id=%s', ('verified', 'owner'))

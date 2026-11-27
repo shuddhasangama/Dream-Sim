@@ -26,6 +26,19 @@ class RelationshipApiTests(RouteTestCase):
         with mock.patch.dict(os.environ,{'BETA_DATE_SIMULATION_ENABLED':'1'}):
             for body in ({'step':'playbook'},{'step':'sign','signed_name':uid,'acks':list(ceremony.ack_keys(ceremony.STAGE_GATE))},{'step':'face'}):
                 r=self.post(self.base+'/checkpoints/'+source+'/steps',body,uid);self.assertEqual(r.status_code,200,r.json)
+
+    def test_checkpoint_requires_verified_fee_or_waiver(self):
+        path=self.base+'/checkpoints/relationship'
+        with mock.patch.dict(os.environ,{'DHASHU_FEES_WAIVED':'0','PAYMENTS_ENABLED':'0'}):
+            own=self.request(path)
+            self.assertEqual(own.status_code,200)
+            self.assertEqual(own.json['data']['payment']['satisfied'],False)
+            self.assertEqual(own.json['data']['payment']['enforced'],True)
+            self.assertEqual(self.request(path,uid='stranger').status_code,404)
+            denied=self.post(path+'/steps',{'step':'playbook'})
+            self.assertEqual((denied.status_code,denied.json['error']['code']),(409,'payment_required'))
+        self.assertTrue(self.request(path).json['data']['payment']['satisfied'])
+        self.assertFalse(self.request(path).json['data']['payment']['enforced'])
     def test_differences_are_private_until_author_consents(self):
         body={'request_id':'diff1','stage':'relationship','text':'My private concern'}
         for _ in range(2):self.assertEqual(self.post(self.base+'/differences',body).status_code,200)

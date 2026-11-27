@@ -83,7 +83,7 @@ class LiveRouteTests(unittest.TestCase):
         self.assertEqual(checkout.json['data']['checkout']['amount'], 199900)
 
     def test_the_simulated_gateway_is_refused_while_real_billing_is_on(self):
-        self.assertEqual(self.client.post('/pay/availability/confirm', headers={'Origin': 'http://localhost'}).status_code, 403)
+        self.assertEqual(self.client.post('/pay/availability/confirm', headers={'Origin': 'http://localhost'}).status_code, 404)
 
     def test_webhooks_must_be_signed_and_fresh(self):
         fresh = {'event': 'payment.authorized', 'payload': {}, 'created_at': int(time.time())}

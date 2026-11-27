@@ -11,6 +11,7 @@ import uuid
 import time
 import guru_provider
 import provider_jobs
+import billing_service
 from flask import g, jsonify, request
 import db
 from auth_sessions import sql, transaction
@@ -342,11 +343,14 @@ def register(api,get_db,journey_state):
     def context():
         if not enabled():
             raise ApiError('guru_disabled','Guru conversations are not enabled yet.',503)
-        cipher()
         guidance=journey_state(g.api_user)
         if 'verified' not in guidance['milestones']:
             raise ApiError('verification_required','Complete verification first.',403)
-        return get_db(),g.api_user['user_id'],stage_guidance(g.api_user,guidance['next_action'])
+        conn,uid=get_db(),g.api_user['user_id']
+        if not billing_service.fee_satisfied(conn,uid,'guru',uid):
+            raise ApiError('payment_required','Guru access requires a verified payment.',403)
+        cipher()
+        return conn,uid,stage_guidance(g.api_user,guidance['next_action'])
 
     @api.get('/guru/state')
     def guru_state():

@@ -21,6 +21,18 @@ class GuruNavigatorTests(DateCycleApiTests):
     def topic(self):
         return self.req('state').json['data']['topics'][0]['id']
 
+    def test_guru_requires_waiver_or_verified_entitlement(self):
+        with mock.patch.dict(os.environ,{'DHASHU_FEES_WAIVED':'0','PAYMENTS_ENABLED':'0'}):
+            for path,body in [('state',None),('private',{'action':'message','topic':'planning','text':'private'}),
+                              ('discussions',{'topic':'planning'})]:
+                response=self.req(path,body)
+                self.assertEqual(response.status_code,403,response.json)
+                self.assertEqual(response.json['error']['code'],'payment_required')
+            self.assertEqual(db.fetch_all(self.conn,'GuruPrivate'),[])
+            with mock.patch('billing_service.legacy_entitled',return_value=True):
+                self.assertEqual(self.req('state').status_code,200)
+        self.assertEqual(self.req('state').status_code,200)
+
     def test_mixed_intentions_shared_discussion_does_not_accept_date(self):
         self.mixed()
         state=self.req('state').json['data']

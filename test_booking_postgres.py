@@ -19,7 +19,7 @@ class BookingPostgresTests(unittest.TestCase):
 
     def setUp(self):
         pg.PostgresAuthenticationTests.setUp(self)
-        flag = mock.patch.dict(os.environ, {'DHASHU_BOOKING_COORDINATION_ENABLED':'1', 'PAYMENTS_ENABLED':'0', 'DHASHU_ASYNC_TEST':'false'})
+        flag = mock.patch.dict(os.environ, {'DHASHU_BOOKING_COORDINATION_ENABLED':'1', 'DHASHU_FEES_WAIVED':'1', 'DHASHU_ASYNC_TEST':'false'})
         flag.start()
         self.addCleanup(flag.stop)
         self.conn.execute('UPDATE "User" SET bgv_status=%s WHERE id=%s', ('verified', 'owner'))
