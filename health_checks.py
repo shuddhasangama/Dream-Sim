@@ -15,7 +15,9 @@ def database_ready(timeout_ms=None):
         conn = db.acquire()
         if db._is_postgres_connection(conn):
             with conn.cursor() as cur:
-                cur.execute("SET LOCAL statement_timeout = %s", (str(timeout_ms),))
+                # SET cannot take a bind parameter (psycopg 3 binds server-side); set_config
+                # with is_local=true is the parameterised, transaction-local equivalent.
+                cur.execute("SELECT set_config('statement_timeout', %s, true)", (str(timeout_ms),))
                 cur.execute('SELECT 1')
                 cur.fetchone()
             conn.rollback()

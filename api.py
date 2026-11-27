@@ -117,6 +117,9 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
             pending = account_deletion.scheduled(evolution['get_db'](), g.api_user['user_id']) if evolution else None
             if pending:
                 state = {**state, 'account_deletion': {'due_at': pending['due_at']}}
+            import billing_catalog
+            if billing_catalog.payment_bypass():   # the app shows "Test mode: payments off"
+                state = {**state, 'payment_bypass': True}
             return jsonify(state)
 
         @api.get('/guidance')

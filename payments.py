@@ -98,6 +98,9 @@ def is_enabled() -> bool:
     play-test flow with no paywall in the way — useful when you are
     testing the journey rules rather than demoing the funnel.
     """
+    import billing_catalog
+    if billing_catalog.payment_bypass():   # DHASHU_PAYMENT_BYPASS: every fee gate is open
+        return False
     return os.environ.get("PAYMENTS_ENABLED", "1").strip().lower() not in ("0", "false", "no", "off")
 
 

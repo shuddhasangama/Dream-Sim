@@ -24,12 +24,41 @@ def mode():
     return value
 
 
+LIVE_MONEY_MODES = ('live', 'live_pilot')
+BYPASS_ON = ('1', 'true', 'yes', 'on')
+BYPASS_OFF = ('', '0', 'false', 'no', 'off')
+BYPASS_NOTICE = ('PAYMENT BYPASS ON (DHASHU_PAYMENT_BYPASS=1): every paid step is unlocked, '
+                 'no checkout opens and nothing is charged. Development only; impossible in live billing modes.')
+
+
+def payment_bypass_requested(environ=None):
+    """DHASHU_PAYMENT_BYPASS as set (strict: ambiguous values count as off here and are
+    refused by startup_check)."""
+    env = os.environ if environ is None else environ
+    return str(env.get('DHASHU_PAYMENT_BYPASS', '')).strip().lower() in BYPASS_ON
+
+
+def payment_bypass(environ=None):
+    """Owner decision 2026-11-27: development bypass. True only when DHASHU_PAYMENT_BYPASS
+    is on AND the billing mode moves no real money (never 'live' or 'live_pilot'; an
+    invalid mode also counts as off). Every fee gate, the verification payment and
+    checkout read this one function."""
+    env = os.environ if environ is None else environ
+    if not payment_bypass_requested(env):
+        return False
+    return env.get('DHASHU_BILLING_MODE', 'disabled') in ('disabled', 'sandbox')
+
+
 def real_billing(uid):
     """True when this member's payments go through Razorpay (never the simulation)."""
+    if payment_bypass():
+        return False
     return mode() == 'live' or pilot_user(uid)
 
 
 def price(uid, product):
+    if payment_bypass():
+        raise ApiError('payment_bypass', 'Test mode: payments are off, so there is nothing to pay.', 409)
     if mode() == 'disabled':
         raise ApiError('billing_disabled', 'Payment checkout is not enabled.', 503)
     if mode() != 'live' and not pilot_user(uid):
@@ -82,6 +111,13 @@ def startup_check(environ=None):
     the message, never values. Raises RuntimeError; returns None when fine."""
     env = os.environ if environ is None else environ
     value = env.get('DHASHU_BILLING_MODE', 'disabled')
+    # Payment bypass: refused in every environment when real money can move.
+    raw_bypass = str(env.get('DHASHU_PAYMENT_BYPASS', '')).strip().lower()
+    if raw_bypass not in BYPASS_ON + BYPASS_OFF:
+        raise RuntimeError('DHASHU_PAYMENT_BYPASS must be 1 or 0.')
+    if raw_bypass in BYPASS_ON and value in LIVE_MONEY_MODES:
+        raise RuntimeError('Billing configuration refused: DHASHU_PAYMENT_BYPASS cannot be on while '
+                           'DHASHU_BILLING_MODE is ' + value + '. Remove DHASHU_PAYMENT_BYPASS.')
     if not production(env) or value == 'disabled':
         return None
     problems = []
@@ -98,3 +134,8 @@ def startup_check(environ=None):
     if problems:
         raise RuntimeError('Billing configuration refused: ' + '; '.join(problems) + '. See docs/PAYMENTS_GO_LIVE.md.')
     return None
+
+
+def startup_notice(environ=None):
+    """The line the web process logs at startup while the bypass is on (else None)."""
+    return BYPASS_NOTICE if payment_bypass(environ) else None

@@ -41,7 +41,8 @@ def register(api,get_db):
     def billing_config():
         guard(get_db)
         session.setdefault('billing_csrf',secrets.token_urlsafe(32))
-        return jsonify(mode=catalog.mode(),csrf=session['billing_csrf'],products=catalog.PRODUCTS)
+        return jsonify(mode=catalog.mode(),csrf=session['billing_csrf'],products=catalog.PRODUCTS,
+                       payment_bypass=catalog.payment_bypass())
 
     @api.post('/billing/quotes')
     def billing_quote():

@@ -34,6 +34,8 @@ Use this for every release of the backend (Railway) and of the mobile app (store
   - The 5xx rate must not rise.
   - p95 latency must stay within 20 % of the last release.
   - No `circuit_open`, `otp_global_breaker`, `abuse_spike` or `response_trimmed` events that weren't expected.
+- [ ] SMS (MSG91) is configured on the web service: `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID` (MSG91 template linked to the DLT template id and approved sender id). `DHASHU_SMS_PROVIDER` unset (= `msg91`). No Twilio variables are required.
+- [ ] Payment bypass: `DHASHU_PAYMENT_BYPASS` is set only while billing is not live; the startup log says `PAYMENT BYPASS ON`. Remove it before any `live`/`live_pilot` billing (the web service refuses to start with both).
 - [ ] Smoke test against production with the owner's own test account only:
   1. Sign in.
   2. Check that `/api/v1/me` and the dashboard load.
@@ -65,3 +67,5 @@ Use this for every release of the backend (Railway) and of the mobile app (store
 | `DHASHU_SCHEMA_RECONCILE=0` | Alembic adopted (stamp + pre-deploy upgrade) |
 | `DHASHU_ASYNC_DIGILOCKER=1` | The worker is deployed and the provider-jobs alert is wired |
 | `DHASHU_GZIP=1` | The load test is repeated with compression on |
+| `DHASHU_PAYMENT_BYPASS` removed | Before `DHASHU_BILLING_MODE=live` or `live_pilot` (startup refuses both together) |
+| `DHASHU_SMS_PROVIDER=twilio` | Only as a fallback, with `TWILIO_*` set; MSG91 is the default |

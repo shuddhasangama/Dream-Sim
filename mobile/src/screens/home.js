@@ -153,6 +153,13 @@ function ringTiles(key, ctx) {
 }
 
 // Home follows the server action, not a schedule timestamp that may belong to another task.
+// Owner decision 2026-11-27: while the server's DHASHU_PAYMENT_BYPASS is on, the
+// dashboard carries payment_bypass:true and Home says so in one small line.
+export function testModeNote(journey) {
+  return journey?.payment_bypass === true
+    ? '<p class="hint test-mode-note" role="note" id="test-mode-note">Test mode: payments off</p>' : '';
+}
+
 export function nextUpCard(journey, weekSummary) {
   const action = journey?.next_action;
   if (!action || (!action.headline && !action.body)) return null;
@@ -199,6 +206,8 @@ export function render(ctx) {
       </button>` : `<div class="p-next-up p-next-up-static">
         <div><div class="p-next-up-eyebrow">YOUR STATUS${nextUp.eyebrowTime ? ` · ${safe(nextUp.eyebrowTime)}` : ''}</div><div class="p-next-up-title">${safe(nextUp.title)}</div><p>${safe(nextUp.body)}</p></div>
       </div>`) : '<div class="p-card p-next-up-empty">Nothing due — enjoy your week</div>'}
+
+    ${testModeNote(journey)}
 
     ${journey.background_prompt ? `<section class="p-card background-prompt" role="status" aria-label="Background details">
       <h2>Please confirm your background details</h2>

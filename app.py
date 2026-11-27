@@ -134,6 +134,9 @@ client_ip.startup_check()
 # dec-pay: refuse unsafe billing settings in production (live keys required; no test keys).
 import billing_catalog
 billing_catalog.startup_check()
+if billing_catalog.startup_notice():
+    print(billing_catalog.startup_notice(), flush=True)
+    __import__("logging").getLogger("dhashu.billing").warning(billing_catalog.startup_notice())
 # c-security-suite: strip secret-bearing keys from any API JSON response (second layer).
 import response_trim
 response_trim.register(app)
@@ -560,6 +563,7 @@ def inject_globals():
         "demo_enabled": demo.is_enabled(),
         "demo_clock": demo.clock_view(get_clock()) if demo.is_enabled() else None,
         "payments_enabled": payments.is_enabled(),
+        "payment_bypass": __import__("billing_catalog").payment_bypass(),
         "needs_verification": bool(user) and user["bgv_status"] != "verified",
         "health_labels": __import__("profile_choices").HEALTH,
         "nav_links": disclosure.nav_for(reached, reach_locked=reach_locked(user) if user else False),
@@ -3812,6 +3816,8 @@ def _payment_scope(user: dict, purpose: str) -> str | None:
 
 def _has_paid(user_id: str, purpose: str, scope_id: str) -> bool:
     import billing_catalog
+    if billing_catalog.payment_bypass():   # DHASHU_PAYMENT_BYPASS: unlocked, nothing charged
+        return True
     if billing_catalog.real_billing(user_id):   # dec-pay: live mode = Razorpay entitlements for everyone
         import billing_service
         return billing_service.legacy_entitled(get_db(),user_id,purpose,scope_id)
@@ -3836,6 +3842,8 @@ def _require_payment(user: dict, purpose: str):
 @login_required
 def pay_view(purpose):
     import billing_catalog
+    if billing_catalog.payment_bypass():
+        return redirect(request.args.get("next") or url_for("week"))
     if billing_catalog.pilot_user(current_user()['user_id']):
         return redirect('/billing')
     if purpose not in payments.PURPOSES:
@@ -3863,6 +3871,8 @@ def pay_confirm(purpose):
     import billing_catalog
     if billing_catalog.real_billing(current_user()['user_id']):   # dec-pay: never a free bypass of real billing
         abort(403, 'Simulated payment confirmation is disabled while real billing is on.')
+    if billing_catalog.payment_bypass():   # nothing to pay: write no Payment row
+        return redirect(request.form.get("next") or url_for("week"))
     if purpose not in payments.PURPOSES:
         abort(404)
     user = current_user()

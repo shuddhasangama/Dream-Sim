@@ -175,7 +175,9 @@ def cancel(conn,uid,pid,clock,epoch):
         times=mutable(conn,uid,pair,plan,clock,epoch,feedback=False)
         if times['started']:
             raise ApiError('state_conflict','The date has started; use the debrief/report flow.',409)
-        terms=dateplan.cancellation(times['notice_hours'],payments.fee(payments.CANCELLATION)['amount_inr'])
+        import billing_catalog
+        fee_amount=0 if billing_catalog.payment_bypass() else payments.fee(payments.CANCELLATION)['amount_inr']
+        terms=dateplan.cancellation(times['notice_hours'],fee_amount)
         sql(conn,'UPDATE "DatePlan" SET cancel_fee=? WHERE id=?',(terms['fee_inr'],pid))
         if terms['late']:
             planning.save(conn,'ComplianceEvent',{'id':'cancel:'+pid,**outcomes.record_compliance_event(uid,'late_cancel',clock.week,value='late_cancel',notes=terms['reason'])})

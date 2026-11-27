@@ -1,4 +1,11 @@
-"""Configurable MSG91/Twilio HTTPS OTP adapters. Email remains on Twilio.
+"""HTTPS OTP adapters. MSG91 is the primary SMS provider (owner decision 2026-11-27):
+sign-up, sign-in and resend all send through MSG91 SendOTP unless DHASHU_SMS_PROVIDER
+is set to 'twilio' (optional fallback; Twilio settings are never required otherwise).
+
+MSG91 settings: MSG91_AUTH_KEY (authkey header) and MSG91_TEMPLATE_ID (the 24-hex
+MSG91 OTP template id). The DLT-registered template id and the approved sender id are
+attached to that template in the MSG91 dashboard; SendOTP selects them through
+MSG91_TEMPLATE_ID, so they are not sent per request.
 
 No local OTP generation or simulation fallback. Never log provider payloads,
 Authorization headers, destination addresses or submitted codes.
@@ -92,7 +99,7 @@ def check(sid, code):
 
 
 def provider():
-    return os.getenv('DHASHU_SMS_PROVIDER', 'twilio').strip().lower()
+    return (os.getenv('DHASHU_SMS_PROVIDER', '').strip().lower() or 'msg91')
 
 
 def configured():

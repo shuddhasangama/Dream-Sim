@@ -28,6 +28,7 @@
       </span>
       <a href="{{ url_for('bio_page') }}">Bio</a>
     </header>
+    {% if payment_bypass %}<p class="hint test-mode-note" role="note">Test mode: payments off</p>{% endif %}
     {% endif %}
     {% if not secure_auth_enabled %}{% include "_demo_bar.html" %}{% endif %}
     {% if session_user %}

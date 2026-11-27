@@ -77,6 +77,8 @@ def owned_plan(conn, uid, pid):
 
 def paid(conn, uid, purpose, scope):
     import billing_catalog
+    if billing_catalog.payment_bypass():   # DHASHU_PAYMENT_BYPASS: unlocked, nothing charged
+        return True
     if billing_catalog.pilot_user(uid):
         import billing_service
         return billing_service.legacy_entitled(conn,uid,purpose,scope)

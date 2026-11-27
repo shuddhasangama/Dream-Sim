@@ -21,6 +21,7 @@ Owner decision: **real charges, no free pilot.** All of this branch's work used 
 |---|---|---|---|
 | `DHASHU_BILLING_MODE` | `disabled`, `sandbox`, `live_pilot`, `live` | `disabled` | `live` = real charges at catalogue prices for everyone. |
 | `PAYMENTS_ENABLED` | `1` / `0` | `1` | The **payment gate**: whether paid features require payment at all. |
+| `DHASHU_PAYMENT_BYPASS` | `1` / unset | unset | Development bypass (owner decision 2026-11-27): every paid step unlocked, no checkout, nothing charged; logged at startup and shown as "Test mode: payments off". Only with `disabled`/`sandbox`; the web process refuses to start with `live`/`live_pilot`. |
 | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | | | Live mode requires `rzp_live_…`. |
 | `RAZORPAY_WEBHOOK_SECRET` | 16+ characters | | Must equal the secret in the Razorpay dashboard webhook. |
 | `RAZORPAY_GURU_TEST_PLAN_ID` | `plan_…` | | Guru monthly plan; its amount must match the catalogue. |
@@ -35,7 +36,7 @@ Owner decision: **real charges, no free pilot.** All of this branch's work used 
    - Events: `payment.captured`, `refund.processed`, `refund.failed`, `subscription.charged`, `subscription.cancelled`, `subscription.completed`.
    - Set a long random secret.
 3. If Guru is sold: create the monthly Guru plan at the catalogue price, then copy the `plan_…` id.
-4. Railway → web service → Variables (sealed):
+4. Railway → web service → Variables: **delete `DHASHU_PAYMENT_BYPASS`** first. Then set (sealed):
    - `RAZORPAY_KEY_ID=rzp_live_…`
    - `RAZORPAY_KEY_SECRET=…`
    - `RAZORPAY_WEBHOOK_SECRET=…`

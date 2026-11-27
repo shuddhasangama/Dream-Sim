@@ -1,5 +1,7 @@
 # Member password login and dashboard count details
 
+> **Update 2026-11-27:** SMS codes now go through **MSG91** (default provider). Twilio is optional and never required. Current steps: `docs/msg91-signup-deployment.md`.
+
 Prepared in C:\DreamContractLocalBKP\ChatGPT\dhashu-waitlist-release. No accounts are deleted or reassigned. Admin login remains password + authenticator; member passwords are separate.
 
 ## Release order
@@ -15,7 +17,7 @@ $railway = "$env:APPDATA\npm\railway.cmd"
 & $railway up --project c768517b-18ad-4855-8bad-521915324c10 --environment production --service Dream-Sim --detach
 ```
 
-2. Wait for Dream-Sim to become healthy. Startup applies additive PasswordGrant and MemberEmailChallenge tables. No manual database edits needed. Keep AUTH_ENABLED and Twilio Verify configured for initial phone verification and recovery.
+2. Wait for Dream-Sim to become healthy. Startup applies additive PasswordGrant and MemberEmailChallenge tables. No manual database edits needed. Keep AUTH_ENABLED and the SMS provider (MSG91) configured for initial phone verification and recovery.
 3. The GitHub-connected dhashu-admin service should redeploy from master. Check it is successful. If it does not redeploy automatically:
 
 ```powershell
