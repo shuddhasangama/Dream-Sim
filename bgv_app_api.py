@@ -9,7 +9,8 @@ import db
 def register(api, get_db):
     def actor():
         if not request.headers.get('Authorization', '').startswith('Bearer ') or not getattr(g, 'auth_session', None):
-            raise ApiError('authentication_required', 'Sign in through the app to manage verification.', 401)
+            # Signed in, but not with the app's secure sign-in: not a refused session (auth.APP_SESSION_REQUIRED).
+            raise ApiError('app_session_required', 'Sign in through the app to manage verification.', 401)
         return g.api_user['user_id']
     def response(uid):
         result = jsonify(bgv_app.view(get_db(), uid))

@@ -1,5 +1,17 @@
 export class ApiError extends Error {
-  constructor(message, status = 0) { super(message); this.status = status; }
+  constructor(message, status = 0, code = '') { super(message); this.status = status; this.code = code; }
+}
+
+// The backend's 401 codes (auth.py). Only a refused SESSION signs the member
+// out; APP_SESSION_REQUIRED means the session is still accepted by the API but
+// one route needs the app's own sign-in, so the member stays signed in.
+export const APP_SESSION_REQUIRED = 'app_session_required';
+// Such a 401 becomes a 403 for the caller: every screen treats 401 as "sign in
+// again", and this must never be that. The server's message is kept.
+export function keptSession(e) {
+  const error = new ApiError(e.message || 'This part of the app is unavailable for your session.', 403, APP_SESSION_REQUIRED);
+  error.sessionKept = true;
+  return error;
 }
 
 // Maps a thrown error to how the UI should react — the §3 status-code table
@@ -51,7 +63,8 @@ export class Session {
     catch { throw new ApiError('Connection unavailable. Check your internet and try again.'); }
     const envelope = response.data;
     if (response.status < 200 || response.status >= 300) {
-      throw new ApiError(envelope?.error?.message || 'Request could not be completed.', response.status);
+      throw new ApiError(envelope?.error?.message || 'Request could not be completed.', response.status,
+        typeof envelope?.error?.code === 'string' ? envelope.error.code : '');
     }
     if (!envelope || envelope.error !== null || !envelope.data) throw new ApiError('Unexpected server response.');
     return envelope.data;
@@ -140,13 +153,20 @@ export class Session {
   // is dead (refresh already happened above, or just failed), not something
   // worth replaying, and a mutation must never be silently replayed either
   // (see the class docstring — a lost response needs OTP again).
+  // Exception: a 401 with code APP_SESSION_REQUIRED is one route refusing a
+  // session the API still accepts (e.g. a side panel) — the session is kept
+  // and the caller gets keptSession()'s 403 instead.
   async authed(path, method, body) {
-    if (this.cookieAuth) return this.raw(path, method, body);
+    if (this.cookieAuth) {
+      try { return await this.raw(path, method, body); }
+      catch (e) { throw e.status === 401 && e.code === APP_SESSION_REQUIRED ? keptSession(e) : e; }
+    }
     if (this.flight) await this.flight;
     if (!this.tokens) throw new ApiError('Please sign in.', 401);
     if (this.tokens.expiresAt < this.now() + 30000) await this.refresh();
     try { return await this.raw(path, method, body, this.tokens.access_token); }
     catch (e) {
+      if (e.status === 401 && e.code === APP_SESSION_REQUIRED) throw keptSession(e);
       if (e.status === 401) { this.tokens = null; await this.vault.clear(); }
       throw e;
     }

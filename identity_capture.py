@@ -208,7 +208,8 @@ def register(api, get_db):
 
     def uid():
         if not getattr(g, 'auth_session', None):
-            raise ApiError('authentication_required', 'An authenticated account is required for private identity evidence.', 401)
+            # Signed in, but not with the app's secure sign-in: not a refused session (auth.APP_SESSION_REQUIRED).
+            raise ApiError('app_session_required', 'An authenticated account is required for private identity evidence.', 401)
         return g.api_user['user_id']
 
     @api.get('/identity-capture')
