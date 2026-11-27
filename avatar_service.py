@@ -131,7 +131,9 @@ def work_one(conn,provider=generate):
     return True
 def register(api,get_db):
     def uid():
-        if not request.headers.get('Authorization','').startswith('Bearer ') or not getattr(g,'auth_session',None):raise ApiError('authentication_required','Sign in through the app.',401)
+        # auth.bearer_session: secure sign-in, or the local harness on a local backend only.
+        import auth
+        if not auth.bearer_session():raise ApiError(auth.APP_SESSION_REQUIRED,'Sign in through the app.',401)
         return g.api_user['user_id']
     @api.get('/profile/avatar')
     def avatar_read():return jsonify(view(get_db(),uid()))

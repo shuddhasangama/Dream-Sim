@@ -22,5 +22,9 @@ export default defineConfig({
      reuseExistingServer: false, timeout: 120_000},
     {command: 'npm run dev:local -- --port 5174 --strictPort', url: 'http://127.0.0.1:5174',
      reuseExistingServer: false, timeout: 120_000},
+    // The emulator build (same mode as `npm run sync:emulator`) pointed at the
+    // local backend; avatar-session.spec.js shims Capacitor's native bridge.
+    {command: 'npx vite --mode emulator --host 127.0.0.1 --port 5175 --strictPort', url: 'http://127.0.0.1:5175',
+     env: {VITE_API_BASE_URL: 'http://127.0.0.1:5000'}, reuseExistingServer: false, timeout: 120_000},
   ],
 });

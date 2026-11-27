@@ -147,6 +147,20 @@ def bearer_user_id(get_db):
     return g.local_harness_user
 
 
+def bearer_session():
+    """The harness session behind this request's bearer token, already checked
+    by bearer_user_id() (app.current_user) for this request; else None.
+
+    Same shape the bearer-only routes read from auth.resolve's g.auth_session.
+    Never set when the harness is inactive, so it is always None in production.
+    """
+    handled, user_id = g.get('local_harness_user', (False, None))
+    session_id = g.get('local_harness_session_id')
+    if not handled or not user_id or not session_id:
+        return None
+    return {'id': session_id, 'user_id': user_id, 'kind': 'mobile'}
+
+
 def register(app, get_db) -> bool:
     """Register the /api/v1/dev/* routes only when the harness is active. Returns whether it is."""
     assert_safe_startup()

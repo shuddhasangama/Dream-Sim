@@ -3,6 +3,8 @@ import {Camera} from '@capacitor/camera';
 import {captureOptions} from './identity.js';
 export async function load(session){
  const [avatar,face]=await Promise.allSettled([session.get('/api/v1/profile/avatar'),faceMatch.load(session)]);
+ // Kept session (session.js keptSession): this panel is unavailable, the member stays signed in.
+ if(avatar.status==='rejected'&&avatar.reason?.sessionKept)return {enabled:false,state:'unavailable',message:avatar.reason.message,face:face.status==='fulfilled'?face.value:null,_faceError:face.status==='rejected'};
  if(avatar.status==='rejected')throw avatar.reason;
  if(face.status==='rejected'&&face.reason?.status===401)throw face.reason;
  return {...avatar.value,...(avatar.value.verified_selfie_preview?{_stagedSelfie:avatar.value.verified_selfie_preview,_cameraNote:'Your Signzy selfie is ready. Review it before consenting to avatar generation.'}:{}),face:face.status==='fulfilled'?face.value:null,_faceError:face.status==='rejected'};

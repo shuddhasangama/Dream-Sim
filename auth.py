@@ -77,6 +77,33 @@ def resolve(get_db):
     return g.auth_session
 
 
+# API error codes for a 401. The mobile app signs the member out ONLY on
+# 'authentication_required' (the session itself is missing, expired, revoked or
+# locked). A route that refuses a session the API has already accepted, because
+# it needs the app's own sign-in, answers APP_SESSION_REQUIRED instead: the app
+# keeps the member signed in and shows that one part as unavailable.
+APP_SESSION_REQUIRED = 'app_session_required'
+
+
+def bearer_session():
+    """Session for a native-app (Bearer) request to a bearer-only member route.
+
+    The secure sign-in session from resolve(); otherwise, on a local backend
+    with the local harness active, the harness session from the emulator's
+    "Pick a local user" (validated in local_harness.bearer_user_id). The harness
+    is refused when AUTH_ENABLED is on or any production marker is present, so
+    production only ever accepts resolve()'s session here. Call after the API's
+    before_request has resolved the user. None means: not signed in in the app.
+    """
+    if not request.headers.get('Authorization', '').startswith('Bearer '):
+        return None
+    active = g.get('auth_session')
+    if active:
+        return active
+    import local_harness
+    return local_harness.bearer_session()
+
+
 def failure(message, status=400, code='validation_error'):
     return jsonify(error=message, code=code), status
 
