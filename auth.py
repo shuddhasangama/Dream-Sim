@@ -6,7 +6,7 @@ import os
 import time
 import re
 import secrets
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from flask import abort, current_app, g, has_request_context, jsonify, redirect, render_template, request, session
 
@@ -64,6 +64,24 @@ def same_origin():
         return False
     origin = parsed.scheme + '://' + parsed.netloc
     return origin == current_app.config['AUTH_PUBLIC_ORIGIN']
+
+
+def safe_next(url):
+    """Return a local return path, or the dashboard for an unsafe target."""
+    fallback = '/dashboard'
+    if not isinstance(url, str) or len(url) > 2048 or not url.startswith('/'):
+        return fallback
+    candidate = url
+    for _ in range(3):
+        if (candidate.startswith('//') or candidate.startswith('/\\')
+                or '\\' in candidate
+                or any(ord(char) < 32 or ord(char) == 127 for char in candidate)):
+            return fallback
+        decoded = unquote(candidate)
+        if decoded == candidate:
+            return url
+        candidate = decoded
+    return fallback
 
 
 def resolve(get_db):

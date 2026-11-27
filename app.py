@@ -630,6 +630,7 @@ def _link_to_url(url: str, fallback_label: str = "Back") -> dict:
     link name that screen instead of saying "Back" at everyone; when the
     match fails the destination is still right, only the label is generic.
     """
+    url = auth.safe_next(url)
     try:
         endpoint, _args = app.url_map.bind("localhost").match(url.split("?")[0])
         named = _link_to(endpoint)
@@ -3751,7 +3752,7 @@ def demo_advance():
     step = request.form.get("step", "day")
     if step in demo.STEP_HOURS:
         set_clock(demo.advance(get_clock(), step))
-    back = request.form.get("back") or request.referrer or url_for("dashboard")
+    back = auth.safe_next(request.form.get("back") or request.referrer)
     return redirect(back)
 
 
@@ -3843,13 +3844,14 @@ def pay_view(purpose):
     if scope_id is None:
         return redirect(url_for("week"))
     paid = _has_paid(user["user_id"], purpose, scope_id)
+    next_url = auth.safe_next(request.args.get("next") or url_for("week"))
     return render_template(
         "pay.html",
         view=payments.checkout_view(purpose, scope_id, paid),
-        next_url=request.args.get("next") or url_for("week"),
+        next_url=next_url,
         # Entered with ?next= from whatever needed paying for, so that is
         # the way back — not the Dashboard, and not a dead end.
-        back_to=_link_to_url(request.args.get("next") or url_for("week")),
+        back_to=_link_to_url(next_url),
     )
 
 
@@ -3871,7 +3873,7 @@ def pay_confirm(purpose):
     row = payments.payment_row(user["user_id"], purpose, scope_id, str(get_clock()))
     db.insert_row(get_db(), "Payment", payments.simulate_gateway_callback(row, succeeded=True))
 
-    nxt = request.form.get("next") or url_for("week")
+    nxt = auth.safe_next(request.form.get("next") or url_for("week"))
     return redirect(nxt)
 
 
