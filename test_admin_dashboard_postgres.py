@@ -55,7 +55,8 @@ class AdminPostgresTests(unittest.TestCase):
   import auth_delivery
   from flask import Flask
   app=Flask('password-pg-test');app.secret_key='synthetic-secret-key-for-test-only-123456'
-  with patch.dict(os.environ,{'AUTH_ENABLED':'0'}):auth.register_auth(app,lambda:self.c)
+  with patch.dict(os.environ,{'AUTH_ENABLED':'1','AUTH_PUBLIC_ORIGIN':'https://member.example.test','SECRET_KEY':app.secret_key}),patch.object(auth_delivery,'configured',return_value=True):
+   auth.register_auth(app,lambda:self.c)
   app.config.update(AUTH_ENABLED=True,AUTH_PUBLIC_ORIGIN='https://member.example.test',TESTING=True)
   client=app.test_client()
   with patch.object(auth_delivery,'configured',return_value=True),patch.object(auth_delivery,'start',return_value='VE'+'a'*32),patch.object(auth_delivery,'check',return_value=True):
