@@ -137,10 +137,8 @@ billing_catalog.startup_check()
 # c-security-suite: strip secret-bearing keys from any API JSON response (second layer).
 import response_trim
 response_trim.register(app)
-app.secret_key = os.environ.get("SECRET_KEY") or "dream-sim-local-play-test-only"
-# SECRET_KEY must be set in Railway. The fallback exists so `python app.py`
-# still runs locally; it signs session cookies and is public in this repo,
-# so anything deployed without the environment variable is forgeable.
+import security_config
+app.secret_key = security_config.require_secret_key()
 
 
 # ── simulation-wide state: the current clock (week + day + hour) ──────────

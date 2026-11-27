@@ -8,7 +8,7 @@ import re
 import secrets
 from urllib.parse import urlsplit
 
-from flask import abort, current_app, g, jsonify, redirect, render_template, request, session
+from flask import abort, current_app, g, has_request_context, jsonify, redirect, render_template, request, session
 
 import auth_delivery
 import auth_sessions as sessions
@@ -19,7 +19,19 @@ GENERIC_SENT = 'If delivery is available for this contact, a code will arrive sh
 
 
 def enabled():
-    return current_app.config.get('AUTH_ENABLED', False)
+    if current_app.config.get('AUTH_ENABLED', True):
+        return True
+    # Disabling real auth is a request-scoped local harness exception. If any
+    # part of that boundary is missing, keep the secure behavior enabled.
+    if not has_request_context():
+        return True
+    import local_harness
+    try:
+        host = urlsplit('//' + (request.host or '')).hostname
+    except ValueError:
+        host = None
+    return not (host is not None and host.lower() in local_harness.LOCAL_HOSTNAMES
+                and local_harness.request_allowed())
 
 
 def normalize(channel, value, stored=False):
@@ -201,7 +213,14 @@ def register_auth(app, get_db):
             return failure(member_lock.MESSAGE, 403, 'account_locked')
         return member_lock.MESSAGE, 403
 
-    app.config['AUTH_ENABLED'] = os.environ.get('AUTH_ENABLED', '').lower() in ('1', 'true', 'on')
+    raw_auth = os.environ.get('AUTH_ENABLED', '')
+    auth_disabled = raw_auth.strip().lower() in ('0', 'false', 'no', 'off')
+    app.config['AUTH_ENABLED'] = not auth_disabled
+    if auth_disabled:
+        import local_harness
+        if not local_harness.flag_set():
+            raise RuntimeError('AUTH_ENABLED may be disabled only with DHASHU_LOCAL_HARNESS=1.')
+        local_harness.assert_safe_startup()
     app.config['AUTH_PUBLIC_ORIGIN'] = os.environ.get('AUTH_PUBLIC_ORIGIN', '').rstrip('/')
     if app.config['AUTH_ENABLED']:
         origin = urlsplit(app.config['AUTH_PUBLIC_ORIGIN'])

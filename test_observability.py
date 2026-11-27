@@ -72,7 +72,12 @@ class SentryTests(RouteTestCase):
         self.make_user('owner'); self.client.post('/login/owner')
         app_module.app.config['PROPAGATE_EXCEPTIONS'] = False
         try:
-            with mock.patch.dict(app_module.app.view_functions, {'api_v1.prepare_week': probe}):
+            # This assertion concerns Sentry scrubbing after the request reaches
+            # the handler; provide an authenticated principal now that auth is
+            # enabled by default in the suite.
+            with mock.patch.dict(app_module.app.config, {'AUTH_ENABLED': True}), \
+                    mock.patch('auth.resolve', return_value={'user_id': 'owner'}), \
+                    mock.patch.dict(app_module.app.view_functions, {'api_v1.prepare_week': probe}):
                 response = self.client.post('/api/v1/week/prepare?email=owner@private.test',
                                             json={'phone': '+919876543210', 'password': 'hunter2-secret'},
                                             headers={'Authorization': 'Bearer secret-token-value',

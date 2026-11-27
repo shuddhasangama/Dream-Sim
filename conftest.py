@@ -19,8 +19,20 @@ An in-memory connection locks nothing and is left alone.
 from __future__ import annotations
 
 import sqlite3
+import os
 
 import pytest
+
+# The application is imported with secure auth on and no emulator routes
+# registered. Legacy route integration tests opt into the local harness in
+# their own fixture; startup tests clear these values in child processes.
+os.environ.setdefault("SECRET_KEY", "local-test-only-secret-key-at-least-32-characters")
+os.environ["AUTH_ENABLED"] = "1"
+os.environ["AUTH_PUBLIC_ORIGIN"] = "https://localhost"
+os.environ["TWILIO_ACCOUNT_SID"] = "AC" + "a" * 32
+os.environ["TWILIO_VERIFY_SERVICE_SID"] = "VA" + "b" * 32
+os.environ["TWILIO_AUTH_TOKEN"] = "test-only-not-a-credential"
+os.environ.pop("DHASHU_LOCAL_HARNESS", None)
 
 _TRACKED: list[tuple[str, sqlite3.Connection]] = []
 _REAL_CONNECT = sqlite3.connect
