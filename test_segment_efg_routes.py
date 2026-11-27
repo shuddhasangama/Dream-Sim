@@ -79,6 +79,11 @@ class RouteTestCase(unittest.TestCase):
             self.conn.close()
         self._tmp.cleanup()
 
+    def domain_snapshot(self):
+        """Preserve no-mutation checks while allowing expected abuse counters."""
+        return [statement for statement in self.conn.iterdump()
+                if not statement.startswith('INSERT INTO "AuthThrottle" ')]
+
     # ── fixtures ──────────────────────────────────────────────────────────
 
     def make_user(self, user_id, *, bgv_status="verified", journey_state="dating"):

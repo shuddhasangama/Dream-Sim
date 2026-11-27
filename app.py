@@ -4881,7 +4881,7 @@ import restaurant_web
 restaurant_web.register(app, get_db, current_user, login_required)
 
 register_api(
-    app, current_user=current_user, reach_locked=reach_locked,
+    app, current_user=current_user, get_db=get_db, reach_locked=reach_locked,
     enrollment={'get_db':get_db},
     relationship={'get_db':get_db,'get_clock':get_clock,'week_to_date':week_to_date,'derive':derive_availability,'vision_options':VISION_STANCE_OPTIONS},
     after_date={'get_db':get_db,'get_clock':get_clock,'week_to_date':week_to_date},

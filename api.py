@@ -4,14 +4,34 @@ Dependencies are supplied at registration so this module never imports app.py
 or creates a second Flask application (including under Gunicorn).
 """
 import math
+import os
+import sqlite3
 
 from flask import Blueprint, g, jsonify, request
+import psycopg
+import auth
+import auth_sessions
 import clock as clock_module
 import accelerated_clock
 from api_contract import ApiError, json_object
 
 
-def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
+WRITE_METHODS = frozenset({'POST', 'PUT', 'PATCH', 'DELETE'})
+WRITE_WINDOW_SECONDS = 60
+
+
+def write_limit():
+    """A bad limit fails closed instead of silently disabling member protection."""
+    raw = os.environ.get('DHASHU_RATE_USER_WRITES', '60')
+    if not 1 <= len(raw) <= 4 or not raw.isascii() or not raw.isdecimal():
+        raise ApiError('rate_limit_unavailable', 'Please try again later.', 503)
+    limit = int(raw)
+    if not 1 <= limit <= 1000:
+        raise ApiError('rate_limit_unavailable', 'Please try again later.', 503)
+    return limit
+
+
+def register_api(app, *, current_user, get_db, reach_locked, reach_state, reach_actions,
                  journey_state=None, week_reads=None, week_prepare=None, match_action=None, planning=None, date_cycle=None, evolution=None, after_date=None, relationship=None, enrollment=None,
                  get_clock=None, set_clock=None):
     api = Blueprint("api_v1", __name__, url_prefix="/api/v1")
@@ -72,6 +92,21 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         g.api_user = current_user()
         if g.api_user is None:
             return failure("authentication_required", "Sign in to continue.", 401)
+        if request.method in WRITE_METHODS and request.url_rule is not None:
+            # The matched rule is canonical: IDs and user-controlled path values
+            # cannot create new throttle buckets for the same route group.
+            group = request.url_rule.rule.partition('/api/v1/')[2].partition('/')[0] or 'root'
+            member_key = auth.key('api-write:' + g.api_user['user_id'] + ':' + group)
+            try:
+                allowed = auth_sessions.throttle(get_db(), [member_key],
+                                                 limit=write_limit(), seconds=WRITE_WINDOW_SECONDS)
+            except (sqlite3.Error, psycopg.Error):
+                return failure('rate_limit_unavailable', 'Please try again later.', 503)
+            if not allowed:
+                response = jsonify(error='Too many requests. Please wait and try again.', code='rate_limited')
+                response.status_code = 429
+                response.headers['Retry-After'] = str(WRITE_WINDOW_SECONDS)
+                return response
         if request.path.startswith("/api/v1/reach") and reach_locked(g.api_user):
             return failure("reach_locked", "REACH is paused during match review and date planning/debrief. It reopens when no candidates remain or you return to the pool.", 403)
 

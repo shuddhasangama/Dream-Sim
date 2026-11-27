@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT))
 PRODUCTION_MARKERS = ('RAILWAY_ENVIRONMENT', 'RAILWAY_PROJECT_ID', 'RAILWAY_SERVICE_ID')
 REMOVE = ('DATABASE_URL', 'TEST_DATABASE_URL', 'ADMIN_REPORT_DATABASE_URL', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN',
           'TWILIO_VERIFY_SERVICE_SID', 'MSG91_AUTH_KEY', 'OPENAI_API_KEY', 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET',
-          'SIGNZY_API_KEY', 'SIGNZY_ENV', 'SIGNZY_PRODUCTION_ENABLED', 'SENTRY_DSN', 'AUTH_ENABLED')
+          'SIGNZY_API_KEY', 'SIGNZY_ENV', 'SIGNZY_PRODUCTION_ENABLED', 'SENTRY_DSN')
 MEMBERS = {'test_owner': 'female', 'test_partner': 'male', 'test_stranger': 'female'}
 PHONES = {'test_owner': '+919876500011', 'test_partner': '+919876500012', 'test_stranger': '+919876500013'}
 
@@ -39,7 +39,7 @@ def prepare_environment(tmp):
     for name in REMOVE:
         os.environ.pop(name, None)
     os.environ.update({
-        'DHASHU_LOCAL_HARNESS': '1', 'DHASHU_SIMULATED_CLOCK': 'true', 'DEMO_MODE': '1',
+        'DHASHU_LOCAL_HARNESS': '1', 'AUTH_ENABLED': '0', 'DHASHU_SIMULATED_CLOCK': 'true', 'DEMO_MODE': '1',
         'BETA_DATE_SIMULATION_ENABLED': '1', 'PAYMENTS_ENABLED': '0', 'DHASHU_GURU_AI_ENABLED': '0',
         'DHASHU_BILLING_MODE': 'sandbox',   # only so /billing renders; its API is stubbed in the browser test
         'SECRET_KEY': 'e2e-local-only-secret-key-not-for-any-deployment-0001',
