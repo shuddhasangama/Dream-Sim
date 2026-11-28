@@ -1,3 +1,4 @@
+import { heightLabel } from '../heightUnits.js';
 import * as leaveGuard from '../leaveGuard.js';
 import * as personal from './personal.js';
 let personalData=null, personalOwner=null;
@@ -34,7 +35,7 @@ const VISION_PILLARS_FALLBACK = ['Intimacy', 'Kids', 'Cohabitate', 'Travel toget
 // from the old renderDashboard) — reused here for the Stats ring's fact
 // tiles and CTA form.
 export const DASHBOARD_STAT_ROWS = [
-  ['age', 'Age', ''], ['height_cm', 'Height', ' cm'], ['weight_kg', 'Weight', ' kg'],
+  ['age', 'Age', ''], ['height_cm', 'Height', ''], ['weight_kg', 'Weight', ' kg'],
   ['waist_in', 'Waist', ' in'], ['income_band', 'Salary band', ''], ['diet', 'Diet', ''],
   ['education', 'Education', ''], ['nationality', 'Nationality', ''], ['profession', 'Profession', ''],
   ['employment_category','Employment category (self-declared)',''],
@@ -147,7 +148,8 @@ function ringTiles(key, ctx) {
   const rows = statsSummary?.rows || [];
   const byKey = new Map(rows.map((r) => [r.key, r]));
   const verified = DASHBOARD_STAT_ROWS.filter(([k]) => byKey.get(k)?.group === 'verified').slice(0, 4);
-  const tiles = verified.map(([k, label]) => ({ key: label, value: byKey.get(k)?.check === 'verified' ? `✓ ${safe(byKey.get(k).value ?? '')}` : String(byKey.get(k)?.value ?? '—') }));
+  const shown = (k) => (k === 'height_cm' && byKey.get(k)?.value != null ? heightLabel(byKey.get(k).value) : byKey.get(k)?.value);
+  const tiles = verified.map(([k, label]) => ({ key: label, value: byKey.get(k)?.check === 'verified' ? `✓ ${safe(shown(k) ?? '')}` : String(shown(k) ?? '—') }));
   const { answered, total } = statsProgress(statsSummary);
   return { tiles, summary: 'About you' };
 }

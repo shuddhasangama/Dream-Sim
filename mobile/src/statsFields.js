@@ -10,6 +10,8 @@
 // labels: presentational text keyed by a small, fixed set of field keys
 // stats_edit.py already defines, never business logic of its own.
 
+import { ftInInputs, readHeight, cmToFtIn, rangeText } from './heightUnits.js';
+
 export const STAT_LABELS = {
   employment_category:'Employment category (self-declared)',
   share_verification_summary:'Share Court, FIR and employment statuses and check dates with matches (no documents or case details)',
@@ -49,8 +51,8 @@ export function editableFieldsForm(data, safe, formId) {
   const cell = (r) => `<label class="field-cell" ${r.key==='children_count'?'data-children-count':''} ${r.key==='children_count'&&rows.find(x=>x.key==='has_children')?.value!=='Yes'?'hidden':''}>
       <span class="field-label">${safe(label(r.key))}</span>
       ${options[r.key] ? `<select name="${safe(r.key)}"><option value="">Not set</option>${options[r.key].map((o) => `<option value="${safe(o)}" ${String(r.value) === o ? 'selected' : ''}>${safe(o)}</option>`).join('')}</select>`
-        : `<input type="number" inputmode="numeric" name="${safe(r.key)}" value="${r.value ?? ''}" min="${ranges[r.key]?.[0] ?? ''}" max="${ranges[r.key]?.[1] ?? ''}" placeholder="${safe(STAT_UNITS[r.key] || '')}">`}
-      ${ranges[r.key]?`<small class="hint">${ranges[r.key][0]}–${ranges[r.key][1]} ${safe(STAT_UNITS[r.key]||'')}</small>`:''}
+        : `<input type="number" inputmode="numeric" name="${safe(r.key)}" value="${r.value ?? ''}" min="${ranges[r.key]?.[0] ?? ''}" max="${ranges[r.key]?.[1] ?? ''}" placeholder="${safe(STAT_UNITS[r.key] || '')}">${r.key === 'height_cm' ? ftInInputs(r.value, safe) : ''}`}
+      ${ranges[r.key]?`<small class="hint">${r.key === 'height_cm' ? safe(rangeText(ranges[r.key][0], ranges[r.key][1])) : `${ranges[r.key][0]}–${ranges[r.key][1]} ${safe(STAT_UNITS[r.key]||'')}`}</small>`:''}
       ${err(r.key)}
     </label>`;
   const reverifyNote = verified.map((r) => r.warning).find(Boolean);
@@ -133,6 +135,21 @@ export function changedFields(form, statsData) {
     // that lives on another form (ethnicity moved to Background & health).
     if (!(r.key in submitted) && (!multi || !isRendered(form, r.key))) continue;
     let value = multi ? (submitted[r.key] || []) : submitted[r.key];
+    if (r.key === 'height_cm') {
+      // Client answer 6: cm or feet/inches, stored in cm, same range in both units. When cm
+      // still shows the saved value but feet/inches were changed, feet/inches win.
+      const original = 'orig' in r ? r.orig : r.value;
+      let cm = submitted.height_cm, ft = submitted.height_ft, inch = submitted.height_in;
+      if (original != null && String(cm ?? '').trim() === String(original) && (ft || inch)) {
+        const [of, oi] = cmToFtIn(original);
+        if (Number(ft || 0) !== of || Number(inch || 0) !== oi) cm = '';
+      }
+      const height = readHeight({cm, ft, inch}, ...(ranges.height_cm || []));
+      if (height.error) { errors[r.key] = height.error; continue; }
+      if (fieldsEqual(height.cm, original)) continue;
+      fields[r.key] = height.cm;
+      continue;
+    }
     if (multi) { if (!value.length) value = null; }
     else if (typeof value === 'string') value = value.trim() === '' ? null : value.trim();
     if (value !== null && !multi && ranges[r.key]) {

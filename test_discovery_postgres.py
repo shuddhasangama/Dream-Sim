@@ -1,4 +1,5 @@
 """Isolated PostgreSQL acceptance, including competing confirmations."""
+from test_segment_efg_routes import DATE_PREFS
 import concurrent.futures
 import json
 import os
@@ -24,7 +25,7 @@ class PostgresDiscoveryTests(unittest.TestCase):
         flag=patch.dict(os.environ,{'DHASHU_DAILY_DISCOVERY':'1'});flag.start();self.addCleanup(flag.stop)
         for uid,gender in [('owner','female'),('partner','male'),('stranger','male')]:
             db.insert_row(self.conn,'User',dict(id=uid,journey_state='dating',bgv_status='verified',
-                stats_json=json.dumps({'age':30,'gender':gender,'city':'Bangalore'}),
+                stats_json=json.dumps({'age':30,'gender':gender,'city':'Bangalore','diet':'Vegetarian',**DATE_PREFS}),   # client answer 3
                 vision_json=json.dumps([{'key':'Intimacy','stance':['Emotional']},{'key':'Travel together','stance':[]}]),
                 preferences_json=json.dumps({'fixed':{'dealbreakers':[]},'adjustable':{}})))
             account=db.fetch_one(self.conn,'Account',user_id=uid) or dict(id=uid,user_id=uid,created_at='test')

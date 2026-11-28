@@ -43,7 +43,7 @@ class GroupTests(unittest.TestCase):
     def test_every_verified_field_is_one_bgv_actually_checks(self):
         """A field claimed as verified that BGV never looks at would be a
         lock with nothing behind it."""
-        labels = {l.lower() for l in onboarding.MANDATORY_FIELD_LABELS}
+        labels = {l.lower() for l in onboarding.BGV_CHECKED_LABELS}
         for field in se.VERIFIED:
             with self.subTest(field=field):
                 stem = field.replace("income_band", "salary")

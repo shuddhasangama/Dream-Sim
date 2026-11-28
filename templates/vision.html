@@ -107,4 +107,15 @@
 </div>
 {% endif %}
 {% endif %}
+<div class="card own-pillars">
+  <div class="section-label">Your own pillars</div>
+  {% if own_pillars %}<ul>{% for p in own_pillars %}<li>{{ p }}</li>{% endfor %}</ul>{% else %}<p class="hint">None yet.</p>{% endif %}
+  {% if own_pillars_open %}
+  <form method="post" action="{{ url_for('vision_own_pillars') }}">
+    {% for p in own_pillars %}<label class="checkbox-row"><input type="checkbox" name="remove" value="{{ p }}"> remove {{ p }}</label>{% endfor %}
+    {% if own_pillars|length < 4 %}<label>Add a pillar of your own <input type="text" name="add" maxlength="40"></label>{% endif %}
+    <button type="submit" class="btn-secondary">Save my pillars</button>
+  </form>
+  {% else %}<p class="hint">Choose the Custom plan to add up to four pillars of your own.</p>{% endif %}
+</div>
 {% endblock %}

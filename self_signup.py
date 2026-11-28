@@ -68,8 +68,9 @@ def save_stats(conn,uid,body):
             raise ApiError('validation_error','Enter your age as a whole number from 18 to 120.')
     else:
         # Existing installed clients can finish signup during the release rollout.
-        if not isinstance(body['name'],str) or not 1<=len(body['name'].strip())<=200:
-            raise ApiError('validation_error','Enter your name as on Aadhaar.')
+        # Client answer 2: name is deprecated and never required (DigiLocker supplies it).
+        if body['name'] is not None and (not isinstance(body['name'],str) or len(body['name'].strip())>200):
+            raise ApiError('validation_error','Name must be at most 200 characters, or left blank.')
         try:
             born=date.fromisoformat(body['dob']);today=date.today()
             age=today.year-born.year-((today.month,today.day)<(born.month,born.day))
@@ -105,7 +106,7 @@ def save_stats(conn,uid,body):
     shared['disclosure']=health['disclosure']
     import verified_identity
     identity=verified_identity.owner_identity(conn,uid)
-    if identity and not modern and (body['name'].strip()!=identity['name'] or body['dob']!=identity['dob']):raise ApiError('identity_owned_field','Your name and DOB are set by confirmed DigiLocker details.',409)
+    if identity and not modern and (((body['name'] or '').strip() not in ('',identity['name'])) or body['dob']!=identity['dob']):raise ApiError('identity_owned_field','Your name and DOB are set by confirmed DigiLocker details.',409)
     with auth_sessions.transaction(conn):
         user,stats=parts(conn,uid)
         if stats.get('signup_version')!=VERSION or stats.get('signup_submitted'):raise ApiError('signup_closed','Use profile editing for an existing submitted profile.',409)
@@ -114,11 +115,14 @@ def save_stats(conn,uid,body):
             user['active_bgv_case_id']=None
         for field in FIELDS:stats.pop(field,None)
         stats.update(clean,declared_age=age,declared_gender=body['gender'],health_shared=shared,city=city['name'],gender=body['gender'],signup_stats_saved=True,age=identity['age'] if identity else age,age_band=onboarding.age_band_for(identity['age'] if identity else age))
-        user['stats_json']=json.dumps(stats,ensure_ascii=False);db.insert_row(conn,'User',user)
+        user['stats_json']=json.dumps(stats,ensure_ascii=False)
+        import matching   # client answer 5: REACH filters follow the Stats just given (only ever adds)
+        user['preferences_json']=json.dumps(matching.unlock_levers_for(db.load_json_field(user.get('preferences_json'),{}),stats),ensure_ascii=False)
+        db.insert_row(conn,'User',user)
         draft=db.fetch_one(conn,'EnrollmentDraft',id=uid)
         payload=db.load_json_field(draft['payload_json'],{})
         if not modern:
-            payload['identity_claims']=Protection().seal({'name':body['name'].strip(),'dob':body['dob']})
+            payload['identity_claims']=Protection().seal({'name':(body['name'] or '').strip(),'dob':body['dob']})
         draft.update(payload_json=json.dumps(payload),revision=draft['revision']+1);db.insert_row(conn,'EnrollmentDraft',draft)
     import signup_markets
     signup_markets.ensure(conn,uid)

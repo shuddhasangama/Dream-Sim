@@ -111,7 +111,8 @@ def compatible(conn, a, b, cycle):
         return False
     if not market(conn,a['city'])['discovery'] or not market(conn,b['city'])['discovery']:
         return False
-    if a['bgv_status']=='verified' and b['bgv_status']!='verified':
+    import reach_access   # client answer 5: one visibility rule
+    if not reach_access.visible(a,b):
         return False
     if unavailable(conn,b['user_id'],cycle) or excluded(conn,a['user_id'],b['user_id']):
         return False
@@ -121,6 +122,8 @@ def compatible(conn, a, b, cycle):
 def require_date_ready(conn, a, b, cycle):
     if not compatible(conn,a,b,cycle) or not compatible(conn,b,a,cycle) or unavailable(conn,a['user_id'],cycle):
         raise ApiError('pair_unavailable', 'This pairing is no longer available. Explore other profiles.', 409)
+    import date_preferences   # client answer 3: the member's own preferences, before accepting
+    date_preferences.require(conn, a['user_id'], 'accept a match')
     import signup_verification, verification_payment
     for user in (a,b):
         if user['bgv_status']!='verified' or user['journey_state']!='dating':
@@ -174,7 +177,9 @@ def snapshot(conn, uid, cycle):
 def prepare(conn, uid, cycle):
     with week_service.transition(conn, uid, serialize=f'discovery-generation:{cycle}'):   # perf-rowlock: allocation, once per member per cycle
         user=member(conn,uid)
-        if not complete(user) or not market(conn,user.get('city'))['discovery'] or unavailable(conn,uid,cycle):
+        import reviewer_accounts   # client answer 9: a store reviewer is never offered a real member
+        if (reviewer_accounts.is_reviewer(conn,uid) or not complete(user) or not market(conn,user.get('city'))['discovery']
+                or unavailable(conn,uid,cycle)):
             return snapshot(conn,uid,cycle)
         seen=db.fetch_all(conn,'DiscoveryExposure',user_id=uid)
         today=[r for r in seen if r['day']==day()]

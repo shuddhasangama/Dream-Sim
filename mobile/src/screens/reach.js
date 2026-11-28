@@ -110,7 +110,7 @@ export function render(ctx) {
   return `<section class="reach-review-heading"><span class="p-eyebrow">REACH</span><p class="reach-status">${safe(status)}</p><div class="reach-count">${safe(mutual)}</div><h1>Potential matches right now</h1><p>${safe(fit)} fit your filters · ${data.counting_unverified?'Includes unverified profiles':'Verified profiles only'}</p></section>
     <p class="reach-guidance" role="status">${safe(guidance)}</p>
     <p class="hint">REACH shows potential compatibility, not a reserved date. New Wednesday–Sunday entrants join matching next week.</p>
-    <details class="reach-extra-filters"><summary>Verification &amp; health preferences</summary>${workVerificationForm(data.work_verification_filter,safe)}${healthForm(data.health_filter, safe)}</details>
+    <p class="hint reach-stats-only">REACH filters use your Stats only.</p>
     ${data.discovery?`<section class="card"><h2>Available to explore</h2><p>${safe(data.discovery.message)}</p>${data.discovery.profiles.map(p=>`<div class="stat-row"><strong>${safe(p.age)} years · ${safe(p.city)}</strong><span>${safe(p.verification)}</span><p>${p.pillars.map(safe).join(' · ')}</p></div>`).join('')||`<p>${safe(data.discovery.empty_message)}</p>`}<p class="hint">Private preview only. No identity documents or background-check details are shared. After verification, use Week to express interest.</p></section>`:''}
     <div class="p-reach-hint"><span>Tap a filter to loosen it</span>
       <button type="button" class="p-text-link" id="show-all" data-ignore="${all_ignored ? 'false' : 'true'}">${all_ignored ? 'Put them back' : 'Any for everything'}</button>

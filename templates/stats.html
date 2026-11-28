@@ -61,6 +61,11 @@
         <input type="number" inputmode="numeric" name="{{ row.key }}" value="{{ row.value or '' }}"
                min="{{ ranges[row.key][0] }}" max="{{ ranges[row.key][1] }}"
                placeholder="{{ units[row.key] }}">
+        {% if row.key == 'height_cm' %}{% set row_value = row.value %}
+               {% set fi = (row_value)|ft_in %}<span class="height-ftin"><input class="field-input" type="number" inputmode="numeric" name="height_ft" min="4" max="7" placeholder="ft" aria-label="Height, feet" value="{{ fi[0] }}">
+               <input class="field-input" type="number" inputmode="numeric" name="height_in" min="0" max="11" placeholder="in" aria-label="Height, inches" value="{{ fi[1] }}"></span>
+               <input type="hidden" name="height_cm_was" value="{{ row_value or '' }}">
+               <span class="field-hint">Enter centimetres or feet and inches.</span>{% endif %}
         {% endif %}
         {% if row.warning %}<span class="field-hint form-error">{{ row.warning }}</span>{% endif %}
       </label>

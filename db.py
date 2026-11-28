@@ -47,6 +47,7 @@ TABLES = {
     "SecurityEvent",
     "MemberLockEvent",
     "DeletionRecord",
+    "DeletedContactRetention",
     "RestaurantBooking", "RestaurantEvent",
     "BookingPreference", "BookingSnapshot",
     "BillingPurchase", "BillingEntitlement", "BillingEvent",

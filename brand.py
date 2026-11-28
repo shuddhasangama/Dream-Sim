@@ -26,6 +26,10 @@ PLATFORM = "DhaShu"
 
 TAGLINE = "Purity, re-engineered."
 
+# Client answer 8 (2026-11-27): the one support contact, shown wherever the app
+# or the web pages offer support, and on the public /delete-account page.
+SUPPORT_EMAIL = "hello@dhashu.com"
+
 # The old name, kept ONLY so the test can look for it. Never rendered.
 RETIRED_NAMES = ("Dare to Dream", "Dare To Dream", "DARE TO DREAM",
                  "dare-to-dream", "dare to dream")

@@ -60,7 +60,11 @@ def seed(db_path):
         stats.update(age=30, height_cm=170, profession=onboarding.STAT_OPTIONS['profession'][0],
                      education=onboarding.STAT_OPTIONS['education'][0],
                      marital_history=onboarding.STAT_OPTIONS['marital_history'][0],
-                     languages=[onboarding.STAT_OPTIONS['languages'][0]])
+                     languages=[onboarding.STAT_OPTIONS['languages'][0]],
+                     # Client answer 3: date preferences are needed before accepting a match.
+                     diet=stats.get('diet') or 'Vegetarian', neighbourhoods=['indiranagar'],
+                     cuisine=stats.get('cuisine') or ['South Indian'],
+                     budget=stats.get('budget') or [onboarding.STAT_OPTIONS['budget'][1]])
         row = onboarding.build_user_row(uid, 'Bangalore', gender, stats, onboarding.build_visions(**data['vision']),
                                         data['activities'], journey_state='dating', bgv_status='verified')
         row['preferences_json'] = db.json_field({'fixed': {'dealbreakers': []}, 'adjustable': {'distance_km': [0, 5000]}})

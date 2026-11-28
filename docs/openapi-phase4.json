@@ -10527,6 +10527,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "custom_pillars": {
+                    "items": {},
+                    "maxItems": 500,
+                    "type": "array"
+                  },
                   "kids_intent": {
                     "enum": [
                       "want",
@@ -16303,6 +16308,56 @@
                 "type": "object",
                 "properties": {},
                 "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profile/date-preferences": {
+      "get": {
+        "operationId": "getProfileDatePreferences",
+        "summary": "Own date preferences (neighbourhood, diet, cuisine, budget): values, options for the member's city, and what is still missing.",
+        "responses": {
+          "200": {
+            "description": "Actor-scoped result in the data/error envelope."
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putProfileDatePreferences",
+        "summary": "Fill in date preferences. Required before accepting a match or planning a date (409 date_preferences_required). A diet already set is changed in Stats.",
+        "responses": {
+          "200": {
+            "description": "Actor-scoped result in the data/error envelope."
+          },
+          "400": {
+            "description": "Invalid strict JSON body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           }

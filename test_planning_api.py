@@ -127,6 +127,12 @@ class PlanningApiTests(RouteTestCase):
         self.assertEqual(self.domain_snapshot(), before)
 
     def test_alignment_and_overlap_are_required(self):
+        for who in ('owner', 'partner'):   # a partner whose alignment answers are gone again
+            stats = json.loads(db.fetch_one(self.conn, 'User', id=who)['stats_json'])
+            for key in ('cuisine', 'budget'):
+                stats.pop(key, None)
+            self.conn.execute('UPDATE User SET stats_json=? WHERE id=?', (json.dumps(stats), who))
+        self.conn.commit()
         self.assertEqual(self.request(self.base+'/date-plan', method='POST', body=self.slot).json['error']['code'], 'alignment_required')
         for who in ('owner', 'partner'):
             self.align(who)

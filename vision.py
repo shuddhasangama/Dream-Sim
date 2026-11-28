@@ -35,16 +35,12 @@ from generate_users import COHABIT_FOCUS, INTIMACY_KINDS, KIDS_ROUTES, OTHER_VIS
 # marital_history/languages/city added there on 2026-08-28 specifically
 # so this list is fully satisfiable — "location" -> city, the field this
 # project already tracks for that purpose).
+# Client answer 2 (2026-11-27): required Stats are age, sex and city only; every
+# other field is optional, so it no longer blocks Relationship entry either.
 MANDATORY_STATS_FIELDS = (
     "age",
-    "height_cm",
-    "profession",
-    "income_band",
-    "education",
-    "diet",
-    "marital_history",
+    "gender",
     "city",
-    "languages",
 )
 
 # round3-fixes-spec.md §7.1's exact four pillars and their sub-selections

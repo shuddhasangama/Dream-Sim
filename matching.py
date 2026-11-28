@@ -365,11 +365,9 @@ def fits_filters(user_a: dict[str, Any], user_b: dict[str, Any]) -> bool:
     Stats yet; every user is implicitly "seeking the opposite gender."
     Opening this up to other orientations later means adding that real
     field and reading it here, not deleting this check."""
-    from profile_choices import health_fits
-    import match_checks
-    if not match_checks.fits(user_a,user_b):return False
-    if not health_fits(user_a, user_b):
-        return False
+    # Client answer 5 (2026-11-27): REACH filters are Stats-only. Health openness and
+    # work-verification (checks) preferences no longer filter anyone; saved answers are
+    # kept, not deleted. What remains: gender, the Vision rule, and Stats filters.
     if not user_a.get("gender") or not user_b.get("gender") or user_a["gender"] == user_b["gender"]:
         return False
 
@@ -457,12 +455,13 @@ def eligible_candidates(
     from persisted LockIn/Match rows — keeps this function DB-free and
     unit-testable like everything else in this module."""
     if user["bgv_status"] != "verified":
-        return []
+        return []          # weekly matches open at verification (a date needs both verified)
+    import reach_access    # client answer 5: one visibility rule
     return [
         c
         for c in _pool_excluding_self(user, pool)
         if mutual_open(user, c)
-        and c["bgv_status"] == "verified"
+        and reach_access.visible(user, c)
         and c["user_id"] not in locked_in_ids
         and c["user_id"] not in recent_match_ids
     ]
@@ -557,6 +556,8 @@ LEVERS = ["age", "height_cm", "weight_kg", "waist_in", "distance_km", "nationali
 # in. A lever exists only where the backing stat does, so the whole lever
 # machinery has to ask before it reaches.
 LEVER_STAT = {
+    # Client answer 5: REACH filters follow the member's own Stats, age included.
+    "age": "age",
     "height_cm": "height_cm",
     "weight_kg": "weight_kg",
     "waist_in": "waist_in",
@@ -567,7 +568,7 @@ LEVER_STAT = {
 # How wide a newly unlocked range starts, either side of the person's own
 # value. Wide enough to be useful on day one, narrow enough that it is
 # obviously theirs to adjust — REACH's whole point is that you move it.
-_UNLOCK_SPREAD = {"height_cm": 12, "weight_kg": 15, "waist_in": 5}
+_UNLOCK_SPREAD = {"age": 6, "height_cm": 12, "weight_kg": 15, "waist_in": 5}
 
 
 def unlock_levers_for(preferences: dict[str, Any],

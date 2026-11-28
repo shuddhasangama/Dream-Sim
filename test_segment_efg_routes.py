@@ -31,6 +31,12 @@ import guru_dating
 import app as app_module
 
 
+# Client answer 3: date preferences are required before a match is accepted or a date is
+# planned, so fixture members have them; tests about missing preferences remove them.
+DATE_PREFS = {"neighbourhoods": ["indiranagar"], "cuisine": ["South Indian"],
+              "budget": [__import__("onboarding").STAT_OPTIONS["budget"][1]]}
+
+
 class RouteTestCase(unittest.TestCase):
     """One temp database and one temp clock file per test, so nothing here
     touches data/dream.db or the shared simulation clock."""
@@ -90,7 +96,7 @@ class RouteTestCase(unittest.TestCase):
             "bgv_status": bgv_status,
             "journey_state": journey_state,
             "stats_json": json.dumps({"city": "Bengaluru", "gender": "female",
-                                      "age_band": "28-32", "diet": "vegetarian"}),
+                                      "age_band": "28-32", "diet": "vegetarian", **DATE_PREFS}),
             "vision_json": json.dumps([]),
             "preferences_json": json.dumps({}),
         })

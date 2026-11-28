@@ -1,4 +1,5 @@
 """Release acceptance: private discovery, mutual allocation and editable catalogue."""
+from test_segment_efg_routes import DATE_PREFS
 import concurrent.futures
 import json
 import os
@@ -36,7 +37,7 @@ class DiscoveryTests(WeekApiTests):
         flag=patch.dict(os.environ,{'DHASHU_DAILY_DISCOVERY':'1'});flag.start();self.addCleanup(flag.stop)
         for uid,gender in [('owner','female'),('partner','male'),('stranger','male')]:
             row=db.fetch_one(self.conn,'User',id=uid)
-            row['stats_json']=json.dumps({'age':30,'gender':gender,'city':'Bangalore'})
+            row['stats_json']=json.dumps({'age':30,'gender':gender,'city':'Bangalore','diet':'Vegetarian',**DATE_PREFS})
             row['vision_json']=json.dumps([{'key':'Intimacy','stance':['Emotional']},{'key':'Travel together','stance':[]}])
             db.insert_row(self.conn,'User',row)
         discovery.configure_market(self.conn,'BLR',dict(discovery=True,verification=True,payments=True,restaurants=True,support=True,paused=False))

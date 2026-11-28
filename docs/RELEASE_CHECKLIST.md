@@ -69,3 +69,28 @@ Use this for every release of the backend (Railway) and of the mobile app (store
 | `DHASHU_GZIP=1` | The load test is repeated with compression on |
 | `DHASHU_PAYMENT_BYPASS` removed | Before `DHASHU_BILLING_MODE=live` or `live_pilot` (startup refuses both together) |
 | `DHASHU_SMS_PROVIDER=twilio` | Only as a fallback, with `TWILIO_*` set; MSG91 is the default |
+
+## 5. Store reviewer account (Apple App Review and Google Play)
+
+Reviewers can't receive an SMS code. One reviewer account therefore signs in with **phone number + password only**. It is admitted straight to the main screens (verified, Dating, signup complete) without DigiLocker, liveness or payment.
+
+How it is kept safe:
+- It is never shown to, counted for or matched with any member.
+- It is never offered a member in weekly matching or discovery.
+- No test switch is involved.
+
+The owner keeps the phone number and password outside the repository and rotates the password after each review. **Never write them into a file, ticket, commit, log or chat.**
+
+- [ ] The database has migration `0009_account_reviewer` (`.\dev-local.ps1 migrate -Apply` locally; the pre-deploy Alembic upgrade or the automatic reconcile on Railway).
+- [ ] Run the tool from the repository root, in your **own** terminal. It asks for the phone and the password with hidden input; never pass them as arguments:
+  ```
+  .venv\Scripts\python.exe tools\create_reviewer_account.py --apply
+  ```
+  - It uses `DATABASE_URL`. Add `--database-url <url>` to target another database for this run only.
+  - It shows the target host and database name and asks you to type `YES`.
+  - Without `--apply` it refuses and changes nothing.
+  - It refuses a phone number that belongs to a member, and refuses to create a second reviewer.
+  - Running it again with the same phone updates the password and signs out the reviewer's old sessions.
+- [ ] In the app, sign in with **Use password** using those values. Check that Home, REACH, Vision, Stats and Chemistry open with no SMS code asked for.
+- [ ] Enter the phone and password in App Store Connect → App Review Information, and in Google Play Console → App content → App access. Add the note: "Sign in with phone number and password; no SMS code is needed."
+- [ ] After the review, rotate the password by running the tool again.

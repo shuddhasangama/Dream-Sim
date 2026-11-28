@@ -5,6 +5,15 @@ import db
 import async_rehearsal
 
 LOCKED_STATES={'relationship','engaged','married'}
+
+
+def visible(viewer, candidate):
+    """Client answer 5 (2026-11-27), the one visibility rule for REACH counts, match lists
+    and weekly matching: an unverified member sees verified AND unverified members; a
+    verified member sees ONLY verified members."""
+    if (viewer or {}).get('bgv_status') == 'verified':
+        return (candidate or {}).get('bgv_status') == 'verified'
+    return True
 LOCK_REASON='REACH is paused while matches are being reviewed or a date/debrief is in progress. It reopens when no candidates remain or you return to the pool.'
 
 def state(conn,user,clock):

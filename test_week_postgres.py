@@ -20,6 +20,11 @@ class PostgresWeekTests(unittest.TestCase):
         self.conn.execute('UPDATE "User" SET bgv_status = %s WHERE id = %s',('verified','owner'))
         for uid in ('partner','stranger'):
             self.conn.execute('INSERT INTO "User" (id,journey_state,bgv_status) VALUES (%s,%s,%s)',(uid,'dating','verified'))
+        # Client answer 3: date preferences are needed before a match is accepted.
+        import json
+        from test_segment_efg_routes import DATE_PREFS
+        for uid in ('owner','partner','stranger'):
+            self.conn.execute('UPDATE "User" SET stats_json=%s WHERE id=%s',(json.dumps({'diet':'Vegetarian',**DATE_PREFS}),uid))
         self.clock = SimulationClock.at(1,'Mon',12)
 
     def match(self, uid, other, slot=1):

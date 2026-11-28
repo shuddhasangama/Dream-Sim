@@ -47,6 +47,8 @@ def register_api(app, *, current_user, reach_locked, reach_state, reach_actions,
         guru_navigator.register(api, evolution['get_db'], journey_state)
         import account_deletion   # feat-delete: delete with a grace period
         account_deletion.register(api, evolution['get_db'])
+        import date_preferences   # client answer 3
+        date_preferences.register(api, evolution['get_db'])
         import background_prompt   # ethnicity-restore fallback (DHASHU_ETHNICITY_PROMPT)
         background_prompt.register(api, evolution['get_db'])
     if planning is not None:

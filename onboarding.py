@@ -446,13 +446,15 @@ OPTIONAL_NUMERIC_STATS = [
     ("children_count", "Number of children", "children", CHILDREN_COUNT_RANGE[0], CHILDREN_COUNT_RANGE[1], "1"),
 ]
 
-CHOICE_STATS = [
+# Client answer 2 (2026-11-27): the required Stats are age, sex (gender) and city
+# only. Name is deprecated (never required). Education, nationality, profession and
+# salary are optional like every other field.
+CHOICE_STATS: list[tuple[str, str, list[str]]] = []
+
+OPTIONAL_CHOICE_STATS = [
     ("education", "Education", EDUCATION),
     ("nationality", "Nationality", OWN_NATIONALITIES),
     ("profession", "Profession", PROFESSIONS),
-]
-
-OPTIONAL_CHOICE_STATS = [
     ('employment_category','Employment category (self-declared)',['Salaried','Self-employed','Freelancer','Business owner','Other']),
     ('share_verification_summary','Share check statuses and dates with matches',['Yes','No']),
     ("diet", "Dietary preference", DIETS),
@@ -511,7 +513,9 @@ OPTIONAL_STAT_KEYS = (
 )
 
 # Salary is mandatory but never stored raw — only the derived band is.
-MANDATORY_FIELD_LABELS = ("Age", "Education", "Nationality", "Salary", "Profession")
+MANDATORY_FIELD_LABELS = ("Age", "Gender", "City")
+# The fields background verification checks (no longer the same list as the required ones).
+BGV_CHECKED_LABELS = ("Age", "Education", "Nationality", "Salary", "Profession")
 
 
 # 2026-09-09: the stats editor needs a label and an option list per field.
@@ -668,6 +672,14 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
     # filter they never filled in.
 
     for key, label, unit, low, high, _ph in OPTIONAL_NUMERIC_STATS:
+        if key == "height_cm":                     # client answer 6: cm or feet/inches, stored in cm
+            import height_units
+            value, problem = height_units.from_form(form, low, high)
+            if problem:
+                return {"ok": False, "error": problem, "stats": None}
+            if value is not None:
+                stats[key] = value
+            continue
         raw = str(form.get(key, "")).strip()
         if not raw:
             continue
@@ -735,10 +747,12 @@ def validate_stats(form: dict[str, Any]) -> dict[str, Any]:
         if chosen:
             stats[key] = sorted(chosen)
 
-    band = bracket_for(form.get("salary"))
-    if band is None:
-        return {"ok": False, "error": "Enter your annual salary in rupees — it derives your bracket, and only the bracket is ever shown.", "stats": None}
-    stats["income_band"] = band
+    # Salary is optional (client answer 2): blank is omitted; a typed value must be valid.
+    if str(form.get("salary") or "").strip():
+        band = bracket_for(form.get("salary"))
+        if band is None:
+            return {"ok": False, "error": "Enter your annual salary in rupees, or leave it blank. Only the bracket is ever shown.", "stats": None}
+        stats["income_band"] = band
 
     city = str(form.get("city", "")).strip()
     if city not in CITIES_FOR_SIGNUP:

@@ -27,3 +27,10 @@ test('confirmation is one request to the deletion endpoint', async () => {
   await confirm({post: async (p, b) => { calls.push([p, b]); return {}; }}, {password: 'x'});
   assert.deepEqual(calls, [['/api/v1/account/deletion', {password: 'x'}]]);
 });
+
+test('client answer 8: deletion screens show the one support email and the 2-year contact rule', () => {
+  const confirmHtml = renderConfirm({grace_days: 30}, safe);
+  const scheduledHtml = renderScheduled({due_at: 1767225600}, safe);
+  for (const html of [confirmHtml, scheduledHtml]) assert.match(html, /mailto:hello@dhashu\.com/);
+  assert.match(confirmHtml, /for 2 years, then delete it/);
+});

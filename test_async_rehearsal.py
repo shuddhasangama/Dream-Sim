@@ -222,7 +222,9 @@ class AsyncRehearsalTests(RouteTestCase):
             pair=db.fetch_all(self.conn,'LockIn',status='active')[0]
             self.assertEqual(len(db.fetch_all(self.conn,'Availability',lockin_id=pair['id'])),2)
             self.assertEqual(db.fetch_one(self.conn,'RehearsalIntro',id='owner')['slots_json'],'[]')
-            self.assertEqual(self.state()['async_rehearsal']['stage'],'availability')
+            # Client answer 3: date preferences are complete before a match can be accepted, so
+            # with the transferred overlapping drafts the pair is ready to plan at once.
+            self.assertEqual(self.state()['async_rehearsal']['stage'],'planning')
             self.assertEqual(self.request('/rehearsal/availability',method='PUT',body={'slots':[]}).status_code,409)
             self.base='/lock-ins/'+pair['id']
             for who in ('owner','partner'): self.align(who)

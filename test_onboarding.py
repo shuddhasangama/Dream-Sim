@@ -312,22 +312,30 @@ class StatsValidationTests(unittest.TestCase):
         self.assertEqual(result["stats"]["languages"], ["English", "Hindi"])
 
     def test_every_mandatory_field_is_actually_required(self):
-        """2026-09-04, user's rule: five mandatory fields, no more. Salary
-        is checked separately because only its derived band is stored."""
-        for key in ("age", "education", "nationality", "profession"):
+        """Client answer 2 (2026-11-27): age, sex (gender) and city are required,
+        nothing else."""
+        for key in ("age", "gender", "city"):
             form = _valid_stats()
             form[key] = ""
             self.assertFalse(onboarding.validate_stats(form)["ok"], key)
+        for key in ("education", "nationality", "profession", "salary", "languages", "name"):
+            form = _valid_stats()
+            form[key] = ""
+            self.assertTrue(onboarding.validate_stats(form)["ok"], key)
 
-    def test_the_five_mandatory_fields_are_the_ones_that_were_asked_for(self):
-        self.assertEqual(onboarding.REQUIRED_STAT_KEYS,
-                         ["age", "education", "nationality", "profession"])
-        self.assertEqual(onboarding.MANDATORY_FIELD_LABELS,
-                         ("Age", "Education", "Nationality", "Salary", "Profession"))
+    def test_the_mandatory_fields_are_the_ones_that_were_asked_for(self):
+        self.assertEqual(onboarding.REQUIRED_STAT_KEYS, ["age"])      # gender and city are validated separately
+        self.assertEqual(onboarding.MANDATORY_FIELD_LABELS, ("Age", "Gender", "City"))
+        self.assertNotIn("Name", onboarding.MANDATORY_FIELD_LABELS)
+
+    def test_age_gender_and_city_alone_are_enough_to_register(self):
+        """Client answer 2: age, sex and city are the only required Stats."""
+        result = onboarding.validate_stats({"age": "31", "city": "Chennai", "gender": "female"})
+        self.assertTrue(result["ok"], result["error"])
+        self.assertEqual(sorted(result["stats"]), ["age"])
 
     def test_the_five_alone_are_enough_to_register(self):
-        """The whole point of the split: a stranger who has not seen a
-        single match answers five questions, not seventeen."""
+        """Optional answers given at sign-up are still kept."""
         minimal = {
             "age": "31", "education": "Master's", "nationality": "IN",
             "profession": "Law", "salary": "1800000",
@@ -356,9 +364,13 @@ class StatsValidationTests(unittest.TestCase):
         form["height_cm"] = "12"
         self.assertFalse(onboarding.validate_stats(form)["ok"])
 
-    def test_salary_is_required_because_the_band_derives_from_it(self):
+    def test_salary_is_optional_but_a_typed_salary_must_be_valid(self):
         form = _valid_stats()
         form["salary"] = ""
+        result = onboarding.validate_stats(form)
+        self.assertTrue(result["ok"], result["error"])
+        self.assertNotIn("income_band", result["stats"])             # blank is omitted, never guessed
+        form["salary"] = "not money"
         self.assertFalse(onboarding.validate_stats(form)["ok"])
 
     def test_existing_children_is_optional_and_only_yes_takes_a_count(self):

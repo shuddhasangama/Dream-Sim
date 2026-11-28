@@ -11,7 +11,7 @@ import uuid
 import auth_sessions as sessions
 import db
 
-MESSAGE = 'This account is locked. Please contact DhaShu support.'
+MESSAGE = 'This account is locked. Please contact DhaShu support at hello@dhashu.com.'
 
 
 class AccountLocked(Exception):

@@ -15,3 +15,9 @@ export const CALENDAR_VIDEO = {
   src: env.DHASHU_CALENDAR_VIDEO_SRC || '/media/calendar-explainer.mp4',
   poster: env.DHASHU_CALENDAR_VIDEO_POSTER || '',
 };
+
+// Client answer 8 (2026-11-27): the one support contact, wherever the app offers support.
+export const SUPPORT_EMAIL = 'hello@dhashu.com';
+export function supportLine() {
+  return `<p class="hint support-line">Need help? Write to <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>`;
+}

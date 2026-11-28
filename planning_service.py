@@ -146,6 +146,8 @@ def validate_slots(chosen):
 
 def availability(conn, uid, lid, chosen):
     parsed = validate_slots(chosen)
+    import date_preferences   # client answer 3: mandatory before a date is planned
+    date_preferences.require(conn, uid, 'plan a date')
     async_rehearsal.require_intro_complete(conn, uid)
     with transition(conn, uid, lid=lid):
         pair(conn, uid, lid)

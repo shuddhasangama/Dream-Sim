@@ -17,10 +17,15 @@ class ProfileChoicesTests(WeekApiTests):
             self.assertEqual(set(mapped['Intimacy']),{'Emotional','Physical'})
             self.assertIn('Travel together',mapped)
             self.assertEqual(choices.template_label(json.loads(row['stats_json']),goals),
-                             'Family Together' if key=='grow' else 'Two Together')
-        self.assertNotIn('Travel together',choices.TEMPLATES[1]['choices'])
+                             'Family' if key=='grow' else 'Together')
+        # Client answer 1: Family = all four pillars; Together = all except Kids.
+        self.assertEqual(set(choices.TEMPLATES[0]['choices']),{'Intimacy','Kids','Cohabitate','Travel together'})
+        self.assertEqual(set(choices.TEMPLATES[1]['choices']),{'Intimacy','Cohabitate','Travel together'})
+        self.assertEqual(set(choices.TEMPLATES[2]['choices']),{'Intimacy','Travel together'})
+        self.assertEqual(choices.TEMPLATES[2]['choices']['Intimacy'],['Emotional'])
+        self.assertEqual([t['label'] for t in choices.TEMPLATES],['Family','Together','Travel together','Custom'])
         self.assertEqual(choices.template_label({'vision_template':'two','kids_intent':'no'},
-                          [{'key':'Intimacy','stance':['Emotional']}]),'Custom Together')
+                          [{'key':'Intimacy','stance':['Emotional']}]),'Custom')
 
     def test_focus_plan_roundtrip_and_server_alignment(self):
         import vision_plans

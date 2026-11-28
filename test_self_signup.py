@@ -28,9 +28,13 @@ class SelfSignupTests(RouteTestCase):
         for picks in [['saket'],['indiranagar']*2,['indiranagar','koramangala','mg-road','whitefield']]:
             body['fields']['neighbourhoods']=picks
             self.assertEqual(self.client.put('/api/v1/signup/stats',headers=h,json=body).status_code,400)
-        for key in ['name','dob','gender','city']:
+        for key in ['dob','gender','city']:
             body=self.stats();body[key]=''
             self.assertEqual(self.client.put('/api/v1/signup/stats',headers=h,json=body).status_code,400,key)
+        # Client answer 2: name is deprecated and never required (an old client may send it blank or null).
+        for blank in ('', None):
+            body=self.stats();body['name']=blank
+            self.assertEqual(self.client.put('/api/v1/signup/stats',headers=h,json=body).status_code,200,blank)
 
     def test_failed_sms_does_not_claim_code_sent_or_create_account(self):
         with patch.object(auth_delivery,'start',side_effect=auth_delivery.DeliveryUnavailable('unavailable',http_status=403,provider_code=60203)):
@@ -115,7 +119,13 @@ class SelfSignupTests(RouteTestCase):
         self.assertEqual(self.client.put('/api/v1/signup/stats',headers=h,json=body).status_code,200)
         self.assertTrue(json.loads(db.fetch_one(self.conn,'User',id=uid)['stats_json'])['health_shared']['consent'])
         self.assertEqual(self.client.get('/api/v1/signup/state').status_code,401)
-        self.assertEqual(json.loads(db.fetch_one(self.conn,'User',id=uid)['preferences_json'])['adjustable'],{'distance_km':[0,30]})
+        # Client answer 5: REACH filters follow the member's own Stats from signup on
+        # (age: own age +/- 6; religion opens on their own answer); never removes one.
+        stats=json.loads(db.fetch_one(self.conn,'User',id=uid)['stats_json'])
+        adjustable=json.loads(db.fetch_one(self.conn,'User',id=uid)['preferences_json'])['adjustable']
+        self.assertEqual(adjustable['distance_km'],[0,30])
+        self.assertEqual(adjustable['age'],[stats['age']-6,stats['age']+6])
+        self.assertEqual(set(adjustable)-{'distance_km','age'},{k for k in ('height_cm','weight_kg','waist_in','religion') if stats.get(k)})
     def test_matching_admission_requires_current_bound_evidence_not_otp_or_claims(self):
         from bgv_app import Protection
         import verified_identity,auth_sessions

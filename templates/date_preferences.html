@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Date preferences — {{ brand_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Date preferences</div>
+<h1>Where and what you'd like to eat</h1>
+{% if prompt %}<p class="card notice" role="alert">{{ prompt }}</p>{% endif %}
+<p class="lede">Optional at sign-up. Needed before you accept a match or plan a date, so a venue suits you both.</p>
+{% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="{{ url_for('date_preferences_view') }}" class="card">
+  {% if state.options.neighbourhoods %}
+  <fieldset><legend>Neighbourhood · up to three{% if 'neighbourhoods' in state.missing %} · needed{% endif %}</legend>
+    {% for place in state.options.neighbourhoods %}
+    <label class="checkbox-row"><input type="checkbox" name="neighbourhoods" value="{{ place.id }}" {% if place.id in (state['values'].neighbourhoods or []) %}checked{% endif %}> {{ place.name }}</label>
+    {% endfor %}
+  </fieldset>
+  {% endif %}
+  <label>Diet{% if 'diet' in state.missing %} · needed{% endif %}
+    <select name="diet" {% if state.diet_locked %}disabled{% endif %}>
+      <option value="">Choose…</option>
+      {% for d in state.options.diet %}<option value="{{ d }}" {% if state['values'].diet == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+  </label>
+  {% if state.diet_locked %}<p class="hint">Change your diet on the Stats page.</p>{% endif %}
+  <fieldset><legend>Cuisine{% if 'cuisine' in state.missing %} · needed{% endif %}</legend>
+    {% for c in state.options.cuisine %}<label class="checkbox-row"><input type="checkbox" name="cuisine" value="{{ c }}" {% if c in (state['values'].cuisine or []) %}checked{% endif %}> {{ c }}</label>{% endfor %}
+  </fieldset>
+  <fieldset><legend>Budget per person{% if 'budget' in state.missing %} · needed{% endif %}</legend>
+    {% for b in state.options.budget %}<label class="checkbox-row"><input type="checkbox" name="budget" value="{{ b }}" {% if b in (state['values'].budget or []) %}checked{% endif %}> {{ b }}</label>{% endfor %}
+  </fieldset>
+  <button type="submit" class="btn-primary">Save date preferences</button>
+</form>
+{% endblock %}

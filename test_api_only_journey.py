@@ -4,6 +4,7 @@ Only approved synthetic profiles and controllable simulation time are fixtures.
 OTP provider and explicitly enabled face simulation never contact real services.
 Enrollment pending-review boundary is exercised separately: no fake BGV API.
 """
+from test_segment_efg_routes import DATE_PREFS
 import os
 from unittest import mock
 import db, onboarding, ceremony, chemistry, guru_dating, auth_delivery
@@ -31,7 +32,8 @@ class ApiOnlyJourneyTests(RouteTestCase):
         for uid in ('owner','partner','stranger'):
             data=sections();stats=onboarding.validate_stats(data['stats'])['stats']
             stats.update(age=30,height_cm=170,profession=onboarding.STAT_OPTIONS['profession'][0],
-                education=onboarding.STAT_OPTIONS['education'][0],marital_history=onboarding.STAT_OPTIONS['marital_history'][0],languages=[onboarding.STAT_OPTIONS['languages'][0]])
+                education=onboarding.STAT_OPTIONS['education'][0],marital_history=onboarding.STAT_OPTIONS['marital_history'][0],languages=[onboarding.STAT_OPTIONS['languages'][0]],
+                diet=stats.get('diet') or 'Vegetarian',**DATE_PREFS)
             row=onboarding.build_user_row(uid,'Bangalore','male' if uid=='partner' else 'female',stats,
                 onboarding.build_visions(**data['vision']),data['activities'],journey_state='dating' if uid!='stranger' else 'onboarding',bgv_status='verified')
             row['preferences_json']=db.json_field({'fixed':{'dealbreakers':[]},'adjustable':{'distance_km':[0,5000]}})

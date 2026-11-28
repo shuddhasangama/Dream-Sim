@@ -77,7 +77,7 @@ test('invalid stats stay on the step and preserve the entered value for correcti
   await expect(page.getByRole('heading',{name:'Step 1 of 4 · Vision'})).toBeVisible();
 });
 
-for(const [key,label,kids] of [['grow','Family',true],['two','Together',false],['explore','Travel Partner',false]])test(`signup offers ${label} with live pillar preview`,async({page})=>{
+for(const [key,label,kids] of [['grow','Family',true],['two','Together',false],['explore','Travel together',false]])test(`signup offers ${label} with live pillar preview`,async({page})=>{
  await enter(page);await page.getByRole('button',{name:label,exact:true}).click();
  await expect(page.locator('[data-signup-plan="'+key+'"]')).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('[data-signup-pillar="Kids"]')).toBeChecked({checked:kids});
@@ -89,7 +89,7 @@ test('signup needs an explicit plan and custom choices have no history or duplic
  await page.getByRole('button',{name:'Continue to Stats'}).click();await expect(page.getByRole('alert')).toContainText('Choose your Together Plan');
  await page.getByRole('button',{name:'Customise your plan',exact:true}).click();   // 056139e labelawait expect(page.locator('[data-signup-choice]:checked')).toHaveCount(1);await expect(page.getByText('Travel together (optional)',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Family',exact:true}).click();await page.getByRole('button',{name:'Together',exact:true}).click();await expect(page.locator('[data-signup-pillar="Kids"]')).not.toBeChecked();
- await page.getByRole('button',{name:'Travel Partner',exact:true}).click();await expect(page.locator('[data-signup-pillar="Cohabitate"]')).not.toBeChecked();
+ await page.getByRole('button',{name:'Travel together',exact:true}).click();await expect(page.locator('[data-signup-pillar="Cohabitate"]')).not.toBeChecked();
 });
 for(const width of [320,390])test(`focus panel aligns plans and pillars at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:844});await enter(page);

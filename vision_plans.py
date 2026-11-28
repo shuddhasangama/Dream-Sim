@@ -14,11 +14,36 @@ def has_detail(pillar):
 
 SETS = {'grow': set(OPTIONS), 'two': {'Intimacy', 'Cohabitate', 'Travel together'},
     'explore': {'Intimacy', 'Travel together'}}
-LABELS = {'grow': 'Family', 'two': 'Together', 'explore': 'Travel Partner', 'custom': 'Custom'}
+# Client answer 1 (2026-11-27): Family = all 4 pillars; Together = all except Kids;
+# Travel together = Emotional intimacy + Travel; Custom = the member defines their own.
+LABELS = {'grow': 'Family', 'two': 'Together', 'explore': 'Travel together', 'custom': 'Custom'}
 PRESETS = [{'key': key, 'label': LABELS[key], 'description': '',
     'choices': {pillar: (['Emotional'] if pillar=='Intimacy' else []) for pillar in OPTIONS if pillar in selected},
     'kids_intent': 'want' if key == 'grow' else 'no' if key == 'two' else 'undecided'} for key, selected in SETS.items()]
 PRESETS.append({'key': 'custom', 'label': 'Custom', 'description': '', 'choices': None, 'kids_intent': 'undecided'})
+
+
+# Custom: up to four pillars the member names themselves, alongside any of the four above.
+# Stored apart from the four (stats_json.vision_custom_pillars), so matching, which reads
+# only the four, is unchanged; they are shown on the member's own Vision.
+MAX_CUSTOM_PILLARS = 4
+
+
+def validate_custom_pillars(names):
+    if names is None:
+        return []
+    if type(names) is not list or len(names) > MAX_CUSTOM_PILLARS:
+        raise ApiError('validation_error', f'Add up to {MAX_CUSTOM_PILLARS} pillars of your own.')
+    clean, seen = [], {k.casefold() for k in OPTIONS} | {'travel', 'intimacy'}
+    for name in names:
+        if type(name) is not str or not 1 <= len(name.strip()) <= 40 or any(ord(c) < 32 for c in name):
+            raise ApiError('validation_error', 'Name each pillar of your own in 1 to 40 characters.')
+        key = ' '.join(name.split()).casefold()
+        if key in seen:
+            raise ApiError('validation_error', 'Name pillars of your own that are distinct and not already listed.')
+        seen.add(key)
+        clean.append(' '.join(name.split()))
+    return clean
 
 
 def plan_for(pillars):

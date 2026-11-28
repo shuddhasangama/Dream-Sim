@@ -45,7 +45,32 @@
         </span>
       </div>
       {% endfor %}
+      {% for activity in custom_activities %}
+      <div class="activity-row activity-custom">
+        <span class="activity-name">{{ activity }} <span class="hint">(your own)</span></span>
+        <span class="activity-buckets">
+          {% for bucket_id, glyph, label in buckets %}
+          <label class="bucket-pick" title="{{ label }}">
+            <input type="radio" name="act__{{ activity }}" value="{{ bucket_id }}"
+                   {% if remembered.fields.get('act__' + activity, chosen.get(activity)) == bucket_id %}checked{% endif %}>
+            <span class="bucket-glyph b-{{ bucket_id }}">{{ glyph }}</span>
+          </label>
+          {% endfor %}
+        </span>
+      </div>
+      {% endfor %}
     </div>
+    {% if custom_activities|length < 4 %}
+    <div class="activity-add">
+      <label>Add your own activity <input type="text" name="new_activity" maxlength="60" autocomplete="off"></label>
+      <label>Your answer
+        <select name="new_activity_bucket">
+          {% for bucket_id, glyph, label in buckets %}<option value="{{ bucket_id }}">{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    {% endif %}
+    <p class="hint" id="activity-count" role="status">Sorted {{ sorted_count }} of at least {{ min_activities }} activities (from the list or your own).</p>
   </div>
   <button type="submit" class="btn-primary">Save chemistry</button>
 </form>

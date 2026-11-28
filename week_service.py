@@ -64,6 +64,9 @@ def eligible_user(conn, uid):
 
 
 def prepare(conn, uid, clock):
+    import reviewer_accounts
+    if reviewer_accounts.is_reviewer(conn, uid):
+        return []        # client answer 9: a store reviewer is never offered a real member
     import discovery
     if discovery.enabled():
         discovery.prepare(conn,uid,discovery.cycle_for(clock))
@@ -187,6 +190,8 @@ def decide(conn, uid, match_id, action, pass_reason, clock):
                     raise ApiError('match_unavailable', str(exc), 409)
             if not signup_verification.matching_satisfied(db.fetch_one(conn, 'Account', user_id=uid)):
                 raise ApiError('contact_verification_required', 'Verify your email or phone first.', 403)
+            import date_preferences   # client answer 3: mandatory before a match is accepted
+            date_preferences.require(conn, uid, 'accept a match')
             eligible_user(conn, row['candidate_id'])
             if active_for(conn, row['candidate_id']):
                 raise ApiError('match_unavailable', 'This match is no longer available.', 409)

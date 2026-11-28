@@ -168,7 +168,7 @@
     <div class="micro section-label" style="margin-top:10px;">Verified stats</div>
     <div class="stat-rows">
       <div class="stat-row"><span>Age</span><span>{{ s.candidate.stats.age }}</span></div>
-      <div class="stat-row"><span>Height</span><span>{{ s.candidate.stats.height_cm }} cm</span></div>
+      <div class="stat-row"><span>Height</span><span>{{ s.candidate.stats.get('height_cm')|height }}</span></div>
       <div class="stat-row"><span>Income band</span><span>{{ s.candidate.stats.income_band }}</span></div>
       <div class="stat-row"><span>Education</span><span>{{ s.candidate.stats.education }}</span></div>
       <div class="stat-row"><span>Diet</span><span>{{ s.candidate.stats.diet }}</span></div>

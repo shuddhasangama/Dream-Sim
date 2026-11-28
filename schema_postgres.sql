@@ -673,6 +673,9 @@ CREATE TABLE IF NOT EXISTS "Account" (
     -- feat-delete: set when the member asks to be deleted; the purge runs at deletion_due_at.
     deletion_requested_at BIGINT,
     deletion_due_at       BIGINT,
+    -- Client answer 9: the one App Store / Google Play reviewer account (tools/create_reviewer_account.py).
+    -- Signs in with phone + password; never shown to or matched with any member.
+    reviewer        INTEGER NOT NULL DEFAULT 0 CHECK (reviewer IN (0, 1)),
     created_at      TEXT NOT NULL,
     UNIQUE (user_id)
 );
@@ -1091,6 +1094,22 @@ CREATE TABLE IF NOT EXISTS "DeletionRecord" (
     rows_deleted     INTEGER NOT NULL,
     rows_anonymised  INTEGER NOT NULL
 );
+
+-- Client answer 7 (2026-11-27): after the purge only a keyed hash (blind index) of the
+-- member's phone, or email when there is no phone, and the exit type remain, until
+-- delete_after (DHASHU_DELETED_RETENTION_DAYS, default 730). No member id. Admin-only.
+CREATE TABLE IF NOT EXISTS "DeletedContactRetention" (
+    id             TEXT PRIMARY KEY,
+    contact_kind   TEXT NOT NULL CHECK (contact_kind IN ('phone', 'email')),
+    contact_index  TEXT NOT NULL,
+    index_key      TEXT NOT NULL,
+    exit_type      TEXT NOT NULL CHECK (exit_type IN ('good_exit', 'bad_exit')),
+    purged_at      BIGINT NOT NULL,
+    delete_after   BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_deleted_contact_index ON "DeletedContactRetention" (contact_index);
+CREATE INDEX IF NOT EXISTS idx_deleted_contact_expiry ON "DeletedContactRetention" (delete_after);
+
 
 CREATE TABLE IF NOT EXISTS "MemberLockEvent" (
     id          TEXT PRIMARY KEY,

@@ -313,11 +313,14 @@ class StatsPrerequisiteMetTests(unittest.TestCase):
         self.assertTrue(result["met"])
 
     def test_not_met_when_a_field_missing(self) -> None:
-        stats = self._full_stats()
-        del stats["profession"]
-        result = stats_prerequisite_met(stats)
-        self.assertFalse(result["met"])
-        self.assertIn("profession", result["missing"])
+        # Client answer 2: only age, sex and city are required at Relationship entry.
+        for field in ("age", "gender", "city"):
+            stats = self._full_stats()
+            del stats[field]
+            result = stats_prerequisite_met(stats)
+            self.assertFalse(result["met"], field)
+            self.assertEqual(result["missing"], [field])
+        self.assertTrue(stats_prerequisite_met({"age": 31, "gender": "female", "city": "Pune"})["met"])
 
 
 class PrerequisitesMetTests(unittest.TestCase):

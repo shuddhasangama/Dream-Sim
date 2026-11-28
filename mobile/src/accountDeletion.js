@@ -1,6 +1,7 @@
 // feat-delete: Settings -> Delete account, and the grace-period screen.
 // The server decides everything (grace days, the due date); this only asks for a
 // confirmation (password, or a code sent to the member's own phone) and shows state.
+import { supportLine } from './config.js';
 export function dueDate(epochSeconds) {
   return new Date(epochSeconds * 1000).toLocaleDateString('en-IN', {day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'});
 }
@@ -11,7 +12,8 @@ export function renderConfirm(state, safe) {
     <h1 id="delete-title">Delete your account</h1>
     <p>Your profile is hidden at once and you are signed out on every device. After ${safe(days)} days everything is deleted
        permanently: profile, photos, avatars, Guru notes, files and sign-in details. Payment records the law requires are kept
-       without your personal details.</p>
+       without your personal details. To recognise a returning member we keep only a one-way scrambled copy of your phone
+       number (or email) and whether you left in good standing, for 2 years, then delete it.</p>
     <p>You can cancel by signing in within ${safe(days)} days.</p>
     ${state?._error ? `<p role="alert" class="warn">${safe(state._error)}</p>` : ''}
     ${state?.challenge_id
@@ -21,6 +23,7 @@ export function renderConfirm(state, safe) {
          <button class="secondary" type="submit">Delete my account</button></form>
          <button type="button" id="delete-use-code" class="text-button">Use a code instead</button>`}
     <button type="button" id="delete-back" class="primary">Keep my account</button>
+    ${supportLine()}
   </section></main>`;
 }
 
@@ -31,6 +34,7 @@ export function renderScheduled(deletion, safe) {
     <p>Cancelling restores everything.</p>
     <button type="button" id="delete-cancel" class="primary">Cancel deletion</button>
     <button type="button" id="logout" class="secondary">Sign out</button>
+    ${supportLine()}
   </section></main>`;
 }
 

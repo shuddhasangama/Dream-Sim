@@ -144,6 +144,73 @@ class DeletionTests(unittest.TestCase):
             account_deletion.apply_retention(self.conn)
         self.assertEqual(db.fetch_all(self.conn, 'SecurityEvent'), [])
 
+    # ── client answer 7: only the contact hash and the exit type remain, for 2 years ──
+    def retained(self):
+        return db.fetch_all(self.conn, 'DeletedContactRetention')
+
+    def test_purge_keeps_only_a_contact_hash_and_the_exit_type(self):
+        self.request({'password': PASSWORD})
+        self.run_jobs(sessions.now() + 31 * DAY)
+        rows = self.retained()
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual((row['contact_kind'], row['exit_type']), ('phone', 'good_exit'))
+        self.assertRegex(row['contact_index'], r'^[0-9a-f]{64}$')
+        self.assertEqual(set(row), {'id', 'contact_kind', 'contact_index', 'index_key', 'exit_type', 'purged_at', 'delete_after'})
+        self.assertAlmostEqual(row['delete_after'] - row['purged_at'], 730 * DAY, delta=1)   # default 2 years
+        text = json.dumps(row)
+        for secret in ('owner', '9876500011', 'owner@test.example'):
+            self.assertNotIn(secret, text)                                # no member id, no readable contact
+        self.assertEqual([r['exit_type'] for r in account_deletion.find_deleted_contact(self.conn, '+919876500011')], ['good_exit'])
+        self.assertEqual(account_deletion.find_deleted_contact(self.conn, '+919876500099'), [])
+
+    def test_locked_or_reported_member_is_a_bad_exit(self):
+        member_lock.lock(self.conn, 'owner', 'admin-1', 'Reported, ticket 9001')
+        self.assertEqual(account_deletion.exit_type(self.conn, 'owner'), 'bad_exit')
+        self.assertEqual(account_deletion.exit_type(self.conn, 'partner'), 'good_exit')
+        db.insert_row(self.conn, 'ComplianceEvent', {'id': 'c1', 'user_id': 'partner', 'type': 'late_cancel', 'week': 1})
+        self.conn.commit()
+        self.assertEqual(account_deletion.exit_type(self.conn, 'partner'), 'good_exit')   # a late cancel is not a bad exit
+        db.insert_row(self.conn, 'ComplianceEvent', {'id': 'c2', 'user_id': 'partner', 'type': 'report', 'week': 1})
+        self.conn.commit()
+        self.assertEqual(account_deletion.exit_type(self.conn, 'partner'), 'bad_exit')
+        account_deletion.request_deletion(self.conn, 'owner')
+        self.run_jobs(sessions.now() + 31 * DAY)
+        self.assertEqual([r['exit_type'] for r in self.retained()], ['bad_exit'])
+
+    def test_email_is_kept_when_there_is_no_phone(self):
+        self.conn.execute('UPDATE Account SET phone = NULL WHERE user_id = ?', ('owner',)); self.conn.commit()
+        account_deletion.request_deletion(self.conn, 'owner')
+        self.run_jobs(sessions.now() + 31 * DAY)
+        self.assertEqual([r['contact_kind'] for r in self.retained()], ['email'])
+        self.assertTrue(account_deletion.find_deleted_contact(self.conn, 'OWNER@test.example'))
+
+    def test_retention_deletes_the_record_after_the_setting(self):
+        start = sessions.now()
+        with mock.patch.dict(os.environ, {'DHASHU_DELETED_RETENTION_DAYS': '30'}):
+            account_deletion.request_deletion(self.conn, 'owner')
+            self.run_jobs(start + 31 * DAY)
+        self.assertEqual(len(self.retained()), 1)
+        with mock.patch('auth_sessions.now', return_value=start + 31 * DAY + 29 * DAY):
+            account_deletion.apply_retention(self.conn)
+        self.assertEqual(len(self.retained()), 1)                          # not due yet
+        with mock.patch('auth_sessions.now', return_value=start + 31 * DAY + 31 * DAY):
+            account_deletion.apply_retention(self.conn)
+        self.assertEqual(self.retained(), [])
+
+    def test_deleted_retention_setting_defaults_and_bounds(self):
+        for raw, expected in (('365', 365), ('0', 1), ('99999', 3650), ('soon', 730)):
+            with mock.patch.dict(os.environ, {'DHASHU_DELETED_RETENTION_DAYS': raw}):
+                self.assertEqual(account_deletion.deleted_retention_days(), expected, raw)
+        with mock.patch.dict(os.environ, {}):
+            os.environ.pop('DHASHU_DELETED_RETENTION_DAYS', None)
+            self.assertEqual(account_deletion.deleted_retention_days(), 730)
+
+    def test_members_have_no_route_to_retained_contacts(self):
+        import app as app_module
+        rules = [r.rule for r in app_module.app.url_map.iter_rules()]
+        self.assertEqual([r for r in rules if 'deleted-contact' in r or 'retention' in r], [])
+
     def test_grace_setting(self):
         with mock.patch.dict(os.environ, {'DHASHU_DELETE_GRACE_DAYS': '7'}):
             state = account_deletion.request_deletion(self.conn, 'owner')

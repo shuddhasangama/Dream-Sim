@@ -51,6 +51,7 @@ export function render(ctx) {
           <label class="chemistry-partner-any"><input type="checkbox" name="partner_any" value="${safe(a)}" ${partner_any.includes(a)?'checked':''}> Partner preference doesn’t matter</label>
         </details>`).join('')}</div>
         <div class="chemistry-add"><label for="custom-activity">Add your own activity · ${custom_activities.length}/4</label><div><input id="custom-activity" maxlength="60" placeholder="For example, marathon running" ${custom_activities.length>=4?'disabled':''}><button type="button" id="add-activity" ${custom_activities.length>=4?'disabled':''}>Add activity</button></div><p class="hint">Up to four suggestions. Choose your answer after adding. Suggestions are reviewed before joining the public list.</p></div>
+        <p class="hint" id="activity-count" role="status">${safe(countText(Object.keys(activities).length, minimumFor(data)))}</p>
         <button class="primary" type="submit" id="save-chemistry" ${changed?'':'disabled'}>Save chemistry</button>
         ${data._saved ? '<p class="save-note">Saved.</p>' : ''}
         ${data._error ? `<p class="warn">${safe(data._error)}</p>` : ''}
@@ -70,6 +71,18 @@ function activitiesEqual(a, b) {
   return ak.every((k) => a[k] === b[k]);
 }
 
+// Client answer 4: at least 4 activities, from the catalogue or the member's own.
+// The server enforces the same rule (chemistry_choices.validate); this only says so first.
+export const MIN_ACTIVITIES = 4;
+export function minimumFor(data) { return Number.isInteger(data?.min_activities) ? data.min_activities : MIN_ACTIVITIES; }
+export function countText(count, minimum) {
+  return `Sorted ${count} of at least ${minimum} activities (from the list or your own).`;
+}
+export function activityMinimumError(activities, minimum = MIN_ACTIVITIES) {
+  const count = Object.keys(activities || {}).length;
+  return count < minimum ? `Sort at least ${minimum} activities (${count}/${minimum} so far).` : null;
+}
+
 export function bind(root, ctx) {
   const { session, run, patch, data } = ctx;
   if (!root.querySelector('#activities-form')) return;
@@ -85,6 +98,8 @@ export function bind(root, ctx) {
   const save=root.querySelector('#save-chemistry');
   root.querySelector('#activities-form').addEventListener('change',event=>{
     if(save)save.disabled=!isDirty();
+    const counter=root.querySelector('#activity-count');
+    if(counter)counter.textContent=countText(Object.keys(read().activities).length,minimumFor(data));
     if(event.target.name==='partner_any')event.target.closest('.activity-row')?.querySelector('[data-partner-flag]')?.toggleAttribute('hidden',!event.target.checked);
   });
   root.querySelectorAll('.activity-row').forEach(row=>row.addEventListener('toggle',()=>{
@@ -109,6 +124,8 @@ export function bind(root, ctx) {
     e.preventDefault();
     run(async () => {
       const submitted=read(),picked=submitted.activities;
+      const tooFew=activityMinimumError(picked,minimumFor(data));
+      if(tooFew){patch({...data,...submitted,activities:picked,_saved:false,_error:tooFew});return;}
 
       let putResult;
       try {

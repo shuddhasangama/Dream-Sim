@@ -52,7 +52,7 @@ FIELD_TYPES = {
     # lists
     **{name: List for name in (
         'slots', 'acks', 'categories', 'neighbourhoods', 'green_flags', 'red_flags',
-        'custom_activities', 'partner_any', 'add', 'remove', 'open_categories', 'question_keys')},
+        'custom_activities', 'partner_any', 'add', 'remove', 'open_categories', 'question_keys', 'custom_pillars')},
     # 'activities' and 'pillars' are lists on some routes and objects on others: untyped here.
     # objects
     **{name: dict for name in ('fields', 'values', 'inputs', 'declared')},

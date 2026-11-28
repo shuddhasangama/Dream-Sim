@@ -27,7 +27,9 @@ class MatchCheckRouteTests(RouteTestCase):
  def test_preferences_persist_affect_matching_counts_and_generation(self):
   r=self.request('/reach/work-verification',method='POST',body=self.body(categories=['Salaried']))
   self.assertEqual(r.status_code,200,r.json)
-  self.assertEqual(r.json['data']['counts']['fits_user_filters'],0)
+  # Client answer 5: REACH filters are Stats-only. A saved employment choice is kept
+  # but no longer removes anyone from REACH or weekly matching.
+  self.assertEqual(r.json['data']['counts']['fits_user_filters'],1)
   again=self.request('/reach').json['data'];self.assertEqual(again['work_verification_filter']['preferences']['categories'],['Salaried'])
   r=self.request('/reach/work-verification',method='POST',body=self.body(categories=['Freelancer']))
   self.assertEqual(r.json['data']['counts']['fits_user_filters'],1)
@@ -62,9 +64,10 @@ class MatchCheckRouteTests(RouteTestCase):
   self.assertEqual(json.loads(db.fetch_one(self.conn,'User',id='owner')['stats_json'])['share_verification_summary'],'No')
  def test_verified_filter_requires_real_shared_proof_not_legacy_verified(self):
   r=self.request('/reach/work-verification',method='POST',body=self.body(verified_only=True,max_age_days=90))
-  self.assertEqual(r.status_code,200,r.json);self.assertEqual(r.json['data']['counts']['fits_user_filters'],0)
+  # Client answer 5: Stats-only filters; "verified checks only" no longer filters anyone.
+  self.assertEqual(r.status_code,200,r.json);self.assertEqual(r.json['data']['counts']['fits_user_filters'],1)
   self.set_clock(day='Mon',hour=12);self.request('/week/prepare',method='POST',body={})
-  self.assertEqual(db.fetch_all(self.conn,'Match',user_id='owner'),[])
+  self.assertEqual([m['candidate_id'] for m in db.fetch_all(self.conn,'Match',user_id='owner')],['partner'])
  def test_category_validation_and_show_all_preserve_filters(self):
   r=self.request('/profile/stats',method='PATCH',body={'fields':{'employment_category':'Invented'}});self.assertEqual(r.status_code,400)
   self.request('/reach/work-verification',method='POST',body=self.body(categories=['Salaried']))

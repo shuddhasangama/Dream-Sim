@@ -4,11 +4,13 @@ import db
 import vision
 from api_contract import ApiError
 
+# Client answer 1 (2026-11-27): Family = all 4 pillars; Together = all except Kids;
+# Travel together = Emotional intimacy + Travel; Custom = the member defines their own.
 TEMPLATES = [
- {'key':'grow','label':'Family Together','description':'Build a shared life with children in the picture.','choices':{'Intimacy':['Emotional','Physical'],'Kids':['Naturally'],'Cohabitate':['Chores split','Expenses sharing']},'kids_intent':'want'},
- {'key':'two','label':'Two Together','description':'Build a shared life without having children.','choices':{'Intimacy':['Emotional','Physical'],'Cohabitate':['Chores split','Expenses sharing']},'kids_intent':'no'},
- {'key':'explore','label':'Travel Together','description':'Connection and travel; children and cohabitation remain undecided.','choices':{'Intimacy':['Emotional'],'Travel together':[]},'kids_intent':'undecided'},
- {'key':'custom','label':'Custom Together','description':'Choose your own pillars and preferences.','choices':None,'kids_intent':'undecided'},
+ {'key':'grow','label':'Family','description':'Build a shared life with children in the picture.','choices':{'Intimacy':['Emotional','Physical'],'Kids':['Naturally'],'Cohabitate':['Chores split','Expenses sharing'],'Travel together':[]},'kids_intent':'want'},
+ {'key':'two','label':'Together','description':'Build a shared life without having children.','choices':{'Intimacy':['Emotional','Physical'],'Cohabitate':['Chores split','Expenses sharing'],'Travel together':[]},'kids_intent':'no'},
+ {'key':'explore','label':'Travel together','description':'Connection and travel; children and cohabitation remain undecided.','choices':{'Intimacy':['Emotional'],'Travel together':[]},'kids_intent':'undecided'},
+ {'key':'custom','label':'Custom','description':'Choose your own pillars and preferences.','choices':None,'kids_intent':'undecided'},
 ]
 HEALTH = {'mobility':'Mobility disability / wheelchair use','physical':'Other physical disability','sensory':'Sensory disability','non_visible':'Non-visible disability','diabetes':'Diabetes','cancer':'Cancer / cancer history','trauma':'Trauma / mental health history','other':'Other health or accessibility needs'}
 # Keep legacy categories readable; never infer a narrower category for saved users.
@@ -38,7 +40,7 @@ def template_label(stats, goals):
               and intent=='undecided')
     else:
         fits=True
-    return item['label'] if fits else 'Custom Together'
+    return item['label'] if fits else 'Custom'
 
 
 HEALTH_GROUPS = {'sensory': {'hearing','vision'}, 'non_visible': {'neurodivergence','mental_health'},

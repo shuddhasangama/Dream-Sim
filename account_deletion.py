@@ -21,6 +21,12 @@ Purge (worker, provider_jobs, idempotent): every table is scanned for the member
 - SecurityEvent / MemberLockEvent stay, re-pointed to the tombstone, until the
   retention job removes them (DHASHU_SECURITY_RETENTION_DAYS, default 180).
 - One anonymous DeletionRecord keeps the counts. Nothing holds the member id afterwards.
+- Client answer 7 (2026-11-27): one DeletedContactRetention row keeps ONLY a keyed hash
+  (blind index) of the member's phone, or of the email when there is no phone, and
+  the exit type (good_exit / bad_exit), until DHASHU_DELETED_RETENTION_DAYS (default
+  730 = 2 years); the worker's retention pass then deletes it. No member id and no
+  readable contact. Owners can only ask "did this phone/email leave, and how?"
+  (admin dashboard, audited); members never see it.
 """
 import hashlib
 import hmac
@@ -54,6 +60,15 @@ def grace_days():
         return 30
 
 
+def deleted_retention_days():
+    """DHASHU_DELETED_RETENTION_DAYS: days the deleted-contact hash and exit type are
+    kept after the purge (default 730 = 2 years; 1-3650)."""
+    try:
+        return max(1, min(3650, int(os.environ.get('DHASHU_DELETED_RETENTION_DAYS', '730'))))
+    except ValueError:
+        return 730
+
+
 def retention_days():
     try:
         return max(7, int(os.environ.get('DHASHU_SECURITY_RETENTION_DAYS', '180')))
@@ -71,8 +86,9 @@ def scheduled(conn, uid):
 
 
 def hidden_ids(conn):
-    """Members who asked to be deleted: never shown to anyone from the request on."""
-    return {r['user_id'] for r in sessions.sql(conn, 'SELECT user_id FROM "Account" WHERE deletion_due_at IS NOT NULL').fetchall()}
+    """Never shown to, counted for or matched with anyone: members who asked to be
+    deleted (from the request on), and the store reviewer account (client answer 9)."""
+    return {r['user_id'] for r in sessions.sql(conn, 'SELECT user_id FROM "Account" WHERE deletion_due_at IS NOT NULL OR reviewer = 1').fetchall()}
 
 
 # ── request / cancel ──────────────────────────────────────────────────────
@@ -228,6 +244,93 @@ def tombstone_id(uid):
     return 'deleted_' + hmac.new(secret, uid.encode(), hashlib.sha256).hexdigest()[:20]
 
 
+# ── deleted-contact retention (client answer 7) ───────────────────────────
+# Why a keyed hash and not encryption: the only legitimate use of a deleted member's
+# contact is an exact-match question ("has this phone/email left before, and how?").
+# An HMAC answers it when an owner types the contact in, but the stored value can never
+# be turned back into a phone number or email, so two years of ex-members' contacts are
+# readable by nobody, even with database and key access. Encryption would keep them
+# readable, which the purpose does not need (data minimisation).
+BAD_EXIT_COMPLIANCE = ('report', 'violation', 'no_show')
+
+
+def _index_key():
+    """(label, secret): the dedicated blind-index key when configured (sec-enc), else
+    the app SECRET_KEY (always at least 32 characters, sec-login)."""
+    secret = os.environ.get('DHASHU_BLIND_INDEX_KEY', '')
+    if len(secret) >= 32:
+        return 'blind_index', secret
+    import security_config
+    return 'secret_key', security_config.require_secret_key()
+
+
+def contact_hash(kind, canonical, key=None):
+    _label, secret = key or _index_key()
+    return hmac.new(secret.encode('utf-8'), (kind + ':' + canonical).encode('utf-8'), hashlib.sha256).hexdigest()
+
+
+def _canonical(kind, value):
+    import auth
+    import member_crypto
+    value = member_crypto.open_quiet(value) if isinstance(value, str) else None
+    return auth.normalize(kind, value, stored=True) if value else None
+
+
+def lookup_hashes(contact):
+    """Every (kind, hash) a typed phone/email could be stored under."""
+    if not isinstance(contact, str) or not 3 <= len(contact.strip()) <= 254:
+        return []
+    kind = 'email' if '@' in contact else 'phone'
+    canonical = _canonical(kind, contact.strip())
+    if not canonical:
+        return []
+    keys = [_index_key()]
+    if keys[0][0] == 'blind_index':
+        import security_config
+        keys.append(('secret_key', security_config.require_secret_key()))
+    return [(kind, contact_hash(kind, canonical, key)) for key in keys]
+
+
+def exit_type(conn, uid):
+    """bad_exit: an owner locked the account, or the member has a report, violation or
+    no-show on record. good_exit: every other deletion."""
+    account = sessions.sql(conn, 'SELECT locked_at FROM "Account" WHERE user_id = ?', (uid,)).fetchone()
+    if account and account['locked_at'] is not None:
+        return 'bad_exit'
+    marks = ','.join('?' * len(BAD_EXIT_COMPLIANCE))
+    flagged = sessions.sql(conn, f'SELECT 1 FROM "ComplianceEvent" WHERE user_id = ? AND type IN ({marks}) LIMIT 1',
+                           (uid, *BAD_EXIT_COMPLIANCE)).fetchone()
+    return 'bad_exit' if flagged else 'good_exit'
+
+
+def _retain_contact(conn, uid):
+    """Inside the purge transaction, before the Account row is deleted. Returns the exit type kept, or None."""
+    account = sessions.sql(conn, 'SELECT phone, email FROM "Account" WHERE user_id = ?', (uid,)).fetchone()
+    if not account:
+        return None
+    kind, canonical = 'phone', _canonical('phone', account['phone'])
+    if not canonical:
+        kind, canonical = 'email', _canonical('email', account['email'])
+    if not canonical:
+        return None
+    key, now, kept = _index_key(), sessions.now(), exit_type(conn, uid)
+    sessions.sql(conn, 'INSERT INTO "DeletedContactRetention" (id, contact_kind, contact_index, index_key, exit_type, '
+                       'purged_at, delete_after) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                 (uuid.uuid4().hex, kind, contact_hash(kind, canonical, key), key[0], kept, now,
+                  now + deleted_retention_days() * DAY))
+    return kept
+
+
+def find_deleted_contact(conn, contact):
+    """Owner lookup (admin dashboard): retained exit records for this phone/email, newest first."""
+    found = []
+    for kind, digest in lookup_hashes(contact):
+        found += [dict(r) for r in sessions.sql(conn, 'SELECT exit_type, purged_at, delete_after FROM "DeletedContactRetention" '
+                                                      'WHERE contact_kind = ? AND contact_index = ? AND delete_after > ?',
+                                                (kind, digest, sessions.now())).fetchall()]
+    return sorted(found, key=lambda r: -r['purged_at'])
+
+
 def purge(conn, uid):
     """Permanently remove the member. Idempotent. Returns the anonymous counts, or None."""
     schema = Schema(conn)
@@ -240,9 +343,10 @@ def purge(conn, uid):
         if not sessions.sql(conn, 'SELECT id FROM "User" WHERE id = ?', (tomb,)).fetchone():
             sessions.sql(conn, '''INSERT INTO "User" (id, journey_state, bgv_status, stats_json, vision_json, skills_json, preferences_json)
                 VALUES (?, 'exiting', 'declared', '{"deleted": true}', '[]', '{}', '{}')''', (tomb,))
+        _retain_contact(conn, uid)          # before the Account row goes (client answer 7)
         _clear_sides(conn, uid)
         for table in schema.tables:
-            if table == 'User':
+            if table in ('User', 'DeletedContactRetention'):
                 continue
             for row in _rows_mentioning(conn, schema, table, uid):
                 user_cells = [row.get(c) for c in schema.user_cols[table]]
@@ -261,12 +365,15 @@ def purge(conn, uid):
 
 
 def apply_retention(conn):
-    """Remove SecurityEvent / MemberLockEvent rows older than the retention period."""
-    cutoff = sessions.now() - retention_days() * DAY
+    """Worker pass (bgv_worker, every 5 minutes): remove SecurityEvent / MemberLockEvent
+    rows older than their retention, and deleted-contact records past delete_after."""
+    now = sessions.now()
+    cutoff = now - retention_days() * DAY
     with sessions.transaction(conn):
         a = sessions.sql(conn, 'DELETE FROM "SecurityEvent" WHERE created_at < ?', (cutoff,)).rowcount or 0
         b = sessions.sql(conn, 'DELETE FROM "MemberLockEvent" WHERE created_at < ?', (cutoff,)).rowcount or 0
-    return a + b
+        c = sessions.sql(conn, 'DELETE FROM "DeletedContactRetention" WHERE delete_after <= ?', (now,)).rowcount or 0
+    return a + b + c
 
 
 # ── worker job ────────────────────────────────────────────────────────────

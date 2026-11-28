@@ -44,6 +44,25 @@ class AdminDashboardTests(unittest.TestCase):
    self.assertIs(self.client.get('/api/session').get_json()['payment_bypass'],False)
   with patch.dict(os.environ,{'DHASHU_PAYMENT_BYPASS':'invalid'}):
    with self.assertRaises(RuntimeError):create_app()
+ def test_deleted_contact_lookup_is_owner_only_audited_and_never_echoes_the_contact(self):
+  # Client answer 7: retained exit records are answered by typed-in contact only.
+  import account_deletion
+  now=int(time.time())
+  self.conn.execute('INSERT INTO "DeletedContactRetention" (id,contact_kind,contact_index,index_key,exit_type,purged_at,delete_after) VALUES (?,?,?,?,?,?,?)',
+   ('r1','phone',account_deletion.contact_hash('phone','+919000000077'),'secret_key','bad_exit',now,now+730*86400));self.conn.commit()
+  self.assertEqual(self.client.post('/api/deleted-contacts/lookup',json={'contact':'+919000000077'},headers={'Origin':'http://localhost'}).status_code,401)
+  self.login();headers={'Origin':'http://localhost','X-CSRF-Token':self.csrf()}
+  r=self.client.post('/api/deleted-contacts/lookup',json={'contact':'+919000000077'},headers=headers)
+  self.assertEqual(r.status_code,200,r.get_json())
+  self.assertEqual([x['exit_type'] for x in r.get_json()['records']],['bad_exit'])
+  self.assertNotIn('9000000077',r.get_data(as_text=True))
+  self.assertFalse(self.client.post('/api/deleted-contacts/lookup',json={'contact':'+919000000078'},headers=headers).get_json()['found'])
+  self.assertEqual(self.client.post('/api/deleted-contacts/lookup',json={'contact':'not a phone'},headers=headers).status_code,400)
+  self.assertEqual(self.client.post('/api/deleted-contacts/lookup',json={'contact':'+919000000077','extra':1},headers=headers).status_code,400)
+  actions=[r['action'] for r in self.conn.execute('SELECT action FROM "AdminAudit"').fetchall()]
+  self.assertEqual(actions.count('deleted_contact_lookup'),2)
+  self.conn.execute('UPDATE "AdminIdentity" SET role=? WHERE email=?',('support','office@shuddhasangama.org'));self.conn.commit()
+  self.assertEqual(self.client.post('/api/deleted-contacts/lookup',json={'contact':'+919000000077'},headers=headers).status_code,403)
  def test_owner_controls_require_csrf_and_support_cannot_change_readiness(self):
   self.login();headers={'Origin':'http://localhost','X-CSRF-Token':self.csrf()}
   body={'code':'BLR','values':dict(discovery=True,verification=True,payments=True,restaurants=False,support=True,paused=False)}

@@ -5,6 +5,9 @@ import { previewTransport } from './preview.js';
 import { resolveApiConfig } from './apiConfig.js';
 import { sameOriginTransport } from './localTransport.js';
 import { startMonitoring } from './monitoring.js';
+import { supportLine } from './config.js';
+import { installHeightSync } from './heightUnits.js';
+import * as datePrefs from './datePreferences.js';
 import { createNav, primaryTabs, secondaryTabs, labelFor, wireHardwareBack, wireKeyboardScroll, PRIMARY_TAB_KEYS } from './nav.js';
 import * as homeScreen from './screens/home.js';
 import * as boundariesScreen from './screens/boundaries.js';
@@ -64,6 +67,7 @@ const transport = preview ? previewTransport() : localProxy ? sameOriginTranspor
 };
 const session = new Session(transport,vault,undefined,{cookieAuth:localProxy});
 const root = document.querySelector('#app');
+installHeightSync(root);   // client answer 6: cm and feet/inches stay in step while typing
 let challenge=null, phone='', busy=false, message='', journey=null, profile=null;
 let accountSecurity=null;
 // Emulator dev build only: the local-harness user picker (devLogin.js). Stays
@@ -108,6 +112,7 @@ let folds=newFolds();
 // has no room for. A plain UI overlay, not server state.
 let avatarSheetOpen=false;
 let deleteFlow=null;      // feat-delete: Settings -> Delete account (null = closed)
+let prefsFlow=null;       // client answer 3: date preferences prompt (null = closed)
 let resumeCovered=false;   // feat-resume: private screens hidden while backgrounded / until the session is re-checked
 const safe = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Bundled up for Home's Stats ring, which reuses this module's editor
@@ -195,7 +200,7 @@ function render() {
       ${signedIn&&!signupActive&&!passwordSetup ? `<span class="verify-pill ${journey.user.bgv_status==='verified'?'is-verified':'is-pending'}"><span class="verify-dot" aria-hidden="true"></span>${journey.user.bgv_status==='verified'?'Verified':'Not verified'}</span>` : ''}
     </header>
     ${apiConfig.badge?`<aside class="preview" data-api-mode="${safe(apiConfig.kind)}">${safe(apiConfig.badge)}${localProxy&&!signedIn?' · <a href="/pool">sign in at /pool</a>':''}</aside>`:''}
-    ${passwordSetup ? `<main class="container"><section class="card"><h1>Set your password</h1><p>Next time, sign in with your phone number and this password.</p><form id="password-form"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="hint">Use 12 or more characters. A memorable passphrase works well.</p><button class="primary" ${busy?'disabled':''}>Save password and continue</button><button type="button" id="password-new-code" class="text-button">Request a new verification code</button></form></section></main>` : signedIn ? journey.account_deletion ? accountDeletion.renderScheduled(journey.account_deletion, safe) : deleteFlow ? accountDeletion.renderConfirm(deleteFlow, safe) : signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${import.meta.env.MODE==='emulator'&&devLogin?devLogin.pickerHtml(devPicker,safe):''}${signin()}</main>`}
+    ${passwordSetup ? `<main class="container"><section class="card"><h1>Set your password</h1><p>Next time, sign in with your phone number and this password.</p><form id="password-form"><label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="hint">Use 12 or more characters. A memorable passphrase works well.</p><button class="primary" ${busy?'disabled':''}>Save password and continue</button><button type="button" id="password-new-code" class="text-button">Request a new verification code</button></form></section></main>` : signedIn ? journey.account_deletion ? accountDeletion.renderScheduled(journey.account_deletion, safe) : deleteFlow ? accountDeletion.renderConfirm(deleteFlow, safe) : prefsFlow ? datePrefs.render(prefsFlow, safe) : signupActive ? `<main class="container">${signup.render()}</main>` : renderChrome(current, tabs) : `<main class="container">${import.meta.env.MODE==='emulator'&&devLogin?devLogin.pickerHtml(devPicker,safe):''}${signin()}</main>`}
     <p id="notice" role="status" class="notice">${safe(message)}</p>
     ${busy?'<div class="loading" role="status">Please wait…</div>':''}
     ${signedIn && !signupActive ? '' : '<footer>Connection. Clarity. Together.</footer>'}`;
@@ -288,6 +293,7 @@ function renderAvatarSheet() {
       <button type="button" id="set-member-password" class="secondary">Set / reset login password</button>
       <button type="button" id="logout" class="secondary" ${busy?'disabled':''}>Sign out</button>
       <button type="button" id="delete-account" class="text-button">Delete account</button>
+      ${supportLine()}
     </div>`;
 }
 
@@ -323,6 +329,11 @@ function bindChrome(current) {
   // feat-delete
   root.querySelector('#delete-account')?.addEventListener('click',()=>run(async()=>{avatarSheetOpen=false;deleteFlow={...await session.get('/api/v1/account/deletion')};}));
   root.querySelector('#delete-back')?.addEventListener('click',()=>{deleteFlow=null;render();});
+  root.querySelector('#date-prefs-close')?.addEventListener('click',()=>{prefsFlow=null;render();});
+  root.querySelector('#date-prefs-form')?.addEventListener('submit',e=>{e.preventDefault();const body=datePrefs.bodyFrom(e.target,prefsFlow);
+    run(async()=>{let saved;try{saved=await session.put('/api/v1/profile/date-preferences',body);}catch(err){prefsFlow={...prefsFlow,_error:err.message};return;}
+      if(saved.missing?.length){prefsFlow={...prefsFlow,...saved,_error:'Still needed: '+datePrefs.stillNeeded(saved).join(', ')+'.'};return;}
+      prefsFlow=null;message='Date preferences saved. Try again now.';try{await reloadCurrent();}catch{}});});
   root.querySelector('#delete-use-code')?.addEventListener('click',()=>run(async()=>{
     try{deleteFlow={...deleteFlow,...await session.post('/api/v1/account/deletion/code',{}),_error:null};}catch(e){deleteFlow={...deleteFlow,_error:e.message};}
   }));
@@ -474,6 +485,10 @@ async function run(action) {
   catch(e) {
     const c = classify(e);
     message = c.message;
+    if (datePrefs.isPrompt(e)) {          // client answer 3: ask for them right here, then retry
+      try { prefsFlow = {...await session.get('/api/v1/profile/date-preferences'), _prompt: e.message}; message = ''; }
+      catch { /* keep the server's message on screen */ }
+    }
     if (c.kind === 'auth') { journey=null;profile=null;signupActive=false;nav.resetTo('dashboard'); }
     else if (c.kind === 'conflict') { try { await reloadCurrent(); } catch {} }
   }

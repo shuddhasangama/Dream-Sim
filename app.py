@@ -554,6 +554,7 @@ def inject_globals():
     return {
         "session_user": user,
         "brand_name": brand.NAME,
+        "support_email": brand.SUPPORT_EMAIL,
         "bottom_tabs": _bottom_tabs(reached, request.endpoint) if user else [],
         "session_user_name": own_display_name(user["user_id"], user["gender"]) if user else None,
         "week_number": get_week_number(),
@@ -639,6 +640,23 @@ def _link_to(endpoint: str) -> dict | None:
 def deterministic_couple_id(user_a_id: str, user_b_id: str) -> str:
     a, b = sorted([user_a_id, user_b_id])
     return f"couple_{a}_{b}"
+
+
+@app.template_filter("height")
+def height_filter(cm):
+    """Client answer 6: '170 cm (5′ 7″)'; empty when no height is set."""
+    import height_units
+    return height_units.label(cm)
+
+
+@app.template_filter("ft_in")
+def ft_in_filter(cm):
+    """(feet, inches) for prefilling the feet/inches inputs, or ('', '')."""
+    import height_units
+    try:
+        return height_units.cm_to_ft_in(int(cm))
+    except (TypeError, ValueError):
+        return ('', '')
 
 
 @app.template_filter("fmtval")
@@ -1027,9 +1045,8 @@ def reach_pool(user: dict) -> tuple[list[dict], bool]:
     if __import__("discovery").enabled():
         import discovery
         everyone=[u for u in everyone if discovery.market(get_db(),u["city"])["discovery"] and not discovery.excluded(get_db(),user["user_id"],u["user_id"])]
-    if user["bgv_status"] == "verified":
-        return [u for u in everyone if u["bgv_status"] == "verified"], False
-    return everyone, True
+    import reach_access   # client answer 5: one visibility rule (verified see only verified)
+    return [u for u in everyone if reach_access.visible(user, u)], user["bgv_status"] != "verified"
 
 
 def _ignored_summary(user: dict, filters: list[dict]) -> dict:
@@ -1414,7 +1431,7 @@ def _prerequisites_for_user(user_id: str) -> dict:
     # "stats" into top-level user fields (matching.py's own established
     # shape) — vision.MANDATORY_STATS_FIELDS' "city" entry means put it
     # back for this one check, not that it's missing from the user.
-    stats = {**user["stats"], "city": user["city"]}
+    stats = {**user["stats"], "city": user["city"], "gender": user.get("gender")}
     vision_entries = db.fetch_all(get_db(), "VisionEntry", user_id=user_id)
     chemistry_entries = db.fetch_all(get_db(), "ChemistryEntry", user_id=user_id)
     return vision.prerequisites_met(vision_entries, stats, chemistry_entries)
@@ -1555,6 +1572,9 @@ def week_act():
         if exc.code == 'contact_verification_required':
             _remember_form("Confirm your email or phone before you say yes to someone.", endpoint='week')
             return redirect(url_for('verify_contact'))
+        if exc.code == 'date_preferences_required':        # client answer 3: prompt, then come back
+            session['date_prefs_prompt'] = {'message': exc.message, 'back': url_for('week')}
+            return redirect(url_for('date_preferences_view'))
         if exc.status == 400:
             abort(400)
         # Preserve existing web stale-action behaviour; APIs return precise errors.
@@ -1634,8 +1654,39 @@ def calendar_submit():
     try:
         planning_service.availability(get_db(), user['user_id'], active['id'], chosen)
     except ApiError as exc:
+        if exc.code == 'date_preferences_required':    # client answer 3: prompt, then come back
+            session['date_prefs_prompt'] = {'message': exc.message, 'back': url_for('calendar_view')}
+            return redirect(url_for('date_preferences_view'))
         abort(exc.status, description=exc.message)
     return redirect(url_for('calendar_view'))
+
+
+@app.route("/date-preferences", methods=["GET", "POST"])
+@login_required
+def date_preferences_view():
+    """Client answer 3: neighbourhood, diet, cuisine and budget. Optional at signup,
+    asked for here when a match is accepted or a date is planned."""
+    import date_preferences
+    user = current_user()
+    prompt = session.get('date_prefs_prompt') or {}
+    error = None
+    if request.method == 'POST':
+        body = {'neighbourhoods': request.form.getlist('neighbourhoods'), 'cuisine': request.form.getlist('cuisine'),
+                'budget': request.form.getlist('budget')}
+        if request.form.get('diet'):
+            body['diet'] = request.form.get('diet')
+        try:
+            state = date_preferences.save(get_db(), user['user_id'], body)
+        except ApiError as exc:
+            error = exc.message
+        else:
+            if not state['missing']:
+                session.pop('date_prefs_prompt', None)
+                session['date_prefs_saved'] = True
+                return redirect(auth.safe_next(prompt.get('back') or url_for('dashboard')))
+            error = 'Still needed: ' + ', '.join(state['labels'][g] for g in state['missing']) + '.'
+    return render_template('date_preferences.html', state=date_preferences.view(get_db(), user['user_id']),
+                           prompt=prompt.get('message'), error=error)
 
 @app.route("/calendar/confirm", methods=["POST"])
 @login_required
@@ -2373,6 +2424,14 @@ def stats_save():
     user=current_user()
     submitted={k:request.form.getlist(k) if k in onboarding.MULTI_VALUE_STATS else request.form.get(k)
                for k in stats_edit.ALL_FIELDS if k in request.form}
+    if 'height_cm' in request.form or 'height_ft' in request.form:   # client answer 6: cm or feet/inches
+        import height_units
+        low, high = onboarding.STAT_RANGES['height_cm']
+        cm, problem = height_units.from_form(request.form, low, high)
+        if problem:
+            _remember_form(problem, endpoint='stats_view')
+            return redirect(url_for('stats_view'))
+        submitted['height_cm'] = '' if cm is None else str(cm)
     result=evolution_service.save_stats(get_db(),user['user_id'],submitted,lambda:_stats_situation(user),get_clock())
     if result['errors'] or result['refused']:
         _remember_form(' '.join(result['errors'])+(' Held right now, so not changed: '+', '.join(result['refused']) if result['refused'] else ''),endpoint='stats_view')
@@ -2430,6 +2489,34 @@ def stats_reverify():
     return redirect(url_for("stats_view"))
 
 
+@app.route("/vision/own-pillars", methods=["POST"])
+@login_required
+def vision_own_pillars():
+    """Client answer 1: on the Custom plan, a member names up to four pillars of their own."""
+    import vision_plans
+    user = current_user()
+    with evolution_service.transaction(get_db(), user["user_id"]):
+        row = db.fetch_one(get_db(), "User", id=user["user_id"])
+        stats = db.load_json_field(row["stats_json"], {})
+        state = _stats_situation(user)
+        if stats.get("vision_template") != "custom":
+            _remember_form("Choose the Custom plan to add pillars of your own.", endpoint="vision_view")
+        elif state.get("keenness") or state.get("live_match") or state.get("in_relationship"):
+            _remember_form("Your current match or relationship holds this Vision.", endpoint="vision_view")
+        else:
+            own = [p for p in stats.get("vision_custom_pillars", []) if p not in request.form.getlist("remove")]
+            if (request.form.get("add") or "").strip():
+                own.append(request.form.get("add"))
+            try:
+                stats["vision_custom_pillars"] = vision_plans.validate_custom_pillars(own)
+            except ApiError as exc:
+                _remember_form(exc.message, endpoint="vision_view")
+            else:
+                row["stats_json"] = json.dumps(stats, ensure_ascii=False)
+                db.insert_row(get_db(), "User", row)
+    return redirect(url_for("vision_view"))
+
+
 @app.route("/vision")
 @login_required
 def vision_view():
@@ -2460,6 +2547,8 @@ def vision_view():
 
     return render_template(
         "vision.html",
+        own_pillars=(user.get("stats") or {}).get("vision_custom_pillars", []),
+        own_pillars_open=(user.get("stats") or {}).get("vision_template") == "custom",
         goals=goals,
         # The additive-detail half only means something once a couple is
         # working through ROAD together; before that it is six empty
@@ -2552,6 +2641,9 @@ def chemistry_view():
     return render_template(
         "chemistry.html",
         activities=onboarding.ACTIVITIES,
+        custom_activities=skills.get("custom_activities", []),
+        min_activities=onboarding.MIN_SORTED,
+        sorted_count=len(chosen),
         buckets=onboarding.BUCKETS,
         chosen=chosen,
         bucket_labels={b[0]: b[2] for b in onboarding.BUCKETS},
@@ -2564,8 +2656,19 @@ def chemistry_view():
 @app.route("/chemistry/activities", methods=["POST"])
 @login_required
 def chemistry_set_activities():
-    submitted={a:request.form.get('act__'+a) for a in onboarding.ACTIVITIES if request.form.get('act__'+a)}
-    try: evolution_service.save_activities(get_db(),current_user()['user_id'],submitted)
+    """Client answer 4: at least 4 activities, from the catalogue or the member's own.
+    Existing custom activities are kept (they used to be dropped by this form) and one
+    new custom activity can be added; the same validator as the app enforces the rules."""
+    uid=current_user()['user_id']
+    skills=db.load_json_field(db.fetch_one(get_db(),'User',id=uid).get('skills_json'),{}) or {}
+    custom=[x for x in skills.get('custom_activities',[]) if request.form.get('act__'+x)]
+    submitted={a:request.form.get('act__'+a) for a in [*onboarding.ACTIVITIES,*custom] if request.form.get('act__'+a)}
+    new_name=(request.form.get('new_activity') or '').strip()
+    if new_name:
+        custom.append(new_name)
+        submitted[new_name]=request.form.get('new_activity_bucket') or ''
+    keep_any=[x for x in skills.get('partner_any',[]) if x in submitted]
+    try: evolution_service.save_activities(get_db(),uid,submitted,custom,keep_any)
     except ApiError as exc: _remember_form(exc.message,endpoint='chemistry_view')
     return redirect(url_for('chemistry_view'))
 
@@ -4761,7 +4864,9 @@ def delete_account_info():
     """Public: how to delete an account (needed for the Apple and Google store listings)."""
     import account_deletion
     return render_template("delete_account_info.html", grace_days=account_deletion.grace_days(),
-                           retention_days=account_deletion.retention_days())
+                           retention_days=account_deletion.retention_days(),
+                           deleted_retention_days=account_deletion.deleted_retention_days(),
+                           support_email=brand.SUPPORT_EMAIL)
 
 
 def _due_date(epoch):

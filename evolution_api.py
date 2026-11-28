@@ -85,6 +85,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
             template_key=g.api_user['stats'].get('vision_template','custom'),
             template_label=profile_choices.template_label(g.api_user['stats'],g.api_user['visions']),
             kids_intent=g.api_user['stats'].get('kids_intent','undecided'),
+            custom_pillars=g.api_user['stats'].get('vision_custom_pillars',[]),max_custom_pillars=vision_plans.MAX_CUSTOM_PILLARS,
             pillar_options={k:list(v) for k,v in vision_plans.DETAIL_OPTIONS.items()},
             detail_explanation='Emotional intimacy is required. Physical intimacy is optional. Other pillars have no detailed choices in this release.',
             rc_open=vision.rc_open(get_clock()),
@@ -123,6 +124,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
         # radio ever came back checked.
         skills=db.load_json_field(db.fetch_one(get_db(),'User',id=uid())['skills_json'],{})
         return jsonify(activities=skills.get('activities',{}), custom_activities=skills.get('custom_activities',[]), partner_any=skills.get('partner_any',[]), max_custom_activities=4,
+            min_activities=onboarding.MIN_SORTED,
             activity_options=__import__('activity_catalog').ordered(get_db()),activity_aliases=__import__('activity_catalog').aliases(get_db()),buckets=onboarding.BUCKETS,
             answers=answers,entry_keys=(*chemistry.MANDATORY_KEYS,*chemistry.INTIMACY_MANDATORY_KEYS),
             options={'physical_boundary':chemistry.PHYSICAL_BOUNDARY_OPTIONS,'intimacy_pace':chemistry.INTIMACY_PACE_OPTIONS,'health_openness':chemistry.HEALTH_OPENNESS_OPTIONS},
@@ -201,7 +203,7 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
 
     @api.put('/profile/vision/template')
     def vision_template_write():
-        body=json_object(required={'template'},optional={'pillars','kids_intent','travel','schema_version'})
+        body=json_object(required={'template'},optional={'pillars','kids_intent','travel','schema_version','custom_pillars'})
         import vision_plans
         version=body.get('schema_version',1)
         if type(version) is not int or version not in (1,2):raise ApiError('validation_error','Unsupported Vision version.')
@@ -214,9 +216,13 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
                 raise ApiError('profile_locked','Your current match or relationship holds this Vision. Use the disclosed-change flow or return after the match window.',409)
             row=db.fetch_one(get_db(),'User',id=uid())
             pillars=body.get('pillars') if modern else item['choices'] if item['choices'] is not None else body.get('pillars')
+            custom=vision_plans.validate_custom_pillars(body.get('custom_pillars'))   # client answer 1
+            if custom and not (modern and body['template']=='custom'):
+                raise ApiError('validation_error','Pillars of your own belong to the Custom plan.')
             if modern:
                 vision_plans.validate(pillars)
-                if vision_plans.plan_for(pillars)!=body['template']:raise ApiError('validation_error','Your Together plan must match your selected pillars.')
+                expected='custom' if custom else vision_plans.plan_for(pillars)
+                if expected!=body['template']:raise ApiError('validation_error','Your Together plan must match your selected pillars.')
             if type(pillars) is not dict or any(type(v) is not list or any(type(x) is not str for x in v) for v in pillars.values()):
                 raise ApiError('validation_error','Provide your selected pillars and their choices.')
             if 'travel' in body and type(body['travel']) is not bool:
@@ -230,6 +236,8 @@ def register(api,get_db,get_clock,stats_situation,milestones,reach_locked=None):
                 raise ApiError('validation_error','Children intention must agree with your Kids pillar.')
             stats=db.load_json_field(row['stats_json'],{})
             stats.update(vision_template=item['key'],kids_intent=intent,vision_schema_version=version)
+            if custom: stats['vision_custom_pillars']=custom
+            else: stats.pop('vision_custom_pillars',None)
             row.update(stats_json=json.dumps(stats),vision_json=json.dumps(vision._as_vision_json(pillars)))
             db.insert_row(get_db(),'User',row)
         # g.api_user is a request snapshot; return fresh data after the mutation.

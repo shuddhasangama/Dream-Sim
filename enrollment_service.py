@@ -59,7 +59,7 @@ def options():
         'required_stats': forms.REQUIRED_STAT_KEYS, 'activities': forms.ACTIVITIES,
         'activity_buckets': sorted(forms.BUCKET_IDS), 'genders': forms.GENDERS_FOR_SIGNUP,
         'cities': forms.CITIES_FOR_SIGNUP,
-        'salary_required': True, 'city_required': True}
+        'salary_required': False, 'city_required': True}
 
 
 def vision_options():

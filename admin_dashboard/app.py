@@ -226,6 +226,23 @@ def create_app():
         return jsonify(rows=[{'user_id': r['user_id'], 'requested_at': r['deletion_requested_at'], 'due_at': r['deletion_due_at']} for r in rows],
                        generated_at=int(time.time()))
 
+    @app.post('/api/deleted-contacts/lookup')
+    def deleted_contact_lookup():
+        # Client answer 7: owner only, audited. The contact is typed in and hashed; it is
+        # never stored, logged or echoed back. Answers only "left before, and how".
+        if g.admin['role'] != 'owner':
+            return jsonify(error='Owner access required.'), 403
+        body = request.get_json(silent=True)
+        if type(body) is not dict or set(body) != {'contact'} or not isinstance(body['contact'], str):
+            return jsonify(error='Provide one phone number or email.'), 400
+        import account_deletion
+        if not account_deletion.lookup_hashes(body['contact']):
+            return jsonify(error='Enter a full phone number (+91...) or email address.'), 400
+        rows = account_deletion.find_deleted_contact(get_db(), body['contact'])
+        with auth_sessions.transaction(get_db()):
+            security.audit(get_db(), g.admin['admin_id'], 'deleted_contact_lookup', 'deletions')
+        return jsonify(found=bool(rows), records=rows, generated_at=int(time.time()))
+
     @app.post('/api/members/lock')
     def member_lock_route():
         return member_lock_change('lock')
