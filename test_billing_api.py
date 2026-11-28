@@ -12,7 +12,7 @@ class BillingApiTests(RouteTestCase):
     def setUp(self):
         super().setUp()
         p=mock.patch.dict(app_module.app.config,{'AUTH_ENABLED':True,'AUTH_PUBLIC_ORIGIN':'http://localhost'});p.start();self.addCleanup(p.stop)
-        p=mock.patch.dict(os.environ,{'DHASHU_BILLING_MODE':'sandbox','DHASHU_BILLING_TESTERS':'owner,partner'});p.start();self.addCleanup(p.stop)
+        p=mock.patch.dict(os.environ,{'DHASHU_BILLING_MODE':'sandbox','DHASHU_BILLING_TESTERS':'owner,partner','DHASHU_PAYMENT_BYPASS':'0'});p.start();self.addCleanup(p.stop)
         p=mock.patch.object(billing_service,'Razorpay',FakeGateway);p.start();self.addCleanup(p.stop)
         self.tokens={}
         for uid in ('owner','partner'):
@@ -51,7 +51,7 @@ class BillingApiTests(RouteTestCase):
     def test_client_cannot_override_price_and_mock_confirmation_blocked(self):
         response=self.post('quotes',{'product':'verification','amount':1})
         self.assertEqual(response.status_code,400)
-        self.assertEqual(self.client.post('/pay/availability/confirm',headers={'Origin':app_module.app.config['AUTH_PUBLIC_ORIGIN']}).status_code,403)
+        self.assertEqual(self.client.post('/pay/availability/confirm',headers={'Origin':app_module.app.config['AUTH_PUBLIC_ORIGIN']}).status_code,404)
 
     def test_bundle_unlocks_both_date_gates(self):
         import planning_service
@@ -65,6 +65,16 @@ class BillingApiTests(RouteTestCase):
         self.make_plan('lock-1',plan_id='plan-test',status='pending_signatures')
         self.assertTrue(planning_service.paid(self.conn,'owner','agreement','plan-test'))
         self.assertFalse(planning_service.paid(self.conn,'partner','availability','lock-1'))
+
+    def test_verified_relationship_purchase_unlocks_only_the_buyer_checkpoint(self):
+        self.make_lockin('owner','partner')
+        row=self.post('quotes',{'product':'relationship_entry','reference':'lock-1'}).json['data']
+        self.post('purchases/'+row['id']+'/checkout',{})
+        with billing_service.transaction(self.conn):
+            billing_service.apply_payment(self.conn,billing_service.get(self.conn,row['id']),
+                {'id':'pay_relationship','status':'captured','amount':100,'currency':'INR'})
+        self.assertTrue(billing_service.fee_satisfied(self.conn,'owner','stage_gate','lock-1'))
+        self.assertFalse(billing_service.fee_satisfied(self.conn,'partner','stage_gate','lock-1'))
 
     def test_page_renders_and_webhook_requires_signature(self):
         self.assertEqual(self.client.get('/billing').status_code,200)

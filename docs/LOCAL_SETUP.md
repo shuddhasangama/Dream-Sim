@@ -73,7 +73,7 @@ Run only one Vite server on 5173 at a time. Run `cd mobile; npm install` once be
 
 ### How to log in
 
-- **Backend (web):** open `/pool` and click any synthetic user. There's no SMS, because `AUTH_ENABLED` stays unset locally.
+- **Backend (web):** open `/pool` and click any synthetic user. There's no SMS, because `dev-local.ps1` sets `AUTH_ENABLED=0` (sec-login: real sign-in is on whenever `AUTH_ENABLED` is unset, and `0` is accepted only with `DHASHU_LOCAL_HARNESS=1`).
 - **Mobile preview (`npm run dev`):** in-browser mock data. Use any phone number and code `123456`.
 - **Mobile + local backend (`npm run dev:local`):** open http://127.0.0.1:5173/pool and pick a user; you land in the app.
 - **Admin dashboard:** create an administrator once (step 7). Then sign in with email + password + the 6-digit code from your authenticator.
@@ -131,7 +131,7 @@ If you lose the password or authenticator: `.\dev-local.ps1 admin-reset -Email y
 
 Notes:
 - **Local only.** Plain http works only in **debug** builds and only to `10.0.2.2`, `localhost` and `127.0.0.1`. Release builds are https-only, and their bundle contains no picker code.
-- **When the picker returns 404.** The local harness (`local_harness.py`) works only when `DHASHU_LOCAL_HARNESS=1` is set, `AUTH_ENABLED` is unset, no production setting is present, and the request comes from this machine. Otherwise every `/api/v1/dev/*` call is 404, and the backend refuses to start if the flag is combined with a production setting. It lists and signs in only seeded users (`u_*`, `test_*`).
+- **When the picker returns 404.** The local harness (`local_harness.py`) works only when `DHASHU_LOCAL_HARNESS=1` is set, `AUTH_ENABLED=0`, no production setting is present, and the request comes from this machine. Otherwise every `/api/v1/dev/*` call is 404, and the backend refuses to start if the flag is combined with a production setting. It lists and signs in only seeded users (`u_*`, `test_*`).
 - **Line endings.** `npx cap sync` may rewrite line endings in `mobile/android/app/capacitor.build.gradle` and `mobile/android/capacitor.settings.gradle`. If `git diff` shows no content change, run `git restore` on both.
 - **Black screenshots.** If `adb screencap` returns black (host-GPU emulator), use `adb emu screenrecord screenshot <folder>`.
 - **Password screens.** The Settings → password screens return 503 against the local backend, because local sign-in is off. This is expected.

@@ -24,6 +24,6 @@ class FreshSignupPostgresTests(unittest.TestCase):
     def setUp(self):
         PgBase.setUp(self)
         temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup)
-        for p in [patch.object(db,'get_connection',lambda *a,**kw:self.connect()),patch.object(app_module,'SIM_STATE_PATH',Path(temp.name)/'clock.json'),patch.dict(app_module.app.config,{'AUTH_ENABLED':True}),patch.dict(os.environ,{'SIGNZY_ENV':'preproduction','DHASHU_BILLING_MODE':'disabled','SIGNZY_RECEIPT_ENCRYPTION_KEY':Fernet.generate_key().decode(),'DHASHU_SIMULATED_CLOCK':'true','PAYMENTS_ENABLED':'0'}),patch.object(auth_delivery,'configured',return_value=True),patch.object(auth_delivery,'start',side_effect=lambda *args:'VE'+uuid.uuid4().hex),patch.object(auth_delivery,'check',return_value=True)]:
+        for p in [patch.object(db,'get_connection',lambda *a,**kw:self.connect()),patch.object(app_module,'SIM_STATE_PATH',Path(temp.name)/'clock.json'),patch.dict(app_module.app.config,{'AUTH_ENABLED':True}),patch.dict(os.environ,{'SIGNZY_ENV':'preproduction','DHASHU_BILLING_MODE':'disabled','SIGNZY_RECEIPT_ENCRYPTION_KEY':Fernet.generate_key().decode(),'DHASHU_SIMULATED_CLOCK':'true','DHASHU_PAYMENT_BYPASS':'1'}),patch.object(auth_delivery,'configured',return_value=True),patch.object(auth_delivery,'start',side_effect=lambda *args:'VE'+uuid.uuid4().hex),patch.object(auth_delivery,'check',return_value=True)]:
             p.start();self.addCleanup(p.stop)
         self.client=app_module.app.test_client()

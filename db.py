@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 SQLITE_SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 POSTGRES_SCHEMA_PATH = Path(__file__).with_name("schema_postgres.sql")
@@ -182,13 +183,13 @@ def _commit(conn: Any) -> None:
 def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> Any:
     """Open the configured database connection.
 
-    SQLite remains the default for local development and the existing test
-    suite. PostgreSQL is selected when DATABASE_URL is set to a PostgreSQL
-    connection URL.
+    PostgreSQL is required for the default application database. SQLite is
+    available only for an explicitly local path or the guarded local harness.
     """
     database_url = os.environ.get("DATABASE_URL")
 
-    if database_url and database_url.startswith(("postgres://", "postgresql://")):
+    scheme = urlsplit(database_url).scheme.lower() if database_url else ""
+    if database_url and scheme in ("postgres", "postgresql"):
         try:
             import psycopg
             from psycopg.rows import dict_row
@@ -201,6 +202,12 @@ def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> Any:
         conn = psycopg.connect(database_url, row_factory=dict_row, connect_timeout=5)
         apply_timeouts(conn)
         return conn
+
+    import local_harness
+    if database_url and not local_harness.active():
+        raise RuntimeError("DATABASE_URL must use PostgreSQL; SQLite is local-only.")
+    if not database_url and db_path == DEFAULT_DB_PATH and not local_harness.active():
+        raise RuntimeError("DATABASE_URL is required for the application database; SQLite is local-only.")
 
     if db_path != ":memory:":
         db_path = Path(db_path)

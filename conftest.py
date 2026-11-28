@@ -19,8 +19,23 @@ An in-memory connection locks nothing and is left alone.
 from __future__ import annotations
 
 import sqlite3
+import os
 
 import pytest
+
+# The application is imported with secure auth on and no emulator routes
+# registered. Legacy route integration tests opt into the local harness in
+# their own fixture; startup tests clear these values in child processes.
+os.environ.setdefault("SECRET_KEY", "local-test-only-secret-key-at-least-32-characters")
+os.environ["AUTH_ENABLED"] = "1"
+os.environ["AUTH_PUBLIC_ORIGIN"] = "https://localhost"
+# MSG91 is the primary OTP provider (auth_delivery.configured); synthetic,
+# non-credential placeholders so secure startup passes. Nothing is ever sent:
+# tests that exercise delivery patch auth_delivery.
+os.environ["MSG91_AUTH_KEY"] = "test-only-not-a-credential"
+os.environ["MSG91_TEMPLATE_ID"] = "0" * 24
+os.environ.pop("DHASHU_SMS_PROVIDER", None)
+os.environ.pop("DHASHU_LOCAL_HARNESS", None)
 
 _TRACKED: list[tuple[str, sqlite3.Connection]] = []
 _REAL_CONNECT = sqlite3.connect

@@ -91,10 +91,10 @@ class ClockTests(unittest.TestCase):
 
 
 class SwitchTests(unittest.TestCase):
-    def test_demo_mode_is_on_by_default(self):
-        """A walkthrough that needs a hidden flag set is one nobody runs."""
+    def test_demo_mode_is_off_by_default(self):
+        """Demo controls require an explicit opt-in."""
         with mock.patch.dict(os.environ, {}, clear=True):
-            self.assertTrue(demo.is_enabled())
+            self.assertFalse(demo.is_enabled())
 
     def test_it_can_be_turned_off(self):
         for value in ("0", "false", "no", "off"):

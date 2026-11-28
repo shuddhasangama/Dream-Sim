@@ -66,7 +66,7 @@ def register(api,get_db):
     @api.post('/billing/purchases/<pid>/refresh')
     def billing_refresh(pid):
         guard(get_db); json_object()
-        return jsonify(service.reconcile(get_db(),g.api_user['user_id'],pid))
+        return jsonify(service.request_reconcile(get_db(),g.api_user['user_id'],pid))
 
     @api.post('/billing/purchases/<pid>/cancel-subscription')
     def billing_cancel_subscription(pid):
@@ -86,13 +86,29 @@ def register_web(app,get_db,current_user):
     @app.post('/billing/webhooks/razorpay')
     def billing_webhook():
         if request.content_length and request.content_length > 262144:
+            webhook_failure('payload_too_large', 413)
             return jsonify(error='Notification too large'),413
         try:
             raw=request.get_data()
             import billing_razorpay
             billing_razorpay.verify_webhook(raw,request.headers.get('X-Razorpay-Signature',''))   # unsigned -> 401, nothing parsed
             reject_stale(raw)                                                                   # replayed old events -> 400
-            service.webhook(get_db(),raw,request.headers.get('X-Razorpay-Signature',''))        # exact duplicates are a no-op there
+            service.webhook(get_db(),raw,request.headers.get('X-Razorpay-Signature',''),       # an already-applied event
+                            request.headers.get('X-Razorpay-Event-Id'))                         # is a silent 200: no alert
             return jsonify(received=True)
         except ApiError as exc:
+            webhook_failure(exc.code, exc.status)
             return jsonify(code=exc.code,error=exc.message),exc.status
+        except Exception as exc:
+            webhook_failure('internal_error', 500, type(exc).__name__)
+            raise
+
+
+def webhook_failure(reason, status, error=None):
+    """mon-alerts integration point (sec-pay): every refused or failed Razorpay delivery.
+    Codes and status only, never the payload, signature or any member data."""
+    import alerts
+    fields = {'reason': reason, 'status': status}
+    if error:
+        fields['error'] = error
+    alerts.emit('payment_webhook_failure', **fields)

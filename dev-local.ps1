@@ -48,7 +48,13 @@ foreach ($line in Get-Content $EnvFile -Encoding UTF8) {
 }
 if ($Placeholders.Count) { throw ('Replace CHANGE_ME in .env.local for: ' + ($Placeholders -join ', ')) }
 # Hard guards: never production providers, never PG14 on 5432.
-Remove-Item Env:AUTH_ENABLED -ErrorAction SilentlyContinue
+# sec-login: real sign-in is ON unless AUTH_ENABLED is explicitly off, and off is accepted only
+# together with DHASHU_LOCAL_HARNESS=1 (local_harness.py). Local runs never use real OTP sign-in.
+$env:AUTH_ENABLED = '0'
+if ($env:DHASHU_LOCAL_HARNESS -ne '1') { throw 'Set DHASHU_LOCAL_HARNESS=1 in .env.local (local sign-in needs the local harness).' }
+if ($env:PAYMENTS_ENABLED -and -not $env:DHASHU_PAYMENT_BYPASS) {
+  Write-Warning 'PAYMENTS_ENABLED is retired (sec-pay). Add DHASHU_PAYMENT_BYPASS=1 to .env.local to keep paid steps unlocked locally.'
+}
 if ($env:DATABASE_URL -notmatch '@(localhost|127\.0\.0\.1):5433/dhashu_local$') { throw 'DATABASE_URL must be localhost:5433/dhashu_local' }
 if ($env:SIGNZY_ENV -ne 'preproduction' -or $env:SIGNZY_PRODUCTION_ENABLED -ne '0') { throw 'Signzy must stay preproduction/disabled' }
 
@@ -75,7 +81,7 @@ switch ($Part) {
     $env:TEST_AVATAR_POSTGRES_URL = $env:TEST_DATABASE_URL
     # Tests must never see the app database, nor the dev switches above.
     foreach ($n in 'DATABASE_URL', 'TEST_DATABASE_URL', 'ADMIN_REPORT_DATABASE_URL', 'ADMIN_REPORT_DB_PASSWORD', 'SECRET_KEY', 'ADMIN_TOTP_ENCRYPTION_KEY', 'ADMIN_PUBLIC_ORIGIN', 'ADMIN_ALLOW_HTTP',
-      'DEMO_MODE', 'DHASHU_SIMULATED_CLOCK', 'DHASHU_RESTAURANT_MODE', 'DHASHU_IDENTITY_VERIFICATION_MODE', 'PAYMENTS_ENABLED',
+      'DEMO_MODE', 'DHASHU_SIMULATED_CLOCK', 'DHASHU_RESTAURANT_MODE', 'DHASHU_IDENTITY_VERIFICATION_MODE', 'PAYMENTS_ENABLED', 'DHASHU_PAYMENT_BYPASS', 'AUTH_ENABLED',
       'DHASHU_BILLING_MODE', 'VERIFICATION_DELIVERY', 'SIGNZY_ENV', 'SIGNZY_PRODUCTION_ENABLED', 'DHASHU_GURU_AI_ENABLED', 'DHASHU_LOCAL_HARNESS') {
       Remove-Item "Env:$n" -ErrorAction SilentlyContinue
     }

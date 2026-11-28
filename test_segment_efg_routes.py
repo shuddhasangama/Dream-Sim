@@ -28,9 +28,7 @@ import ceremony as ceremony_module
 import db
 import guru_dating
 
-os.environ.setdefault("PAYMENTS_ENABLED", "0")
-
-import app as app_module  # noqa: E402  (after the env pin above)
+import app as app_module
 
 
 class RouteTestCase(unittest.TestCase):
@@ -51,11 +49,16 @@ class RouteTestCase(unittest.TestCase):
             mock.patch.object(db, "get_connection",
                               lambda *a, **k: real_get_connection(self.db_path)),
             mock.patch.object(app_module, "SIM_STATE_PATH", tmp / "sim_state.json"),
+            mock.patch.dict(app_module.app.config, {
+                'AUTH_ENABLED': False,
+                'LOCAL_HARNESS_ACTIVE': True,
+            }),
             # This whole suite drives the clock directly (set_clock() below,
             # per-test set_clock() calls) — it's the "testing" side of
             # road-fixes-clock-spec.md §7, so it opts into the simulated
             # clock explicitly rather than relying on a default.
-            mock.patch.dict(os.environ, {"PAYMENTS_ENABLED": "0", "DEMO_MODE": "1", "DHASHU_SIMULATED_CLOCK": "true"}),
+            mock.patch.dict(os.environ, {"AUTH_ENABLED": "0", "DHASHU_LOCAL_HARNESS": "1",
+                "DHASHU_PAYMENT_BYPASS": "1", "DEMO_MODE": "1", "DHASHU_SIMULATED_CLOCK": "true"}),
         ]
         for p in self._patches:
             p.start()
@@ -73,6 +76,11 @@ class RouteTestCase(unittest.TestCase):
         if getattr(self, "conn", None) is not None:
             self.conn.close()
         self._tmp.cleanup()
+
+    def domain_snapshot(self):
+        """Preserve no-mutation checks while allowing expected abuse counters."""
+        return [statement for statement in self.conn.iterdump()
+                if not statement.startswith('INSERT INTO "AuthThrottle" ')]
 
     # ── fixtures ──────────────────────────────────────────────────────────
 
@@ -357,28 +365,31 @@ class CeremonyRouteTests(RouteTestCase):
 
 
 class CeremonyPaymentTests(CeremonyRouteTests):
-    """The fee, when fees are switched on. Same fixtures, one switch."""
+    """The agreement gate when no waiver or verified entitlement exists."""
 
     def setUp(self):
         super().setUp()
-        self._pay = mock.patch.dict(os.environ, {"PAYMENTS_ENABLED": "1"})
+        self._pay = mock.patch.dict(os.environ, {"DHASHU_PAYMENT_BYPASS": "1"})
         self._pay.start()
         self.addCleanup(self._pay.stop)
 
     def test_the_screen_offers_the_checkout_rather_than_the_sign_button(self):
-        body = self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}").get_data(as_text=True)
-        self.assertIn("₹1,499", body)
-        self.assertIn("/pay/agreement", body)
+        with mock.patch.dict(os.environ, {"DHASHU_PAYMENT_BYPASS": "0"}):
+            body = self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}").get_data(as_text=True)
+        self.assertIn("verified payment", body)
+        self.assertNotIn("/pay/", body)
+        self.assertNotIn("/ceremony/date_agreement/step\"", body)
 
     def test_no_step_can_be_taken_before_the_fee_clears(self):
-        self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
-        response = self.step()
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/pay/agreement", response.headers["Location"])
+        with mock.patch.dict(os.environ, {"DHASHU_PAYMENT_BYPASS": "0"}):
+            self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
+            response = self.step()
+        self.assertEqual(response.status_code, 403)
         self.assertFalse(self.state()["playbook_ack"])
 
     def test_once_it_clears_the_ceremony_runs(self):
-        self.client.post("/pay/agreement/confirm", data={})
+        with mock.patch.dict(os.environ, {"DHASHU_PAYMENT_BYPASS": "0"}):
+            self.assertEqual(self.step().status_code, 403)
         self.client.get(f"/ceremony/{ceremony.DATE_AGREEMENT}")
         self.step()
         self.assertTrue(self.state()["playbook_ack"])
@@ -387,51 +398,39 @@ class CeremonyPaymentTests(CeremonyRouteTests):
     # path rather than silently passing for the wrong reason.
     def _complete(self, user_id):
         self.login(user_id)
-        self.client.post("/pay/agreement/confirm", data={})
         super()._complete(user_id)
 
     def test_the_playbook_renders_every_clause(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_the_playbook_renders_every_clause()
 
     def test_the_agreement_reads_back_the_plan_rather_than_asking_again(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_the_agreement_reads_back_the_plan_rather_than_asking_again()
 
     def test_the_slot_reads_as_a_sentence_not_a_timestamp(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_the_slot_reads_as_a_sentence_not_a_timestamp()
 
     def test_the_terms_are_shown_in_full_not_just_named(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_the_terms_are_shown_in_full_not_just_named()
 
     def test_a_signature_with_a_term_unticked_is_refused(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_a_signature_with_a_term_unticked_is_refused()
 
     def test_the_refusal_says_why(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_the_refusal_says_why()
 
     def test_what_was_ticked_is_stored_and_mirrored(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_what_was_ticked_is_stored_and_mirrored()
 
     def test_the_three_steps_run_in_order(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_the_three_steps_run_in_order()
 
     def test_posting_a_signature_first_does_not_skip_the_playbook(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_posting_a_signature_first_does_not_skip_the_playbook()
 
     def test_a_failed_face_check_leaves_the_ceremony_open_and_retryable(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_a_failed_face_check_leaves_the_ceremony_open_and_retryable()
 
     def test_the_same_kind_recurs_for_the_next_date_rather_than_reading_as_signed(self):
-        self.client.post("/pay/agreement/confirm", data={})
         super().test_the_same_kind_recurs_for_the_next_date_rather_than_reading_as_signed()
 
 
@@ -654,10 +653,19 @@ class CancellationTests(RouteTestCase):
 
     def test_inside_the_window_it_costs_and_is_recorded(self):
         self.set_clock(week=1, day="Sat", hour=10)   # 9h before a 19:30 slot
-        self.client.post("/plan/cancel")
+        with mock.patch.dict(os.environ,{'DHASHU_PAYMENT_BYPASS':'0'}):
+            self.client.post("/plan/cancel")
         row = db.fetch_one(self.conn, "DatePlan", id=self.plan)
         self.assertEqual(row["cancel_fee"], 999)
         self.assertEqual(self.strikes("u1"), ["late_cancel"])
+
+    def test_late_notice_records_no_charge_when_fees_are_waived(self):
+        self.set_clock(week=1, day="Sat", hour=10)
+        self.assertEqual(self.client.post("/plan/cancel").status_code,302)
+        row=db.fetch_one(self.conn,"DatePlan",id=self.plan)
+        self.assertEqual(row["cancel_fee"],0)
+        self.assertEqual(db.fetch_all(self.conn,"DateCharge"),[])
+        self.assertEqual(self.strikes("u1"),["late_cancel"])
 
     def test_the_penalty_lands_on_the_person_who_cancelled(self):
         self.set_clock(week=1, day="Sat", hour=10)

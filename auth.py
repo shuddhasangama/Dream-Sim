@@ -6,9 +6,9 @@ import os
 import time
 import re
 import secrets
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
-from flask import abort, current_app, g, jsonify, redirect, render_template, request, session
+from flask import abort, current_app, g, has_request_context, jsonify, redirect, render_template, request, session
 
 import auth_delivery
 import auth_sessions as sessions
@@ -19,7 +19,22 @@ GENERIC_SENT = 'If delivery is available for this contact, a code will arrive sh
 
 
 def enabled():
-    return current_app.config.get('AUTH_ENABLED', False)
+    if current_app.config.get('AUTH_ENABLED', True):
+        return True
+    # Disabling real auth is a request-scoped local harness exception. If any
+    # part of that boundary is missing, keep the secure behavior enabled.
+    if not has_request_context():
+        return True
+    # local_harness.request_allowed() re-checks every condition for this request:
+    # flag, no production marker, loopback socket peer, no forwarding header and a
+    # local Host, including the Android emulator's 10.0.2.2 alias (a localhost-only
+    # check here treated emulator requests as deployed ones and signed the
+    # "Pick a local user" member out).
+    import local_harness
+    try:
+        return not local_harness.request_allowed()
+    except ValueError:   # malformed Host header: keep the secure behaviour
+        return True
 
 
 def normalize(channel, value, stored=False):
@@ -52,6 +67,39 @@ def same_origin():
         return False
     origin = parsed.scheme + '://' + parsed.netloc
     return origin == current_app.config['AUTH_PUBLIC_ORIGIN']
+
+
+def safe_next(url):
+    """Return a local return path, or the dashboard for an unsafe target."""
+    fallback = '/dashboard'
+    if not isinstance(url, str) or len(url) > 2048 or not url.startswith('/'):
+        return fallback
+    candidate = url
+    for _ in range(3):
+        if (candidate.startswith('//') or candidate.startswith('/\\')
+                or '\\' in candidate
+                or any(ord(char) < 32 or ord(char) == 127 for char in candidate)):
+            return fallback
+        decoded = unquote(candidate)
+        if decoded == candidate:
+            return url
+        candidate = decoded
+    return fallback
+
+
+def local_referrer():
+    """This request's Referer as a local path when it points at this same host
+    (browsers send an absolute URL), else the raw value for safe_next to judge."""
+    referrer = request.referrer
+    if not referrer:
+        return None
+    try:
+        parts = urlsplit(referrer)
+    except ValueError:
+        return None
+    if parts.scheme in ('http', 'https') and parts.netloc and parts.netloc == request.host:
+        return (parts.path or '/') + ('?' + parts.query if parts.query else '')
+    return referrer
 
 
 def resolve(get_db):
@@ -228,7 +276,14 @@ def register_auth(app, get_db):
             return failure(member_lock.MESSAGE, 403, 'account_locked')
         return member_lock.MESSAGE, 403
 
-    app.config['AUTH_ENABLED'] = os.environ.get('AUTH_ENABLED', '').lower() in ('1', 'true', 'on')
+    raw_auth = os.environ.get('AUTH_ENABLED', '')
+    auth_disabled = raw_auth.strip().lower() in ('0', 'false', 'no', 'off')
+    app.config['AUTH_ENABLED'] = not auth_disabled
+    if auth_disabled:
+        import local_harness
+        if not local_harness.flag_set():
+            raise RuntimeError('AUTH_ENABLED may be disabled only with DHASHU_LOCAL_HARNESS=1.')
+        local_harness.assert_safe_startup()
     app.config['AUTH_PUBLIC_ORIGIN'] = os.environ.get('AUTH_PUBLIC_ORIGIN', '').rstrip('/')
     if app.config['AUTH_ENABLED']:
         origin = urlsplit(app.config['AUTH_PUBLIC_ORIGIN'])

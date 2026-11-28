@@ -10,6 +10,7 @@ import neighbourhood_catalog
 import dateplan
 import db
 import payments
+import billing_catalog
 import planning_service as service
 import booking_coordination
 import restaurant_service
@@ -46,8 +47,8 @@ def register(api, get_db, get_clock, slot_datetime, agreement_context):
 
     def entitlement(purpose, scope):
         return {'purpose': purpose, 'scope_id': scope, 'satisfied': service.paid(get_db(), uid(), purpose, scope),
-                'enforced': payments.is_enabled(), 'amount_inr': payments.fee(purpose)['amount_inr'],
-                'provider_mode': 'simulation', 'api_payment_available': False}
+                'enforced': not billing_catalog.payment_bypass(), 'amount_inr': payments.fee(purpose)['amount_inr'],
+                'provider_mode': billing_catalog.mode(), 'api_payment_available': False}
 
     def slot_view(items):
         return [{'day': d, 'meal_slot': m} for d, m in items]

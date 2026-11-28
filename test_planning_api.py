@@ -68,7 +68,7 @@ class PlanningApiTests(RouteTestCase):
 
     def test_existing_mobile_build_gets_readable_clauses_and_server_face_flag(self):
         path = self.prepare()
-        before = list(self.conn.iterdump())
+        before = self.domain_snapshot()
         with mock.patch.dict(os.environ, {'BETA_DATE_SIMULATION_ENABLED': '0'}):
             data = self.request(path+'/agreement').json['data']
             self.assertFalse(data['face_simulation_available'])
@@ -78,7 +78,7 @@ class PlanningApiTests(RouteTestCase):
             self.assertFalse(clause['text'].startswith('{'))
         with mock.patch.dict(os.environ, {'BETA_DATE_SIMULATION_ENABLED': '1'}):
             self.assertTrue(self.request(path+'/agreement').json['data']['face_simulation_available'])
-        self.assertEqual(before, list(self.conn.iterdump()))
+        self.assertEqual(before, self.domain_snapshot())
 
     def test_week_completion_uses_saved_state_and_boundary_has_profile_route(self):
         before = self.request('/week').json['data']['activity_status']
@@ -109,9 +109,9 @@ class PlanningApiTests(RouteTestCase):
                 self.assertEqual(self.step(path, who, 'playbook').json['data']['step'], 'sign')
                 self.assertEqual(self.step(path, who, 'sign', signed_name='Private '+who, acks=list(ceremony.ack_keys(ceremony.DATE_AGREEMENT))).status_code, 200)
                 self.assertEqual(self.step(path, who, 'face').json['data']['step'], 'done')
-                before = list(self.conn.iterdump())
+                before = self.domain_snapshot()
                 self.assertEqual(self.step(path, who, 'face').status_code, 200)
-                self.assertEqual(list(self.conn.iterdump()), before)
+                self.assertEqual(self.domain_snapshot(), before)
         result = self.request(path).json['data']
         self.assertEqual(result['status'], 'confirmed')
         self.assertTrue(result['my_signed'] and result['partner_signed'])
@@ -120,11 +120,11 @@ class PlanningApiTests(RouteTestCase):
 
     def test_reads_are_read_only_and_foreign_resources_are_hidden(self):
         path = self.prepare()
-        before = list(self.conn.iterdump())
+        before = self.domain_snapshot()
         for route in (self.base+'/calendar', path, path+'/agreement'):
             self.assertEqual(self.request(route).status_code, 200)
             self.assertEqual(self.request(route, uid='stranger').status_code, 404)
-        self.assertEqual(list(self.conn.iterdump()), before)
+        self.assertEqual(self.domain_snapshot(), before)
 
     def test_alignment_and_overlap_are_required(self):
         self.assertEqual(self.request(self.base+'/date-plan', method='POST', body=self.slot).json['error']['code'], 'alignment_required')
@@ -141,10 +141,14 @@ class PlanningApiTests(RouteTestCase):
         self.assertEqual(self.request(self.base+'/alignment', method='PUT', body={'budget': {}, 'diet': [], 'cuisine': 1}).status_code, 400)
 
     def test_payment_is_required_and_never_granted_by_api(self):
-        with mock.patch.dict(os.environ, {'PAYMENTS_ENABLED': '1'}):
-            self.assertFalse(self.request(self.base+'/calendar').json['data']['payment']['satisfied'])
+        with mock.patch.dict(os.environ, {'DHASHU_PAYMENT_BYPASS': '0', 'PAYMENTS_ENABLED': '0'}):
+            payment=self.request(self.base+'/calendar').json['data']['payment']
+            self.assertFalse(payment['satisfied'])
+            self.assertTrue(payment['enforced'])
             r = self.request(self.base+'/availability', method='PUT', body={'slots': [self.slot]})
             self.assertEqual(r.status_code, 403)
+            self.assertEqual(r.json['error']['code'],'payment_required')
+            self.assertEqual(self.request(self.base+'/calendar',uid='stranger').status_code,404)
             self.assertEqual(db.fetch_all(self.conn, 'Payment'), [])
 
     def test_face_simulation_is_opt_in_and_acks_cannot_be_skipped(self):
@@ -158,11 +162,11 @@ class PlanningApiTests(RouteTestCase):
 
     def test_plan_freezes_inputs_and_rejects_different_confirmation(self):
         path = self.prepare()
-        before = list(self.conn.iterdump())
+        before = self.domain_snapshot()
         with mock.patch.dict(app_module.app.config, {'AUTH_ENABLED':False}):
             self.login('owner')
             self.assertEqual(self.client.post('/calendar/no-overlap',data={'choice':'next_weekend'}).status_code,409)
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
         self.assertEqual(self.align('owner').status_code, 409)
         self.assertEqual(self.request(self.base+'/availability', method='PUT', body={'slots': []}).status_code, 409)
         self.assertEqual(self.request(self.base+'/date-plan', method='POST', body={'day': 'Sun', 'meal_slot': 'dinner'}).status_code, 409)
@@ -173,11 +177,11 @@ class PlanningApiTests(RouteTestCase):
 
     def test_availability_rolls_back_on_insert_failure(self):
         self.request(self.base+'/availability', method='PUT', body={'slots': [self.slot]})
-        before = list(self.conn.iterdump())
+        before = self.domain_snapshot()
         with mock.patch.object(planning_service, 'save', side_effect=RuntimeError('write failed')):
             with self.assertRaises(RuntimeError):
                 planning_service.availability(self.conn, 'owner', 'lock-1', [{'day': 'Sun', 'meal_slot': 'lunch'}])
-        self.assertEqual(list(self.conn.iterdump()), before)
+        self.assertEqual(self.domain_snapshot(), before)
 
     def test_html_uses_same_overlap_validation(self):
         for who in ('owner', 'partner'):
@@ -190,14 +194,14 @@ class PlanningApiTests(RouteTestCase):
 
     def test_foreign_mutations_and_closed_resources_cannot_change_state(self):
         path = self.prepare()
-        before = list(self.conn.iterdump())
+        before = self.domain_snapshot()
         for route, method, body in (
             (self.base+'/availability','PUT',{'slots': [self.slot]}),
             (self.base+'/date-plan','POST',self.slot),
             (path+'/selections','PUT',{'dietary':'x','dress':'x'}),
             (path+'/agreement/steps','POST',{'step':'playbook'})):
             self.assertEqual(self.request(route, uid='stranger', method=method, body=body).status_code,404)
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
         self.conn.execute('UPDATE DatePlan SET status=?',('cancelled',))
         self.conn.commit()
         self.assertEqual(self.step(path,'owner','playbook').status_code,409)

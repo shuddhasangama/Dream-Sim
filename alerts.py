@@ -12,8 +12,9 @@ Events:
                           (twilio, msg91) also emit otp_provider_down
   stuck_verification_jobs BGV requests / provider jobs running longer than
                           DHASHU_ALERT_STUCK_MINUTES (default 15)
-  payment_webhook_failure call alerts.emit('payment_webhook_failure', reason=...)
-                          from the billing webhook (integration point, sec-pay)
+  payment_webhook_failure the Razorpay webhook refused or failed a delivery
+                          (billing_api.webhook_failure; reason=code, status=...);
+                          duplicate deliveries are a silent success, never an alert
   abuse_spike             emitted by request-abuse protection (c-api-abuse)
 """
 from __future__ import annotations

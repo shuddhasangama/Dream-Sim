@@ -55,6 +55,19 @@ class AuthenticationTests(RouteTestCase):
     def bearer(self, tokens):
         return {'Authorization': 'Bearer ' + tokens['access_token']}
 
+    def test_legacy_pool_login_admin_and_demo_routes_are_404_with_auth_on(self):
+        self.assertTrue(app_module.app.config['AUTH_ENABLED'])
+        requests = (
+            ('GET', '/pool'),
+            ('POST', '/login/owner'),
+            ('GET', '/admin/errors'),
+            ('POST', '/demo/advance'),
+        )
+        for method, path in requests:
+            with self.subTest(path=path):
+                response = self.client.open(path, method=method, json={})
+                self.assertEqual(response.status_code, 404)
+
     def test_optional_tester_login_and_revocation(self):
         body = {'phone': '+919876543210'}
         with mock.patch.dict('os.environ', {'DHASHU_TESTER_NO_OTP': 'false', 'DHASHU_TESTER_USER_IDS': 'owner'}):

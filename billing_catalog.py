@@ -14,8 +14,7 @@ PRODUCTS = {
 
 
 def mode():
-    """DHASHU_BILLING_MODE (default 'disabled' = no gateway; the walkthrough's simulated
-    fees apply). 'sandbox' = Razorpay test keys, testers only, Rs 1. 'live_pilot' = live
+    """DHASHU_BILLING_MODE (default 'disabled' = no gateway). 'sandbox' = Razorpay test keys, testers only, Rs 1. 'live_pilot' = live
     keys, testers only, Rs 1. 'live' = owner decision 2026-11-25: real charges at the
     catalogue price for every member (live keys only; see docs/PAYMENTS_GO_LIVE.md)."""
     value = os.getenv('DHASHU_BILLING_MODE', 'disabled')
@@ -31,11 +30,20 @@ BYPASS_NOTICE = ('PAYMENT BYPASS ON (DHASHU_PAYMENT_BYPASS=1): every paid step i
                  'no checkout opens and nothing is charged. Development only; impossible in live billing modes.')
 
 
+# sec-pay drafted the same switch as DHASHU_FEES_WAIVED. It is read only as a deprecated
+# alias of DHASHU_PAYMENT_BYPASS, so there is ONE bypass rule (payment_bypass below).
+BYPASS_SETTINGS = ('DHASHU_PAYMENT_BYPASS', 'DHASHU_FEES_WAIVED')
+
+
+def _bypass_values(env):
+    return {name: str(env.get(name, '')).strip().lower() for name in BYPASS_SETTINGS}
+
+
 def payment_bypass_requested(environ=None):
-    """DHASHU_PAYMENT_BYPASS as set (strict: ambiguous values count as off here and are
-    refused by startup_check)."""
+    """DHASHU_PAYMENT_BYPASS (or its deprecated alias) as set (strict: ambiguous values
+    count as off here and are refused by startup_check)."""
     env = os.environ if environ is None else environ
-    return str(env.get('DHASHU_PAYMENT_BYPASS', '')).strip().lower() in BYPASS_ON
+    return any(value in BYPASS_ON for value in _bypass_values(env).values())
 
 
 def payment_bypass(environ=None):
@@ -103,6 +111,19 @@ def production(environ=None):
     return (env.get('RAILWAY_ENVIRONMENT_NAME') or env.get('RAILWAY_ENVIRONMENT') or env.get('DHASHU_ENVIRONMENT') or '').lower() == 'production'
 
 
+def validate_bypass(environ=None):
+    """Payment bypass: an ambiguous value, or the bypass while real money can move, is
+    refused in every environment (member web and admin services). Names only."""
+    env = os.environ if environ is None else environ
+    value = env.get('DHASHU_BILLING_MODE', 'disabled')
+    for name, raw_bypass in _bypass_values(env).items():
+        if raw_bypass not in BYPASS_ON + BYPASS_OFF:
+            raise RuntimeError(name + ' must be 1 or 0.')
+        if raw_bypass in BYPASS_ON and value in LIVE_MONEY_MODES:
+            raise RuntimeError('Billing configuration refused: ' + name + ' cannot be on while '
+                               'DHASHU_BILLING_MODE is ' + value + '. Remove ' + name + '.')
+
+
 def startup_check(environ=None):
     """Refuse to start a production web process with unsafe billing settings.
 
@@ -111,13 +132,7 @@ def startup_check(environ=None):
     the message, never values. Raises RuntimeError; returns None when fine."""
     env = os.environ if environ is None else environ
     value = env.get('DHASHU_BILLING_MODE', 'disabled')
-    # Payment bypass: refused in every environment when real money can move.
-    raw_bypass = str(env.get('DHASHU_PAYMENT_BYPASS', '')).strip().lower()
-    if raw_bypass not in BYPASS_ON + BYPASS_OFF:
-        raise RuntimeError('DHASHU_PAYMENT_BYPASS must be 1 or 0.')
-    if raw_bypass in BYPASS_ON and value in LIVE_MONEY_MODES:
-        raise RuntimeError('Billing configuration refused: DHASHU_PAYMENT_BYPASS cannot be on while '
-                           'DHASHU_BILLING_MODE is ' + value + '. Remove DHASHU_PAYMENT_BYPASS.')
+    validate_bypass(env)
     if not production(env) or value == 'disabled':
         return None
     problems = []

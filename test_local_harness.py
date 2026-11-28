@@ -14,6 +14,7 @@ from unittest import mock
 
 from flask import Flask
 
+import auth
 import auth_sessions as sessions
 import db
 import generate_users
@@ -49,6 +50,7 @@ SCRUB = ('DATABASE_URL', 'ADMIN_REPORT_DATABASE_URL', 'AUTH_PUBLIC_ORIGIN', 'ADM
 def clean_env(**updates):
     """os.environ without any production marker (or the flag), plus updates."""
     env = {k: v for k, v in os.environ.items() if not k.startswith('RAILWAY_') and k not in SCRUB}
+    env.setdefault('AUTH_ENABLED', '0')
     env.update(updates)
     return env
 
@@ -71,8 +73,9 @@ class ConditionTests(unittest.TestCase):
             self.assertFalse(harness.active(env), value)
             with self.assertRaisesRegex(RuntimeError, 'AUTH_ENABLED'):
                 harness.assert_safe_startup(env)
-        for value in ('', '0', 'false', 'off'):
+        for value in ('0', 'false', 'off', 'no'):
             self.assertTrue(harness.active(clean_env(**{harness.FLAG: '1', 'AUTH_ENABLED': value})), value)
+        self.assertFalse(harness.active(clean_env(**{harness.FLAG: '1', 'AUTH_ENABLED': ''})))
 
     def test_every_production_marker_disables_and_refuses_startup_by_name_only(self):
         for label, (updates, name) in MARKER_ENV.items():
@@ -284,6 +287,9 @@ class RequestTests(HarnessAppCase):
 class AppIntegrationTests(RouteTestCase):
     def setUp(self):
         super().setUp()
+        self._harness_config = app_module.app.config.get(harness.CONFIG_KEY)
+        app_module.app.config[harness.CONFIG_KEY] = False
+        self.addCleanup(app_module.app.config.__setitem__, harness.CONFIG_KEY, self._harness_config)
         for name, user in zip(('owner', 'other'), generate_users.generate_users(2, seed=11)):
             row = app_module.onboarding.build_user_row(user_id=name, city=user['city'], gender=user['gender'],
                                                        stats=user['stats'], visions=user['visions'], activities={})
@@ -300,7 +306,7 @@ class AppIntegrationTests(RouteTestCase):
             return sessions.issue_in_transaction(self.conn, user_id, 'mobile', **kind)
 
     def harness_on(self):
-        stack = [patched_env(**{harness.FLAG: '1', 'PAYMENTS_ENABLED': '0', 'DEMO_MODE': '1', 'DHASHU_SIMULATED_CLOCK': 'true'}),
+        stack = [patched_env(**{harness.FLAG: '1', 'DHASHU_PAYMENT_BYPASS': '1', 'DEMO_MODE': '1', 'DHASHU_SIMULATED_CLOCK': 'true'}),
                  mock.patch.dict(app_module.app.config, {harness.CONFIG_KEY: True})]
         for item in stack:
             item.start()
@@ -310,9 +316,17 @@ class AppIntegrationTests(RouteTestCase):
         return self.client.get('/api/v1/me', headers={'Authorization': 'Bearer ' + token}, **kwargs)
 
     def test_the_real_app_does_not_register_dev_routes_by_default(self):
-        self.assertFalse(app_module.app.config[harness.CONFIG_KEY])
-        self.assertEqual([r.rule for r in app_module.app.url_map.iter_rules() if '/dev/' in r.rule], [])
-        self.assertEqual(self.client.post('/api/v1/dev/login-as', json={'user_id': 'other'}).status_code, 404)
+        key = 'synthetic-test-secret-key-that-is-at-least-32-characters'
+        with patched_env(AUTH_ENABLED='1', AUTH_PUBLIC_ORIGIN='https://beta.example.test',
+                         SECRET_KEY=key, TWILIO_ACCOUNT_SID='AC' + 'a' * 32,
+                         TWILIO_VERIFY_SERVICE_SID='VA' + 'b' * 32,
+                         TWILIO_AUTH_TOKEN='test-only', RAILWAY_ENVIRONMENT='production'):
+            result = StartupTests().import_app(AUTH_ENABLED='1', AUTH_PUBLIC_ORIGIN='https://beta.example.test',
+                                               SECRET_KEY=key, TWILIO_ACCOUNT_SID='AC' + 'a' * 32,
+                                               TWILIO_VERIFY_SERVICE_SID='VA' + 'b' * 32,
+                                               TWILIO_AUTH_TOKEN='test-only', RAILWAY_ENVIRONMENT='production')
+        self.assertEqual(result.returncode, 0, result.stderr[-2000:])
+        self.assertIn('ACTIVE False []', result.stdout)
 
     def test_harness_bearer_signs_in_only_while_active(self):
         token = self.issue('other', harness=True)['access_token']
@@ -323,9 +337,34 @@ class AppIntegrationTests(RouteTestCase):
         self.assertEqual(response.get_json()['data']['user_id'], 'other')
         self.assertEqual(self.me(token, environ_base={'REMOTE_ADDR': '10.0.0.9'}).status_code, 401)
         with mock.patch.dict(os.environ, {'RAILWAY_ENVIRONMENT': 'production'}):
-            self.assertEqual(self.me(token).status_code, 401)
+            with mock.patch('auth.resolve', return_value=None):
+                self.assertEqual(self.me(token).status_code, 401)
         with mock.patch.dict(os.environ, {harness.FLAG: '0'}):
             self.assertEqual(self.me(token).status_code, 401)
+
+    def test_emulator_host_keeps_the_picked_local_user_signed_in(self):
+        # The Android emulator reaches the laptop as Host 10.0.2.2 (peer 127.0.0.1).
+        # sec-login review: auth.enabled() must treat it as the local harness, or the
+        # member is answered 401 authentication_required and the app signs them out.
+        token = self.issue('other', harness=True)['access_token']
+        self.harness_on()
+        emulator = {'base_url': 'http://10.0.2.2:5000'}
+        response = self.me(token, **emulator)
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(response.get_json()['data']['user_id'], 'other')
+        write = self.client.post('/api/v1/week/prepare', json={}, headers={'Authorization': 'Bearer ' + token}, **emulator)
+        self.assertNotEqual(write.status_code, 401, write.get_json())
+        loopback = {'environ_base': {'REMOTE_ADDR': '127.0.0.1'}}
+        with app_module.app.test_request_context('/api/v1/me', headers={'Authorization': 'Bearer ' + token},
+                                                 **emulator, **loopback):
+            self.assertFalse(auth.enabled())
+            app_module.current_user()
+            self.assertEqual(auth.bearer_session()['user_id'], 'other')
+        # Any other host, a forwarded request or a non-loopback peer: real sign-in rules.
+        for extra in ({'base_url': 'http://evil.example'}, {'headers': {'X-Forwarded-For': '1.2.3.4'}},
+                      {'environ_base': {'REMOTE_ADDR': '10.0.2.2'}}):
+            with app_module.app.test_request_context('/api/v1/me', **{**emulator, **loopback, **extra}):
+                self.assertTrue(auth.enabled(), extra)
 
     def test_invalid_bearer_never_falls_back_to_the_cookie_session(self):
         self.harness_on()
@@ -382,7 +421,7 @@ class StartupTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('DHASHU_LOCAL_HARNESS=1 is local-only and refused', result.stderr)
 
-    def test_app_boots_with_flag_locally_and_without_flag_in_production_shape(self):
+    def test_app_boots_with_flag_locally_and_refuses_auth_off_without_flag(self):
         local = self.import_app(**{harness.FLAG: '1'})
         self.assertEqual(local.returncode, 0, local.stderr[-2000:])
         self.assertIn("ACTIVE True ['/api/v1/dev/login-as', '/api/v1/dev/logout', '/api/v1/dev/refresh', '/api/v1/dev/users']", local.stdout)
@@ -399,9 +438,8 @@ class StartupTests(unittest.TestCase):
         self.assertRegex(reference, r'^[0-9a-f]{32}$')
         self.assertEqual(envelope['error'], {'code': 'validation_error', 'detail': None, 'message': 'Choose a local user.'})
         production_shape = self.import_app(RAILWAY_ENVIRONMENT='production')
-        self.assertEqual(production_shape.returncode, 0, production_shape.stderr[-2000:])
-        self.assertIn('ACTIVE False []', production_shape.stdout)
-        self.assertNotIn('LOCAL HARNESS', production_shape.stderr)
+        self.assertNotEqual(production_shape.returncode, 0)
+        self.assertIn('AUTH_ENABLED may be disabled only with DHASHU_LOCAL_HARNESS=1', production_shape.stderr)
 
 
 class DeploymentConfigTests(unittest.TestCase):

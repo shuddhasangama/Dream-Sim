@@ -6,7 +6,7 @@ seeded user, against a backend running on this laptop with secure sign-in off.
 
 It is active only when ALL of these hold (checked at startup AND on every request):
   1. DHASHU_LOCAL_HARNESS=1 is set explicitly;
-  2. AUTH_ENABLED is not on;
+  2. AUTH_ENABLED is explicitly off (0/false/no/off; unset means real sign-in is ON);
   3. no production marker is present (production_markers() below);
   4. the request reaches this process directly from loopback (127.0.0.1 / ::1;
      the emulator's 10.0.2.2 arrives as 127.0.0.1), with a local Host header and
@@ -57,7 +57,8 @@ def flag_set(env=None) -> bool:
 
 def auth_enabled(env=None) -> bool:
     # Same parsing as auth.register_auth.
-    return (os.environ if env is None else env).get('AUTH_ENABLED', '').lower() in ('1', 'true', 'on')
+    value = (os.environ if env is None else env).get('AUTH_ENABLED', '')
+    return value.strip().lower() not in ('0', 'false', 'no', 'off')
 
 
 def _non_local_host(url: str) -> bool:
@@ -79,7 +80,8 @@ def production_markers(env=None) -> list[str]:
         value = env.get(name, '')
         if value and _non_local_host(value):
             found.add(name + ' (non-local host)')
-    if auth_enabled(env):
+    auth_value = env.get('AUTH_ENABLED', '').strip().lower()
+    if auth_value in ('1', 'true', 'on', 'yes'):
         found.add('AUTH_ENABLED')
     if env.get('SIGNZY_PRODUCTION_ENABLED', '0') not in ('', '0') or env.get('SIGNZY_ENV', 'preproduction') == 'production':
         found.add('SIGNZY production')

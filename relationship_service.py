@@ -1,7 +1,7 @@
 """Post-Dating actions, serialized against membership and stage transitions."""
 from datetime import date
 import json
-import db,journey,ceremony,payments,guru_relationship
+import db,journey,ceremony,payments,guru_relationship,billing_catalog,billing_service
 import after_date_service
 from evolution_service import transaction,text
 from api_contract import ApiError
@@ -100,8 +100,10 @@ def checkpoint_state(conn,uid,cid,source):
         'partner_complete':bool(theirs and ceremony.is_complete(theirs)),'my_signed_name':mine['signed_name'],
         'acks':ceremony.acks_for(ceremony.STAGE_GATE), **ceremony.document_view(mine,ceremony.clauses_for(ceremony.STAGE_GATE)),
         'face_mode':'capture' if identity['enabled'] else 'simulation','face_simulation_available':not identity['enabled'] and after_date_service.simulation_allowed(conn,uid),
-        'payment':{'enforced':payments.is_enabled(),'satisfied':not payments.is_enabled() or payments.has_paid(db.fetch_all(conn,'Payment',user_id=uid),uid,payments.STAGE_GATE,scope),
-            'purpose':payments.STAGE_GATE,'scope_id':scope,'amount_inr':payments.fee(payments.STAGE_GATE)['amount_inr'],'provider_mode':'simulation','api_payment_available':False}}
+        'payment':{'enforced':not billing_catalog.payment_bypass(),
+            'satisfied':billing_service.fee_satisfied(conn,uid,payments.STAGE_GATE,scope),
+            'purpose':payments.STAGE_GATE,'scope_id':scope,'amount_inr':payments.fee(payments.STAGE_GATE)['amount_inr'],
+            'provider_mode':billing_catalog.mode(),'api_payment_available':False}}
 
 
 def checkpoint_step(conn,uid,cid,source,body,clock):

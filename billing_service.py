@@ -2,10 +2,13 @@
 from contextlib import contextmanager
 import json
 import hashlib
+import os
+import re
 import time
 import uuid
 import db
 import auth_sessions
+import provider_jobs
 import planning_service as planning
 from api_contract import ApiError
 import billing_catalog as catalog
@@ -15,10 +18,14 @@ sql = auth_sessions.sql
 
 
 @contextmanager
-def transaction(conn):
+def transaction(conn, *user_ids):
+    """Billing writes for these members, serialised on exactly their User rows
+    (db.lock_user_rows, sorted) instead of a table-wide LOCK TABLE that made every
+    member's checkout wait for every other's. All purchase state is per member, so the
+    member lock is enough for "one live purchase per product and scope"; provider
+    events are additionally made idempotent by their unique BillingEvent key."""
     with auth_sessions.transaction(conn):
-        if db._is_postgres_connection(conn):
-            sql(conn, 'LOCK TABLE "BillingPurchase" IN SHARE ROW EXCLUSIVE MODE')
+        db.lock_user_rows(conn, *user_ids)
         yield
 
 
@@ -64,7 +71,7 @@ def quote(conn, uid, product, reference, channel):
     scoped = scope(conn, uid, product, reference)
     pid = uuid.uuid4().hex
     now = int(time.time())
-    with transaction(conn):
+    with transaction(conn, uid):
         planning.save(conn, 'BillingPurchase', {
             'id': pid, 'user_id': uid, 'product': product, 'scope_id': scoped,
             'reference_id': reference or uid, 'mode': price['mode'], 'provider': provider,
@@ -86,7 +93,7 @@ def public(row):
 
 def checkout(conn, uid, pid, accept_recurring=False):
     gateway = Razorpay()  # validate credentials BEFORE reserving an attempt
-    with transaction(conn):
+    with transaction(conn, uid):
         row = get(conn, pid, uid)
         if row['mode'] != catalog.mode():
             raise ApiError('environment_mismatch', 'Create a new quote in the current environment.', 409)
@@ -108,10 +115,10 @@ def checkout(conn, uid, pid, accept_recurring=False):
         provider_id = result['id']
         if not isinstance(provider_id, str) or not provider_id.replace('_','').isalnum():
             raise ValueError('Invalid provider ID')
-        with transaction(conn):
+        with transaction(conn, uid):
             update(conn, pid, provider_id=provider_id, status='checkout_ready')
     except Exception:
-        with transaction(conn):
+        with transaction(conn, uid):
             update(conn, pid, status='reconciling')
         raise
     return checkout_result(get(conn, pid, uid), gateway)
@@ -161,6 +168,15 @@ def legacy_entitled(conn, uid, purpose, scoped):
     return False
 
 
+def fee_satisfied(conn, uid, purpose, scoped):
+    """The only authority for the four historical fee gates."""
+    if purpose not in ('availability', 'agreement', 'stage_gate', 'guru'):
+        return False
+    if not isinstance(uid, str) or not uid or not isinstance(scoped, str) or not scoped:
+        return False
+    return catalog.payment_bypass() or legacy_entitled(conn, uid, purpose, scoped)
+
+
 def apply_payment(conn, row, payment, paid_until=None):
     if payment.get('status') != 'captured':
         return
@@ -195,12 +211,12 @@ def reconcile(conn, uid, pid):
     gateway = Razorpay()
     if row['refund_id']:
         result = gateway.call('GET', 'refunds/'+row['refund_id'])
-        with transaction(conn):
+        with transaction(conn, uid):
             apply_refund(conn, get(conn,pid), result)
     elif row['product'] != 'guru':
         result = gateway.call('GET', 'orders/'+row['provider_id']+'/payments')
         captured = [p for p in result.get('items', []) if p.get('status') == 'captured' and p.get('order_id') == row['provider_id']]
-        with transaction(conn):
+        with transaction(conn, uid):
             for payment in captured:
                 apply_payment(conn, get(conn, pid), payment)
     else:
@@ -212,10 +228,10 @@ def reconcile(conn, uid, pid):
             payment=gateway.call('GET','payments/'+invoice['payment_id'])
             if payment.get('invoice_id') != invoice.get('id'):
                 continue
-            with transaction(conn):
+            with transaction(conn, uid):
                 apply_payment(conn,get(conn,pid),payment,invoice.get('billing_end'))
         if subscription.get('status') in ('cancelled','completed','expired'):
-            with transaction(conn):
+            with transaction(conn, uid):
                 update(conn,pid,status='cancelled')
     return public(get(conn, pid, uid))
 
@@ -234,7 +250,8 @@ def apply_refund(conn, row, refund):
 def refund(conn, pid):
     """Operations-only entry point. Full one-time refunds; never exposed to an ordinary user."""
     gateway = Razorpay()
-    with transaction(conn):
+    owner = get(conn, pid)['user_id']
+    with transaction(conn, owner):
         row = get(conn,pid)
         if row['mode'] != catalog.mode() or row['product'] == 'guru':
             raise ApiError('refund_unavailable', 'Use provider operations for subscription refunds.', 409)
@@ -243,7 +260,7 @@ def refund(conn, pid):
         update(conn,pid,refund_status='requested')
     try:
         result = gateway.call('POST','payments/'+row['payment_id']+'/refund', {'amount':row['amount'], 'notes':{'purchase_id':pid}})
-        with transaction(conn):
+        with transaction(conn, owner):
             apply_refund(conn,get(conn,pid),result)
     except Exception:
         # Requested remains durable; operations must reconcile, not submit another refund.
@@ -255,7 +272,7 @@ def cancel_subscription(conn, uid, pid):
     row=get(conn,pid,uid)
     if row['product'] != 'guru' or not row['provider_id'] or row['mode'] != catalog.mode():
         raise ApiError('subscription_unavailable','Subscription unavailable.',409)
-    with transaction(conn):
+    with transaction(conn, uid):
         if get(conn,pid)['cancel_requested']:
             return public(get(conn,pid))
         update(conn,pid,cancel_requested=1)
@@ -263,7 +280,27 @@ def cancel_subscription(conn, uid, pid):
     return public(get(conn,pid))
 
 
-def webhook(conn, raw, signature):
+EVENT_ID = re.compile(r'[A-Za-z0-9_]{1,64}')
+
+
+def event_keys(raw, event_id=None):
+    """(key, legacy) for one provider event. key is the unique idempotency key stored
+    as BillingEvent.id: Razorpay's X-Razorpay-Event-Id (the same on every retry of an
+    event), else the signed body's digest. legacy is the digest every event was stored
+    under before, so an event applied before this change is still a duplicate."""
+    legacy = hashlib.sha256(raw).hexdigest()
+    if isinstance(event_id, str) and EVENT_ID.fullmatch(event_id):
+        return 'razorpay:' + event_id, legacy
+    return legacy, legacy
+
+
+def _seen(conn, keys):
+    return any(db.fetch_one(conn, 'BillingEvent', id=key) for key in set(keys))
+
+
+def webhook(conn, raw, signature, event_id=None):
+    """Apply one signed Razorpay event at most once. Returns 'duplicate' for an event
+    already applied (a silent success: Razorpay retries deliveries), else None."""
     verify_webhook(raw, signature)
     if catalog.mode() == 'disabled':
         raise ApiError('billing_disabled','Billing is disabled.',503)
@@ -279,18 +316,21 @@ def webhook(conn, raw, signature):
     subscription=payload.get('subscription',{}).get('entity',{})
     refund_entity=payload.get('refund',{}).get('entity',{})
     provider_id=subscription.get('id') or payment.get('order_id')
-    event_id=hashlib.sha256(raw).hexdigest()
-    with transaction(conn):
-        if db.fetch_one(conn,'BillingEvent',id=event_id):
-            return
-        rows=db.fetch_all(conn,'BillingPurchase',mode=catalog.mode())
-        row=next((r for r in rows if (provider_id and (r['provider_id']==provider_id or (r['provider']=='razorpay_verification_test_link' and json.loads(r['price_json']).get('order_id')==provider_id))) or
-                  (refund_entity.get('payment_id') and r['payment_id']==refund_entity['payment_id'])),None)
-        if row is None:
-            # A notification can race create_order's response; retry delivery later.
-            if kind in ('payment.captured','subscription.charged','refund.processed','refund.failed'):
-                raise ApiError('purchase_not_ready','Purchase mapping not ready.',503)
-            return
+    keys=event_keys(raw, event_id)
+    if _seen(conn, keys):
+        return 'duplicate'
+    rows=db.fetch_all(conn,'BillingPurchase',mode=catalog.mode())
+    row=next((r for r in rows if (provider_id and (r['provider_id']==provider_id or (r['provider']=='razorpay_verification_test_link' and json.loads(r['price_json']).get('order_id')==provider_id))) or
+              (refund_entity.get('payment_id') and r['payment_id']==refund_entity['payment_id'])),None)
+    if row is None:
+        # A notification can race create_order's response; retry delivery later.
+        if kind in ('payment.captured','subscription.charged','refund.processed','refund.failed'):
+            raise ApiError('purchase_not_ready','Purchase mapping not ready.',503)
+        return None
+    with transaction(conn, row['user_id']):
+        if _seen(conn, keys):              # a concurrent delivery of this event won the member lock
+            return 'duplicate'
+        row=get(conn,row['id'])            # fresh under the lock
         if kind == 'payment.captured' and row['product'] != 'guru':
             apply_payment(conn,row,payment)
         elif kind == 'subscription.charged' and row['product']=='guru':
@@ -299,6 +339,44 @@ def webhook(conn, raw, signature):
             apply_refund(conn,row,refund_entity)
         elif kind in ('subscription.cancelled','subscription.completed'):
             update(conn,row['id'],status='cancelled')
-        planning.save(conn,'BillingEvent',{'id':event_id,'purchase_id':row['id'],
+        planning.save(conn,'BillingEvent',{'id':keys[0],'purchase_id':row['id'],
             'kind':kind,'received_at':int(time.time())})
         # Failures/authorized mandates never grant access or overwrite a captured payment.
+    return None
+
+
+# Payment status on provider_jobs (sec-pay / perf-worker). "Check payment" asks
+# Razorpay for a purchase's status. With DHASHU_ASYNC_BILLING=1 the request only
+# records a billing_reconcile job (at most one per purchase per RECONCILE_WINDOW
+# seconds) and returns at once; bgv_worker.py makes the provider calls. Unset, the
+# request reconciles inline as before (no worker dependency). Webhooks remain the
+# primary path either way.
+RECONCILE_JOB = 'billing_reconcile'
+RECONCILE_WINDOW = 30
+
+
+def async_reconcile():
+    return os.environ.get('DHASHU_ASYNC_BILLING', '0') == '1'
+
+
+def request_reconcile(conn, uid, pid):
+    row = get(conn, pid, uid)
+    if row['mode'] != catalog.mode():
+        raise ApiError('environment_mismatch', 'Use the original billing environment.', 409)
+    if not async_reconcile() or not row['provider_id']:
+        return reconcile(conn, uid, pid)
+    key = RECONCILE_JOB + ':' + pid + ':' + str(int(time.time()) // RECONCILE_WINDOW)
+    with transaction(conn, uid):
+        job_id = provider_jobs.enqueue(conn, RECONCILE_JOB, uid, pid, key)
+    return public(get(conn, pid, uid)) | {'job': job_id}
+
+
+def _reconcile_job(conn, job):
+    row = db.fetch_one(conn, 'BillingPurchase', id=job['ref'])
+    conn.commit()                       # end the read; no transaction is held during provider calls
+    if not row or row['user_id'] != job['user_id'] or row['mode'] != catalog.mode() or not row['provider_id']:
+        return                          # gone, foreign, other environment or never created: nothing to ask
+    reconcile(conn, row['user_id'], row['id'])
+
+
+provider_jobs.register_kind(RECONCILE_JOB, _reconcile_job, max_attempts=3, lease=60)

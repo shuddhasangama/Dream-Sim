@@ -84,8 +84,10 @@ class EnrollmentApiTests(RouteTestCase):
         with mock.patch.dict(app_module.app.config,{'AUTH_ENABLED':False}):
             self.login(self.uid)
             r=self.read()
-            self.assertEqual(r.status_code,403,r.json)
-            self.assertEqual(r.json['error']['code'],'secure_auth_required')
+            # With auth disabled, the local harness accepts only harness tokens;
+            # a real OTP token must not fall through to the legacy cookie session.
+            self.assertEqual(r.status_code,401,r.json)
+            self.assertEqual(r.json['error']['code'],'authentication_required')
     def test_unverified_or_disabled_account_cannot_write(self):
         # Sign-in verifies the phone (phone-only auth); an unverified account has neither contact verified.
         self.conn.execute('UPDATE Account SET verified_email=0, verified_phone=0');self.conn.commit()

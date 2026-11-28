@@ -62,20 +62,20 @@ class WeekApiTests(RouteTestCase):
         self.assertNotIn('actual_date',week_activity.completed(self.conn,'owner',pair,plan,matches))
 
     def test_get_is_read_only_and_prepare_is_explicit_idempotent_even_when_empty(self):
-        before = list(self.conn.iterdump())
+        before = self.domain_snapshot()
         result = self.request('/week')
         self.assertEqual(result.status_code,200)
         self.assertFalse(result.json['data']['prepared'])
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
         first = self.request('/week/prepare',method='POST',body={})
         self.assertEqual(first.status_code,200,first.json)
         self.assertTrue(first.json['data']['prepared'])
         # All fixtures are female, so this is a genuinely empty batch.
         self.assertEqual(first.json['data']['matches'],[])
-        before = list(self.conn.iterdump())
+        before = self.domain_snapshot()
         second = self.request('/week/prepare',method='POST',body={})
         self.assertEqual(first.json,second.json)
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
 
     def test_future_matches_hide_identity_and_are_not_directly_readable(self):
         mid = self.match('owner','partner',slot=2,reveal='Tue',close='Wed')
@@ -128,14 +128,14 @@ class WeekApiTests(RouteTestCase):
 
     def test_foreign_missing_invalid_and_changed_decisions_do_not_write(self):
         mid=self.match('owner','partner')
-        before=list(self.conn.iterdump())
+        before=self.domain_snapshot()
         self.assertEqual(self.action('stranger',mid,'interest').status_code,404)
         self.assertEqual(self.request('/matches/'+mid,uid='stranger').status_code,404)
         self.assertEqual(self.action('owner','missing','pass').status_code,404)
         for value in (None,[],{},True,'invalid'):
             self.assertEqual(self.action('owner',mid,value).status_code,400)
         self.assertEqual(self.action('owner',mid,'pass',user_id='partner').status_code,400)
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
         self.assertEqual(self.action('owner',mid,'pass',pass_reason='not a fit').status_code,200)
         self.assertEqual(self.action('owner',mid,'interest').status_code,409)
         self.assertEqual(self.action('owner',mid,'pass',pass_reason='changed').status_code,409)

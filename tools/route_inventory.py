@@ -40,6 +40,8 @@ DISABLED_WITH_SIGN_IN = ('/pool', '/login/', '/admin', '/demo', '/verify/simulat
 # Routes removed on purpose. Each must answer 404 (test_security_suite.py).
 RETIRED = {
     ('PUT', '/api/v1/profile/photo'): 'retired 2026-11-25: profile portrait upload (owner decision; the AI avatar replaces it)',
+    ('GET', '/pay/<purpose>'): 'retired: simulated payment page cannot grant fee access',
+    ('POST', '/pay/<purpose>/confirm'): 'retired: simulated payment confirmation cannot mark fees paid',
 }
 ADMIN_PUBLIC = {'/healthz', '/', '/robots.txt', '/api/login', '/static/<path:filename>'}
 ADMIN_OWNER = {'/api/reports/markets', '/api/markets/readiness', '/api/reports/activities', '/api/activities/review',

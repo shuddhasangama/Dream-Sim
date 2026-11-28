@@ -26,6 +26,11 @@ AVATAR_SCREEN = ('/api/v1/profile/avatar', '/api/v1/profile/liveness', '/api/v1/
 class AvatarScreenSessionTests(RouteTestCase):
     def setUp(self):
         super().setUp()
+        # sec-login: RouteTestCase registers the local harness for the legacy route
+        # suites; these tests start from "harness not registered" and opt in via harness_on().
+        patch = mock.patch.dict(app_module.app.config, {harness.CONFIG_KEY: False})
+        patch.start()
+        self.addCleanup(patch.stop)
         for name, user in zip(('owner', 'other'), generate_users.generate_users(2, seed=11)):
             row = app_module.onboarding.build_user_row(user_id=name, city=user['city'], gender=user['gender'],
                                                        stats=user['stats'], visions=user['visions'], activities={})
@@ -41,7 +46,7 @@ class AvatarScreenSessionTests(RouteTestCase):
             return sessions.issue_in_transaction(self.conn, user_id, 'mobile', **kind)
 
     def harness_on(self):
-        for item in (patched_env(**{harness.FLAG: '1', 'PAYMENTS_ENABLED': '0', 'DEMO_MODE': '1', 'DHASHU_SIMULATED_CLOCK': 'true'}),
+        for item in (patched_env(**{harness.FLAG: '1', 'DHASHU_PAYMENT_BYPASS': '1', 'DEMO_MODE': '1', 'DHASHU_SIMULATED_CLOCK': 'true'}),
                      mock.patch.dict(app_module.app.config, {harness.CONFIG_KEY: True})):
             item.start()
             self.addCleanup(item.stop)

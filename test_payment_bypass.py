@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 import billing_catalog as catalog
+import billing_service
 import db
 import payments
 import planning_service
@@ -17,7 +18,7 @@ from test_segment_efg_routes import app_module
 
 
 def env(**values):
-    clean = {k: v for k, v in os.environ.items() if k not in ('DHASHU_PAYMENT_BYPASS', 'DHASHU_BILLING_MODE')}
+    clean = {k: v for k, v in os.environ.items() if k not in ('DHASHU_PAYMENT_BYPASS', 'DHASHU_FEES_WAIVED', 'DHASHU_BILLING_MODE')}
     clean.update(values)
     return mock.patch.dict(os.environ, clean, clear=True)
 
@@ -31,6 +32,19 @@ class BypassRuleTests(unittest.TestCase):
             values = {k: v for k, v in (('DHASHU_PAYMENT_BYPASS', bypass), ('DHASHU_BILLING_MODE', mode)) if v is not None}
             with env(**values):
                 self.assertIs(catalog.payment_bypass(), expected, (bypass, mode))
+
+    def test_sec_pay_name_is_only_an_alias_of_the_one_bypass(self):
+        # sec-pay drafted DHASHU_FEES_WAIVED; it follows exactly the same rule, never a second one.
+        for mode, expected in (('disabled', True), ('sandbox', True), ('live', False), ('live_pilot', False)):
+            with env(DHASHU_FEES_WAIVED='1', DHASHU_BILLING_MODE=mode):
+                self.assertIs(catalog.payment_bypass(), expected, mode)
+        for mode in ('live', 'live_pilot'):
+            with self.assertRaises(RuntimeError) as caught:
+                catalog.startup_check({'DHASHU_FEES_WAIVED': '1', 'DHASHU_BILLING_MODE': mode})
+            self.assertIn('DHASHU_FEES_WAIVED', str(caught.exception))
+        with self.assertRaises(RuntimeError):
+            catalog.validate_bypass({'DHASHU_FEES_WAIVED': 'maybe'})
+        self.assertFalse(hasattr(catalog, 'fees_waived'))
 
     def test_startup_refuses_bypass_in_live_modes_in_every_environment(self):
         for mode in ('live', 'live_pilot'):
@@ -51,13 +65,15 @@ class BypassRuleTests(unittest.TestCase):
     def test_bypass_overrides_the_fee_switch_and_real_billing(self):
         with env(DHASHU_PAYMENT_BYPASS='1', PAYMENTS_ENABLED='1', DHASHU_BILLING_MODE='sandbox',
                  DHASHU_BILLING_TESTERS='owner'):
-            self.assertFalse(payments.is_enabled())
+            # sec-pay: billing_service.fee_satisfied is the one fee authority.
             self.assertFalse(catalog.real_billing('owner'))
-            self.assertTrue(payments.has_paid([], 'owner', payments.AVAILABILITY, 'lock-1'))
-        with env(PAYMENTS_ENABLED='1'):
-            self.assertTrue(payments.is_enabled())                     # unchanged without the bypass
-        with env(DHASHU_PAYMENT_BYPASS='1', PAYMENTS_ENABLED='1', DHASHU_BILLING_MODE='live'):
-            self.assertTrue(payments.is_enabled())                     # never in live
+            self.assertTrue(billing_service.fee_satisfied(None, 'owner', payments.AVAILABILITY, 'lock-1'))
+        with env(PAYMENTS_ENABLED='0'):                                # the retired switch opens nothing
+            with mock.patch('billing_service.legacy_entitled', return_value=False):
+                self.assertFalse(billing_service.fee_satisfied(None, 'owner', payments.AVAILABILITY, 'lock-1'))
+        with env(DHASHU_PAYMENT_BYPASS='1', PAYMENTS_ENABLED='0', DHASHU_BILLING_MODE='live'):
+            with mock.patch('billing_service.legacy_entitled', return_value=False):   # never in live
+                self.assertFalse(billing_service.fee_satisfied(None, 'owner', payments.AVAILABILITY, 'lock-1'))
 
     def test_no_checkout_opens_and_nothing_is_charged(self):
         with env(DHASHU_PAYMENT_BYPASS='1', DHASHU_BILLING_MODE='sandbox', DHASHU_BILLING_TESTERS='owner'):

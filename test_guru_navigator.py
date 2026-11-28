@@ -21,6 +21,12 @@ class GuruNavigatorTests(DateCycleApiTests):
     def topic(self):
         return self.req('state').json['data']['topics'][0]['id']
 
+    def test_guru_is_not_paywalled_without_an_owner_decision(self):
+        # sec-pay review: Guru was never fee-gated; a subscription gate is an owner
+        # decision (docs + dev-reports/adithya-review.md), not part of removing simulated grants.
+        with mock.patch.dict(os.environ,{'DHASHU_PAYMENT_BYPASS':'0','PAYMENTS_ENABLED':'0','DHASHU_BILLING_MODE':'disabled'}),                 mock.patch('billing_service.legacy_entitled',side_effect=AssertionError('no Guru paywall')):
+            self.assertEqual(self.req('state').status_code,200)
+
     def test_mixed_intentions_shared_discussion_does_not_accept_date(self):
         self.mixed()
         state=self.req('state').json['data']

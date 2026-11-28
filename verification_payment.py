@@ -47,7 +47,7 @@ def start(conn,uid):
     gateway=Razorpay()
     if not gateway.key.startswith('rzp_test_'):raise ApiError('sandbox_only','A Razorpay test key is required.',503)
     now=int(time.time())
-    with billing.transaction(conn):
+    with billing.transaction(conn,uid):
         if billing.entitled(conn,uid,'verification',uid):return view(conn,uid)
         row=latest(conn,uid)
         if row and row['status'] not in ('expired','cancelled'):
@@ -69,9 +69,9 @@ def start(conn,uid):
             raise ApiError('provider_response_invalid','Checkout details do not match the saved purchase.',503)
         price['checkout_url']=link['short_url']
         if link.get('order_id'):price['order_id']=link['order_id']
-        with billing.transaction(conn):billing.update(conn,pid,provider_id=link['id'],status='pending',price_json=json.dumps(price))
+        with billing.transaction(conn,uid):billing.update(conn,pid,provider_id=link['id'],status='pending',price_json=json.dumps(price))
     except Exception:
-        with billing.transaction(conn):billing.update(conn,pid,status='outcome_unknown')
+        with billing.transaction(conn,uid):billing.update(conn,pid,status='outcome_unknown')
         raise
     return view(conn,uid)
 
@@ -83,7 +83,7 @@ def complete(conn,uid):
     # Private tester rollout: failed/unavailable sandbox checkout must not block
     # BGV. Record access separately; never fabricate paid/captured evidence or
     # grant a billing entitlement. Live modes are rejected above.
-    with billing.transaction(conn):
+    with billing.transaction(conn,uid):
         current=billing.get(conn,row['id'],uid)
         price=json.loads(current['price_json'])
         price['sandbox_bgv_access']=True
@@ -105,7 +105,7 @@ def confirm_provider_payment(conn,uid):
     if (link.get('id'),link.get('reference_id'),link.get('amount'),link.get('currency'))!=(row['provider_id'],row['id'],100,'INR'):
         raise ApiError('payment_mismatch','Provider payment does not match this account checkout.',409)
     if link.get('status') in ('expired','cancelled'):
-        with billing.transaction(conn):billing.update(conn,row['id'],status=link['status'])
+        with billing.transaction(conn,uid):billing.update(conn,row['id'],status=link['status'])
     elif link.get('status')=='paid' and link.get('amount_paid')==100:
         payments=[p for p in link.get('payments',[]) if p.get('status')=='captured' and p.get('amount')==100]
         if len(payments)!=1:raise ApiError('payment_unconfirmed','A captured payment could not be confirmed.',409)
@@ -114,7 +114,7 @@ def confirm_provider_payment(conn,uid):
         payment=gateway.call('GET','payments/'+pid)
         if payment.get('id')!=pid or payment.get('order_id')!=link.get('order_id') or not link.get('order_id'):
             raise ApiError('payment_mismatch','Captured payment is not bound to this checkout.',409)
-        with billing.transaction(conn):
+        with billing.transaction(conn,uid):
             price=json.loads(row['price_json']);price['order_id']=link['order_id']
             billing.update(conn,row['id'],price_json=json.dumps(price))
             billing.apply_payment(conn,billing.get(conn,row['id'],uid),payment)

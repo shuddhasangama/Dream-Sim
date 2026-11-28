@@ -32,6 +32,18 @@ class AdminDashboardTests(unittest.TestCase):
   with patch('time.time',return_value=self.now):
    return self.client.post('/api/login',json={'email':email,'password':self.password,'code':security.code(self.secret,self.now//30)},headers={'Origin':'http://localhost'})
  def csrf(self):return self.client.get('/api/session').get_json()['csrf']
+ def test_fee_waiver_state_is_private_and_shown_in_admin_shell(self):
+  self.assertEqual(self.client.get('/api/session').status_code,401)
+  self.assertIn('id="fees-policy"',self.client.get('/').get_data(as_text=True))
+  self.login()
+  with patch.dict(os.environ,{'DHASHU_PAYMENT_BYPASS':'1'}):
+   response=self.client.get('/api/session')
+   self.assertEqual(response.status_code,200)
+   self.assertIs(response.get_json()['payment_bypass'],True)
+  with patch.dict(os.environ,{'DHASHU_PAYMENT_BYPASS':'0'}):
+   self.assertIs(self.client.get('/api/session').get_json()['payment_bypass'],False)
+  with patch.dict(os.environ,{'DHASHU_PAYMENT_BYPASS':'invalid'}):
+   with self.assertRaises(RuntimeError):create_app()
  def test_owner_controls_require_csrf_and_support_cannot_change_readiness(self):
   self.login();headers={'Origin':'http://localhost','X-CSRF-Token':self.csrf()}
   body={'code':'BLR','values':dict(discovery=True,verification=True,payments=True,restaurants=False,support=True,paused=False)}

@@ -2,6 +2,8 @@
 import os
 import sys
 
+import prod_guard
+
 def _setting(env, name, default, low, high):
     try:
         value = int(env.get(name, default))
@@ -77,7 +79,10 @@ def prepare_pilot():
         print('BGV sandbox pilot schema and account policy ready; public profile and overall BGV unchanged.',flush=True)
     finally: conn.close()
 
-if __name__=='__main__':
+def main():
+    prod_guard.assert_safe_startup()
+    import security_config
+    security_config.require_secret_key()
     role=os.getenv('DHASHU_PROCESS_ROLE','web')
     argv=command(role)
     if role=='web':
@@ -92,3 +97,9 @@ if __name__=='__main__':
             initialize(conn)
         finally: conn.close()
     os.execvp(argv[0],argv)
+
+if __name__=='__main__':
+    try:
+        main()
+    except RuntimeError as exc:
+        raise SystemExit(f'Startup refused: {exc}') from None

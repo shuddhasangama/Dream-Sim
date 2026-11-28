@@ -65,17 +65,17 @@ class AsyncRehearsalTests(RouteTestCase):
     def test_full_flow_waits_for_both_and_second_date_has_new_readiness(self):
         self.align('owner')
         self.request(self.base+'/availability',method='PUT',body={'slots':[self.slot]})
-        before=list(self.conn.iterdump())
+        before=self.domain_snapshot()
         for _ in range(3):
             self.assertEqual(self.state()['async_rehearsal']['stage'],'availability')
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
         path=self.confirmed()
         self.assertEqual(self.state()['async_rehearsal']['stage'],'date')
         for stage in ('debrief',):
             self.assertEqual(self.ready(path,'owner',stage).status_code,200)
-            saved=list(self.conn.iterdump())
+            saved=self.domain_snapshot()
             self.assertEqual(self.ready(path,'owner',stage).status_code,200)
-            self.assertEqual(saved,list(self.conn.iterdump()))
+            self.assertEqual(saved,self.domain_snapshot())
             self.assertEqual(self.state()['clock'],self.state('partner')['clock'])
             self.assertFalse(self.request(path+'/debrief').json['data']['feedback_open'])
             self.assertEqual(self.ready(path,'partner',stage).status_code,200)
@@ -121,14 +121,14 @@ class AsyncRehearsalTests(RouteTestCase):
         self.assertEqual(self.request('/rehearsal'+path+'/ready',method='POST',body={'step':'date','user_id':'partner'}).status_code,400)
         self.assertEqual(self.client.post('/api/v1/rehearsal'+path+'/ready',json={'step':'date'}).status_code,403)
         self.assertEqual(self.client.get('/api/v1/journey/status').status_code,401)
-        before=list(self.conn.iterdump())
+        before=self.domain_snapshot()
         with mock.patch.dict('os.environ',{'DHASHU_SIMULATED_CLOCK':'false'}):
             self.assertIsNone(self.state()['async_rehearsal'])
             self.assertEqual(self.ready(path,'owner','date').status_code,403)
         with mock.patch.dict('os.environ',{'DHASHU_ASYNC_TEST':'false'}):
             self.assertIsNone(self.state()['async_rehearsal'])
             self.assertTrue(self.state()['accelerated_test']['enabled'])
-        self.assertEqual(before,list(self.conn.iterdump()))
+        self.assertEqual(before,self.domain_snapshot())
 
     def test_other_pair_does_not_advance_and_pending_agreement_blocks(self):
         path=self.prepare()
@@ -165,7 +165,7 @@ class AsyncRehearsalTests(RouteTestCase):
         before=self.state()
         with mock.patch('accelerated_clock.position',side_effect=AssertionError('must not use elapsed clock')):
             self.assertEqual(self.state()['clock'],before['clock'])
-        with mock.patch.dict('os.environ',{'PAYMENTS_ENABLED':'1'}):
+        with mock.patch.dict('os.environ',{'DHASHU_PAYMENT_BYPASS':'0','PAYMENTS_ENABLED':'0'}):
             self.assertEqual(self.request(self.base+'/availability',method='PUT',body={'slots':[self.slot]}).status_code,403)
         self.assertEqual(db.fetch_all(self.conn,'Payment'),[])
         self.make_user('fourth')
@@ -178,9 +178,9 @@ class AsyncRehearsalTests(RouteTestCase):
 
     def test_personal_intro_boundaries_restart_and_late_partner(self):
         db.delete_row(self.conn,'LockIn','lock-1')
-        before=list(self.conn.iterdump())
+        before=self.domain_snapshot()
         self.assertIn('start_request',self.state()['async_rehearsal'])
-        self.assertEqual(before,list(self.conn.iterdump()))
+        self.assertEqual(before,self.domain_snapshot())
         with mock.patch('async_rehearsal.time.time',return_value=1000):
             r=self.request('/rehearsal/start',method='POST',body={})
             self.assertEqual(r.status_code,200,r.json)
@@ -226,7 +226,7 @@ class AsyncRehearsalTests(RouteTestCase):
             self.assertEqual(self.request('/rehearsal/availability',method='PUT',body={'slots':[]}).status_code,409)
             self.base='/lock-ins/'+pair['id']
             for who in ('owner','partner'): self.align(who)
-            with mock.patch.dict('os.environ',{'PAYMENTS_ENABLED':'1'}):
+            with mock.patch.dict('os.environ',{'DHASHU_PAYMENT_BYPASS':'0','PAYMENTS_ENABLED':'0'}):
                 r=self.request(self.base+'/date-plan',method='POST',body=self.slot)
                 self.assertEqual(r.status_code,403,r.json)
             r=self.request(self.base+'/date-plan',method='POST',body=self.slot)

@@ -151,11 +151,11 @@ class DateCycleApiTests(RouteTestCase):
                 for body in ({'step':'playbook'},{'step':'sign','signed_name':who,'acks':list(ceremony.ack_keys(ceremony.DATE_AGREEMENT))},{'step':'face'}):
                     r=self.request(next_path+'/agreement/steps',uid=who,method='POST',body=body)
                     self.assertEqual(r.status_code,200,r.json)
-        before=list(self.conn.iterdump())
+        before=self.domain_snapshot()
         self.assertEqual(self.decision('owner').status_code,200)
         self.assertEqual(self.decision('owner','pass').status_code,409)
         self.assertEqual(self.request(self.path+'/no-show',method='POST',body={}).status_code,409)
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
         self.set_clock(week=2,day='Sat',hour=21)
         for who in ('partner','owner'):
             self.assertEqual(self.flags(who,next_path).status_code,200)
@@ -197,13 +197,13 @@ class DateCycleApiTests(RouteTestCase):
         self.assertFalse(r.json['data']['no_show_is_confirmed'])
         self.assertEqual(db.fetch_all(self.conn,'ComplianceEvent'),[])
         self.assertEqual(db.fetch_all(self.conn,'DateOutcome'),[])
-        before=list(self.conn.iterdump())
+        before=self.domain_snapshot()
         self.assertEqual(self.request(self.path+'/no-show',method='POST',body={}).status_code,200)
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
 
     def test_late_cancellation_is_charged_once_and_cannot_cancel_started_date(self):
         self.set_clock(day='Sat',hour=18)
-        with mock.patch.dict(os.environ,{'PAYMENTS_ENABLED':'1'}):
+        with mock.patch.dict(os.environ,{'DHASHU_PAYMENT_BYPASS':'0'}):
             for _ in range(2):
                 self.assertEqual(self.request(self.path+'/cancel',method='POST',body={}).status_code,200)
         self.assertEqual(len(db.fetch_all(self.conn,'ComplianceEvent')),1)
@@ -219,17 +219,17 @@ class DateCycleApiTests(RouteTestCase):
     def test_resolution_failure_rolls_back_partner_decision_and_count(self):
         for who in ('owner','partner'): self.flags(who)
         self.decision('owner')
-        before=list(self.conn.iterdump())
+        before=self.domain_snapshot()
         with mock.patch.object(service,'finish',side_effect=RuntimeError('injected')):
             with self.assertRaises(RuntimeError):
                 service.decide(self.conn,'partner','plan:lock-1',{'decision':'continue'},app_module.get_clock(),app_module.WEEK_ONE_MONDAY)
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
 
     def test_read_does_not_resolve_timeout(self):
         self.set_clock(week=2,day='Mon',hour=12)
-        before=list(self.conn.iterdump())
+        before=self.domain_snapshot()
         self.request(self.path+'/debrief')
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
         self.assertEqual(self.flags('owner').status_code,409)
         self.assertEqual(self.request(self.path+'/feedback/reconcile',method='POST',body={}).json['data']['resolution'],'ghosted')
         self.assertEqual(db.fetch_one(self.conn,'LockIn',id='lock-1')['dates_completed'],0)

@@ -44,7 +44,7 @@ DEMO_PARTNER_PREFIX = "dp_"
 
 
 def is_enabled() -> bool:
-    return os.environ.get("DEMO_MODE", "1").strip().lower() not in ("0", "false", "no", "off")
+    return os.environ.get("DEMO_MODE", "0").strip().lower() not in ("0", "false", "no", "off")
 
 
 # ── 1. the clock ──────────────────────────────────────────────────────────

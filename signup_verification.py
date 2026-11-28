@@ -41,6 +41,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import security_config
+
 CODE_LENGTH = 6
 CODE_TTL_MINUTES = 15
 MAX_ATTEMPTS = 5
@@ -61,7 +63,7 @@ def _pepper() -> bytes:
     trivially brute-forced offline, so the hash is peppered with the app
     secret — which is why this reads it at call time rather than import:
     the secret is an environment variable in production."""
-    return (os.environ.get("SECRET_KEY") or "dream-sim-local-play-test-only").encode()
+    return security_config.require_secret_key().encode()
 
 
 def hash_code(code: str) -> str:

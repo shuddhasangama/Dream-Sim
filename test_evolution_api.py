@@ -39,10 +39,10 @@ class EvolutionApiTests(RouteTestCase):
         self.assertIn('Physical',goals['Intimacy'])
         self.assertEqual(row['journey_state'],'dating')
         self.assertEqual(db.fetch_one(self.conn,'User',id='partner'),before)
-        snapshot=list(self.conn.iterdump())
+        snapshot=self.domain_snapshot()
         for bad in ({**body,'user_id':'partner'},{**body,'preset':'unknown'}):
             self.assertEqual(self.post('/profile/vision/presets',bad).status_code,400)
-        self.assertEqual(list(self.conn.iterdump()),snapshot)
+        self.assertEqual(self.domain_snapshot(),snapshot)
 
     def test_marriage_default_excludes_adoption_surrogacy_but_never_reverses(self):
         fresh=vision.marriage_preset([])
@@ -60,11 +60,11 @@ class EvolutionApiTests(RouteTestCase):
                 self.assertEqual(r.status_code,200,r.json)
 
     def test_stats_atomic_hold_and_strict_types(self):
-        before=list(self.conn.iterdump())
+        before=self.domain_snapshot()
         for fields,status in [({'weight_kg':True},400),({'user_id':'stranger'},400),({'weight_kg':70},409),({'diet':{}},400)]:
             r=self.request('/profile/stats',method='PATCH',body={'fields':fields})
             self.assertEqual(r.status_code,status,r.json)
-        self.assertEqual(list(self.conn.iterdump()),before)
+        self.assertEqual(self.domain_snapshot(),before)
 
     def test_stats_patch_partial_vs_stringified_whole_form(self):
         # round4-fixes-spec.md §1 diagnosis: the client used to PATCH every
@@ -261,8 +261,8 @@ class EvolutionApiTests(RouteTestCase):
         self.assertEqual(self.post(self.base+'/gate/enter-relationship',{'round':1},'stranger').status_code,404)
 
     def test_gate_entry_rolls_back_all_legacy_helper_writes(self):
-        self.prepare_gate();before=list(self.conn.iterdump())
+        self.prepare_gate();before=self.domain_snapshot()
         with mock.patch.object(gate_service.journey,'schedule_weekly_report',side_effect=RuntimeError('injected')):
             with self.assertRaises(RuntimeError):
                 gate_service.action(self.conn,'owner','lock-1','enter-relationship',{'round':1},app_module.get_clock(),'2026-01-05')
-        self.assertEqual(before,list(self.conn.iterdump()))
+        self.assertEqual(before,self.domain_snapshot())

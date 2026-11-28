@@ -12,12 +12,9 @@ import os
 import unittest
 from unittest import mock
 
+import billing_catalog
+import billing_service
 import payments
-
-
-def _paid(user_id="u1", purpose=payments.AVAILABILITY, scope_id="lockin-1"):
-    row = payments.payment_row(user_id, purpose, scope_id, "W1 Mon 12:00")
-    return payments.simulate_gateway_callback(row, succeeded=True)
 
 
 class FeeTableTests(unittest.TestCase):
@@ -41,62 +38,84 @@ class FeeTableTests(unittest.TestCase):
 
 
 class EntitlementTests(unittest.TestCase):
-    """These assert what the gate does when fees ARE enforced, so they pin
-    the switch rather than inheriting whatever the shell happens to set.
-    A test that changes its answer with the environment is not a test."""
+    """Only the verified billing ledger can satisfy an unwaived fee gate."""
 
     def setUp(self):
-        self._env = mock.patch.dict(os.environ, {"PAYMENTS_ENABLED": "1"})
+        self._env = mock.patch.dict(os.environ, {"DHASHU_PAYMENT_BYPASS": "0"})
         self._env.start()
         self.addCleanup(self._env.stop)
+        self.active = {("u1", "date_mechanics", "lockin-1")}
+        self._ledger = mock.patch.object(
+            billing_service, "entitled",
+            side_effect=lambda _conn, uid, product, scope: (uid, product, scope) in self.active,
+        )
+        self._ledger.start()
+        self.addCleanup(self._ledger.stop)
 
     def test_a_paid_row_entitles_its_own_scope(self):
-        rows = [_paid(scope_id="lockin-1")]
-        self.assertTrue(payments.has_paid(rows, "u1", payments.AVAILABILITY, "lockin-1"))
+        self.assertTrue(billing_service.fee_satisfied(None, "u1", payments.AVAILABILITY, "lockin-1"))
 
     def test_a_fee_is_not_paid_forever(self):
-        """The availability fee is per date. Paying for one must not
-        entitle the next one."""
-        rows = [_paid(scope_id="lockin-1")]
-        self.assertFalse(payments.has_paid(rows, "u1", payments.AVAILABILITY, "lockin-2"))
+        self.assertFalse(billing_service.fee_satisfied(None, "u1", payments.AVAILABILITY, "lockin-2"))
 
     def test_paying_one_fee_does_not_entitle_another(self):
-        rows = [_paid(purpose=payments.AVAILABILITY, scope_id="s1")]
-        self.assertFalse(payments.has_paid(rows, "u1", payments.AGREEMENT, "s1"))
+        self.assertFalse(billing_service.fee_satisfied(None, "u1", payments.STAGE_GATE, "lockin-1"))
 
     def test_one_users_payment_does_not_entitle_another(self):
-        rows = [_paid(user_id="u1", scope_id="s1")]
-        self.assertFalse(payments.has_paid(rows, "u2", payments.AVAILABILITY, "s1"))
+        self.assertFalse(billing_service.fee_satisfied(None, "u2", payments.AVAILABILITY, "lockin-1"))
 
     def test_a_pending_or_failed_row_entitles_nothing(self):
-        pending = payments.payment_row("u1", payments.AVAILABILITY, "s1", "t")
-        failed = payments.simulate_gateway_callback(pending, succeeded=False)
-        for rows in ([pending], [failed]):
-            self.assertFalse(payments.has_paid(rows, "u1", payments.AVAILABILITY, "s1"))
+        self.active.clear()
+        self.assertFalse(billing_service.fee_satisfied(None, "u1", payments.AVAILABILITY, "lockin-1"))
 
     def test_scope_ids_compare_as_strings(self):
-        """Scope ids arrive from the database as text and from route args
-        as text, but a caller may hand over an int."""
-        rows = [_paid(scope_id="7")]
-        self.assertTrue(payments.has_paid(rows, "u1", payments.AVAILABILITY, 7))
+        self.assertFalse(billing_service.fee_satisfied(None, "u1", payments.AVAILABILITY, 7))
+        self.assertFalse(billing_service.fee_satisfied(None, "u1", "unknown", "lockin-1"))
+
+    def test_guru_uses_own_verified_subscription(self):
+        self.active.add(("u1", "guru", "u1"))
+        self.assertTrue(billing_service.fee_satisfied(None, "u1", payments.GURU, "week-1"))
+        self.assertFalse(billing_service.fee_satisfied(None, "u2", payments.GURU, "week-1"))
+
+    def test_invalid_identity_scope_and_purpose_fail_closed(self):
+        for uid, purpose, scope in (("", payments.AVAILABILITY, "lockin-1"),
+                                    (None, payments.AVAILABILITY, "lockin-1"),
+                                    ("u1", payments.AVAILABILITY, ""),
+                                    ("u1", payments.AVAILABILITY, None),
+                                    ("u1", "availability; DROP TABLE Payment", "lockin-1")):
+            self.assertFalse(billing_service.fee_satisfied(None, uid, purpose, scope))
 
 
 class SwitchTests(unittest.TestCase):
     def test_fees_are_enforced_by_default(self):
         with mock.patch.dict(os.environ, {}, clear=True):
-            self.assertTrue(payments.is_enabled())
+            self.assertFalse(billing_catalog.payment_bypass())
+            self.assertFalse(billing_service.fee_satisfied(None, "u1", payments.AVAILABILITY, "s1"))
 
     def test_disabling_fees_entitles_everything(self):
-        """The gate disappears rather than letting unpaid rows through,
-        which would be the same behaviour with a worse audit trail."""
-        with mock.patch.dict(os.environ, {"PAYMENTS_ENABLED": "0"}):
-            self.assertFalse(payments.is_enabled())
-            self.assertTrue(payments.has_paid([], "u1", payments.AGREEMENT, "anything"))
+        with mock.patch.dict(os.environ, {"DHASHU_PAYMENT_BYPASS": "1"}):
+            self.assertTrue(billing_catalog.payment_bypass())
+            self.assertTrue(billing_service.fee_satisfied(None, "u1", payments.AGREEMENT, "anything"))
 
     def test_the_off_switch_accepts_the_usual_spellings(self):
         for value in ("0", "false", "no", "off", "OFF", " False "):
-            with mock.patch.dict(os.environ, {"PAYMENTS_ENABLED": value}):
-                self.assertFalse(payments.is_enabled(), value)
+            with mock.patch.dict(os.environ, {"DHASHU_PAYMENT_BYPASS": value, "PAYMENTS_ENABLED": "0"}):
+                self.assertFalse(billing_catalog.payment_bypass(), value)
+                self.assertFalse(billing_service.fee_satisfied(None, "u1", payments.AVAILABILITY, "s1"))
+
+    def test_the_explicit_waiver_accepts_true_spellings(self):
+        for value in ("1", "true", "yes", "on", " TRUE "):
+            with mock.patch.dict(os.environ, {"DHASHU_PAYMENT_BYPASS": value}):
+                self.assertTrue(billing_catalog.payment_bypass(), value)
+
+    def test_an_invalid_waiver_setting_refuses_startup(self):
+        for value in ("maybe", "2", "false;true"):
+            with self.assertRaises(RuntimeError):
+                billing_catalog.startup_check({"DHASHU_PAYMENT_BYPASS": value})
+
+    def test_live_billing_cannot_boot_with_payment_bypass(self):
+        with self.assertRaises(RuntimeError):
+            billing_catalog.startup_check({'DHASHU_BILLING_MODE':'live','DHASHU_PAYMENT_BYPASS':'1'})
 
 
 class RowTests(unittest.TestCase):

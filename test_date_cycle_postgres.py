@@ -59,7 +59,7 @@ class PostgresDateCycleTests(unittest.TestCase):
 
     def test_competing_cancellations_assess_one_charge(self):
         self.clock=SimulationClock.at(1,'Sat',18)
-        with mock.patch.dict(os.environ,{'PAYMENTS_ENABLED':'1'}):
+        with mock.patch.dict(os.environ,{'DHASHU_PAYMENT_BYPASS':'0'}):
             result=self.race(lambda c,u:service.cancel(c,u,'plan',self.clock,self.epoch))
         self.assertEqual(sorted(result),['ok','state_conflict'])
         self.assertEqual(len(db.fetch_all(self.conn,'DateCharge')),1)

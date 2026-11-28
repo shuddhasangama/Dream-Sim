@@ -12,6 +12,10 @@ class PostgresRelationshipTests(unittest.TestCase):
     cleanup=pg.PostgresAuthenticationTests.cleanup
     def setUp(self):
         pg.PostgresAuthenticationTests.setUp(self)
+        # Concurrency, not fees: the stage-gate fee is waived with the one dev bypass (sec-pay);
+        # this used to rely on PAYMENTS_ENABLED=0 leaking from another test module's import.
+        from unittest import mock
+        bypass=mock.patch.dict(os.environ,{'DHASHU_PAYMENT_BYPASS':'1','DHASHU_BILLING_MODE':'disabled'});bypass.start();self.addCleanup(bypass.stop)
         self.conn.execute('UPDATE "User" SET bgv_status=%s WHERE id=%s',('verified','owner'))
         self.conn.execute('INSERT INTO "User" (id,journey_state,bgv_status) VALUES (%s,%s,%s)',('partner','dating','verified'))
         journey.advance_stage(self.conn,'pair',True,True,today='2026-01-05',user_a_id='owner',user_b_id='partner')
